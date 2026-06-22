@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import { motion } from "framer-motion";
@@ -12,16 +12,16 @@ import { CheckCircle, XCircle, Loader2 } from "lucide-react";
 import {
   applyActionCode,
   checkActionCode,
-  Auth,
 } from "firebase/auth";
 
 /*
   Firestore functions.
 */
-import { doc, updateDoc, getDoc, collection, getDocs, query, where } from "firebase/firestore";
+import { doc, updateDoc, collection, query, where, getDocs } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 
-export default function VerifyEmailPage() {
+// Inner component that uses useSearchParams
+function VerifyEmailContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [verifying, setVerifying] = useState(true);
@@ -47,10 +47,6 @@ export default function VerifyEmailPage() {
         await applyActionCode(auth, oobCode);
 
         // Step 3: Find and update the user in Firestore by email
-        // We need to query Firestore to find the user by email
-        // Since we don't have the UID from the action code directly
-        
-        // Option A: If you have the current user (they might be logged in)
         const currentUser = auth.currentUser;
         if (currentUser) {
           // Update using current user's UID
@@ -60,14 +56,9 @@ export default function VerifyEmailPage() {
           });
           console.log("✅ Firestore updated for current user");
         } else {
-          // Option B: Query Firestore by email (requires index)
-          // This is less secure but works
-          // We'll use a different approach - see below
-          
           console.log("⚠️ No user logged in, trying alternative approach");
           
-          // Option C: Use the email to find the user document
-          // Note: This requires a Firestore query
+          // Use the email to find the user document
           const usersRef = collection(db, "users");
           const q = query(usersRef, where("email", "==", email));
           const querySnapshot = await getDocs(q);
@@ -103,58 +94,68 @@ export default function VerifyEmailPage() {
   }, [searchParams, router]);
 
   return (
-    <main className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-orange-50 to-green-50">
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-md bg-white rounded-3xl shadow-2xl p-8 text-center"
-      >
-        <div className="flex justify-center mb-6">
-          <div className="relative w-20 h-20">
-            <Image
-              src="/logo.png"
-              alt="LIA"
-              fill
-              className="object-contain"
-            />
-          </div>
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="w-full max-w-md bg-white rounded-3xl shadow-2xl p-8 text-center"
+    >
+      <div className="flex justify-center mb-6">
+        <div className="relative w-20 h-20">
+          <Image
+            src="/logo.png"
+            alt="LIA"
+            fill
+            className="object-contain"
+          />
         </div>
+      </div>
 
-        {verifying ? (
-          <>
-            <Loader2 className="w-16 h-16 text-green-600 animate-spin mx-auto mb-4" />
-            <h2 className="text-2xl font-bold text-gray-800">Verifying Email</h2>
-            <p className="text-gray-500 mt-2">Please wait while we verify your email...</p>
-          </>
-        ) : success ? (
-          <>
-            <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
-            <h2 className="text-2xl font-bold text-gray-800">Email Verified!</h2>
-            <p className="text-gray-600 mt-2">Your email has been successfully verified.</p>
-            <p className="text-gray-500 text-sm mt-4">Redirecting to login...</p>
-          </>
-        ) : (
-          <>
-            <XCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
-            <h2 className="text-2xl font-bold text-gray-800">Verification Failed</h2>
-            <p className="text-red-600 mt-2">{error}</p>
-            <button
-              onClick={() => router.push("/login")}
-              className="mt-6 px-6 py-2 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-xl hover:shadow-lg transition"
-            >
-              Back to Login
-            </button>
-          </>
-        )}
-      </motion.div>
-    </main>
+      {verifying ? (
+        <>
+          <Loader2 className="w-16 h-16 text-orange-500 animate-spin mx-auto mb-4" />
+          <h2 className="text-2xl font-bold text-gray-800">Verifying Email</h2>
+          <p className="text-gray-500 mt-2">Please wait while we verify your email...</p>
+        </>
+      ) : success ? (
+        <>
+          <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
+          <h2 className="text-2xl font-bold text-gray-800">Email Verified! 🎉</h2>
+          <p className="text-gray-600 mt-2">Your email has been successfully verified.</p>
+          <p className="text-gray-500 text-sm mt-4">Redirecting to login...</p>
+        </>
+      ) : (
+        <>
+          <XCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
+          <h2 className="text-2xl font-bold text-gray-800">Verification Failed</h2>
+          <p className="text-red-600 mt-2">{error}</p>
+          <button
+            onClick={() => router.push("/login")}
+            className="mt-6 px-6 py-2 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-xl hover:shadow-lg transition"
+          >
+            Back to Login
+          </button>
+        </>
+      )}
+    </motion.div>
   );
 }
 
+// Loading component for Suspense fallback
 function VerifyEmailLoading() {
   return (
+    <div className="flex items-center justify-center">
+      <Loader2 className="w-12 h-12 text-orange-500 animate-spin" />
+    </div>
+  );
+}
+
+// Main page with Suspense boundary
+export default function VerifyEmailPage() {
+  return (
     <main className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-orange-50 to-green-50">
-      <Loader2 className="w-16 h-16 text-green-600 animate-spin" />
+      <Suspense fallback={<VerifyEmailLoading />}>
+        <VerifyEmailContent />
+      </Suspense>
     </main>
   );
 }
