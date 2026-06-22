@@ -1,0 +1,99 @@
+"use client";
+
+import {motion} from "framer-motion";
+import {X, MapPin, AlertCircle, Truck} from "lucide-react";
+import {Store} from "@/types/store";
+import {formatDistance} from "@/services/distance";
+
+interface DistanceWarningModalProps {
+  store: Store;
+  distance: number;
+  onClose: () => void;
+  onContinue: () => void;
+}
+
+export function DistanceWarningModal({
+  store,
+  distance,
+  onClose,
+  onContinue,
+}: DistanceWarningModalProps) {
+  const maxRadius = 25;
+
+  return (
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
+      <motion.div
+        initial={{opacity: 0, scale: 0.9}}
+        animate={{opacity: 1, scale: 1}}
+        exit={{opacity: 0, scale: 0.9}}
+        className="bg-white rounded-3xl max-w-sm w-full p-6 max-h-[90vh] overflow-y-auto"
+      >
+        {/* Close button */}
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 w-8 h-8 rounded-full hover:bg-gray-100 flex items-center justify-center transition"
+          aria-label="Close"
+        >
+          <X className="w-5 h-5 text-gray-500" />
+        </button>
+
+        {/* Icon */}
+        <div className="w-20 h-20 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
+          <AlertCircle className="w-10 h-10 text-orange-600" />
+        </div>
+
+        {/* Title */}
+        <h2 className="text-2xl font-bold text-center text-gray-800 mb-2">
+          Store is Far Away
+        </h2>
+
+        {/* Distance info */}
+        <div className="bg-gray-50 rounded-xl p-4 mb-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <MapPin className="w-5 h-5 text-gray-500" />
+              <span className="text-gray-600">Distance:</span>
+            </div>
+            <span className="font-bold text-gray-800">{formatDistance(distance)}</span>
+          </div>
+          <div className="flex items-center justify-between mt-2">
+            <div className="flex items-center gap-2">
+              <Truck className="w-5 h-5 text-gray-500" />
+              <span className="text-gray-600">Max Delivery:</span>
+            </div>
+            <span className="font-bold text-gray-800">{maxRadius} miles</span>
+          </div>
+        </div>
+
+        {/* Store info */}
+        <div className="text-center mb-6">
+          <p className="text-gray-600 text-sm">
+            <span className="font-semibold">{store.name}</span> is outside our delivery radius.
+            Unfortunately, we cannot deliver to your location from this store.
+          </p>
+          <p className="text-gray-500 text-xs mt-2">
+            Please try a store closer to you for faster delivery.
+          </p>
+        </div>
+
+        {/* Buttons */}
+        <div className="flex flex-col gap-3">
+          <button
+            onClick={onContinue}
+            className="w-full py-3 bg-orange-500 text-white rounded-xl font-semibold hover:bg-orange-600 transition"
+            aria-label="Continue browsing"
+          >
+            View Store Anyway
+          </button>
+          <button
+            onClick={onClose}
+            className="w-full py-3 border border-gray-200 text-gray-600 rounded-xl font-medium hover:bg-gray-50 transition"
+            aria-label="Go back"
+          >
+            Go Back
+          </button>
+        </div>
+      </motion.div>
+    </div>
+  );
+}
