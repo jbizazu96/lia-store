@@ -1,22 +1,25 @@
 "use client";
 
-import { useEffect, useState, use, Suspense } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { CheckCircle, XCircle, Loader2 } from "lucide-react";
 import { auth } from "@/lib/firebase";
 import { confirmPasswordReset } from "firebase/auth";
 
-// Inner component
-function ResetPasswordContent({ searchParams }: { searchParams: Promise<{ oobCode?: string }> }) {
+// Inner component that uses useSearchParams
+function ResetPasswordContent() {
   const router = useRouter();
-  const { oobCode } = use(searchParams);
+  const searchParams = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
+  const oobCode = searchParams.get("oobCode");
+
+  // Handle the password reset
   const handleReset = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -131,12 +134,8 @@ function ResetPasswordContent({ searchParams }: { searchParams: Promise<{ oobCod
   );
 }
 
-// Main page with Suspense
-export default function ResetPasswordPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ oobCode?: string }>;
-}) {
+// Main page with Suspense boundary
+export default function ResetPasswordPage() {
   return (
     <main className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-orange-50 to-green-50">
       <Suspense fallback={
@@ -144,7 +143,7 @@ export default function ResetPasswordPage({
           <Loader2 className="w-8 h-8 text-orange-500 animate-spin" />
         </div>
       }>
-        <ResetPasswordContent searchParams={searchParams} />
+        <ResetPasswordContent />
       </Suspense>
     </main>
   );
