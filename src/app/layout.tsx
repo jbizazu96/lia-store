@@ -1,8 +1,8 @@
 import type {Metadata} from "next";
 import {Inter} from "next/font/google";
 import "./globals.css";
-import {BottomNavigation} from "@/components/navigation/BottomNavigation";
 import {AuthProvider} from "@/context/AuthContext";
+import {CartProvider} from "@/context/CartContext";
 
 const inter = Inter({subsets: ["latin"]});
 
@@ -20,12 +20,13 @@ export default function RootLayout({
     <html lang="en">
       <body className={inter.className}>
         <AuthProvider>
-          <div className="min-h-screen flex flex-col">
-            <main className="flex-1">
-              {children}
-            </main>
-            <BottomNavigation />
-          </div>
+          <CartProvider>
+            <div className="min-h-screen flex flex-col">
+              <main className="flex-1">
+                {children}
+              </main>
+            </div>
+          </CartProvider>
         </AuthProvider>
       </body>
     </html>

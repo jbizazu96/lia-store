@@ -1,36 +1,48 @@
 "use client";
 
 /*
-  Floating cart button.
+  Floating cart button with count.
+  Uses CartContext for global state.
 */
 
-import {motion} from "framer-motion";
+import {motion, AnimatePresence} from "framer-motion";
 import {ShoppingCart} from "lucide-react";
 import Link from "next/link";
+import {useCart} from "@/context/CartContext";
 
-interface CartButtonProps {
-  count: number;
-}
+export function CartButton() {
+  const {itemCount, totalPrice} = useCart();
 
-export function CartButton({count}: CartButtonProps) {
-  if (count === 0) return null;
+  if (itemCount === 0) return null;
 
   return (
-    <motion.div
-      initial={{opacity: 0, y: 20}}
-      animate={{opacity: 1, y: 0}}
-      className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50"
-    >
-      <Link
-        href="/cart"
-        className="flex items-center gap-3 px-6 py-3 bg-orange-500 text-white rounded-full shadow-lg hover:bg-orange-600 transition"
+    <AnimatePresence>
+      <motion.div
+        initial={{opacity: 0, y: 20, scale: 0.9}}
+        animate={{opacity: 1, y: 0, scale: 1}}
+        exit={{opacity: 0, y: 20, scale: 0.9}}
+        className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 w-[calc(100%-2rem)] max-w-md"
       >
-        <ShoppingCart className="w-5 h-5" />
-        <span className="font-medium">{count} item{count !== 1 ? 's' : ''} in cart</span>
-        <span className="w-6 h-6 bg-white/20 rounded-full flex items-center justify-center text-sm font-bold">
-          ${(count * 12.99).toFixed(2)}
-        </span>
-      </Link>
-    </motion.div>
+        <Link
+          href="/cart"
+          className="flex items-center justify-between px-5 py-3 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-2xl shadow-lg hover:shadow-xl transition"
+        >
+          <div className="flex items-center gap-3">
+            <div className="relative">
+              <ShoppingCart className="w-5 h-5" />
+              <span className="absolute -top-2 -right-2 w-5 h-5 bg-white text-orange-600 text-xs font-bold rounded-full flex items-center justify-center">
+                {itemCount > 99 ? "99+" : itemCount}
+              </span>
+            </div>
+            <span className="font-medium">
+              {itemCount} item{itemCount !== 1 ? 's' : ''} in cart
+            </span>
+          </div>
+          <span className="font-bold text-lg">
+            ${totalPrice.toFixed(2)}
+          </span>
+        </Link>
+      </motion.div>
+    </AnimatePresence>
   );
 }

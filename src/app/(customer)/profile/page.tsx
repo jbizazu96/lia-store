@@ -9,19 +9,19 @@ import {motion, AnimatePresence} from "framer-motion";
 import {onAuthStateChanged} from "firebase/auth";
 import {doc, getDoc} from "firebase/firestore";
 import {auth, db} from "@/lib/firebase";
-import {User, MapPin, Globe, FileText, Shield, LogOut, Trash2} from "lucide-react";
+import {ArrowLeft, User, MapPin, Globe, FileText, Shield, LogOut, Trash2} from "lucide-react";
 
 /*
   Components.
 */
-import {ProfileHeader} from "./components/ProfileHeader";
-import {ProfileMenuItem} from "./components/ProfileMenuItem";
-import {EditProfileModal} from "./components/EditProfileModal";
-import {AddressesModal} from "./components/AddressesModal";
-import {LanguageModal} from "./components/LanguageModal";
-import {SecurityModal} from "./components/SecurityModal";
-import {LogoutModal} from "./components/LogoutModal";
-import {DeleteAccountModal} from "./components/DeleteAccountModal";
+import {ProfileHeader} from "@/app/(customer)/profile/components/ProfileHeader";
+import {ProfileMenuItem} from "@/app/(customer)/profile/components/ProfileMenuItem";
+import {EditProfileModal} from "@/app/(customer)/profile/components/EditProfileModal";
+import {AddressesModal} from "@/app/(customer)/profile/components/AddressesModal";
+import {LanguageModal} from "@/app/(customer)/profile/components/LanguageModal";
+import {SecurityModal} from "@/app/(customer)/profile/components/SecurityModal";
+import {LogoutModal} from "@/app/(customer)/profile/components/LogoutModal";
+import {DeleteAccountModal} from "@/app/(customer)/profile/components/DeleteAccountModal";
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -112,44 +112,60 @@ export default function ProfilePage() {
 
   return (
     <main className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <ProfileHeader 
-        displayName={userData?.displayName || user?.email?.split("@")[0] || "User"}
-        email={user?.email || ""}
-      />
+      {/* Header with Back Button */}
+      <div className="bg-white border-b border-gray-100 sticky top-0 z-20">
+        <div className="flex items-center gap-3 px-4 py-4 max-w-lg mx-auto">
+          <button
+            onClick={() => router.back()}
+            className="p-2 hover:bg-gray-100 rounded-full transition"
+            aria-label="Go back"
+          >
+            <ArrowLeft className="w-5 h-5 text-gray-700" />
+          </button>
+          <h1 className="text-xl font-bold text-gray-800">Profile</h1>
+        </div>
+      </div>
 
-      {/* Menu Items */}
-      <div className="max-w-lg mx-auto px-4 space-y-1 pb-8">
-        {menuItems.map((item, index) => (
+      {/* Profile Content */}
+      <div className="max-w-lg mx-auto">
+        <ProfileHeader 
+          displayName={userData?.displayName || user?.email?.split("@")[0] || "User"}
+          email={user?.email || ""}
+        />
+
+        {/* Menu Items */}
+        <div className="px-4 space-y-1 pb-8">
+          {menuItems.map((item, index) => (
+            <ProfileMenuItem
+              key={index}
+              icon={item.icon}
+              label={item.label}
+              description={item.description}
+              onClick={item.onClick}
+            />
+          ))}
+
+          {/* Divider */}
+          <div className="h-px bg-gray-200 my-2" />
+
+          {/* Logout */}
           <ProfileMenuItem
-            key={index}
-            icon={item.icon}
-            label={item.label}
-            description={item.description}
-            onClick={item.onClick}
+            icon={LogOut}
+            label="Logout"
+            description="Sign out of your account"
+            onClick={() => setShowLogout(true)}
+            variant="danger"
           />
-        ))}
 
-        {/* Divider */}
-        <div className="h-px bg-gray-200 my-2" />
-
-        {/* Logout */}
-        <ProfileMenuItem
-          icon={LogOut}
-          label="Logout"
-          description="Sign out of your account"
-          onClick={() => setShowLogout(true)}
-          variant="danger"
-        />
-
-        {/* Delete Account */}
-        <ProfileMenuItem
-          icon={Trash2}
-          label="Delete account"
-          description="Permanently delete your account"
-          onClick={() => setShowDeleteAccount(true)}
-          variant="danger"
-        />
+          {/* Delete Account */}
+          <ProfileMenuItem
+            icon={Trash2}
+            label="Delete account"
+            description="Permanently delete your account"
+            onClick={() => setShowDeleteAccount(true)}
+            variant="danger"
+          />
+        </div>
       </div>
 
       {/* Modals */}

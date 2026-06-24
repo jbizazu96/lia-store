@@ -10,6 +10,7 @@ import {useRouter, useSearchParams} from "next/navigation";
 import {motion, AnimatePresence} from "framer-motion";
 import {doc, getDoc, collection, query, where, getDocs} from "firebase/firestore";
 import {auth, db} from "@/lib/firebase";
+import {useCart} from "@/context/CartContext";
 
 // Components
 import {StoreHeader} from "./components/StoreHeader";
@@ -26,7 +27,7 @@ import {ProductCard} from "./components/ProductCard";
 import {Store, Category, Product} from "./types";
 
 // Services
-import {calculateDistance} from "@/services/distance";
+import {calculateDistance, getDeliveryFeeNumber, getEstimatedTimeNumber} from "@/services/distance";
 
 interface StorePageProps {
   params: Promise<{
@@ -38,6 +39,7 @@ export default function StorePage({params}: StorePageProps) {
   const {storeId} = use(params);
   const router = useRouter();
   const searchParams = useSearchParams();
+  const {addItem} = useCart();
   
   // Get data passed from home page via URL params
   const distanceParam = searchParams.get("distance");
@@ -51,7 +53,6 @@ export default function StorePage({params}: StorePageProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [loading, setLoading] = useState(true);
-  const [cartCount, setCartCount] = useState(0);
   const [userLocation, setUserLocation] = useState<{lat: number; lng: number} | null>(null);
 
   // Get user location from auth
@@ -99,24 +100,22 @@ export default function StorePage({params}: StorePageProps) {
         const productsData: Product[] = [];
         productsSnapshot.forEach((doc) => {
           const p = doc.data();
-         // When mapping products from Firestore, add these fields:
-
-            productsData.push({
-              id: doc.id,
-              name: p.name || "Unnamed Product",
-              description: p.description || "",
-              price: p.price || 0,
-              displayPrice: p.displayPrice || p.price || 0,
-              imageUrl: p.imageUrl || "",
-              category: p.category || "Uncategorized",
-              stock: p.stock || 0,
-              rating: p.rating || 4.5,
-              reviewCount: p.reviewCount || 0,
-              soldCount: p.soldCount || 0,
-              brand: p.brand || "", // Add brand if available
-              size: p.size || null,
-              promotion: p.promotion || null,
-            });
+          productsData.push({
+            id: doc.id,
+            name: p.name || "Unnamed Product",
+            description: p.description || "",
+            price: p.price || 0,
+            displayPrice: p.displayPrice || p.price || 0,
+            imageUrl: p.imageUrl || "",
+            category: p.category || "Uncategorized",
+            stock: p.stock || 0,
+            rating: p.rating || 4.5,
+            reviewCount: p.reviewCount || 0,
+            soldCount: p.soldCount || 0,
+            brand: p.brand || "",
+            size: p.size || null,
+            promotion: p.promotion || null,
+          });
         });
 
         setAllProducts(productsData);
@@ -167,15 +166,9 @@ export default function StorePage({params}: StorePageProps) {
             data.latitude,
             data.longitude
           );
-          // Calculate delivery fee based on distance
-          if (distance < 3) deliveryFee = 0;
-          else if (distance < 5) deliveryFee = 2.99;
-          else if (distance < 8) deliveryFee = 4.99;
-          else if (distance < 12) deliveryFee = 7.99;
-          else deliveryFee = 9.99;
-          
-          // Calculate estimated time (2 min per mile + 5 min prep)
-          estimatedTime = Math.round(distance * 2 + 5);
+          // Use the service functions for consistent fees
+          deliveryFee = getDeliveryFeeNumber(distance);
+          estimatedTime = getEstimatedTimeNumber(distance);
         }
 
         // 5. Build store object
@@ -253,9 +246,21 @@ export default function StorePage({params}: StorePageProps) {
     }
   };
 
-  // Add to cart
+  // Add to cart using CartContext
   const handleAddToCart = (product: Product) => {
-    setCartCount(prev => prev + 1);
+    if (!store) return;
+    
+    addItem({
+      id: product.id,
+      name: product.name,
+      price: product.price,
+      imageUrl: product.imageUrl,
+      storeId: store.id,
+      storeName: store.name,
+      size: product.size,
+    });
+    
+    // Optional: Show a quick feedback
     console.log("Added to cart:", product.name);
   };
 
@@ -325,7 +330,7 @@ export default function StorePage({params}: StorePageProps) {
         />
       </div>
 
-      {/* Categories - Only show if we have categories */}
+      {/* Categories */}
       {categories.length > 0 && (
         <div className="px-4 mt-4">
           <CategoryScroll
@@ -360,7 +365,6 @@ export default function StorePage({params}: StorePageProps) {
           )}
         </div>
       ) : (
-        // Show products by category
         categories.map((category) => (
           <ProductSection
             key={category.id}
@@ -376,7 +380,7 @@ export default function StorePage({params}: StorePageProps) {
       )}
 
       {/* Floating Cart Button */}
-      <CartButton count={cartCount} />
+      <CartButton />
     </main>
   );
 }

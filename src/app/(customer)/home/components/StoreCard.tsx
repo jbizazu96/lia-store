@@ -2,8 +2,16 @@
 
 import {useState} from "react";
 import Image from "next/image";
+import {useRouter} from "next/navigation";
 import {motion} from "framer-motion";
-import {Heart, Star, MapPin, Truck, AlertCircle} from "lucide-react";
+import {Heart, Star, MapPin, Truck, Clock, AlertCircle} from "lucide-react";
+import {
+  formatDistance,
+  getDeliveryFee,
+  getEstimatedTime,
+  getDeliveryFeeNumber,
+  getEstimatedTimeNumber,
+} from "@/services/distance";
 
 interface Store {
   id: string;
@@ -17,7 +25,6 @@ interface Store {
   rating?: number;
   isOpen?: boolean;
   status?: string;
-  deliveryFee?: number;
 }
 
 interface StoreCardProps {
@@ -25,35 +32,35 @@ interface StoreCardProps {
   onClick: () => void;
 }
 
-export function StoreCard({store, onClick}: StoreCardProps) {
+export function StoreCard({store}: StoreCardProps) {
+  const router = useRouter();
   const [isFavorite, setIsFavorite] = useState(false);
   const maxRadius = 25;
-  const isTooFar = (store.distance || 0) > maxRadius;
+  const distance = store.distance || 0;
+  const isTooFar = distance > maxRadius;
 
-  // Format distance
-  const formatDistance = (distance?: number) => {
-    if (!distance) return "0.0 mi";
-    if (distance < 1) return `${(distance * 1000).toFixed(0)} m`;
-    return `${distance.toFixed(1)} mi`;
-  };
+  const formattedDistance = formatDistance(distance);
+  const deliveryFee = getDeliveryFee(distance);
+  const estimatedTime = getEstimatedTime(distance);
 
-  // Get delivery fee based on distance
-  const getDeliveryFee = (distance?: number) => {
-    if (!distance) return "Calculating...";
-    if (distance < 5) return "$5.99";
-    if (distance < 8) return "$7.99";
-    if (distance < 12) return "$10.99";
-    if (distance < 25) return "$15.99";
-    return "Unavailable";
-  };
-
-  // Get store status
   const isOpen = store.isOpen && store.status === "active";
+
+  const handleStoreClick = () => {
+    const deliveryFeeNumber = getDeliveryFeeNumber(distance);
+    const estimatedTimeNumber = getEstimatedTimeNumber(distance);
+    
+    const params = new URLSearchParams();
+    if (store.distance) params.set("distance", store.distance.toString());
+    params.set("deliveryFee", deliveryFeeNumber.toString());
+    params.set("estimatedTime", estimatedTimeNumber.toString());
+    
+    router.push(`/store/${store.id}?${params.toString()}`);
+  };
 
   return (
     <motion.div
       whileTap={{scale: 0.98}}
-      onClick={onClick}
+      onClick={handleStoreClick}
       className={`bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition cursor-pointer ${
         isTooFar ? "opacity-75" : ""
       }`}
@@ -94,28 +101,21 @@ export function StoreCard({store, onClick}: StoreCardProps) {
           />
         </button>
 
-        {/* Distance Warning Badge */}
+        {/* Status Badges */}
+        {!isOpen && (
+          <div className="absolute top-3 left-3 px-3 py-1 bg-red-500 text-white text-xs font-semibold rounded-full">
+            Store is closed
+          </div>
+        )}
         {isTooFar && (
           <div className="absolute top-3 left-3 px-3 py-1.5 bg-orange-500 text-white text-xs font-semibold rounded-full flex items-center gap-1">
             <AlertCircle className="w-3 h-3" />
             <span>Out of Radius</span>
           </div>
         )}
-
-        {/* Status Badge */}
-        {!isOpen && (
-          <div className="absolute top-3 left-3 px-3 py-1 bg-red-500 text-white text-xs font-semibold rounded-full">
-            Store is closed
-          </div>
-        )}
-        {isOpen && store.status === "pending" && (
-          <div className="absolute top-3 left-3 px-3 py-1 bg-yellow-500 text-white text-xs font-semibold rounded-full">
-            Pending approval
-          </div>
-        )}
       </div>
 
-      {/* Store Info */}
+      {/* Store Info - No category tags */}
       <div className="p-4 space-y-3">
         {/* Store Name & Rating */}
         <div className="flex items-center justify-between">
@@ -141,21 +141,25 @@ export function StoreCard({store, onClick}: StoreCardProps) {
           </div>
         </div>
 
-        {/* Distance & Delivery Fee */}
-        <div className="flex items-center gap-4 text-sm">
+        {/* Distance, Delivery Fee & Estimated Time */}
+        <div className="flex items-center gap-3 text-sm">
           <div className="flex items-center gap-1 text-gray-500">
             <MapPin className="w-4 h-4" />
-            <span>{formatDistance(store.distance)}</span>
+            <span>{formattedDistance}</span>
           </div>
           <div className={`flex items-center gap-1 ${
             isTooFar ? "text-red-500" : "text-gray-500"
           }`}>
             <Truck className="w-4 h-4" />
-            <span>Delivery: {getDeliveryFee(store.distance)}</span>
+            <span>Delivery: {deliveryFee}</span>
+          </div>
+          <div className="flex items-center gap-1 text-gray-500">
+            <Clock className="w-4 h-4" />
+            <span>{estimatedTime}</span>
           </div>
         </div>
 
-        {/* Location & Warning */}
+        {/* Location */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1 text-sm text-gray-400">
             <span>Location: {store.city}, {store.state}</span>

@@ -2,10 +2,16 @@
 
 /*
   Store information section.
+  Uses consistent distance, delivery fee, and time formatting.
 */
 
 import {motion} from "framer-motion";
 import {Clock, MapPin, Truck, Star, ChevronRight} from "lucide-react";
+import {
+  formatDistance,
+  getDeliveryFee,
+  getEstimatedTime,
+} from "@/services/distance";
 
 interface StoreInfoProps {
   name: string;
@@ -28,23 +34,20 @@ export function StoreInfo({
   rating,
   reviewCount,
 }: StoreInfoProps) {
-  // Format distance
-  const formatDistance = (dist: number) => {
-    if (dist < 1) return `${(dist * 1000).toFixed(0)} m`;
-    return `${dist.toFixed(1)} mi`;
-  };
-
-  // Format delivery fee
-  const formatDeliveryFee = (fee: number) => {
-    if (fee === 0) return "Free";
-    return `$${fee.toFixed(2)}`;
-  };
+  // Use the shared formatting functions
+  const formattedDistance = formatDistance(distance);
+  
+  // Get delivery fee from the service (uses the same logic as home page)
+  const deliveryFeeDisplay = getDeliveryFee(distance);
+  
+  // Get estimated time from the service
+  const formattedTime = getEstimatedTime(distance || estimatedPrepTime / 2);
 
   return (
     <motion.div
       initial={{opacity: 0, y: 20}}
       animate={{opacity: 1, y: 0}}
-      className="bg-white rounded-2xl p-4 shadow-lg border border-gray-100"
+      className="bg-white rounded-2xl p-4 shadow-lg border border-gray-100 mt-12 relative z-10"
     >
       {/* Store Name & Rating */}
       <div className="flex items-start justify-between">
@@ -80,19 +83,19 @@ export function StoreInfo({
         )}
       </div>
 
-      {/* Delivery Info */}
+      {/* Delivery Info - Using the same formatting as home page */}
       <div className="flex flex-wrap items-center gap-4 mt-3 pt-3 border-t border-gray-100">
         <div className="flex items-center gap-1.5 text-sm text-gray-600">
           <MapPin className="w-4 h-4 text-gray-400" />
-          <span>{formatDistance(distance)} away</span>
+          <span>{formattedDistance} away</span>
         </div>
         <div className="flex items-center gap-1.5 text-sm text-gray-600">
           <Truck className="w-4 h-4 text-gray-400" />
-          <span>Delivery {formatDeliveryFee(deliveryFee)}</span>
+          <span>Delivery: {deliveryFeeDisplay}</span>
         </div>
         <div className="flex items-center gap-1.5 text-sm text-gray-600">
           <Clock className="w-4 h-4 text-gray-400" />
-          <span>{estimatedPrepTime} min</span>
+          <span>{formattedTime}</span>
         </div>
       </div>
 

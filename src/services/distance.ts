@@ -31,12 +31,65 @@ export function calculateDistance(
 
 /**
  * Format distance for display
+ * Shows miles with one decimal place, or meters if less than 0.1 mile
  */
 export function formatDistance(distance: number): string {
-  if (distance < 1) {
-    return `${Math.round(distance * 1000)} m`;
+  if (distance < 0.1) {
+    // Less than 0.1 mile, show in meters
+    const meters = Math.round(distance * 1609.34);
+    return `${meters} m`;
   }
   return `${distance.toFixed(1)} mi`;
+}
+
+/**
+ * Get delivery fee based on distance
+ * Updated fee structure
+ */
+export function getDeliveryFee(distance: number): string {
+  if (distance < 3) return "$5.99";
+  if (distance < 5) return "$6.99";
+  if (distance < 8) return "$8.99";
+  if (distance < 12) return "$10.99";
+  if (distance < 25) return "$15.99";
+  return "Unavailable";
+}
+
+/**
+ * Get delivery fee as a number (for calculations)
+ */
+export function getDeliveryFeeNumber(distance: number): number {
+  if (distance < 3) return 5.99;
+  if (distance < 5) return 6.99;
+  if (distance < 8) return 8.99;
+  if (distance < 12) return 10.99;
+  if (distance < 25) return 15.99;
+  return 0;
+}
+
+/**
+ * Get estimated delivery time based on distance
+ * 2 min per mile + 5 min prep time
+ */
+export function getEstimatedTime(distance: number): string {
+  if (!distance || distance === 0) return "5 min";
+  const totalMinutes = Math.round(distance * 2 + 5);
+  
+  if (totalMinutes < 60) {
+    return `${totalMinutes} min`;
+  }
+  
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
+}
+
+/**
+ * Get estimated time as a number (for calculations)
+ */
+export function getEstimatedTimeNumber(distance: number): number {
+  if (!distance || distance === 0) return 5;
+  return Math.round(distance * 2 + 5);
 }
 
 /**

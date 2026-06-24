@@ -2,6 +2,7 @@
 
 /*
   Store header with banner, back button, and favorite.
+  Logo positioned correctly with proper z-index.
 */
 
 import Image from "next/image";
@@ -50,7 +51,7 @@ export function StoreHeader({
       </div>
 
       {/* Action Buttons */}
-      <div className="absolute top-4 left-4 right-4 flex justify-between">
+      <div className="absolute top-4 left-4 right-4 flex justify-between z-20">
         <button
           type="button"
           onClick={onBack}
@@ -68,8 +69,8 @@ export function StoreHeader({
         </button>
       </div>
 
-      {/* Logo */}
-      <div className="absolute -bottom-10 left-1/2 -translate-x-1/2">
+      {/* Logo - Positioned to overlap the banner and info card */}
+      <div className="absolute -bottom-10 left-1/2 -translate-x-1/2 z-20">
         <div className="relative w-20 h-20 rounded-full bg-white p-1 shadow-lg">
           <div className="relative w-full h-full rounded-full overflow-hidden">
             {logoUrl ? (
@@ -88,7 +89,7 @@ export function StoreHeader({
             )}
           </div>
           {/* Green ring */}
-          <div className="absolute inset-0 rounded-full border-4 border-green-500" />
+          <div className="absolute inset-0 rounded-full border-4 border-green-500 pointer-events-none" />
         </div>
       </div>
     </div>

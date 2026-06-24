@@ -7,13 +7,13 @@ import {auth, db} from "@/lib/firebase";
 import {doc, getDoc, collection, getDocs} from "firebase/firestore";
 import {onAuthStateChanged} from "firebase/auth";
 import {Store} from "@/types/store";
-import {Header} from "./components/Header";
-import {SearchBar} from "./components/SearchBar";
+import {TopNavigation} from "./components/TopNavigation";
+import {FloatingSearchBar} from "./components/FloatingSearchBar";
 import {PromoCarousel} from "./components/PromoCarousel";
 import {StoreCard} from "./components/StoreCard";
 import {StoreCardSkeleton} from "./components/StoreCardSkeleton";
 import {DistanceWarningModal} from "./components/DistanceWarningModal";
-import {calculateDistance, getDeliveryStatusMessage} from "@/services/distance";
+import {calculateDistance} from "@/services/distance";
 
 export default function CustomerHomePage() {
   const router = useRouter();
@@ -22,7 +22,6 @@ export default function CustomerHomePage() {
   const [stores, setStores] = useState<Store[]>([]);
   const [filteredStores, setFilteredStores] = useState<Store[]>([]);
   const [loading, setLoading] = useState(true);
-  const [cartCount, setCartCount] = useState(0);
   const [searchQuery, setSearchQuery] = useState("");
 
   // Distance warning modal state
@@ -39,22 +38,11 @@ export default function CustomerHomePage() {
           const data = userDoc.data();
           setUserName(data.displayName || user.email?.split("@")[0] || "Customer");
           
-          // Get user's default address location
           if (data.defaultAddress) {
             setUserLocation({
               lat: data.defaultAddress.latitude,
               lng: data.defaultAddress.longitude,
             });
-          }
-        }
-        
-        const savedCart = localStorage.getItem(`cart_${user.uid}`);
-        if (savedCart) {
-          try {
-            const cart = JSON.parse(savedCart);
-            setCartCount(cart.length || 0);
-          } catch {
-            setCartCount(0);
           }
         }
       } else {
@@ -82,7 +70,6 @@ export default function CustomerHomePage() {
           } as Store);
         });
         
-        // Calculate distance for each store if user location is available
         let storesWithDistance = storesData;
         if (userLocation) {
           storesWithDistance = storesData.map(store => ({
@@ -96,10 +83,8 @@ export default function CustomerHomePage() {
           }));
         }
         
-        // Sort by distance (closest first)
         storesWithDistance.sort((a, b) => (a.distance || 999) - (b.distance || 999));
         
-        // Filter only active stores
         const activeStores = storesWithDistance.filter(store => 
           store.status === "active" && store.isOpen
         );
@@ -137,13 +122,11 @@ export default function CustomerHomePage() {
     const distance = store.distance || 0;
     const maxRadius = 25;
     
-    // Check if store is within radius
     if (distance > maxRadius) {
       setSelectedStore(store);
       setSelectedDistance(distance);
       setShowDistanceWarning(true);
     } else {
-      // If within radius, go directly to store
       router.push(`/store/${store.id}`);
     }
   };
@@ -157,27 +140,25 @@ export default function CustomerHomePage() {
   };
 
   return (
-    <main className="min-h-screen bg-gray-50 pb-20">
-      {/* Header */}
-      <Header userName={userName} cartCount={cartCount} />
+    <main className="min-h-screen bg-gray-50 pb-4">
+      {/* Top Navigation - User, Orders, Notifications, Cart */}
+      <TopNavigation userName={userName} />
 
-      {/* Search Bar */}
-      <div className="px-4 mt-4">
-        <SearchBar 
-          value={searchQuery} 
-          onChange={setSearchQuery} 
-        />
+      {/* Welcome Section - Hello [Name] */}
+      <div className="px-4 pt-4 pb-2">
+        <p className="text-sm text-gray-500">Hello,</p>
+        <h1 className="text-2xl font-bold text-gray-800">{userName}</h1>
       </div>
 
       {/* Promo Carousel */}
-      <div className="px-4 mt-4">
+      <div className="px-4 mt-2">
         <PromoCarousel />
       </div>
 
       {/* Store List */}
-      <section className="px-4 mt-6 pb-4">
+      <section className="px-4 mt-6 pb-32">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-bold text-gray-800">Stores Near You</h2>
+          <h2 className="text-lg font-bold text-gray-800">Stores Near You</h2>
           <span className="text-sm text-gray-500">{filteredStores.length} stores</span>
         </div>
 
@@ -216,6 +197,12 @@ export default function CustomerHomePage() {
           </motion.div>
         )}
       </section>
+
+      {/* Floating Search Bar - Orange text */}
+      <FloatingSearchBar 
+        value={searchQuery}
+        onChange={setSearchQuery}
+      />
 
       {/* Distance Warning Modal */}
       <AnimatePresence>

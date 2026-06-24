@@ -2,10 +2,23 @@
 
 import {useEffect, useState} from "react";
 import {useRouter} from "next/navigation";
+import {motion, AnimatePresence} from "framer-motion";
 import {auth, db} from "@/lib/firebase";
 import {collection, query, where, getDocs, orderBy} from "firebase/firestore";
 import {onAuthStateChanged} from "firebase/auth";
-import {Package, Clock, CheckCircle, XCircle, Truck} from "lucide-react";
+import {
+  Package,
+  Clock,
+  CheckCircle,
+  XCircle,
+  Truck,
+  ArrowLeft,
+  ShoppingBag,
+  Calendar,
+  CreditCard,
+  MapPin,
+} from "lucide-react";
+import Link from "next/link";
 
 interface Order {
   id: string;
@@ -14,6 +27,7 @@ interface Order {
   status: string;
   createdAt: string;
   items: number;
+  deliveryAddress?: string;
 }
 
 export default function OrdersPage() {
@@ -47,6 +61,7 @@ export default function OrdersPage() {
             status: data.status || "pending",
             createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
             items: data.items?.length || 0,
+            deliveryAddress: data.deliveryAddress || "",
           });
         });
         
@@ -69,6 +84,8 @@ export default function OrdersPage() {
         return <XCircle className="w-5 h-5 text-red-500" />;
       case "out_for_delivery":
         return <Truck className="w-5 h-5 text-blue-500" />;
+      case "preparing":
+        return <Package className="w-5 h-5 text-purple-500" />;
       default:
         return <Clock className="w-5 h-5 text-orange-500" />;
     }
@@ -84,6 +101,33 @@ export default function OrdersPage() {
     }
   };
 
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "delivered": return "bg-green-100 text-green-800";
+      case "cancelled": return "bg-red-100 text-red-800";
+      case "out_for_delivery": return "bg-blue-100 text-blue-800";
+      case "preparing": return "bg-purple-100 text-purple-800";
+      default: return "bg-yellow-100 text-yellow-800";
+    }
+  };
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return new Intl.DateTimeFormat('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    }).format(date);
+  };
+
+  const formatTime = (dateString: string) => {
+    const date = new Date(dateString);
+    return new Intl.DateTimeFormat('en-US', {
+      hour: 'numeric',
+      minute: 'numeric',
+    }).format(date);
+  };
+
   if (loading) {
     return (
       <main className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -94,45 +138,142 @@ export default function OrdersPage() {
 
   return (
     <main className="min-h-screen bg-gray-50">
-      <div className="max-w-lg mx-auto px-4 py-6">
-        <h1 className="text-2xl font-bold text-gray-800 mb-6">My Orders</h1>
+      {/* Header with Back Button */}
+      <div className="bg-white border-b border-gray-100 sticky top-0 z-20">
+        <div className="flex items-center gap-3 px-4 py-4 max-w-lg mx-auto">
+          <button
+            onClick={() => router.back()}
+            className="p-2 hover:bg-gray-100 rounded-full transition"
+            aria-label="Go back"
+          >
+            <ArrowLeft className="w-5 h-5 text-gray-700" />
+          </button>
+          <h1 className="text-xl font-bold text-gray-800">My Orders</h1>
+        </div>
+      </div>
 
+      <div className="max-w-lg mx-auto px-4 py-6">
         {orders.length === 0 ? (
-          <div className="text-center py-16">
-            <Package className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-            <p className="text-gray-500 text-lg">No orders yet</p>
-            <p className="text-gray-400 text-sm">Start shopping to see your orders here</p>
-            <button
-              onClick={() => router.push("/home")}
-              className="mt-4 px-6 py-2 bg-orange-500 text-white rounded-full font-semibold hover:bg-orange-600 transition"
-            >
-              Browse Stores
-            </button>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {orders.map((order) => (
-              <div key={order.id} className="bg-white rounded-2xl p-4 shadow-sm">
-                <div className="flex items-start justify-between mb-3">
-                  <div>
-                    <h3 className="font-semibold text-gray-800">{order.storeName}</h3>
-                    <p className="text-sm text-gray-500">
-                      {new Date(order.createdAt).toLocaleDateString()} • {order.items} items
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {getStatusIcon(order.status)}
-                    <span className="text-sm font-medium text-gray-600">
-                      {getStatusText(order.status)}
-                    </span>
-                  </div>
-                </div>
-                <div className="flex items-center justify-between pt-3 border-t border-gray-100">
-                  <span className="text-sm text-gray-500">Total</span>
-                  <span className="font-bold text-gray-800">${order.total.toFixed(2)}</span>
-                </div>
+          // Beautiful Empty State
+          <motion.div
+            initial={{opacity: 0, y: 20}}
+            animate={{opacity: 1, y: 0}}
+            className="text-center py-16"
+          >
+            {/* Empty State Illustration */}
+            <div className="relative w-48 h-48 mx-auto mb-8">
+              <div className="absolute inset-0 bg-orange-100 rounded-full opacity-20 scale-150" />
+              <div className="relative w-full h-full flex items-center justify-center">
+                <Package className="w-24 h-24 text-orange-300" />
+                <motion.div
+                  animate={{
+                    y: [0, -10, 0],
+                  }}
+                  transition={{
+                    repeat: Infinity,
+                    duration: 2,
+                    ease: "easeInOut",
+                  }}
+                  className="absolute -top-2 -right-2 w-12 h-12 bg-orange-500 rounded-full flex items-center justify-center"
+                >
+                  <span className="text-2xl">📦</span>
+                </motion.div>
               </div>
-            ))}
+            </div>
+
+            <h2 className="text-2xl font-bold text-gray-800 mb-2">
+              No orders yet
+            </h2>
+            <p className="text-gray-500 text-sm mb-6 max-w-xs mx-auto">
+              Start shopping and your orders will appear here. 
+              Fresh African groceries delivered to your door!
+            </p>
+
+            <Link
+              href="/home"
+              className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-orange-500 to-orange-600 text-white font-semibold rounded-xl hover:shadow-lg hover:from-orange-600 hover:to-orange-700 transition"
+            >
+              <ShoppingBag className="w-5 h-5" />
+              Browse Stores
+            </Link>
+
+            <div className="mt-8 flex flex-col gap-3 text-sm text-gray-400">
+              <div className="flex items-center justify-center gap-2">
+                <Truck className="w-4 h-4" />
+                <span>Fast delivery in 30-45 min</span>
+              </div>
+              <div className="flex items-center justify-center gap-2">
+                <MapPin className="w-4 h-4" />
+                <span>Track your order in real-time</span>
+              </div>
+            </div>
+          </motion.div>
+        ) : (
+          // Orders List
+          <div className="space-y-4">
+            <p className="text-sm text-gray-400 px-1">
+              {orders.length} order{orders.length !== 1 ? 's' : ''}
+            </p>
+            
+            <AnimatePresence mode="popLayout">
+              {orders.map((order, index) => (
+                <motion.div
+                  key={order.id}
+                  initial={{opacity: 0, y: 20}}
+                  animate={{opacity: 1, y: 0}}
+                  exit={{opacity: 0, x: -20}}
+                  transition={{delay: index * 0.05}}
+                  className="bg-white rounded-2xl p-5 shadow-sm hover:shadow-md transition border border-gray-100"
+                >
+                  {/* Order Header */}
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-semibold text-gray-800 truncate">
+                        {order.storeName}
+                      </h3>
+                      <div className="flex items-center gap-3 mt-1">
+                        <div className="flex items-center gap-1 text-sm text-gray-500">
+                          <Calendar className="w-3.5 h-3.5" />
+                          <span>{formatDate(order.createdAt)}</span>
+                        </div>
+                        <div className="flex items-center gap-1 text-sm text-gray-500">
+                          <Clock className="w-3.5 h-3.5" />
+                          <span>{formatTime(order.createdAt)}</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className={`px-3 py-1 rounded-full text-xs font-medium flex items-center gap-1.5 ${getStatusColor(order.status)}`}>
+                      {getStatusIcon(order.status)}
+                      {getStatusText(order.status)}
+                    </div>
+                  </div>
+
+                  {/* Order Details */}
+                  <div className="flex items-center justify-between pt-3 border-t border-gray-100">
+                    <div className="flex items-center gap-4 text-sm text-gray-500">
+                      <span>{order.items} item{order.items !== 1 ? 's' : ''}</span>
+                      {order.deliveryAddress && (
+                        <div className="flex items-center gap-1">
+                          <MapPin className="w-3.5 h-3.5" />
+                          <span className="truncate max-w-[120px]">{order.deliveryAddress}</span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="text-lg font-bold text-gray-800">
+                        ${order.total.toFixed(2)}
+                      </span>
+                      <Link
+                        href={`/orders/${order.id}`}
+                        className="px-3 py-1.5 text-xs font-medium text-orange-600 hover:bg-orange-50 rounded-lg transition"
+                      >
+                        View Details
+                      </Link>
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+            </AnimatePresence>
           </div>
         )}
       </div>
