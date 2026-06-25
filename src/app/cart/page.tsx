@@ -157,13 +157,13 @@ export default function CartPage() {
               >
                 <div className="flex gap-4">
                   {/* Product Image */}
-                  <div className="relative w-20 h-20 rounded-xl overflow-hidden flex-shrink-0 bg-gray-100">
+                  <div className="relative w-20 h-20 rounded-xl overflow-hidden flex-shrink-0 bg-white-100">
                     {item.imageUrl ? (
                       <Image
                         src={item.imageUrl}
                         alt={item.name}
                         fill
-                        className="object-cover"
+                        className="object-contain"
                       />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center">

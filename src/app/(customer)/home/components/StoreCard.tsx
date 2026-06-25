@@ -1,5 +1,10 @@
 "use client";
 
+/*
+  Store card component with distance-based styling.
+  Shows a warning badge for stores beyond 25 miles.
+*/
+
 import {useState} from "react";
 import Image from "next/image";
 import {useRouter} from "next/navigation";
@@ -62,7 +67,7 @@ export function StoreCard({store}: StoreCardProps) {
       whileTap={{scale: 0.98}}
       onClick={handleStoreClick}
       className={`bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition cursor-pointer ${
-        isTooFar ? "opacity-75" : ""
+        isTooFar ? "opacity-80" : ""
       }`}
     >
       {/* Store Image */}
@@ -110,12 +115,12 @@ export function StoreCard({store}: StoreCardProps) {
         {isTooFar && (
           <div className="absolute top-3 left-3 px-3 py-1.5 bg-orange-500 text-white text-xs font-semibold rounded-full flex items-center gap-1">
             <AlertCircle className="w-3 h-3" />
-            <span>Out of Radius</span>
+            <span>Outside delivery radius</span>
           </div>
         )}
       </div>
 
-      {/* Store Info - No category tags */}
+      {/* Store Info */}
       <div className="p-4 space-y-3">
         {/* Store Name & Rating */}
         <div className="flex items-center justify-between">
@@ -166,7 +171,7 @@ export function StoreCard({store}: StoreCardProps) {
           </div>
           {isTooFar && (
             <span className="text-xs text-orange-500 font-medium">
-              Beyond 25mi radius
+              Outside delivery radius
             </span>
           )}
         </div>

@@ -1,14 +1,22 @@
-/* This file check the user role and manage to show the correct document */
-export type UserRole =
-  | "customer"
-  | "store_owner"
-  | "admin";
-
-export interface UserProfile {
+export interface User {
   uid: string;
-  email: string;
   displayName: string;
-  role: UserRole;
-  createdAt: string;
+  email: string;
+  phone: string;
+  accountType: "customer" | "store_owner" | "admin";
+  role: string;
   isActive: boolean;
+  emailVerified: boolean;
+  emailVerifiedAt: string | null;
+  defaultAddress?: {
+    street: string;
+    city: string;
+    state: string;
+    zip: string;
+    latitude: number;
+    longitude: number;
+    formattedAddress: string;
+  };
+  recentSearches?: string[]; // ✅ Add this field
+  createdAt: string;
 }

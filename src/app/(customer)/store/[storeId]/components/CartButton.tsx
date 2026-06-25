@@ -3,6 +3,7 @@
 /*
   Floating cart button with count.
   Uses CartContext for global state.
+  Positioned above the bottom navigation with proper spacing.
 */
 
 import {motion, AnimatePresence} from "framer-motion";
@@ -21,7 +22,7 @@ export function CartButton() {
         initial={{opacity: 0, y: 20, scale: 0.9}}
         animate={{opacity: 1, y: 0, scale: 1}}
         exit={{opacity: 0, y: 20, scale: 0.9}}
-        className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 w-[calc(100%-2rem)] max-w-md"
+        className="fixed bottom-28 left-1/2 -translate-x-1/2 z-50 w-[calc(100%-2rem)] max-w-md"
       >
         <Link
           href="/cart"

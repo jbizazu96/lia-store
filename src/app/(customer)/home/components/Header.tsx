@@ -20,7 +20,7 @@ export function Header({userName}: HeaderProps) {
           <div className="flex items-center gap-3">
             <div className="relative w-10 h-10">
               <Image
-                src="/logo.png"
+                src="/icon/icon-512.png"
                 alt="LIA"
                 fill
                 className="object-contain"

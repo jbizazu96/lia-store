@@ -49,7 +49,7 @@ export default function StorePage({params}: StorePageProps) {
   const [store, setStore] = useState<Store | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [allProducts, setAllProducts] = useState<Product[]>([]);
-  const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
+  const [displayProducts, setDisplayProducts] = useState<Product[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [loading, setLoading] = useState(true);
@@ -119,9 +119,9 @@ export default function StorePage({params}: StorePageProps) {
         });
 
         setAllProducts(productsData);
-        setFilteredProducts(productsData);
+        setDisplayProducts(productsData);
 
-        // 3. Build categories from products
+        // 3. Build categories dynamically from products
         const categoryMap = new Map<string, Category>();
         const categoryIcons: {[key: string]: string} = {
           "produce": "🥬",
@@ -166,7 +166,6 @@ export default function StorePage({params}: StorePageProps) {
             data.latitude,
             data.longitude
           );
-          // Use the service functions for consistent fees
           deliveryFee = getDeliveryFeeNumber(distance);
           estimatedTime = getEstimatedTimeNumber(distance);
         }
@@ -218,31 +217,41 @@ export default function StorePage({params}: StorePageProps) {
     fetchStoreAndProducts();
   }, [storeId, router, distanceParam, deliveryFeeParam, estimatedTimeParam, userLocation]);
 
-  // Handle search
+  // ✅ Handle filtering based on category and search
   useEffect(() => {
-    if (!searchQuery.trim()) {
-      setFilteredProducts(allProducts);
+    // If search query is active, search across all products
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      const filtered = allProducts.filter(
+        p =>
+          p.name.toLowerCase().includes(query) ||
+          p.description.toLowerCase().includes(query) ||
+          p.category.toLowerCase().includes(query)
+      );
+      setDisplayProducts(filtered);
       return;
     }
 
-    const query = searchQuery.toLowerCase();
-    const filtered = allProducts.filter(
-      p =>
-        p.name.toLowerCase().includes(query) ||
-        p.description.toLowerCase().includes(query) ||
-        p.category.toLowerCase().includes(query)
-    );
-    setFilteredProducts(filtered);
-  }, [searchQuery, allProducts]);
+    // Otherwise, filter by selected category
+    if (selectedCategory === "all") {
+      setDisplayProducts(allProducts);
+    } else {
+      const category = categories.find(c => c.id === selectedCategory);
+      setDisplayProducts(category?.products || []);
+    }
+  }, [selectedCategory, allProducts, searchQuery, categories]);
 
-  // Handle category selection
+  // Handle search
+  const handleSearch = (query: string) => {
+    setSearchQuery(query);
+  };
+
+  // ✅ Handle category selection - update selectedCategory
   const handleCategorySelect = (categoryId: string) => {
     setSelectedCategory(categoryId);
-    if (categoryId === "all") {
-      setFilteredProducts(allProducts);
-    } else {
-      const category = categories.find(c => c.id === categoryId);
-      setFilteredProducts(category?.products || []);
+    // Clear search when selecting a category
+    if (searchQuery) {
+      setSearchQuery("");
     }
   };
 
@@ -259,9 +268,6 @@ export default function StorePage({params}: StorePageProps) {
       storeName: store.name,
       size: product.size,
     });
-    
-    // Optional: Show a quick feedback
-    console.log("Added to cart:", product.name);
   };
 
   if (loading) {
@@ -289,7 +295,7 @@ export default function StorePage({params}: StorePageProps) {
   }
 
   return (
-    <main className="min-h-screen bg-gray-50 pb-24">
+    <main className="min-h-screen bg-gray-50 pb-32">
       {/* Store Header */}
       <StoreHeader
         bannerUrl={store.bannerUrl}
@@ -325,12 +331,12 @@ export default function StorePage({params}: StorePageProps) {
       <div className="px-4 mt-4">
         <SearchBar
           value={searchQuery}
-          onChange={setSearchQuery}
+          onChange={handleSearch}
           placeholder="Search products..."
         />
       </div>
 
-      {/* Categories */}
+      {/* Categories - Dynamic from products */}
       {categories.length > 0 && (
         <div className="px-4 mt-4">
           <CategoryScroll
@@ -341,20 +347,21 @@ export default function StorePage({params}: StorePageProps) {
         </div>
       )}
 
-      {/* Products */}
+      {/* Products Display */}
       {searchQuery ? (
+        // Search Results
         <div className="px-4 mt-4">
           <h3 className="font-bold text-gray-800 mb-3">
-            Search Results ({filteredProducts.length})
+            Search Results ({displayProducts.length})
           </h3>
-          {filteredProducts.length === 0 ? (
+          {displayProducts.length === 0 ? (
             <div className="text-center py-8">
               <p className="text-gray-500">No products found</p>
               <p className="text-sm text-gray-400">Try adjusting your search</p>
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-3">
-              {filteredProducts.map((product) => (
+              {displayProducts.map((product) => (
                 <ProductCard
                   key={product.id}
                   product={product}
@@ -365,6 +372,7 @@ export default function StorePage({params}: StorePageProps) {
           )}
         </div>
       ) : (
+        // Show products by category
         categories.map((category) => (
           <ProductSection
             key={category.id}
@@ -373,13 +381,13 @@ export default function StorePage({params}: StorePageProps) {
             onAddToCart={handleAddToCart}
             onViewAll={() => {
               setSelectedCategory(category.id);
-              handleCategorySelect(category.id);
+              setSearchQuery("");
             }}
           />
         ))
       )}
 
-      {/* Floating Cart Button */}
+      {/* Floating Cart Button - With extra bottom padding */}
       <CartButton />
     </main>
   );

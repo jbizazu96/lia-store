@@ -1,15 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import {User, Bell, ShoppingCart, Package, Search} from "lucide-react";
+import {User, Bell, ShoppingCart, Package} from "lucide-react";
 import Image from "next/image";
 import {useCart} from "@/context/CartContext";
 
 interface TopNavigationProps {
   userName: string;
+  showSearch?: boolean;
 }
 
-export function TopNavigation({userName}: TopNavigationProps) {
+export function TopNavigation({userName, showSearch = false}: TopNavigationProps) {
   const {itemCount} = useCart();
 
   return (
@@ -17,28 +18,20 @@ export function TopNavigation({userName}: TopNavigationProps) {
       <div className="px-4 py-3">
         <div className="flex items-center justify-between">
           {/* Logo */}
-          <div className="flex items-center gap-2">
+          <Link href="/home" className="flex items-center gap-2">
             <div className="relative w-8 h-8">
               <Image
-                src="/logo.png"
+                src="/icon/icon-512.png"
                 alt="LIA"
                 fill
                 className="object-contain"
               />
             </div>
-            <span className="text-lg font-bold text-green-800">LIA</span>
-          </div>
+            <span className="text-lg font-bold text-green-800"></span>
+          </Link>
 
           {/* Right: Icons with gray backgrounds */}
           <div className="flex items-center gap-1">
-            {/* Search Icon */}
-            <button 
-              className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200 transition"
-              aria-label="Search"
-            >
-              <Search className="w-5 h-5 text-gray-600" />
-            </button>
-
             {/* Orders */}
             <Link 
               href="/orders" 
