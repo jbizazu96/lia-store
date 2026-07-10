@@ -1,8 +1,7 @@
 "use client";
 
 /*
-  Store card component with distance-based styling.
-  Shows a warning badge for stores beyond 25 miles.
+  Store card component with proper spacing and padding.
 */
 
 import {useState} from "react";
@@ -66,7 +65,7 @@ export function StoreCard({store}: StoreCardProps) {
     <motion.div
       whileTap={{scale: 0.98}}
       onClick={handleStoreClick}
-      className={`bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition cursor-pointer ${
+      className={`bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition cursor-pointer mb-4 ${
         isTooFar ? "opacity-80" : ""
       }`}
     >
@@ -120,7 +119,7 @@ export function StoreCard({store}: StoreCardProps) {
         )}
       </div>
 
-      {/* Store Info */}
+      {/* Store Info - With more padding */}
       <div className="p-4 space-y-3">
         {/* Store Name & Rating */}
         <div className="flex items-center justify-between">
@@ -135,7 +134,7 @@ export function StoreCard({store}: StoreCardProps) {
                 />
               </div>
             )}
-            <h4 className="font-semibold text-gray-800">{store.name}</h4>
+            <h4 className="font-semibold text-gray-800 text-base">{store.name}</h4>
           </div>
           
           <div className="flex items-center gap-1">
@@ -147,18 +146,18 @@ export function StoreCard({store}: StoreCardProps) {
         </div>
 
         {/* Distance, Delivery Fee & Estimated Time */}
-        <div className="flex items-center gap-3 text-sm">
-          <div className="flex items-center gap-1 text-gray-500">
+        <div className="flex items-center gap-4 text-sm">
+          <div className="flex items-center gap-1.5 text-gray-500">
             <MapPin className="w-4 h-4" />
             <span>{formattedDistance}</span>
           </div>
-          <div className={`flex items-center gap-1 ${
+          <div className={`flex items-center gap-1.5 ${
             isTooFar ? "text-red-500" : "text-gray-500"
           }`}>
             <Truck className="w-4 h-4" />
             <span>Delivery: {deliveryFee}</span>
           </div>
-          <div className="flex items-center gap-1 text-gray-500">
+          <div className="flex items-center gap-1.5 text-gray-500">
             <Clock className="w-4 h-4" />
             <span>{estimatedTime}</span>
           </div>

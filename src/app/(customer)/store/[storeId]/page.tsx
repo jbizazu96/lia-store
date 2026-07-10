@@ -3,6 +3,7 @@
 /*
   Customer store page.
   Fetches real products from Firestore based on store ID.
+  Shows distance warning if store is outside delivery radius.
 */
 
 import {useState, useEffect, use} from "react";
@@ -22,6 +23,7 @@ import {ProductSection} from "./components/ProductSection";
 import {ProductSkeleton} from "./components/ProductSkeleton";
 import {CartButton} from "./components/CartButton";
 import {ProductCard} from "./components/ProductCard";
+import {DistanceWarningModal} from "./components/DistanceWarningModal";
 
 // Types
 import {Store, Category, Product} from "./types";
@@ -54,6 +56,11 @@ export default function StorePage({params}: StorePageProps) {
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [loading, setLoading] = useState(true);
   const [userLocation, setUserLocation] = useState<{lat: number; lng: number} | null>(null);
+
+  // Distance warning modal state
+  const [showDistanceWarning, setShowDistanceWarning] = useState(false);
+  const [distanceValue, setDistanceValue] = useState(0);
+  const [storeData, setStoreData] = useState<Store | null>(null);
 
   // Get user location from auth
   useEffect(() => {
@@ -205,6 +212,14 @@ export default function StorePage({params}: StorePageProps) {
         };
 
         setStore(storeData);
+
+        // 6. Check if store is within delivery radius
+        const maxRadius = 25;
+        if (distance > maxRadius) {
+          setDistanceValue(distance);
+          setStoreData(storeData);
+          setShowDistanceWarning(true);
+        }
         
       } catch (error) {
         console.error("Error fetching store:", error);
@@ -268,6 +283,17 @@ export default function StorePage({params}: StorePageProps) {
       storeName: store.name,
       size: product.size,
     });
+  };
+
+  // Handle continue to store despite distance warning
+  const handleContinueToStore = () => {
+    setShowDistanceWarning(false);
+  };
+
+  // Handle go back from warning modal
+  const handleGoBack = () => {
+    setShowDistanceWarning(false);
+    router.push("/home");
   };
 
   if (loading) {
@@ -389,6 +415,18 @@ export default function StorePage({params}: StorePageProps) {
 
       {/* Floating Cart Button - With extra bottom padding */}
       <CartButton />
+
+      {/* Distance Warning Modal */}
+      <AnimatePresence>
+        {showDistanceWarning && storeData && (
+          <DistanceWarningModal
+            store={storeData}
+            distance={distanceValue}
+            onClose={handleGoBack}
+            onContinue={handleContinueToStore}
+          />
+        )}
+      </AnimatePresence>
     </main>
   );
 }

@@ -1,12 +1,15 @@
 "use client";
 
 /*
-  React hooks.
+  Simplified Addresses modal - Single address only.
+  Shows existing address with Edit/Delete options.
+  If no address, shows Add form.
 */
+
 import {useState, useEffect} from "react";
 import {motion} from "framer-motion";
-import {X, Plus, Home, Briefcase, User, MapPin, Trash2, Edit2} from "lucide-react";
-import {collection, getDocs, addDoc, updateDoc, deleteDoc, doc} from "firebase/firestore";
+import {X, MapPin, Trash2, Edit2, Check, AlertCircle, Plus} from "lucide-react";
+import {doc, getDoc, setDoc, deleteDoc, collection, getDocs} from "firebase/firestore";
 import {db} from "@/lib/firebase";
 import {geocodeAddress} from "@/services/geocode";
 
@@ -16,140 +19,228 @@ interface AddressesModalProps {
 }
 
 interface Address {
-  id: string;
-  label: string;
   street: string;
   city: string;
   state: string;
   zip: string;
   latitude?: number;
   longitude?: number;
-  isDefault?: boolean;
+  formattedAddress?: string;
 }
 
 export function AddressesModal({userId, onClose}: AddressesModalProps) {
-  const [addresses, setAddresses] = useState<Address[]>([]);
+  const [address, setAddress] = useState<Address | null>(null);
   const [loading, setLoading] = useState(true);
-  const [showAddForm, setShowAddForm] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   const [formData, setFormData] = useState({
-    label: "Home",
     street: "",
     city: "",
     state: "",
     zip: "",
   });
 
-  const [formError, setFormError] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-
+  // Fetch address on mount
   useEffect(() => {
-    fetchAddresses();
+    if (userId) {
+      fetchAddress();
+    }
   }, [userId]);
 
-  async function fetchAddresses() {
+  async function fetchAddress() {
     try {
       setLoading(true);
+      console.log("🔍 Fetching address for user:", userId);
+      
+      // Try to get the address from the user's document first
+      const userRef = doc(db, "users", userId);
+      const userDoc = await getDoc(userRef);
+      
+      if (userDoc.exists()) {
+        const userData = userDoc.data();
+        console.log("📄 User data:", userData);
+        
+        // Check if address is stored directly in user document
+        if (userData.defaultAddress) {
+          console.log("📍 Found address in user document:", userData.defaultAddress);
+          const addr = userData.defaultAddress;
+          setAddress({
+            street: addr.street || "",
+            city: addr.city || "",
+            state: addr.state || "",
+            zip: addr.zip || "",
+            latitude: addr.latitude,
+            longitude: addr.longitude,
+            formattedAddress: addr.formattedAddress,
+          });
+          setFormData({
+            street: addr.street || "",
+            city: addr.city || "",
+            state: addr.state || "",
+            zip: addr.zip || "",
+          });
+          setLoading(false);
+          return;
+        }
+      }
+      
+      // If not in user document, check the addresses subcollection
+      console.log("🔍 Checking addresses subcollection...");
       const addressesRef = collection(db, "users", userId, "addresses");
       const snapshot = await getDocs(addressesRef);
       
-      const addressesData: Address[] = [];
-      snapshot.forEach((doc) => {
-        addressesData.push({
-          id: doc.id,
-          ...doc.data(),
-        } as Address);
-      });
-      
-      setAddresses(addressesData);
+      if (!snapshot.empty) {
+        // Get the first address (or the one marked as default)
+        let foundAddress: any = null;
+        snapshot.forEach((doc) => {
+          const data = doc.data();
+          if (data.isDefault) {
+            foundAddress = { id: doc.id, ...data };
+          }
+        });
+        
+        // If no default, use the first one
+        if (!foundAddress) {
+          const firstDoc = snapshot.docs[0];
+          foundAddress = { id: firstDoc.id, ...firstDoc.data() };
+        }
+        
+        console.log("📍 Found address in subcollection:", foundAddress);
+        
+        // ✅ Fix: Check if foundAddress has the properties before accessing them
+        if (foundAddress && typeof foundAddress === 'object') {
+          setAddress({
+            street: foundAddress.street || "",
+            city: foundAddress.city || "",
+            state: foundAddress.state || "",
+            zip: foundAddress.zip || "",
+            latitude: foundAddress.latitude,
+            longitude: foundAddress.longitude,
+            formattedAddress: foundAddress.formattedAddress,
+          });
+          setFormData({
+            street: foundAddress.street || "",
+            city: foundAddress.city || "",
+            state: foundAddress.state || "",
+            zip: foundAddress.zip || "",
+          });
+        }
+      } else {
+        console.log("❌ No address found");
+        setAddress(null);
+      }
     } catch (error) {
-      console.error("Error fetching addresses:", error);
+      console.error("Error fetching address:", error);
+      setError("Failed to load address");
     } finally {
       setLoading(false);
     }
   }
 
+  // Handle submit (add or update)
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     
     if (!formData.street.trim() || !formData.city.trim() || 
         !formData.state.trim() || !formData.zip.trim()) {
-      setFormError("Please fill in all fields");
+      setError("Please fill in all fields");
       return;
     }
 
     try {
       setSubmitting(true);
-      setFormError("");
+      setError("");
+      setSuccess("");
 
+      // Geocode address
       const fullAddress = `${formData.street}, ${formData.city}, ${formData.state} ${formData.zip}`;
       const location = await geocodeAddress(fullAddress);
 
-      const addressData = {
-        ...formData,
-        latitude: location?.latitude || null,
-        longitude: location?.longitude || null,
+      // ✅ Fix: Create addressData with proper types (no null)
+      const addressData: Address = {
+        street: formData.street,
+        city: formData.city,
+        state: formData.state,
+        zip: formData.zip,
+        latitude: location?.latitude ?? undefined,
+        longitude: location?.longitude ?? undefined,
         formattedAddress: location?.formattedAddress || fullAddress,
       };
 
-      if (editingId) {
-        await updateDoc(doc(db, "users", userId, "addresses", editingId), addressData);
-      } else {
-        await addDoc(collection(db, "users", userId, "addresses"), addressData);
-      }
+      // Save to both places for redundancy
+      // 1. Save to user document
+      await setDoc(doc(db, "users", userId), {
+        defaultAddress: addressData,
+      }, { merge: true });
 
-      setFormData({label: "Home", street: "", city: "", state: "", zip: ""});
-      setShowAddForm(false);
-      setEditingId(null);
-      await fetchAddresses();
+      // 2. Save to addresses subcollection with ID "default"
+      await setDoc(doc(db, "users", userId, "addresses", "default"), {
+        ...addressData,
+        isDefault: true,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
+
+      setAddress(addressData);
+      setSuccess(address ? "Address updated successfully!" : "Address added successfully!");
+      setIsEditing(false);
+      
+      // Clear success message after 3 seconds
+      setTimeout(() => setSuccess(""), 3000);
 
     } catch (error) {
       console.error("Error saving address:", error);
-      setFormError("Failed to save address. Please try again.");
+      setError("Failed to save address. Please try again.");
     } finally {
       setSubmitting(false);
     }
   }
 
-  async function handleDelete(addressId: string) {
-    if (!confirm("Are you sure you want to delete this address?")) return;
+  // Delete address
+  async function handleDelete() {
+    if (!confirm("Are you sure you want to delete your address?")) return;
     
     try {
-      await deleteDoc(doc(db, "users", userId, "addresses", addressId));
-      await fetchAddresses();
+      // Remove from user document
+      await setDoc(doc(db, "users", userId), {
+        defaultAddress: null,
+      }, { merge: true });
+
+      // Remove from addresses subcollection
+      await deleteDoc(doc(db, "users", userId, "addresses", "default"));
+      
+      setAddress(null);
+      setSuccess("Address deleted successfully!");
+      
+      setTimeout(() => setSuccess(""), 3000);
     } catch (error) {
       console.error("Error deleting address:", error);
+      setError("Failed to delete address");
     }
   }
 
-  function handleEdit(address: Address) {
-    setEditingId(address.id);
-    setFormData({
-      label: address.label,
-      street: address.street,
-      city: address.city,
-      state: address.state,
-      zip: address.zip,
-    });
-    setShowAddForm(true);
+  // Start editing
+  function startEditing() {
+    setIsEditing(true);
+    setError("");
+    setSuccess("");
   }
 
-  function getLabelIcon(label: string) {
-    switch (label.toLowerCase()) {
-      case "home": return Home;
-      case "work": return Briefcase;
-      case "friend": return User;
-      default: return MapPin;
-    }
-  }
-
-  function getLabelColor(label: string) {
-    switch (label.toLowerCase()) {
-      case "home": return "text-green-600 bg-green-50";
-      case "work": return "text-blue-600 bg-blue-50";
-      case "friend": return "text-purple-600 bg-purple-50";
-      default: return "text-gray-600 bg-gray-50";
+  // Cancel editing
+  function cancelEditing() {
+    setIsEditing(false);
+    setError("");
+    setSuccess("");
+    if (address) {
+      setFormData({
+        street: address.street || "",
+        city: address.city || "",
+        state: address.state || "",
+        zip: address.zip || "",
+      });
     }
   }
 
@@ -163,7 +254,12 @@ export function AddressesModal({userId, onClose}: AddressesModalProps) {
       >
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200 flex-shrink-0">
-          <h2 className="text-xl font-bold text-gray-800">My Addresses</h2>
+          <div>
+            <h2 className="text-xl font-bold text-gray-800">Delivery Address</h2>
+            <p className="text-sm text-gray-500">
+              {loading ? "Loading..." : address ? "Your saved delivery address" : "Add your delivery address"}
+            </p>
+          </div>
           <button
             onClick={onClose}
             className="w-8 h-8 rounded-full hover:bg-gray-100 flex items-center justify-center transition"
@@ -175,108 +271,75 @@ export function AddressesModal({userId, onClose}: AddressesModalProps) {
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6">
+          {error && (
+            <div className="bg-red-50 border border-red-200 rounded-xl p-3 mb-4 flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-red-500" />
+              <p className="text-red-600 text-sm">{error}</p>
+            </div>
+          )}
+
+          {success && (
+            <div className="bg-green-50 border border-green-200 rounded-xl p-3 mb-4 flex items-center gap-2">
+              <Check className="w-4 h-4 text-green-500" />
+              <p className="text-green-600 text-sm">{success}</p>
+            </div>
+          )}
+
           {loading ? (
             <div className="flex justify-center py-8">
               <div className="w-6 h-6 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
             </div>
           ) : (
-            <div className="space-y-3">
-              {addresses.map((address) => {
-                const Icon = getLabelIcon(address.label);
-                const colorClass = getLabelColor(address.label);
-                
-                return (
-                  <div key={address.id} className="bg-gray-50 rounded-xl p-4">
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-start gap-3">
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center ${colorClass}`}>
-                          <Icon className="w-4 h-4" />
-                        </div>
-                        <div>
-                          <p className="font-medium text-gray-800">
-                            {address.label}
-                            {address.isDefault && (
-                              <span className="ml-2 text-xs bg-green-100 text-green-600 px-2 py-0.5 rounded-full">
-                                Default
-                              </span>
-                            )}
-                          </p>
-                          <p className="text-sm text-gray-500">
-                            {address.street}, {address.city}, {address.state} {address.zip}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex gap-1">
-                        <button
-                          onClick={() => handleEdit(address)}
-                          className="p-1.5 hover:bg-gray-200 rounded-lg transition"
-                          aria-label={`Edit ${address.label} address`}
-                        >
-                          <Edit2 className="w-4 h-4 text-gray-500" />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(address.id)}
-                          className="p-1.5 hover:bg-red-100 rounded-lg transition"
-                          aria-label={`Delete ${address.label} address`}
-                        >
-                          <Trash2 className="w-4 h-4 text-red-500" />
-                        </button>
-                      </div>
+            <div className="space-y-4">
+              {/* Address exists - Show it with Edit/Delete */}
+              {address && !isEditing ? (
+                <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0">
+                      <MapPin className="w-5 h-5 text-green-600" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-gray-800">Your Delivery Address</p>
+                      <p className="text-sm text-gray-600">
+                        {address.street}, {address.city}, {address.state} {address.zip}
+                      </p>
+                      {address.formattedAddress && (
+                        <p className="text-xs text-gray-400 mt-0.5">
+                          📍 {address.formattedAddress}
+                        </p>
+                      )}
+                      <p className="text-xs text-green-600 mt-1 font-medium">
+                        ✓ This address will be used for delivery
+                      </p>
                     </div>
                   </div>
-                );
-              })}
-
-              {addresses.length === 0 && (
-                <div className="text-center py-8">
-                  <MapPin className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                  <p className="text-gray-500">No addresses saved</p>
-                  <p className="text-sm text-gray-400">Add your first delivery address</p>
-                </div>
-              )}
-
-              {!showAddForm && (
-                <button
-                  onClick={() => setShowAddForm(true)}
-                  className="w-full mt-4 py-3 border-2 border-dashed border-gray-300 rounded-xl text-gray-600 font-medium hover:border-orange-400 hover:text-orange-600 transition flex items-center justify-center gap-2"
-                  aria-label="Add new address"
-                >
-                  <Plus className="w-5 h-5" />
-                  Add New Address
-                </button>
-              )}
-
-              {showAddForm && (
-                <form onSubmit={handleSubmit} className="mt-4 bg-gray-50 rounded-xl p-4 space-y-3">
-                  <h3 className="font-semibold text-gray-800">
-                    {editingId ? "Edit Address" : "Add New Address"}
-                  </h3>
-
-                  {formError && (
-                    <div className="bg-red-50 text-red-600 p-2 rounded-lg text-sm">
-                      {formError}
-                    </div>
-                  )}
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Label
-                    </label>
-                    <select
-                      value={formData.label}
-                      onChange={(e) => setFormData({...formData, label: e.target.value})}
-                      className="w-full px-4 py-2 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-orange-500"
+                  
+                  <div className="flex gap-2 mt-4 pt-3 border-t border-gray-200">
+                    <button
+                      onClick={startEditing}
+                      className="flex-1 py-2 bg-orange-500 text-white rounded-lg font-medium hover:bg-orange-600 transition flex items-center justify-center gap-2"
+                      aria-label="Edit address"
                     >
-                      <option value="Home">Home</option>
-                      <option value="Work">Work</option>
-                      <option value="Friend">Friend</option>
-                      <option value="Other">Other</option>
-                    </select>
+                      <Edit2 className="w-4 h-4" />
+                      Update Address
+                    </button>
+                    <button
+                      onClick={handleDelete}
+                      className="px-4 py-2 border border-red-200 text-red-600 rounded-lg font-medium hover:bg-red-50 transition flex items-center gap-2"
+                      aria-label="Delete address"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </div>
+                </div>
+              ) : address && isEditing ? (
+                // Edit form
+                <form onSubmit={handleSubmit} className="bg-orange-50 rounded-xl p-4 space-y-3 border border-orange-200">
+                  <h3 className="font-semibold text-gray-800">Update Your Address</h3>
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Street Address
+                      Street Address *
                     </label>
                     <input
                       type="text"
@@ -291,7 +354,7 @@ export function AddressesModal({userId, onClose}: AddressesModalProps) {
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        City
+                        City *
                       </label>
                       <input
                         type="text"
@@ -304,7 +367,7 @@ export function AddressesModal({userId, onClose}: AddressesModalProps) {
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        State
+                        State *
                       </label>
                       <input
                         type="text"
@@ -319,7 +382,7 @@ export function AddressesModal({userId, onClose}: AddressesModalProps) {
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      ZIP Code
+                      ZIP Code *
                     </label>
                     <input
                       type="text"
@@ -334,26 +397,99 @@ export function AddressesModal({userId, onClose}: AddressesModalProps) {
                   <div className="flex gap-3 pt-2">
                     <button
                       type="button"
-                      onClick={() => {
-                        setShowAddForm(false);
-                        setEditingId(null);
-                        setFormData({label: "Home", street: "", city: "", state: "", zip: ""});
-                        setFormError("");
-                      }}
+                      onClick={cancelEditing}
                       className="flex-1 py-2 border border-gray-200 rounded-lg text-gray-600 font-medium hover:bg-gray-50 transition"
-                      aria-label="Cancel adding address"
+                      aria-label="Cancel editing"
                     >
                       Cancel
                     </button>
                     <button
                       type="submit"
                       disabled={submitting}
-                      className="flex-1 py-2 bg-orange-600 text-white rounded-lg font-semibold hover:bg-orange-700 transition disabled:opacity-50"
-                      aria-label={editingId ? "Update address" : "Save address"}
+                      className="flex-1 py-2 bg-orange-500 text-white rounded-lg font-semibold hover:bg-orange-600 transition disabled:opacity-50"
+                      aria-label="Update address"
                     >
-                      {submitting ? "Saving..." : editingId ? "Update" : "Save"}
+                      {submitting ? "Saving..." : "Update Address"}
                     </button>
                   </div>
+                </form>
+              ) : (
+                // No address - Add form
+                <form onSubmit={handleSubmit} className="bg-orange-50 rounded-xl p-4 space-y-3 border border-orange-200">
+                  <div className="text-center mb-2">
+                    <MapPin className="w-12 h-12 text-gray-300 mx-auto mb-2" />
+                    <h3 className="font-semibold text-gray-800">Add Your Delivery Address</h3>
+                    <p className="text-sm text-gray-500">
+                      This helps us calculate delivery distances and fees
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Street Address *
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.street}
+                      onChange={(e) => setFormData({...formData, street: e.target.value})}
+                      className="w-full px-4 py-2 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-orange-500"
+                      placeholder="123 Main St"
+                      required
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        City *
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.city}
+                        onChange={(e) => setFormData({...formData, city: e.target.value})}
+                        className="w-full px-4 py-2 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-orange-500"
+                        placeholder="Los Angeles"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        State *
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.state}
+                        onChange={(e) => setFormData({...formData, state: e.target.value})}
+                        className="w-full px-4 py-2 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-orange-500"
+                        placeholder="CA"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      ZIP Code *
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.zip}
+                      onChange={(e) => setFormData({...formData, zip: e.target.value})}
+                      className="w-full px-4 py-2 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-orange-500"
+                      placeholder="90210"
+                      required
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={submitting}
+                    className="w-full py-2.5 bg-orange-500 text-white rounded-lg font-semibold hover:bg-orange-600 transition disabled:opacity-50 flex items-center justify-center gap-2"
+                    aria-label="Save address"
+                  >
+                    <Plus className="w-4 h-4" />
+                    {submitting ? "Saving..." : "Save Address"}
+                  </button>
                 </form>
               )}
             </div>

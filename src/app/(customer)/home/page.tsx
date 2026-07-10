@@ -1,19 +1,19 @@
 "use client";
 
-import {useState, useEffect, useRef} from "react";
-import {useRouter} from "next/navigation";
-import {motion, AnimatePresence} from "framer-motion";
-import {auth, db} from "@/lib/firebase";
-import {doc, getDoc, collection, getDocs} from "firebase/firestore";
-import {onAuthStateChanged} from "firebase/auth";
-import {Store} from "@/types/store";
-import {TopNavigation} from "./components/TopNavigation";
-import {SearchBar} from "./components/SearchBar";
-import {PromoCarousel} from "./components/PromoCarousel";
-import {StoreCard} from "./components/StoreCard";
-import {StoreCardSkeleton} from "./components/StoreCardSkeleton";
-import {DistanceWarningModal} from "./components/DistanceWarningModal";
-import {calculateDistance} from "@/services/distance";
+import { useState, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
+import { motion, AnimatePresence } from "framer-motion";
+import { auth, db } from "@/lib/firebase";
+import { doc, getDoc, collection, getDocs } from "firebase/firestore";
+import { onAuthStateChanged } from "firebase/auth";
+import { Store } from "@/types/store";
+import { TopNavigation } from "./components/TopNavigation";
+import { SearchBar } from "./components/SearchBar";
+import { PromoCarousel } from "./components/PromoCarousel";
+import { StoreCard } from "./components/StoreCard";
+import { StoreCardSkeleton } from "./components/StoreCardSkeleton";
+import { DistanceWarningModal } from "./components/DistanceWarningModal";
+import { calculateDistance } from "@/services/distance";
 
 export default function CustomerHomePage() {
   const router = useRouter();
@@ -151,6 +151,107 @@ export default function CustomerHomePage() {
     }
   };
 
+  /* ==========================================
+     LOADING STATE - WHITE BRANDED LOADER
+  ========================================== */
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-white flex flex-col justify-center items-center relative overflow-hidden">
+        
+        {/* Ambient Glows (Soft Yellow accents on white background) */}
+        <div className="absolute top-0 right-0 h-[500px] w-[500px] rounded-full bg-yellow-400/5 blur-[120px] pointer-events-none" />
+        <div className="absolute bottom-0 left-0 h-[400px] w-[400px] rounded-full bg-blue-500/5 blur-[100px] pointer-events-none" />
+
+        {/* Centered Loader */}
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.5 }}
+          className="flex flex-col items-center justify-center p-8 relative z-10"
+        >
+          
+          {/* Logo Orbiting Container */}
+          <div className="relative w-28 h-28 mb-8 flex items-center justify-center">
+            
+            {/* Dotted Orbit Ring */}
+            <motion.div 
+              animate={{ rotate: 360 }}
+              transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
+              className="absolute inset-0 rounded-full border-2 border-dashed border-yellow-400/30"
+            />
+            
+            {/* Inner Ring */}
+            <motion.div 
+              animate={{ rotate: -360 }}
+              transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
+              className="absolute inset-2 rounded-full border border-yellow-400/10"
+            />
+            
+            {/* Rotating glowing dots */}
+            <motion.div 
+              animate={{ rotate: 360 }}
+              transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
+              className="absolute inset-0"
+            >
+              <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-yellow-400 shadow-[0_0_15px_rgba(234,179,8,0.8)]" />
+              <div className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 w-2 h-2 rounded-full bg-yellow-400/40" />
+              <div className="absolute left-0 top-1/2 -translate-x-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-yellow-400/40" />
+              <div className="absolute right-0 top-1/2 translate-x-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-yellow-400/40" />
+            </motion.div>
+
+            {/* Central Logo Image */}
+            <div className="relative w-16 h-16 z-10 bg-white/80 backdrop-blur-md rounded-full border-2 border-yellow-400/50 shadow-[0_0_30px_rgba(234,179,8,0.15)] flex items-center justify-center overflow-hidden">
+              <img 
+                src="/icon/icon-192.png" 
+                alt="LIA Logo" 
+                className="w-12 h-12 object-contain" 
+              />
+            </div>
+          </div>
+
+          {/* Loading Text */}
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: 0.2 }}
+            className="text-center"
+          >
+            <h3 className="text-lg font-medium text-gray-600 mb-1 tracking-wide opacity-100">
+              Loading stores
+            </h3>
+            <div className="flex items-center justify-center gap-1 mt-2">
+              
+              {/* Dot 1 */}
+              <motion.span 
+                initial={{ opacity: 0.5 }} 
+                animate={{ opacity: [0.5, 1, 0.5] }} 
+                transition={{ duration: 1.5, repeat: Infinity, delay: 0 }} 
+                className="w-1.5 h-1.5 rounded-full bg-yellow-400"
+              />
+              
+              {/* Dot 2 */}
+              <motion.span 
+                initial={{ opacity: 0.5 }} 
+                animate={{ opacity: [0.5, 1, 0.5] }} 
+                transition={{ duration: 1.5, repeat: Infinity, delay: 0.3 }} 
+                className="w-1.5 h-1.5 rounded-full bg-yellow-400"
+              />
+              
+              {/* Dot 3 */}
+              <motion.span 
+                initial={{ opacity: 0.5 }} 
+                animate={{ opacity: [0.5, 1, 0.5] }} 
+                transition={{ duration: 1.5, repeat: Infinity, delay: 0.6 }} 
+                className="w-1.5 h-1.5 rounded-full bg-yellow-400"
+              />
+            </div>
+          </motion.div>
+          
+        </motion.div>
+      </div>
+    );
+  }
+
   return (
     <main className="min-h-screen bg-gray-50 pb-4">
       {/* Top Navigation */}
@@ -178,13 +279,7 @@ export default function CustomerHomePage() {
 
       {/* Store List */}
       <section className="px-4 mt-6 pb-32">
-        {loading ? (
-          <div className="space-y-4">
-            {[1, 2, 3].map((i) => (
-              <StoreCardSkeleton key={i} />
-            ))}
-          </div>
-        ) : nearbyStores.length === 0 && farStores.length === 0 ? (
+        {nearbyStores.length === 0 && farStores.length === 0 ? (
           <div className="text-center py-12">
             <div className="w-16 h-16 text-gray-300 mx-auto mb-4">🏪</div>
             <p className="text-gray-500">No stores found</p>
@@ -202,10 +297,10 @@ export default function CustomerHomePage() {
               {filteredNearby.map((store, index) => (
                 <motion.div
                   key={store.id}
-                  initial={{opacity: 0, y: 20}}
-                  animate={{opacity: 1, y: 0}}
-                  exit={{opacity: 0, x: -20}}
-                  transition={{delay: index * 0.05}}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, x: -20 }}
+                  transition={{ delay: index * 0.05 }}
                 >
                   <StoreCard 
                     store={store} 
@@ -239,9 +334,9 @@ export default function CustomerHomePage() {
                 {farStores.map((store, index) => (
                   <motion.div
                     key={store.id}
-                    initial={{opacity: 0, y: 20}}
-                    animate={{opacity: 1, y: 0}}
-                    transition={{delay: index * 0.03 + 0.2}}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: index * 0.03 + 0.2 }}
                   >
                     <StoreCard 
                       store={store} 
