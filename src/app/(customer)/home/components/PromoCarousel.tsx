@@ -8,7 +8,7 @@ const promos = [
   {
     id: 1,
     title: "Free Delivery",
-    subtitle: "On your first order over $20",
+    subtitle: "Free delivery for any order over $150",
     color: "from-orange-500 to-orange-600",
     icon: Truck,
   },

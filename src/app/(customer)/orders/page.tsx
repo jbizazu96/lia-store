@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 
+// ✅ Updated Order interface - deliveryAddress is now an object
 interface Order {
   id: string;
   storeName: string;
@@ -27,7 +28,13 @@ interface Order {
   status: string;
   createdAt: string;
   items: number;
-  deliveryAddress?: string;
+  deliveryAddress?: {
+    street: string;
+    city: string;
+    state: string;
+    zip: string;
+    formattedAddress?: string;
+  };
 }
 
 export default function OrdersPage() {
@@ -61,7 +68,7 @@ export default function OrdersPage() {
             status: data.status || "pending",
             createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
             items: data.items?.length || 0,
-            deliveryAddress: data.deliveryAddress || "",
+            deliveryAddress: data.deliveryAddress || null,
           });
         });
         
@@ -126,6 +133,13 @@ export default function OrdersPage() {
       hour: 'numeric',
       minute: 'numeric',
     }).format(date);
+  };
+
+  // ✅ Helper function to format address object to string
+  const formatAddress = (address: any) => {
+    if (!address) return "";
+    if (typeof address === 'string') return address;
+    return `${address.street || ""}, ${address.city || ""}, ${address.state || ""} ${address.zip || ""}`;
   };
 
   /* ==========================================
@@ -342,27 +356,33 @@ export default function OrdersPage() {
                   </div>
 
                   {/* Order Details */}
-                  <div className="flex items-center justify-between pt-3 border-t border-gray-100">
-                    <div className="flex items-center gap-4 text-sm text-gray-500">
-                      <span>{order.items} item{order.items !== 1 ? 's' : ''}</span>
-                      {order.deliveryAddress && (
-                        <div className="flex items-center gap-1">
-                          <MapPin className="w-3.5 h-3.5" />
-                          <span className="truncate max-w-[120px]">{order.deliveryAddress}</span>
-                        </div>
-                      )}
+                  <div className="flex flex-col gap-2 pt-3 border-t border-gray-100">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-4 text-sm text-gray-500">
+                        <span>{order.items} item{order.items !== 1 ? 's' : ''}</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="text-lg font-bold text-gray-800">
+                          ${order.total.toFixed(2)}
+                        </span>
+                        <Link
+                          href={`/orders/${order.id}`}
+                          className="px-3 py-1.5 text-xs font-medium text-orange-600 hover:bg-orange-50 rounded-lg transition"
+                        >
+                          View Details
+                        </Link>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-3">
-                      <span className="text-lg font-bold text-gray-800">
-                        ${order.total.toFixed(2)}
-                      </span>
-                      <Link
-                        href={`/orders/${order.id}`}
-                        className="px-3 py-1.5 text-xs font-medium text-orange-600 hover:bg-orange-50 rounded-lg transition"
-                      >
-                        View Details
-                      </Link>
-                    </div>
+                    
+                    {/* ✅ Delivery Address - Properly formatted from object */}
+                    {order.deliveryAddress && (
+                      <div className="flex items-center gap-1.5 text-xs text-gray-400 mt-1">
+                        <MapPin className="w-3.5 h-3.5 flex-shrink-0" />
+                        <span className="truncate">
+                          {formatAddress(order.deliveryAddress)}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </motion.div>
               ))}

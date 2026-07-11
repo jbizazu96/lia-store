@@ -71,9 +71,9 @@ export function DistanceWarningModal({
           <div className="flex items-center justify-between mt-2">
             <div className="flex items-center gap-2">
               <Truck className="w-5 h-5 text-gray-500" />
-              <span className="text-gray-600">Delivery Fee:</span>
+              <span className="text-gray-600">Delivery: </span>
             </div>
-            <span className="font-bold text-gray-800">{formatDeliveryFee(store.deliveryFee)}</span>
+            <span className="font-bold text-gray-800">No Delivery</span>
           </div>
           <div className="flex items-center justify-between mt-2">
             <div className="flex items-center gap-2">

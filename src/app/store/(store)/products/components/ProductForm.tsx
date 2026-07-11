@@ -2,6 +2,7 @@
 
 /*
   Reusable product form for add/edit.
+  All fields start empty with helpful placeholders.
 */
 
 import {useState, useEffect} from "react";
@@ -10,8 +11,6 @@ import Image from "next/image";
 import {
   Upload,
   X,
-  Plus,
-  Minus,
   Tag,
   DollarSign,
   Package,
@@ -20,9 +19,10 @@ import {
   Gift,
   Star,
   Save,
-  Link,
+  Link2,
 } from "lucide-react";
 import {ProductFormData, CATEGORIES, SIZE_UNITS, PROMOTION_TYPES} from "../types";
+import Link from "next/link";
 
 interface ProductFormProps {
   initialData?: any;
@@ -37,6 +37,7 @@ export function ProductForm({
   loading,
   submitLabel,
 }: ProductFormProps) {
+  // ✅ Use empty strings for initial values
   const [formData, setFormData] = useState<ProductFormData>({
     name: "",
     description: "",
@@ -56,6 +57,14 @@ export function ProductForm({
     isActive: true,
     isFeatured: false,
   });
+
+  // ✅ String state for inputs to allow empty values
+  const [priceStr, setPriceStr] = useState("");
+  const [displayPriceStr, setDisplayPriceStr] = useState("");
+  const [taxRateStr, setTaxRateStr] = useState("");
+  const [stockStr, setStockStr] = useState("");
+  const [sizeValueStr, setSizeValueStr] = useState("");
+  const [promotionDiscountStr, setPromotionDiscountStr] = useState("");
 
   const [imagePreview, setImagePreview] = useState<string>("");
   const [showPromotion, setShowPromotion] = useState(false);
@@ -82,6 +91,15 @@ export function ProductForm({
         isActive: initialData.isActive !== false,
         isFeatured: initialData.isFeatured || false,
       });
+
+      // ✅ Set string values for inputs
+      setPriceStr(initialData.price?.toString() || "");
+      setDisplayPriceStr(initialData.displayPrice?.toString() || "");
+      setTaxRateStr(initialData.taxRate?.toString() || "");
+      setStockStr(initialData.stock?.toString() || "");
+      setSizeValueStr(initialData.size?.value?.toString() || "");
+      setPromotionDiscountStr(initialData.promotion?.discountAmount?.toString() || "");
+
       setImagePreview(initialData.imageUrl || "");
 
       if (initialData.promotion) {
@@ -90,15 +108,11 @@ export function ProductForm({
     }
   }, [initialData]);
 
-  /*
-    Handle image upload.
-  */
+  // Handle image upload
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // In a real app, you would upload to Firebase Storage here
-    // For now, we'll create a local preview
     const reader = new FileReader();
     reader.onloadend = () => {
       setImagePreview(reader.result as string);
@@ -107,17 +121,13 @@ export function ProductForm({
     reader.readAsDataURL(file);
   };
 
-  /*
-    Remove image.
-  */
+  // Remove image
   const removeImage = () => {
     setImagePreview("");
     setFormData({...formData, imageUrl: ""});
   };
 
-  /*
-    Handle form submission.
-  */
+  // Handle form submission
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -138,6 +148,13 @@ export function ProductForm({
     onSubmit(formData);
   };
 
+  // ✅ Helper to update number fields
+  const updateNumberField = (field: keyof ProductFormData, value: string, setStr: (v: string) => void) => {
+    setStr(value);
+    const num = parseFloat(value);
+    setFormData({...formData, [field]: isNaN(num) ? 0 : num});
+  };
+
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -148,12 +165,12 @@ export function ProductForm({
           </label>
           <div className="relative">
             {imagePreview ? (
-              <div className="relative aspect-square rounded-xl overflow-hidden bg-gray-100">
+              <div className="relative aspect-square rounded-xl overflow-hidden bg-white-100">
                 <Image
                   src={imagePreview}
                   alt="Product preview"
                   fill
-                  className="object-cover"
+                  className="object-contain"
                 />
                 <button
                   type="button"
@@ -241,7 +258,7 @@ export function ProductForm({
             />
           </div>
 
-          {/* Pricing */}
+          {/* Pricing - ✅ All fields start empty with placeholders */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -253,12 +270,10 @@ export function ProductForm({
                   type="number"
                   step="0.01"
                   min="0"
-                  value={formData.price}
-                  onChange={(e) =>
-                    setFormData({...formData, price: parseFloat(e.target.value) || 0})
-                  }
+                  value={priceStr}
+                  onChange={(e) => updateNumberField("price", e.target.value, setPriceStr)}
                   className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500"
-                  placeholder="0.00"
+                  placeholder="e.g., 9.99"
                   required
                 />
               </div>
@@ -273,12 +288,10 @@ export function ProductForm({
                   type="number"
                   step="0.01"
                   min="0"
-                  value={formData.displayPrice}
-                  onChange={(e) =>
-                    setFormData({...formData, displayPrice: parseFloat(e.target.value) || 0})
-                  }
+                  value={displayPriceStr}
+                  onChange={(e) => updateNumberField("displayPrice", e.target.value, setDisplayPriceStr)}
                   className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500"
-                  placeholder="0.00"
+                  placeholder="e.g., 14.99"
                 />
               </div>
               <p className="text-xs text-gray-400 mt-1">
@@ -296,12 +309,10 @@ export function ProductForm({
                   step="0.01"
                   min="0"
                   max="100"
-                  value={formData.taxRate}
-                  onChange={(e) =>
-                    setFormData({...formData, taxRate: parseFloat(e.target.value) || 0})
-                  }
+                  value={taxRateStr}
+                  onChange={(e) => updateNumberField("taxRate", e.target.value, setTaxRateStr)}
                   className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500"
-                  placeholder="8.0"
+                  placeholder="e.g., 8.0"
                 />
               </div>
             </div>
@@ -319,12 +330,10 @@ export function ProductForm({
                   type="number"
                   min="0"
                   step="1"
-                  value={formData.stock}
-                  onChange={(e) =>
-                    setFormData({...formData, stock: parseInt(e.target.value) || 0})
-                  }
+                  value={stockStr}
+                  onChange={(e) => updateNumberField("stock", e.target.value, setStockStr)}
                   className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500"
-                  placeholder="0"
+                  placeholder="e.g., 50"
                   required
                 />
               </div>
@@ -339,12 +348,10 @@ export function ProductForm({
                   type="number"
                   step="0.01"
                   min="0"
-                  value={formData.sizeValue}
-                  onChange={(e) =>
-                    setFormData({...formData, sizeValue: parseFloat(e.target.value) || 0})
-                  }
+                  value={sizeValueStr}
+                  onChange={(e) => updateNumberField("sizeValue", e.target.value, setSizeValueStr)}
                   className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500"
-                  placeholder="0"
+                  placeholder="e.g., 2"
                 />
               </div>
             </div>
@@ -466,15 +473,10 @@ export function ProductForm({
                       type="number"
                       min="0"
                       max="100"
-                      value={formData.promotionDiscount}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          promotionDiscount: parseFloat(e.target.value) || 0,
-                        })
-                      }
+                      value={promotionDiscountStr}
+                      onChange={(e) => updateNumberField("promotionDiscount", e.target.value, setPromotionDiscountStr)}
                       className="w-full px-4 py-2 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500"
-                      placeholder="20"
+                      placeholder="e.g., 20"
                     />
                   </div>
                 )}
@@ -490,7 +492,7 @@ export function ProductForm({
                         setFormData({...formData, promotionCode: e.target.value.toUpperCase()})
                       }
                       className="w-full px-4 py-2 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500 uppercase"
-                      placeholder="SUMMER20"
+                      placeholder="e.g., SUMMER20"
                     />
                   </div>
                 )}

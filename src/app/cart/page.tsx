@@ -1,10 +1,11 @@
 "use client";
 
 /*
-  Modern cart page with beautiful empty state.
+  Modern cart page with proper spacing.
+  All items visible, summary at bottom without overlapping.
 */
 
-import {useState, useEffect} from "react";
+import {useState} from "react";
 import {useRouter} from "next/navigation";
 import {motion, AnimatePresence} from "framer-motion";
 import Image from "next/image";
@@ -29,20 +30,9 @@ export default function CartPage() {
   const router = useRouter();
   const {items, itemCount, totalPrice, updateQuantity, removeItem, clearCart} = useCart();
   const [showClearConfirm, setShowClearConfirm] = useState(false);
-  
-  // ==========================================
-  //     LOADING STATE FOR CART PAGE
-  // ==========================================
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    // Small delay to allow the branded loader to show
-    const timer = setTimeout(() => {
-      setIsLoading(false);
-    }, 800); // Matches the premium feel of the app
-
-    return () => clearTimeout(timer);
-  }, []);
+  const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
+  const [itemToRemove, setItemToRemove] = useState<string | null>(null);
+  const [itemNameToRemove, setItemNameToRemove] = useState("");
 
   // Format price
   const formatPrice = (price: number) => {
@@ -57,7 +47,7 @@ export default function CartPage() {
   const tax = subtotal * 0.08;
   const total = subtotal + deliveryFee + tax;
 
-  // Go back
+  // Go back to previous page
   const goBack = () => {
     router.back();
   };
@@ -67,106 +57,40 @@ export default function CartPage() {
     router.push("/checkout");
   };
 
-  /* ==========================================
-     BRANDED LOADING SCREEN - WHITE THEME
-  ========================================== */
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-white flex flex-col justify-center items-center relative overflow-hidden">
-        
-        {/* Ambient Glows (Soft Yellow accents on white background) */}
-        <div className="absolute top-0 right-0 h-[500px] w-[500px] rounded-full bg-yellow-400/5 blur-[120px] pointer-events-none" />
-        <div className="absolute bottom-0 left-0 h-[400px] w-[400px] rounded-full bg-blue-500/5 blur-[100px] pointer-events-none" />
+  // Handle remove item with confirmation
+  const handleRemoveItem = (itemId: string, itemName: string) => {
+    setItemToRemove(itemId);
+    setItemNameToRemove(itemName);
+    setShowRemoveConfirm(true);
+  };
 
-        {/* Centered Loader */}
-        <motion.div 
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.5 }}
-          className="flex flex-col items-center justify-center p-8 relative z-10"
-        >
-          
-          {/* Logo Orbiting Container */}
-          <div className="relative w-28 h-28 mb-8 flex items-center justify-center">
-            
-            {/* Dotted Orbit Ring */}
-            <motion.div 
-              animate={{ rotate: 360 }}
-              transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
-              className="absolute inset-0 rounded-full border-2 border-dashed border-yellow-400/30"
-            />
-            
-            {/* Inner Ring */}
-            <motion.div 
-              animate={{ rotate: -360 }}
-              transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
-              className="absolute inset-2 rounded-full border border-yellow-400/10"
-            />
-            
-            {/* Rotating glowing dots */}
-            <motion.div 
-              animate={{ rotate: 360 }}
-              transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
-              className="absolute inset-0"
-            >
-              <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-yellow-400 shadow-[0_0_15px_rgba(234,179,8,0.8)]" />
-              <div className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 w-2 h-2 rounded-full bg-yellow-400/40" />
-              <div className="absolute left-0 top-1/2 -translate-x-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-yellow-400/40" />
-              <div className="absolute right-0 top-1/2 translate-x-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-yellow-400/40" />
-            </motion.div>
+  // Confirm remove item
+  const confirmRemoveItem = () => {
+    if (itemToRemove) {
+      removeItem(itemToRemove);
+      setShowRemoveConfirm(false);
+      setItemToRemove(null);
+      setItemNameToRemove("");
+    }
+  };
 
-            {/* Central Logo Image */}
-            <div className="relative w-16 h-16 z-10 bg-white/80 backdrop-blur-md rounded-full border-2 border-yellow-400/50 shadow-[0_0_30px_rgba(234,179,8,0.15)] flex items-center justify-center overflow-hidden">
-              <img 
-                src="/icon/icon-192.png" 
-                alt="LIA Logo" 
-                className="w-12 h-12 object-contain" 
-              />
-            </div>
-          </div>
+  // Cancel remove item
+  const cancelRemoveItem = () => {
+    setShowRemoveConfirm(false);
+    setItemToRemove(null);
+    setItemNameToRemove("");
+  };
 
-          {/* Loading Text */}
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4, delay: 0.2 }}
-            className="text-center"
-          >
-            <h3 className="text-lg font-medium text-gray-600 mb-1 tracking-wide opacity-100">
-              Loading cart
-            </h3>
-            <div className="flex items-center justify-center gap-1 mt-2">
-              
-              {/* Dot 1 */}
-              <motion.span 
-                initial={{ opacity: 0.5 }} 
-                animate={{ opacity: [0.5, 1, 0.5] }} 
-                transition={{ duration: 1.5, repeat: Infinity, delay: 0 }} 
-                className="w-1.5 h-1.5 rounded-full bg-yellow-400"
-              />
-              
-              {/* Dot 2 */}
-              <motion.span 
-                initial={{ opacity: 0.5 }} 
-                animate={{ opacity: [0.5, 1, 0.5] }} 
-                transition={{ duration: 1.5, repeat: Infinity, delay: 0.3 }} 
-                className="w-1.5 h-1.5 rounded-full bg-yellow-400"
-              />
-              
-              {/* Dot 3 */}
-              <motion.span 
-                initial={{ opacity: 0.5 }} 
-                animate={{ opacity: [0.5, 1, 0.5] }} 
-                transition={{ duration: 1.5, repeat: Infinity, delay: 0.6 }} 
-                className="w-1.5 h-1.5 rounded-full bg-yellow-400"
-              />
-            </div>
-          </motion.div>
-          
-        </motion.div>
-      </div>
-    );
-  }
+  // Handle quantity decrease with confirmation if quantity is 1
+  const handleDecreaseQuantity = (itemId: string, currentQuantity: number, itemName: string) => {
+    if (currentQuantity === 1) {
+      setItemToRemove(itemId);
+      setItemNameToRemove(itemName);
+      setShowRemoveConfirm(true);
+    } else {
+      updateQuantity(itemId, currentQuantity - 1);
+    }
+  };
 
   // Empty state
   if (items.length === 0) {
@@ -230,7 +154,7 @@ export default function CartPage() {
   }
 
   return (
-    <main className="min-h-screen bg-gray-50 pb-24">
+    <main className="min-h-screen bg-gray-50">
       {/* Header */}
       <div className="bg-white border-b border-gray-100 sticky top-0 z-20">
         <div className="flex items-center justify-between px-4 py-3 max-w-lg mx-auto">
@@ -254,8 +178,8 @@ export default function CartPage() {
         </div>
       </div>
 
-      {/* Cart Items */}
-      <div className="max-w-lg mx-auto px-4 py-4 space-y-4">
+      {/* ✅ Cart Items - With extra bottom padding for summary */}
+      <div className="max-w-lg mx-auto px-4 py-4 pb-65 space-y-4">
         <AnimatePresence mode="popLayout">
           {items.map((item) => {
             const price = formatPrice(item.price);
@@ -272,17 +196,17 @@ export default function CartPage() {
               >
                 <div className="flex gap-4">
                   {/* Product Image */}
-                  <div className="relative w-20 h-20 rounded-xl overflow-hidden flex-shrink-0 bg-white-100">
+                  <div className="relative w-20 h-20 rounded-xl overflow-hidden flex-shrink-0 bg-gray-100">
                     {item.imageUrl ? (
                       <Image
                         src={item.imageUrl}
                         alt={item.name}
                         fill
-                        className="object-contain"
+                        className="object-cover"
                       />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center">
-                        <ShoppingCart className="w-8 h-8 text-white-300" />
+                        <ShoppingCart className="w-8 h-8 text-gray-300" />
                       </div>
                     )}
                   </div>
@@ -304,7 +228,7 @@ export default function CartPage() {
                         )}
                       </div>
                       <button
-                        onClick={() => removeItem(item.id)}
+                        onClick={() => handleRemoveItem(item.id, item.name)}
                         className="p-1 hover:bg-red-50 rounded-lg transition text-red-400 hover:text-red-600 flex-shrink-0"
                         aria-label={`Remove ${item.name}`}
                       >
@@ -330,7 +254,7 @@ export default function CartPage() {
 
                       <div className="flex items-center gap-2 bg-gray-100 rounded-full p-1">
                         <button
-                          onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                          onClick={() => handleDecreaseQuantity(item.id, item.quantity, item.name)}
                           className="w-7 h-7 rounded-full bg-white shadow-sm flex items-center justify-center hover:bg-gray-50 transition"
                           aria-label={`Decrease ${item.name} quantity`}
                         >
@@ -356,7 +280,7 @@ export default function CartPage() {
         </AnimatePresence>
       </div>
 
-      {/* Order Summary */}
+      {/* ✅ Order Summary - Fixed at bottom with proper spacing */}
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-30">
         <div className="max-w-lg mx-auto px-4 py-4">
           <div className="space-y-2">
@@ -402,6 +326,44 @@ export default function CartPage() {
           )}
         </div>
       </div>
+
+      {/* Remove Item Confirmation Modal */}
+      {showRemoveConfirm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <motion.div
+            initial={{opacity: 0, scale: 0.95}}
+            animate={{opacity: 1, scale: 1}}
+            exit={{opacity: 0, scale: 0.95}}
+            className="bg-white rounded-3xl max-w-sm w-full p-6"
+          >
+            <div className="text-center">
+              <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <AlertCircle className="w-8 h-8 text-orange-600" />
+              </div>
+              <h3 className="text-xl font-bold text-gray-800 mb-2">
+                Remove Item?
+              </h3>
+              <p className="text-gray-500 text-sm mb-6">
+                Are you sure you want to remove <span className="font-semibold text-gray-700">{itemNameToRemove}</span> from your cart?
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={cancelRemoveItem}
+                  className="flex-1 py-3 border border-gray-200 rounded-xl text-gray-600 font-medium hover:bg-gray-50 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmRemoveItem}
+                  className="flex-1 py-3 bg-red-600 text-white rounded-xl font-semibold hover:bg-red-700 transition"
+                >
+                  Remove
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      )}
 
       {/* Clear Cart Confirmation Modal */}
       {showClearConfirm && (

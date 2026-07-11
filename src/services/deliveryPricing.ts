@@ -36,7 +36,7 @@ const DEFAULT_CONFIG: DeliveryPricingConfig = {
   perMileRate: 0.75,
   maxDistance: 20,
   commissionRate: 0.12, // 12% default
-  freeDeliveryThreshold: 30,
+  freeDeliveryThreshold: 150,
 };
 
 // Admin config (fetched from Firestore in production)

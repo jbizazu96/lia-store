@@ -298,7 +298,7 @@ export default function DashboardPage() {
       {/* Quick Actions */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
-          {label: "View Orders", icon: ShoppingBag, color: "bg-orange-500", href: "/store/orders"},
+          {label: "View Orders", icon: ShoppingBag, color: "bg-orange-500", href: "/store/store-orders"},
           {label: "Add Product", icon: Package, color: "bg-blue-500", href: "/store/products/add"},
         //  {label: "Earnings", icon: DollarSign, color: "bg-green-500", href: "/store/earnings"},
         //  {label: "Analytics", icon: BarChart3, color: "bg-purple-500", href: "/store/analytics"},
@@ -328,7 +328,7 @@ export default function DashboardPage() {
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-bold text-gray-800">Recent Orders</h3>
             <Link
-              href="/store/orders"
+              href="/store/store-orders"
               className="text-sm text-orange-600 hover:text-orange-700 flex items-center gap-1"
             >
               View All <ArrowRight className="w-4 h-4" />
@@ -345,7 +345,7 @@ export default function DashboardPage() {
               {recentOrders.slice(0, 5).map((order) => (
                 <Link
                   key={order.id}
-                  href={`/store/orders/${order.id}`}
+                  href={`/store/store-orders/${order.id}`}
                   className="flex items-center justify-between p-3 hover:bg-gray-50 rounded-xl transition"
                 >
                   <div className="flex items-center gap-3">
@@ -389,7 +389,7 @@ export default function DashboardPage() {
                     These orders need your attention. Accept them to start preparing.
                   </p>
                   <Link
-                    href="/store/orders?status=pending"
+                    href="/store/store-orders?status=pending"
                     className="inline-block mt-3 px-4 py-2 bg-yellow-600 text-white text-sm font-medium rounded-lg hover:bg-yellow-700 transition"
                   >
                     View Pending Orders

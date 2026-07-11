@@ -18,7 +18,7 @@ import {
   Clock,
 } from "lucide-react";
 import {auth, db} from "@/lib/firebase";
-import {collection, query, where, getDocs} from "firebase/firestore";
+import {collection, query, where, getDocs, doc, getDoc} from "firebase/firestore";
 import {onAuthStateChanged} from "firebase/auth";
 import Image from "next/image";
 import Link from "next/link";
@@ -37,14 +37,62 @@ export default function StoreLayout({children}: {children: React.ReactNode}) {
   const [storeData, setStoreData] = useState<StoreData | null>(null);
   const [loading, setLoading] = useState(true);
   const [notifications, setNotifications] = useState(3);
+  
+  // ✅ State for pending orders count
+  const [pendingOrdersCount, setPendingOrdersCount] = useState(0);
 
-  // Navigation items - all point to /store/* routes
+  // ✅ Fetch pending orders count
+  useEffect(() => {
+    const fetchPendingOrders = async () => {
+      try {
+        const user = auth.currentUser;
+        if (!user) return;
+
+        // Get store ID
+        const userRef = doc(db, "users", user.uid);
+        const userDoc = await getDoc(userRef);
+        let storeId = userDoc.data()?.storeId;
+
+        if (!storeId) {
+          const storesRef = collection(db, "stores");
+          const q = query(storesRef, where("ownerId", "==", user.uid));
+          const storeSnapshot = await getDocs(q);
+          if (!storeSnapshot.empty) {
+            storeId = storeSnapshot.docs[0].id;
+          }
+        }
+
+        if (!storeId) return;
+
+        // ✅ Count pending orders (not delivered or cancelled)
+        const ordersRef = collection(db, "orders");
+        const q = query(
+          ordersRef,
+          where("storeId", "==", storeId),
+          where("status", "in", ["pending", "accepted", "preparing", "ready", "ready_for_pickup", "picked_up", "out_for_delivery"])
+        );
+        const snapshot = await getDocs(q);
+        setPendingOrdersCount(snapshot.size);
+        
+      } catch (error) {
+        console.error("Error fetching pending orders:", error);
+      }
+    };
+
+    fetchPendingOrders();
+
+    // ✅ Refresh count every 30 seconds
+    const interval = setInterval(fetchPendingOrders, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Navigation items with dynamic badge
   const navItems = [
     {name: "Dashboard", icon: LayoutDashboard, href: "/store/dashboard"},
-    {name: "Orders", icon: ShoppingBag, href: "/store/orders", badge: "12"},
+    {name: "Orders", icon: ShoppingBag, href: "/store/store-orders", badge: pendingOrdersCount > 0 ? pendingOrdersCount.toString() : undefined},
     {name: "Products", icon: Package, href: "/store/products"},
-  //  {name: "Earnings", icon: DollarSign, href: "/store/earnings"},
-  //  {name: "Analytics", icon: BarChart3, href: "/store/analytics"},
+    {name: "Earnings", icon: DollarSign, href: "/store/earnings"},
+    //{name: "Analytics", icon: BarChart3, href: "/store/analytics"},
     {name: "Settings", icon: Settings, href: "/store/settings"},
   ];
 
@@ -148,6 +196,8 @@ export default function StoreLayout({children}: {children: React.ReactNode}) {
         <nav className="p-4 space-y-1">
           {navItems.map((item) => {
             const isActive = pathname === item.href || pathname?.startsWith(item.href + "/");
+            const showBadge = item.badge && parseInt(item.badge) > 0;
+            
             return (
               <Link
                 key={item.name}
@@ -164,11 +214,11 @@ export default function StoreLayout({children}: {children: React.ReactNode}) {
                   }`} />
                   <span className="font-medium text-sm">{item.name}</span>
                 </div>
-                {item.badge && (
+                {showBadge && (
                   <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
                     isActive
                       ? "bg-orange-200 text-orange-700"
-                      : "bg-gray-200 text-gray-600"
+                      : "bg-orange-500 text-white"
                   }`}>
                     {item.badge}
                   </span>
@@ -211,11 +261,7 @@ export default function StoreLayout({children}: {children: React.ReactNode}) {
               <div className="hidden md:flex items-center gap-6 text-sm">
                 <div className="flex items-center gap-2">
                   <Clock className="w-4 h-4 text-gray-400" />
-                  <span className="text-gray-600">Today's Orders: 0</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <DollarSign className="w-4 h-4 text-gray-400" />
-                  <span className="text-gray-600">$0.00</span>
+                  <span className="text-gray-600">Pending Orders: {pendingOrdersCount}</span>
                 </div>
               </div>
 
