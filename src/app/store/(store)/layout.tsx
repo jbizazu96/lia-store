@@ -1,8 +1,8 @@
 "use client";
 
-import {useState, useEffect} from "react";
-import {useRouter, usePathname} from "next/navigation";
-import {motion} from "framer-motion";
+import { useState, useEffect, useRef } from "react";
+import { useRouter, usePathname } from "next/navigation";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   LayoutDashboard,
   Package,
@@ -17,9 +17,9 @@ import {
   Bell,
   Clock,
 } from "lucide-react";
-import {auth, db} from "@/lib/firebase";
-import {collection, query, where, getDocs, doc, getDoc} from "firebase/firestore";
-import {onAuthStateChanged} from "firebase/auth";
+import { auth, db } from "@/lib/firebase";
+import { collection, query, where, getDocs, doc, getDoc } from "firebase/firestore";
+import { onAuthStateChanged } from "firebase/auth";
 import Image from "next/image";
 import Link from "next/link";
 
@@ -30,16 +30,62 @@ interface StoreData {
   status: string;
 }
 
-export default function StoreLayout({children}: {children: React.ReactNode}) {
+export default function StoreLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [storeData, setStoreData] = useState<StoreData | null>(null);
   const [loading, setLoading] = useState(true);
   const [notifications, setNotifications] = useState(3);
+  const sidebarRef = useRef<HTMLDivElement>(null);
+  const [isMobile, setIsMobile] = useState(false);
   
   // ✅ State for pending orders count
   const [pendingOrdersCount, setPendingOrdersCount] = useState(0);
+
+  // ✅ Check if device is mobile
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  // ✅ Close sidebar when clicking outside on mobile only
+  useEffect(() => {
+    if (!isMobile) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      if (sidebarOpen && sidebarRef.current && !sidebarRef.current.contains(event.target as Node)) {
+        const target = event.target as HTMLElement;
+        if (target.closest('button') && target.closest('button')?.querySelector('.menu-button')) {
+          return;
+        }
+        setSidebarOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [sidebarOpen, isMobile]);
+
+  // ✅ Close sidebar on route change (mobile only)
+  useEffect(() => {
+    if (isMobile) {
+      setSidebarOpen(false);
+    }
+  }, [pathname, isMobile]);
+
+  // ✅ For desktop, keep sidebar open by default
+  useEffect(() => {
+    if (!isMobile) {
+      setSidebarOpen(true);
+    }
+  }, [isMobile]);
 
   // ✅ Fetch pending orders count
   useEffect(() => {
@@ -48,7 +94,6 @@ export default function StoreLayout({children}: {children: React.ReactNode}) {
         const user = auth.currentUser;
         if (!user) return;
 
-        // Get store ID
         const userRef = doc(db, "users", user.uid);
         const userDoc = await getDoc(userRef);
         let storeId = userDoc.data()?.storeId;
@@ -64,7 +109,6 @@ export default function StoreLayout({children}: {children: React.ReactNode}) {
 
         if (!storeId) return;
 
-        // ✅ Count pending orders (not delivered or cancelled)
         const ordersRef = collection(db, "orders");
         const q = query(
           ordersRef,
@@ -81,19 +125,17 @@ export default function StoreLayout({children}: {children: React.ReactNode}) {
 
     fetchPendingOrders();
 
-    // ✅ Refresh count every 30 seconds
     const interval = setInterval(fetchPendingOrders, 30000);
     return () => clearInterval(interval);
   }, []);
 
   // Navigation items with dynamic badge
   const navItems = [
-    {name: "Dashboard", icon: LayoutDashboard, href: "/store/dashboard"},
-    {name: "Orders", icon: ShoppingBag, href: "/store/store-orders", badge: pendingOrdersCount > 0 ? pendingOrdersCount.toString() : undefined},
-    {name: "Products", icon: Package, href: "/store/products"},
-    {name: "Earnings", icon: DollarSign, href: "/store/earnings"},
-    //{name: "Analytics", icon: BarChart3, href: "/store/analytics"},
-    {name: "Settings", icon: Settings, href: "/store/settings"},
+    { name: "Dashboard", icon: LayoutDashboard, href: "/store/dashboard" },
+    { name: "Orders", icon: ShoppingBag, href: "/store/store-orders", badge: pendingOrdersCount > 0 ? pendingOrdersCount.toString() : undefined },
+    { name: "Products", icon: Package, href: "/store/products" },
+    { name: "Earnings", icon: DollarSign, href: "/store/earnings" },
+    { name: "Settings", icon: Settings, href: "/store/settings" },
   ];
 
   // Check auth and get store data
@@ -105,7 +147,6 @@ export default function StoreLayout({children}: {children: React.ReactNode}) {
       }
 
       try {
-        // Get store by ownerId
         const storesRef = collection(db, "stores");
         const q = query(storesRef, where("ownerId", "==", user.uid));
         const storeSnapshot = await getDocs(q);
@@ -118,7 +159,6 @@ export default function StoreLayout({children}: {children: React.ReactNode}) {
         const storeDoc = storeSnapshot.docs[0];
         const data = storeDoc.data();
 
-        // Check if store is active
         if (data.status !== "active") {
           router.push("/store/create");
           return;
@@ -146,6 +186,21 @@ export default function StoreLayout({children}: {children: React.ReactNode}) {
     router.push("/login");
   };
 
+  // ✅ Close sidebar helper (mobile only)
+  const closeSidebar = () => {
+    if (isMobile) {
+      setSidebarOpen(false);
+    }
+  };
+
+  // ✅ Toggle sidebar (different behavior for mobile vs desktop)
+  const toggleSidebar = () => {
+    if (isMobile) {
+      setSidebarOpen(!sidebarOpen);
+    }
+    // On desktop, we keep it always open, so toggle does nothing
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -156,16 +211,37 @@ export default function StoreLayout({children}: {children: React.ReactNode}) {
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
+      {/* ✅ Overlay for mobile only */}
+      <AnimatePresence>
+        {isMobile && sidebarOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 bg-black/50 z-40 md:hidden"
+            onClick={closeSidebar}
+          />
+        )}
+      </AnimatePresence>
+
       {/* Sidebar */}
       <motion.aside
-        initial={{x: -280}}
-        animate={{x: sidebarOpen ? 0 : -280}}
-        transition={{duration: 0.3}}
-        className="fixed top-0 left-0 h-full w-64 bg-white border-r border-gray-200 z-50 overflow-y-auto"
+        ref={sidebarRef}
+        initial={{ x: isMobile ? -280 : 0 }}
+        animate={{ 
+          x: isMobile ? (sidebarOpen ? 0 : -280) : 0 
+        }}
+        transition={{ duration: 0.3, ease: "easeInOut" }}
+        className="fixed top-0 left-0 h-full w-64 bg-white border-r border-gray-200 z-50 overflow-y-auto shadow-xl"
       >
         {/* Store Info */}
         <div className="p-4 border-b border-gray-200">
-          <Link href="/store/dashboard" className="flex items-center gap-3">
+          <Link 
+            href="/store/dashboard" 
+            className="flex items-center gap-3"
+            onClick={closeSidebar}
+          >
             <div className="relative w-10 h-10 rounded-lg overflow-hidden">
               {storeData?.logoUrl ? (
                 <Image
@@ -202,6 +278,7 @@ export default function StoreLayout({children}: {children: React.ReactNode}) {
               <Link
                 key={item.name}
                 href={item.href}
+                onClick={closeSidebar}
                 className={`flex items-center justify-between px-4 py-3 rounded-xl transition ${
                   isActive
                     ? "bg-orange-50 text-orange-600"
@@ -230,7 +307,10 @@ export default function StoreLayout({children}: {children: React.ReactNode}) {
           <div className="border-t border-gray-200 my-4" />
 
           <button
-            onClick={handleLogout}
+            onClick={() => {
+              handleLogout();
+              closeSidebar();
+            }}
             className="w-full flex items-center gap-3 px-4 py-3 text-red-600 hover:bg-red-50 rounded-xl transition"
           >
             <LogOut className="w-5 h-5" />
@@ -240,17 +320,21 @@ export default function StoreLayout({children}: {children: React.ReactNode}) {
       </motion.aside>
 
       {/* Main Content */}
-      <div className={`flex-1 ${sidebarOpen ? "ml-64" : "ml-0"} transition-all duration-300`}>
+      <div className={`flex-1 transition-all duration-300 ${isMobile ? '' : 'ml-64'}`}>
         {/* Top Bar */}
         <header className="bg-white border-b border-gray-200 sticky top-0 z-40">
-          <div className="flex items-center justify-between px-6 py-4">
+          <div className="flex items-center justify-between px-4 sm:px-6 py-4">
             <div className="flex items-center gap-4">
-              <button
-                onClick={() => setSidebarOpen(!sidebarOpen)}
-                className="p-2 hover:bg-gray-100 rounded-lg transition"
-              >
-                {sidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-              </button>
+              {/* ✅ Menu button - only shows on mobile */}
+              {isMobile && (
+                <button
+                  onClick={toggleSidebar}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition"
+                  aria-label="Toggle sidebar"
+                >
+                  <Menu className="w-5 h-5 text-gray-700" />
+                </button>
+              )}
               <h1 className="text-xl font-bold text-gray-800 hidden sm:block">
                 {navItems.find(item => pathname === item.href || pathname?.startsWith(item.href + "/"))?.name || "Dashboard"}
               </h1>
@@ -279,7 +363,7 @@ export default function StoreLayout({children}: {children: React.ReactNode}) {
         </header>
 
         {/* Page Content */}
-        <div className="p-6">
+        <div className="p-4 sm:p-6">
           {children}
         </div>
       </div>
