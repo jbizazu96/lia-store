@@ -1,23 +1,29 @@
 "use client";
 
 /*
-  Product card - Mobile optimized with image on top.
-  Price with superscript dollars and cents.
-  Smaller size for mobile devices.
+  Product card with quantity controls.
+  Shows "+" button initially, then "-" and "+" with count when added.
 */
 
 import {useState} from "react";
 import {motion} from "framer-motion";
 import Image from "next/image";
-import {Star, Plus, Package, TrendingUp, Clock} from "lucide-react";
+import {Star, Plus, Minus, Package, TrendingUp, Clock} from "lucide-react";
 import {Product} from "../types";
 
 interface ProductCardProps {
   product: Product;
   onAddToCart: (product: Product) => void;
+  onQuantityChange: (productId: string, quantity: number) => void;
+  quantity: number;
 }
 
-export function ProductCard({ product, onAddToCart }: ProductCardProps) {
+export function ProductCard({
+  product,
+  onAddToCart,
+  onQuantityChange,
+  quantity,
+}: ProductCardProps) {
   const [isHovered, setIsHovered] = useState(false);
 
   // Format price with superscript cents
@@ -72,19 +78,36 @@ export function ProductCard({ product, onAddToCart }: ProductCardProps) {
     );
   };
 
+  // ✅ Handle quantity change
+  const handleDecrease = () => {
+    if (quantity > 0) {
+      onQuantityChange(product.id, quantity - 1);
+    }
+  };
+
+  const handleIncrease = () => {
+    onQuantityChange(product.id, quantity + 1);
+  };
+
+  const handleAdd = () => {
+    onAddToCart(product);
+  };
+
+  const isInCart = quantity > 0;
+
   return (
     <motion.div
       whileHover={{y: -2}}
       className="bg-white rounded-xl overflow-hidden shadow-sm hover:shadow-md transition border border-gray-100 w-[140px] flex-shrink-0"
     >
-      {/* Product Image - Top */}
-      <div className="relative w-full h-[100px] bg-white-100">
+      {/* Product Image */}
+      <div className="relative w-full h-[100px] bg-white">
         {product.imageUrl ? (
           <Image
             src={product.imageUrl}
             alt={product.name}
             fill
-            className="object-contain"
+            className="object-contain p-1"
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center">
@@ -100,7 +123,7 @@ export function ProductCard({ product, onAddToCart }: ProductCardProps) {
         )}
       </div>
 
-      {/* Product Info - Bottom */}
+      {/* Product Info */}
       <div className="p-2">
         {/* Product Name */}
         <h4 className="font-semibold text-gray-800 text-xs truncate">
@@ -114,7 +137,7 @@ export function ProductCard({ product, onAddToCart }: ProductCardProps) {
           </p>
         )}
 
-        {/* Price - Beautiful with superscript cents */}
+        {/* Price */}
         <div className="flex items-center gap-1 mt-0.5">
           {isOnSale ? (
             <>
@@ -144,7 +167,7 @@ export function ProductCard({ product, onAddToCart }: ProductCardProps) {
           {stockStatus.label}
         </p>
 
-        {/* Rating & Sold - Compact */}
+        {/* Rating & Sold */}
         <div className="flex items-center gap-1 mt-0.5">
           {product.rating > 0 && (
             <div className="flex items-center gap-0.5">
@@ -160,16 +183,37 @@ export function ProductCard({ product, onAddToCart }: ProductCardProps) {
           )}
         </div>
 
-        {/* Add Button - Bottom */}
-        <button
-          type="button"
-          onClick={() => onAddToCart(product)}
-          className="w-full mt-1.5 py-1.5 bg-orange-500 text-white text-[10px] font-semibold rounded-lg hover:bg-orange-600 transition flex items-center justify-center gap-1"
-          aria-label={`Add ${product.name} to cart`}
-        >
-          <Plus className="w-3 h-3" />
-          Add
-        </button>
+        {/* ✅ Add/Quantity Button */}
+        {isInCart ? (
+          <div className="flex items-center justify-between mt-1.5 bg-orange-50 rounded-lg p-0.5 border border-orange-200">
+            <button
+              onClick={handleDecrease}
+              className="w-6 h-6 rounded-lg flex items-center justify-center hover:bg-orange-100 transition text-orange-600"
+              aria-label="Decrease quantity"
+            >
+              <Minus className="w-3 h-3" />
+            </button>
+            <span className="text-xs font-semibold text-orange-600 min-w-[20px] text-center">
+              {quantity}
+            </span>
+            <button
+              onClick={handleIncrease}
+              className="w-6 h-6 rounded-lg flex items-center justify-center hover:bg-orange-100 transition text-orange-600"
+              aria-label="Increase quantity"
+            >
+              <Plus className="w-3 h-3" />
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={handleAdd}
+            className="w-full mt-1.5 py-1.5 bg-orange-500 text-white text-[10px] font-semibold rounded-lg hover:bg-orange-600 transition flex items-center justify-center gap-1"
+            aria-label={`Add ${product.name} to cart`}
+          >
+            <Plus className="w-3 h-3" />
+            Add
+          </button>
+        )}
       </div>
     </motion.div>
   );

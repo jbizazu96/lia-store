@@ -3,7 +3,8 @@
 /*
   Customer store page.
   Fetches real products from Firestore based on store ID.
-  Shows distance warning if store is outside delivery radius.
+  ✅ Bottom sticky search bar with cart summary
+  ✅ Product cards show quantity controls when added
 */
 
 import {useState, useEffect, use} from "react";
@@ -24,6 +25,7 @@ import {ProductSkeleton} from "./components/ProductSkeleton";
 import {CartButton} from "./components/CartButton";
 import {ProductCard} from "./components/ProductCard";
 import {DistanceWarningModal} from "./components/DistanceWarningModal";
+import {BottomBar} from "./components/BottomBar";
 
 // Types
 import {Store, Category, Product} from "./types";
@@ -41,13 +43,21 @@ export default function StorePage({params}: StorePageProps) {
   const {storeId} = use(params);
   const router = useRouter();
   const searchParams = useSearchParams();
-  const {addItem} = useCart();
+  const { 
+    addItem, 
+    updateQuantity, 
+    getItemQuantity,
+    getStoreItemCount,
+    getStoreTotalPrice,
+  } = useCart();
   
   // Get data passed from home page via URL params
   const distanceParam = searchParams.get("distance");
   const deliveryFeeParam = searchParams.get("deliveryFee");
   const estimatedTimeParam = searchParams.get("estimatedTime");
-  
+  const storeItemCount = getStoreItemCount(storeId);
+  const storeTotalPrice = getStoreTotalPrice(storeId);
+
   const [store, setStore] = useState<Store | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [allProducts, setAllProducts] = useState<Product[]>([]);
@@ -88,7 +98,6 @@ export default function StorePage({params}: StorePageProps) {
       try {
         setLoading(true);
 
-        // 1. Get store data
         const storeRef = doc(db, "stores", storeId);
         const storeDoc = await getDoc(storeRef);
 
@@ -99,7 +108,6 @@ export default function StorePage({params}: StorePageProps) {
 
         const data = storeDoc.data();
         
-        // 2. Get products for this store
         const productsRef = collection(db, "products");
         const q = query(productsRef, where("storeId", "==", storeId));
         const productsSnapshot = await getDocs(q);
@@ -128,7 +136,6 @@ export default function StorePage({params}: StorePageProps) {
         setAllProducts(productsData);
         setDisplayProducts(productsData);
 
-        // 3. Build categories dynamically from products
         const categoryMap = new Map<string, Category>();
         const categoryIcons: {[key: string]: string} = {
           "produce": "🥬",
@@ -161,7 +168,6 @@ export default function StorePage({params}: StorePageProps) {
         const categoriesList = Array.from(categoryMap.values());
         setCategories(categoriesList);
 
-        // 4. Calculate distance if user location is available and not passed via URL
         let distance = parseFloat(distanceParam || "0");
         let deliveryFee = parseFloat(deliveryFeeParam || "0");
         let estimatedTime = parseInt(estimatedTimeParam || "0");
@@ -177,7 +183,6 @@ export default function StorePage({params}: StorePageProps) {
           estimatedTime = getEstimatedTimeNumber(distance);
         }
 
-        // 5. Build store object
         const storeData: Store = {
           id: storeDoc.id,
           name: data.name || "Store",
@@ -213,7 +218,6 @@ export default function StorePage({params}: StorePageProps) {
 
         setStore(storeData);
 
-        // 6. Check if store is within delivery radius
         const maxRadius = 25;
         if (distance > maxRadius) {
           setDistanceValue(distance);
@@ -232,9 +236,8 @@ export default function StorePage({params}: StorePageProps) {
     fetchStoreAndProducts();
   }, [storeId, router, distanceParam, deliveryFeeParam, estimatedTimeParam, userLocation]);
 
-  // ✅ Handle filtering based on category and search
+  // Handle filtering based on category and search
   useEffect(() => {
-    // If search query is active, search across all products
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
       const filtered = allProducts.filter(
@@ -247,7 +250,6 @@ export default function StorePage({params}: StorePageProps) {
       return;
     }
 
-    // Otherwise, filter by selected category
     if (selectedCategory === "all") {
       setDisplayProducts(allProducts);
     } else {
@@ -256,83 +258,85 @@ export default function StorePage({params}: StorePageProps) {
     }
   }, [selectedCategory, allProducts, searchQuery, categories]);
 
-  // Handle search
   const handleSearch = (query: string) => {
     setSearchQuery(query);
   };
 
-  // ✅ Handle category selection - update selectedCategory
   const handleCategorySelect = (categoryId: string) => {
     setSelectedCategory(categoryId);
-    // Clear search when selecting a category
     if (searchQuery) {
       setSearchQuery("");
     }
   };
 
-  // Add to cart using CartContext
+  // ✅ Handle add to cart with quantity update
   const handleAddToCart = (product: Product) => {
     if (!store) return;
     
-    addItem({
-      id: product.id,
-      name: product.name,
-      price: product.price,
-      imageUrl: product.imageUrl,
-      storeId: store.id,
-      storeName: store.name,
-      size: product.size,
-    });
+    const currentQty = getItemQuantity(product.id);
+    if (currentQty > 0) {
+      // If already in cart, increase quantity
+      updateQuantity(product.id, currentQty + 1);
+    } else {
+      // Add new item
+      addItem({
+        id: product.id,
+        name: product.name,
+        price: product.price,
+        imageUrl: product.imageUrl,
+        storeId: store.id,
+        storeName: store.name,
+        storeAddress: store.address,
+        storePhone: store.phone,
+        storeLatitude: store.latitude,
+        storeLongitude: store.longitude,
+        size: product.size,
+      });
+    }
   };
 
-  // Handle continue to store despite distance warning
+  // ✅ Handle quantity change from product card
+  const handleQuantityChange = (productId: string, newQuantity: number) => {
+    if (newQuantity <= 0) {
+      // Remove from cart (handled by updateQuantity with 0)
+      updateQuantity(productId, 0);
+    } else {
+      updateQuantity(productId, newQuantity);
+    }
+  };
+
   const handleContinueToStore = () => {
     setShowDistanceWarning(false);
   };
 
-  // Handle go back from warning modal
   const handleGoBack = () => {
     setShowDistanceWarning(false);
     router.push("/home");
   };
 
-  /* ==========================================
-     BRANDED LOADING SCREEN - WHITE THEME
-  ========================================== */
   if (loading) {
     return (
       <div className="min-h-screen bg-white flex flex-col justify-center items-center relative overflow-hidden">
-        
-        {/* Ambient Glows (Soft Yellow accents on white background) */}
         <div className="absolute top-0 right-0 h-[500px] w-[500px] rounded-full bg-yellow-400/5 blur-[120px] pointer-events-none" />
         <div className="absolute bottom-0 left-0 h-[400px] w-[400px] rounded-full bg-blue-500/5 blur-[100px] pointer-events-none" />
 
-        {/* Centered Loader */}
         <motion.div 
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.5 }}
           className="flex flex-col items-center justify-center p-8 relative z-10"
         >
-          
-          {/* Logo Orbiting Container */}
           <div className="relative w-28 h-28 mb-8 flex items-center justify-center">
-            
-            {/* Dotted Orbit Ring */}
             <motion.div 
               animate={{ rotate: 360 }}
               transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
               className="absolute inset-0 rounded-full border-2 border-dashed border-yellow-400/30"
             />
-            
-            {/* Inner Ring */}
             <motion.div 
               animate={{ rotate: -360 }}
               transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
               className="absolute inset-2 rounded-full border border-yellow-400/10"
             />
-            
-            {/* Rotating glowing dots */}
             <motion.div 
               animate={{ rotate: 360 }}
               transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
@@ -344,7 +348,6 @@ export default function StorePage({params}: StorePageProps) {
               <div className="absolute right-0 top-1/2 translate-x-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-yellow-400/40" />
             </motion.div>
 
-            {/* Central Logo Image */}
             <div className="relative w-16 h-16 z-10 bg-white/80 backdrop-blur-md rounded-full border-2 border-yellow-400/50 shadow-[0_0_30px_rgba(234,179,8,0.15)] flex items-center justify-center overflow-hidden">
               <img 
                 src="/icon/icon-192.png" 
@@ -354,7 +357,6 @@ export default function StorePage({params}: StorePageProps) {
             </div>
           </div>
 
-          {/* Loading Text */}
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
@@ -365,24 +367,18 @@ export default function StorePage({params}: StorePageProps) {
               Loading store
             </h3>
             <div className="flex items-center justify-center gap-1 mt-2">
-              
-              {/* Dot 1 */}
               <motion.span 
                 initial={{ opacity: 0.5 }} 
                 animate={{ opacity: [0.5, 1, 0.5] }} 
                 transition={{ duration: 1.5, repeat: Infinity, delay: 0 }} 
                 className="w-1.5 h-1.5 rounded-full bg-yellow-400"
               />
-              
-              {/* Dot 2 */}
               <motion.span 
                 initial={{ opacity: 0.5 }} 
                 animate={{ opacity: [0.5, 1, 0.5] }} 
                 transition={{ duration: 1.5, repeat: Infinity, delay: 0.3 }} 
                 className="w-1.5 h-1.5 rounded-full bg-yellow-400"
               />
-              
-              {/* Dot 3 */}
               <motion.span 
                 initial={{ opacity: 0.5 }} 
                 animate={{ opacity: [0.5, 1, 0.5] }} 
@@ -391,7 +387,6 @@ export default function StorePage({params}: StorePageProps) {
               />
             </div>
           </motion.div>
-          
         </motion.div>
       </div>
     );
@@ -406,7 +401,7 @@ export default function StorePage({params}: StorePageProps) {
   }
 
   return (
-    <main className="min-h-screen bg-gray-50 pb-32">
+    <main className="min-h-screen bg-gray-50 pb-20">
       {/* Store Header */}
       <StoreHeader
         bannerUrl={store.bannerUrl}
@@ -414,7 +409,7 @@ export default function StorePage({params}: StorePageProps) {
         name={store.name}
         rating={store.rating}
         reviewCount={store.reviewCount}
-        onBack={() => router.push("/home")} // ✅ Always go to home from store
+        onBack={() => router.push("/home")}
       />
 
       {/* Store Info */}
@@ -438,15 +433,6 @@ export default function StorePage({params}: StorePageProps) {
         </div>
       )}
 
-      {/* Search Bar */}
-      <div className="px-4 mt-4">
-        <SearchBar
-          value={searchQuery}
-          onChange={handleSearch}
-          placeholder="Search products..."
-        />
-      </div>
-
       {/* Categories - Dynamic from products */}
       {categories.length > 0 && (
         <div className="px-4 mt-4">
@@ -460,8 +446,7 @@ export default function StorePage({params}: StorePageProps) {
 
       {/* Products Display */}
       {searchQuery ? (
-        // Search Results
-        <div className="px-4 mt-4">
+        <div className="px-4 mt-4 pb-24">
           <h3 className="font-bold text-gray-800 mb-3">
             Search Results ({displayProducts.length})
           </h3>
@@ -477,19 +462,22 @@ export default function StorePage({params}: StorePageProps) {
                   key={product.id}
                   product={product}
                   onAddToCart={handleAddToCart}
+                  onQuantityChange={handleQuantityChange}
+                  quantity={getItemQuantity(product.id)}
                 />
               ))}
             </div>
           )}
         </div>
       ) : (
-        // Show products by category
         categories.map((category) => (
           <ProductSection
             key={category.id}
             category={category}
             products={category.products}
             onAddToCart={handleAddToCart}
+            onQuantityChange={handleQuantityChange}
+            getQuantity={getItemQuantity}
             onViewAll={() => {
               setSelectedCategory(category.id);
               setSearchQuery("");
@@ -498,8 +486,16 @@ export default function StorePage({params}: StorePageProps) {
         ))
       )}
 
-      {/* Floating Cart Button - With extra bottom padding */}
-      <CartButton />
+   
+      {/* In the return section, pass the storeId to BottomBar */}
+      <BottomBar
+        searchQuery={searchQuery}
+        onSearchChange={handleSearch}
+        itemCount={storeItemCount}      // ✅ Only items from this store
+        totalPrice={storeTotalPrice}    // ✅ Only total from this store
+        storeId={store.id}
+        onCartClick={() => router.push("/cart")}
+      />
 
       {/* Distance Warning Modal */}
       <AnimatePresence>

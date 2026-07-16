@@ -94,7 +94,7 @@ const syncCustomerOrders = httpsCallable(
 
   const getStatusIcon = (status: string) => {
     switch (status) {
-      case "Completed":
+      case "completed":
         return <HandshakeIcon className="w-5 h-5 text-green-500" />;
       case "cancelled":
         return <XCircle className="w-5 h-5 text-red-500" />;

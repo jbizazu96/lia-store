@@ -40,7 +40,7 @@ import { User, onAuthStateChanged } from "firebase/auth";
   from the firebase configuration file.
 */
 import { auth } from "@/lib/firebase";
-
+import { firebaseMessaging } from "@/services/notification/firebaseMessaging";
 /*
   This interface describes what data
   our AuthContext will provide.
@@ -120,7 +120,7 @@ export function AuthProvider({
     const unsubscribe =
       onAuthStateChanged(
         auth,
-        (firebaseUser) => {
+        async (firebaseUser) => {
           /*
             firebaseUser can be:
 
@@ -129,12 +129,29 @@ export function AuthProvider({
           */
           setUser(firebaseUser);
 
-          /*
-            Firebase has finished checking.
+            if (firebaseUser) {
 
-            We can stop loading.
-          */
-          setLoading(false);
+              try {
+
+               await firebaseMessaging.registerDevice();
+
+              } catch (error) {
+
+                console.error(
+                  "Unable to register device for notifications:",
+                  error
+                );
+
+              }
+
+            }
+
+            /*
+              Firebase has finished checking.
+
+              We can stop loading.
+            */
+            setLoading(false);
         }
       );
 

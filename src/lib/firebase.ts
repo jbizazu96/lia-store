@@ -1,4 +1,9 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
+import {
+  getMessaging,
+  isSupported,
+  type Messaging,
+} from "firebase/messaging";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getFunctions } from "firebase/functions";
@@ -32,6 +37,28 @@ const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app, firestoreDatabaseId);
 export const functions = getFunctions(app);
+
+/*
+|--------------------------------------------------------------------------
+| Firebase Cloud Messaging
+|--------------------------------------------------------------------------
+|
+| Messaging is only available in supported browsers.
+| We export an async helper so the rest of the app
+| never has to worry about browser support.
+|
+*/
+
+export async function getFirebaseMessaging():
+  Promise<Messaging | null> {
+
+  if (!(await isSupported())) {
+    return null;
+  }
+
+  return getMessaging(app);
+
+}
 
 // Export app as default
 export default app;

@@ -16,6 +16,10 @@ interface CartItem {
   quantity: number;
   storeId: string;
   storeName: string;
+  storeAddress?: string;
+  storePhone?: string;
+  storeLatitude?: number;
+  storeLongitude?: number;
   size?: {
     value: number;
     unit: string;
@@ -31,6 +35,11 @@ interface CartContextType {
   updateQuantity: (itemId: string, quantity: number) => void;
   clearCart: () => void;
   getStoreId: () => string | null;
+  getItemQuantity: (itemId: string) => number;
+  // ✅ New: Get items for a specific store
+  getStoreItems: (storeId: string) => CartItem[];
+  getStoreItemCount: (storeId: string) => number;
+  getStoreTotalPrice: (storeId: string) => number;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
@@ -106,10 +115,33 @@ export function CartProvider({children}: {children: ReactNode}) {
     return items[0].storeId;
   };
 
-  // Calculate total items
+  // Get quantity for a specific item
+  const getItemQuantity = (itemId: string): number => {
+    const item = items.find(i => i.id === itemId);
+    return item?.quantity || 0;
+  };
+
+  // ✅ Get items for a specific store
+  const getStoreItems = (storeId: string): CartItem[] => {
+    return items.filter(item => item.storeId === storeId);
+  };
+
+  // ✅ Get item count for a specific store
+  const getStoreItemCount = (storeId: string): number => {
+    const storeItems = items.filter(item => item.storeId === storeId);
+    return storeItems.reduce((sum, item) => sum + item.quantity, 0);
+  };
+
+  // ✅ Get total price for a specific store
+  const getStoreTotalPrice = (storeId: string): number => {
+    const storeItems = items.filter(item => item.storeId === storeId);
+    return storeItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  };
+
+  // Calculate total items across all stores
   const itemCount = items.reduce((sum, item) => sum + item.quantity, 0);
 
-  // Calculate total price
+  // Calculate total price across all stores
   const totalPrice = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
 
   return (
@@ -122,6 +154,10 @@ export function CartProvider({children}: {children: ReactNode}) {
       updateQuantity,
       clearCart,
       getStoreId,
+      getItemQuantity,
+      getStoreItems,      // ✅ Added
+      getStoreItemCount,  // ✅ Added
+      getStoreTotalPrice, // ✅ Added
     }}>
       {children}
     </CartContext.Provider>

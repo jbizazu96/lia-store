@@ -5,6 +5,9 @@ import { createShipdayOrder } from "./orders/createShipdayOrder";
 import { shipdayWebhook } from "./webhooks/shipdayWebhook";
 import { syncCustomerOrders } from "./delivery/syncCustomerOrders";
 import { syncStoreOrders } from "./delivery/syncStoreOrders";
+import { sendTestNotification } from "./notification/sendTestNotification";
+import { acceptOrder } from "./orders/acceptOrder";
+import { orderStatusChanged } from "./triggers/orderStatusChanged";
 
 /*
   Initialize the Firebase Admin SDK once.
@@ -287,6 +290,9 @@ export const setEmailVerifiedManually = onCall(
 );
 
 export { createShipdayOrder };
+export { acceptOrder };
 export { shipdayWebhook };
 export { syncCustomerOrders };
 export { syncStoreOrders };
+export { sendTestNotification };
+export { orderStatusChanged };

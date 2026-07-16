@@ -98,7 +98,7 @@ export function OrderSummary({
         </div>
         
         {/* ✅ Tip - ONLY visible if greater than 0 */}
-        {totals.tip && totals.tip > 0 && (
+       {totals.tip > 0 && (
           <div className="flex justify-between text-sm">
             <span className="text-gray-500">Driver Tip</span>
             <span className="text-gray-800">${totals.tip.toFixed(2)}</span>

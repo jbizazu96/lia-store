@@ -1,0 +1,74 @@
+/*
+|--------------------------------------------------------------------------
+| Notification Domain Model
+|--------------------------------------------------------------------------
+|
+| PURPOSE
+| -------
+| Defines the Notification model used throughout LIA.
+|
+| This is OUR business model.
+|
+| It is NOT:
+|   • Firebase Cloud Messaging
+|   • Firestore document
+|   • Apple Push Notification
+|   • Android Notification
+|
+*/
+
+/**
+ * Notification categories.
+ */
+export type NotificationType =
+  | "order"
+  | "delivery"
+  | "promotion"
+  | "system";
+
+/**
+ * Notification model.
+ */
+export interface Notification {
+
+  /**
+   * Firestore document ID.
+   */
+  id: string;
+
+  /**
+   * User that owns this notification.
+   */
+  uid: string;
+
+  /**
+   * Notification title.
+   */
+  title: string;
+
+  /**
+   * Notification body.
+   */
+  body: string;
+
+  /**
+   * Notification category.
+   */
+  type: NotificationType;
+
+  /**
+   * Related order.
+   */
+  orderId?: string;
+
+  /**
+   * Has the notification been opened?
+   */
+  read: boolean;
+
+  /**
+   * Creation date.
+   */
+  createdAt: Date;
+
+}

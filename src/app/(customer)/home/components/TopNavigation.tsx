@@ -1,5 +1,7 @@
 "use client";
 
+import { useNotifications } from "@/context/NotificationContext";
+import { notificationService } from "@/services/notification/notificationService";
 import {useState, useEffect} from "react";
 import Link from "next/link";
 import {User, Bell, ShoppingCart, Package} from "lucide-react";
@@ -19,7 +21,7 @@ interface TopNavigationProps {
   showSearch?: boolean;
 }
 
-// Order status colors
+// ✅ Order status colors
 const orderStatusColors: Record<string, string> = {
   pending: "bg-yellow-500",
   accepted: "bg-blue-500",
@@ -31,7 +33,7 @@ const orderStatusColors: Record<string, string> = {
   cancelled: "bg-red-500",
 };
 
-// Order status labels
+// ✅ Order status labels
 const orderStatusLabels: Record<string, string> = {
   pending: "Pending",
   accepted: "Accepted",
@@ -39,7 +41,7 @@ const orderStatusLabels: Record<string, string> = {
   ready_for_pickup: "Ready for Pickup",
   picked_up: "Picked Up",
   out_for_delivery: "Out for Delivery",
-  completed: "Completed",
+  completed: "completed",
   cancelled: "Cancelled",
 };
 
@@ -48,67 +50,69 @@ export function TopNavigation({userName, showSearch = false}: TopNavigationProps
   const [orderCount, setOrderCount] = useState(0);
   const [latestOrderStatus, setLatestOrderStatus] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const { unreadCount } = useNotifications();
 
-  // Fetch active orders (not completed or cancelled)
+  // ✅ Fetch active orders (not completed or cancelled)
   useEffect(() => {
-    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
-      if (!user) {
-        setOrderCount(0);
-        setLatestOrderStatus(null);
-        setLoading(false);
-        return;
-      }
+  const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+    if (!user) {
+      setOrderCount(0);
+      setLatestOrderStatus(null);
+      setLoading(false);
+      return;
+    }
 
-      const ordersRef = collection(db, "orders");
+    const ordersRef = collection(db, "orders");
 
-      // ✅ Fix: Use "userId" instead of "customer.uid"
-      const q = query(
-        ordersRef,
-        where("userId", "==", user.uid)
-      );
+    const q = query(
+      ordersRef,
+      where("customer.uid", "==", user.uid)
+    );
 
-      const unsubscribeOrders = onSnapshot(q, (snapshot) => {
-        let activeOrders = 0;
-        let latestStatus: string | null = null;
-        let latestDate = new Date(0);
+    const unsubscribeOrders = onSnapshot(q, (snapshot) => {
+      let activeOrders = 0;
+      let latestStatus: string | null = null;
+      let latestDate = new Date(0);
 
-        snapshot.forEach((doc) => {
-          const data = doc.data();
-          const status = data.status ?? "pending";
+      snapshot.forEach((doc) => {
+        const data = doc.data();
 
-          // ✅ Only count orders that are NOT completed or cancelled
-          if (status !== "completed" && status !== "cancelled") {
-            activeOrders++;
+        const status = data.status ?? "pending";
 
-            const createdAt = data.createdAt?.toDate?.() ?? new Date(0);
+        if (status !== "completed" && status !== "cancelled") {
+          activeOrders++;
 
-            if (createdAt > latestDate) {
-              latestDate = createdAt;
-              latestStatus = status;
-            }
+          const createdAt =
+            data.createdAt?.toDate?.() ?? new Date(0);
+
+          if (createdAt > latestDate) {
+            latestDate = createdAt;
+            latestStatus = status;
           }
-        });
-
-        setOrderCount(activeOrders);
-        setLatestOrderStatus(latestStatus);
-        setLoading(false);
+        }
       });
 
-      // Cleanup Firestore listener when auth changes
-      return unsubscribeOrders;
+
+      setOrderCount(activeOrders);
+      setLatestOrderStatus(latestStatus);
+      setLoading(false);
     });
 
-    // Cleanup auth listener when component unmounts
-    return () => unsubscribeAuth();
-  }, []);
+    // Cleanup Firestore listener when auth changes
+    return unsubscribeOrders;
+  });
 
-  // Get color for the order status dot
+  // Cleanup auth listener when component unmounts
+  return () => unsubscribeAuth();
+}, []);
+
+  // ✅ Get color for the order status dot
   const getStatusColor = (status: string | null) => {
     if (!status) return "bg-gray-400";
     return orderStatusColors[status] || "bg-gray-400";
   };
 
-  // Get status label
+  // ✅ Get status label
   const getStatusLabel = (status: string | null) => {
     if (!status) return "";
     return orderStatusLabels[status] || status;
@@ -123,7 +127,7 @@ export function TopNavigation({userName, showSearch = false}: TopNavigationProps
             <div className="relative w-8 h-8">
               <Image
                 src="/icon/icon-192.png"
-                alt="LIA Logo"
+                alt=" LIA Logo"
                 fill
                 className="w-12 h-12 object-contain"
               />
@@ -133,7 +137,7 @@ export function TopNavigation({userName, showSearch = false}: TopNavigationProps
 
           {/* Right: Icons with gray backgrounds */}
           <div className="flex items-center gap-1">
-            {/* Orders - With Count Badge (only shows when orderCount > 0) */}
+            {/* Orders - With Count Badge */}
             <Link 
               href="/orders" 
               className="relative w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200 transition"
@@ -141,14 +145,14 @@ export function TopNavigation({userName, showSearch = false}: TopNavigationProps
             >
               <Package className="w-5 h-5 text-gray-600" />
               
-              {/* ✅ Order count badge - ONLY shows when there are active orders */}
+              {/* ✅ Order count badge - shows number of active orders */}
               {orderCount > 0 && (
                 <span className="absolute -top-1 -right-1 min-w-[18px] h-4 bg-orange-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1">
                   {orderCount > 99 ? "99+" : orderCount}
                 </span>
               )}
               
-              {/* ✅ Status dot - shows latest order status (only if active orders exist) */}
+              {/* ✅ Status dot - shows latest order status */}
               {latestOrderStatus && orderCount > 0 && (
                 <span 
                   className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white ${getStatusColor(latestOrderStatus)}`}
@@ -162,8 +166,13 @@ export function TopNavigation({userName, showSearch = false}: TopNavigationProps
               className="relative w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200 transition"
               aria-label="Notifications"
             >
-              <Bell className="w-5 h-5 text-gray-600" />
-              <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full" />
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-[18px] h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1">
+                  {unreadCount > 99
+                    ? "99+"
+                    : unreadCount}
+                </span>
+              )}
             </button>
 
             {/* Profile */}

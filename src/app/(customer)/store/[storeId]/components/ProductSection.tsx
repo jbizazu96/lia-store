@@ -1,8 +1,7 @@
 "use client";
 
 /*
-  Product section with horizontal scrolling - Touch only, no arrows.
-  Category name with proper capitalization and visibility.
+  Product section with horizontal scrolling.
 */
 
 import {useRef} from "react";
@@ -15,6 +14,8 @@ interface ProductSectionProps {
   category: Category;
   products: Product[];
   onAddToCart: (product: Product) => void;
+  onQuantityChange: (productId: string, quantity: number) => void;
+  getQuantity: (productId: string) => number;
   onViewAll: () => void;
 }
 
@@ -22,20 +23,21 @@ export function ProductSection({
   category,
   products,
   onAddToCart,
+  onQuantityChange,
+  getQuantity,
   onViewAll,
 }: ProductSectionProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   if (products.length === 0) return null;
 
-  // Capitalize first letter
   const capitalize = (str: string) => {
     return str.charAt(0).toUpperCase() + str.slice(1);
   };
 
   return (
     <div className="mt-4 px-4">
-      {/* Header - More visible */}
+      {/* Header */}
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
           <span className="text-xl">{category.icon}</span>
@@ -55,7 +57,7 @@ export function ProductSection({
         </button>
       </div>
 
-      {/* Products - Horizontal Scroll (Touch only) */}
+      {/* Products */}
       <div
         ref={scrollRef}
         className="flex gap-2.5 overflow-x-auto pb-3 scrollbar-hide px-1 snap-x snap-mandatory"
@@ -72,6 +74,8 @@ export function ProductSection({
             <ProductCard
               product={product}
               onAddToCart={onAddToCart}
+              onQuantityChange={onQuantityChange}
+              quantity={getQuantity(product.id)}
             />
           </motion.div>
         ))}
