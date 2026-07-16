@@ -11,7 +11,7 @@
 | ✅ Beautiful modern design
 |
 */
-import { getFunctions, httpsCallable } from "firebase/functions";
+
 import { useEffect, useState } from "react";
 import { ArrowLeft, Bell } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -37,7 +37,7 @@ export default function NotificationsPage() {
   const router = useRouter();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
-  const functions = getFunctions();
+
 
   useEffect(() => {
     if (!user) {
@@ -45,26 +45,6 @@ export default function NotificationsPage() {
       setLoading(false);
       return;
     }
-    
-    // Synchronize Shipday deliveries
-    const syncCustomerOrders =
-      httpsCallable(
-        functions,
-        "syncCustomerOrders"
-      );
-
-    syncCustomerOrders()
-      .then(() => {
-        console.log(
-          "Customer deliveries synchronized."
-        );
-      })
-      .catch((error) => {
-        console.error(
-          "Failed to synchronize deliveries:",
-          error
-        );
-      });
 
     const unsubscribe = notificationService.listenForNotifications(
       user.uid,

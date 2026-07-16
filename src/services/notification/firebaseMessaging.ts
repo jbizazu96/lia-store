@@ -7,8 +7,8 @@
 |
 */
 import {
-  collection,
-  addDoc,
+  doc,
+  setDoc,
   serverTimestamp,
 } from "firebase/firestore";
 
@@ -87,43 +87,44 @@ export class FirebaseMessaging {
 
   }
 
-  /**
- * Registers the current device in Firestore.
- */
-async registerDevice(): Promise<void> {
+    /**
+   * Registers the current device in Firestore.
+   */
+  async registerDevice(): Promise<void> {
 
-  const permission =
-    await this.requestPermission();
+    const permission =
+      await this.requestPermission();
 
-  if (!permission) {
+    if (!permission) {
 
-    console.log(
-      "Notification permission denied."
-    );
+      console.log(
+        "Notification permission denied."
+      );
 
-    return;
+      return;
 
-  }
+    }
 
-  const token =
-    await this.getToken();
+    const token =
+      await this.getToken();
 
-  if (!token) {
-    return;
-  }
+    if (!token) {
+      return;
+    }
 
-  const user =
-    auth.currentUser;
+    const user =
+      auth.currentUser;
 
-  if (!user) {
-    return;
-  }
+    if (!user) {
+      return;
+    }
 
-  await addDoc(
+  await setDoc(
 
-    collection(
+    doc(
       db,
-      "notificationDevices"
+      "notificationDevices",
+      token
     ),
 
     {
@@ -134,8 +135,21 @@ async registerDevice(): Promise<void> {
 
       active: true,
 
-      createdAt:
-        serverTimestamp(),
+      createdAt: serverTimestamp(),
+
+      updatedAt: serverTimestamp(),
+
+      lastSeen: serverTimestamp(),
+
+      platform: navigator.platform,
+
+      userAgent: navigator.userAgent,
+
+    },
+
+    {
+
+      merge: true,
 
     }
 

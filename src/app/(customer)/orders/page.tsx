@@ -22,23 +22,12 @@ import {
   BoxIcon,
 } from "lucide-react";
 import Link from "next/link";
-import {
-  getFunctions,
-  httpsCallable,
-} from "firebase/functions";
 import type { Order } from "@/types/order";
 
 export default function OrdersPage() {
   const router = useRouter();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
-
-  const functions = getFunctions();
-
-const syncCustomerOrders = httpsCallable(
-  functions,
-  "syncCustomerOrders"
-);
 
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
@@ -47,25 +36,6 @@ const syncCustomerOrders = httpsCallable(
         return;
       }
 
-      // ----------------------------------------------------
-      // Synchronize this customer's active deliveries.
-      // ----------------------------------------------------
-      try {
-
-        await syncCustomerOrders();
-
-        console.log(
-          "Customer orders synchronized."
-        );
-
-      } catch (error) {
-
-        console.error(
-          "Synchronization failed:",
-          error
-        );
-
-      }
       // ✅ Set up real-time listener for orders
       const ordersRef = collection(db, "orders");
       const q = query(

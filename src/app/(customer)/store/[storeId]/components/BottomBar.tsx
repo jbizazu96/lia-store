@@ -48,7 +48,7 @@ export function BottomBar({
               animate={{ opacity: 1, scale: 1, x: 0 }}
               exit={{ opacity: 0, scale: 0.9, x: 10 }}
               onClick={onCartClick}
-              className="flex items-center gap-2 px-4 py-3 bg-orange-500 text-white rounded-2xl hover:bg-orange-600 transition flex-shrink-0 shadow-lg"
+              className="flex items-center gap-2 px-4 py-3 bg-orange-500 text-white rounded-3xl hover:bg-orange-600 transition flex-shrink-0 shadow-lg"
             >
               <div className="relative">
                 <ShoppingBag className="w-5 h-5" />

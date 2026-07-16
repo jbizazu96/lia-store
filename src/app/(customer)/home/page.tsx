@@ -14,9 +14,12 @@ import { StoreCard } from "./components/StoreCard";
 import { StoreCardSkeleton } from "./components/StoreCardSkeleton";
 import { DistanceWarningModal } from "./components/DistanceWarningModal";
 import { calculateDistance } from "@/services/delivery/distance";
+import { FloatingCart } from "./components/FloatingCart";
+import { useCart } from "@/context/CartContext";
 
 export default function CustomerHomePage() {
   const router = useRouter();
+  const { itemCount, totalPrice } = useCart();
   const [userName, setUserName] = useState("Guest");
   const [userLocation, setUserLocation] = useState<{lat: number; lng: number} | null>(null);
   const [stores, setStores] = useState<Store[]>([]);
@@ -151,6 +154,11 @@ export default function CustomerHomePage() {
     }
   };
 
+  // Navigate to cart
+  const handleCartClick = () => {
+    router.push("/cart");
+  };
+
   /* ==========================================
      LOADING STATE - WHITE BRANDED LOADER
   ========================================== */
@@ -253,7 +261,7 @@ export default function CustomerHomePage() {
   }
 
   return (
-    <main className="min-h-screen bg-gray-50 pb-4">
+    <main className="min-h-screen bg-gray-50 pb-20">
       {/* Top Navigation */}
       <TopNavigation userName={userName} showSearch={false} />
 
@@ -278,7 +286,7 @@ export default function CustomerHomePage() {
       </div>
 
       {/* Store List */}
-      <section className="px-4 mt-6 pb-32">
+      <section className="px-4 mt-6">
         {nearbyStores.length === 0 && farStores.length === 0 ? (
           <div className="text-center py-12">
             <div className="w-16 h-16 text-gray-300 mx-auto mb-4">🏪</div>
@@ -363,6 +371,13 @@ export default function CustomerHomePage() {
           </>
         )}
       </section>
+
+      {/* ✅ Floating Cart Component */}
+      <FloatingCart
+        itemCount={itemCount}
+        totalPrice={totalPrice}
+        onClick={handleCartClick}
+      />
 
       {/* Distance Warning Modal */}
       <AnimatePresence>

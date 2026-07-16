@@ -19,7 +19,7 @@ export function FloatingSearchBar({value, onChange}: FloatingSearchBarProps) {
       animate={{y: 0, opacity: 1}}
       transition={{delay: 0.3}}
     >
-      <div className={`relative bg-white rounded-2xl shadow-lg border transition ${
+      <div className={`relative bg-white rounded-3xl shadow-lg border transition ${
         isFocused ? "border-orange-400 ring-2 ring-orange-100" : "border-gray-200"
       }`}>
         <div className="flex items-center px-4 py-3">
