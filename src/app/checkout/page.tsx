@@ -28,7 +28,7 @@ import {DeliveryInstructions} from "./components/DeliveryInstructions";
 // Types
 import {Address, CheckoutItem, OrderTotals} from "./types";
 
-// ✅ Store data interface
+// Store data interface
 interface StoreData {
   id: string;
   name: string;
@@ -48,15 +48,15 @@ export default function CheckoutPage() {
   const [orderId, setOrderId] = useState("");
   const [error, setError] = useState("");
 
-  // ✅ User info
+  // User info
   const [userName, setUserName] = useState("");
   const [userPhone, setUserPhone] = useState("");
 
-  // ✅ Delivery info
+  // Delivery info
   const [deliveryInstructions, setDeliveryInstructions] = useState("");
   const [tip, setTip] = useState(0);
 
-  // ✅ Store info (will be fetched from Firestore)
+  // Store info (will be fetched from Firestore)
   const [storeData, setStoreData] = useState<StoreData | null>(null);
 
   // Address form state with name and phone
@@ -68,6 +68,13 @@ export default function CheckoutPage() {
     name: "",
     phone: "",
   });
+
+  // ✅ Check if cart is empty and redirect in useEffect
+  useEffect(() => {
+    if (items.length === 0 && !orderPlaced) {
+      router.push("/home");
+    }
+  }, [items.length, orderPlaced, router]);
 
   // Get user data and address
   useEffect(() => {
@@ -110,7 +117,7 @@ export default function CheckoutPage() {
           }
         }
 
-        // ✅ Fetch store data if we have a storeId
+        // Fetch store data if we have a storeId
         const storeId = items[0]?.storeId;
         if (storeId) {
           const storeRef = doc(db, "stores", storeId);
@@ -134,9 +141,8 @@ export default function CheckoutPage() {
     fetchUserData();
   }, [items, router]);
 
-  // If cart is empty, redirect to home
+  // If cart is empty, return null (redirect handled by useEffect)
   if (items.length === 0 && !orderPlaced) {
-    router.push("/home");
     return null;
   }
 
@@ -177,89 +183,54 @@ export default function CheckoutPage() {
       }
 
       // Calculate delivery distance between the store and the customer.
-          const distanceMiles = calculateDistance(
-            storeData?.latitude || 0,
-            storeData?.longitude || 0,
-            address.latitude || 0,
-            address.longitude || 0
-          );
+      const distanceMiles = calculateDistance(
+        storeData?.latitude || 0,
+        storeData?.longitude || 0,
+        address.latitude || 0,
+        address.longitude || 0
+      );
 
-console.log("Distance:", distanceMiles);
+      console.log("Distance:", distanceMiles);
 
       const order = createOrder({
-
-          userId: user.uid,
-
-          customerName: formData.name || userName,
-
-          customerPhone: formData.phone || userPhone,
-
-          customerEmail: user.email || "",
-
-          storeId,
-
-          storeName,
-
-          storeAddress: storeData?.address || "",
-
-          storePhone: storeData?.phone || "",
-
-          storeLatitude: storeData?.latitude || 0,
-
-          storeLongitude: storeData?.longitude || 0,
-
-          deliveryAddress: {
-
-            street: address.street || "",
-
-            city: address.city || "",
-
-            state: address.state || "",
-
-            zip: address.zip || "",
-
-            formattedAddress: address.formattedAddress || "",
-
-          },
-
-          customerLatitude: address.latitude || 0,
-
-          customerLongitude: address.longitude || 0,
-
-          deliveryInstructions,
-
-          deliveryFee,
-          distanceMiles,
-
-          items: items.map(item => ({
-
-            id: item.id,
-
-            name: item.name,
-
-            price: item.price,
-
-            quantity: item.quantity,
-
-            imageUrl: item.imageUrl,
-
-            size: item.size,
-
-          })),
-
-          subtotal,
-
-          tax,
-
-          tip,
-
-          total,
-
-        });
-console.log(order);
-      const orderId =
-          await orderService.createOrder(order);
-
+        userId: user.uid,
+        customerName: formData.name || userName,
+        customerPhone: formData.phone || userPhone,
+        customerEmail: user.email || "",
+        storeId,
+        storeName,
+        storeAddress: storeData?.address || "",
+        storePhone: storeData?.phone || "",
+        storeLatitude: storeData?.latitude || 0,
+        storeLongitude: storeData?.longitude || 0,
+        deliveryAddress: {
+          street: address.street || "",
+          city: address.city || "",
+          state: address.state || "",
+          zip: address.zip || "",
+          formattedAddress: address.formattedAddress || "",
+        },
+        customerLatitude: address.latitude || 0,
+        customerLongitude: address.longitude || 0,
+        deliveryInstructions,
+        deliveryFee,
+        distanceMiles,
+        items: items.map(item => ({
+          id: item.id,
+          name: item.name,
+          price: item.price,
+          quantity: item.quantity,
+          imageUrl: item.imageUrl,
+          size: item.size,
+        })),
+        subtotal,
+        tax,
+        tip,
+        total,
+      });
+      
+      console.log(order);
+      const orderId = await orderService.createOrder(order);
       setOrderId(orderId);
 
       // Clear cart

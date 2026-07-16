@@ -3,6 +3,7 @@
 /*
   Store Settings Page.
   Complete store management with modern UI.
+  ✅ Fetches store data by ownerId instead of document ID.
 */
 
 import {BrandedLoader} from "@/components/ui/BrandedLoader";
@@ -23,7 +24,7 @@ import {
   Settings as SettingsIcon,
 } from "lucide-react";
 import {auth, db} from "@/lib/firebase";
-import {doc, getDoc, updateDoc} from "firebase/firestore";
+import {doc, getDoc, updateDoc, collection, query, where, getDocs} from "firebase/firestore";
 
 // Components
 import {ProfileSection} from "./components/ProfileSection";
@@ -38,6 +39,7 @@ export default function SettingsPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [storeData, setStoreData] = useState<any>(null);
+  const [storeId, setStoreId] = useState<string>("");
   const [userData, setUserData] = useState<any>(null);
   const [activeSection, setActiveSection] = useState("profile");
   const [saving, setSaving] = useState(false);
@@ -60,11 +62,19 @@ export default function SettingsPage() {
           setUserData(userDoc.data());
         }
 
-        // Get store data
-        const storesRef = doc(db, "stores", user.uid);
-        const storeDoc = await getDoc(storesRef);
-        if (storeDoc.exists()) {
+        // ✅ Get store data by querying ownerId
+        const storesRef = collection(db, "stores");
+        const q = query(storesRef, where("ownerId", "==", user.uid));
+        const storeSnapshot = await getDocs(q);
+        
+        if (!storeSnapshot.empty) {
+          const storeDoc = storeSnapshot.docs[0];
+          setStoreId(storeDoc.id);
           setStoreData({id: storeDoc.id, ...storeDoc.data()});
+        } else {
+          // No store found - redirect to create
+          router.push("/store/create");
+          return;
         }
 
       } catch (error) {
@@ -86,9 +96,9 @@ export default function SettingsPage() {
       const user = auth.currentUser;
       if (!user) return;
 
-      // Update store
-      if (storeData) {
-        await updateDoc(doc(db, "stores", storeData.id), {
+      // ✅ Update store using the correct storeId
+      if (storeData && storeId) {
+        await updateDoc(doc(db, "stores", storeId), {
           ...storeData,
           updatedAt: new Date().toISOString(),
         });
@@ -141,7 +151,7 @@ export default function SettingsPage() {
           <p className="text-gray-500 text-sm">Manage your store and account settings</p>
         </div>
         <button
-          type="button"  // ✅ Add type="button"
+          type="button"
           onClick={handleSave}
           disabled={saving}
           className="px-4 py-2.5 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-xl font-semibold hover:shadow-lg hover:from-orange-600 hover:to-orange-700 transition flex items-center gap-2 text-sm disabled:opacity-50"

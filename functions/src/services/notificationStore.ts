@@ -14,34 +14,59 @@
 
 import { getFirestore } from "firebase-admin/firestore";
 
+interface CreateNotificationInput {
+
+  uid: string;
+
+  title: string;
+
+  body: string;
+
+  type:
+    | "order"
+    | "delivery"
+    | "promotion"
+    | "system";
+
+  icon: string;
+
+  color: string;
+
+  orderId?: string;
+
+}
 export class NotificationStore {
 
   /**
    * Creates an in-app notification.
    */
   async createNotification(
-    uid: string,
-    title: string,
-    body: string,
-    type: "order" | "delivery" | "promotion" | "system",
-    orderId?: string
+  input: CreateNotificationInput
   ): Promise<void> {
 
     await getFirestore("default")
       .collection("users")
-      .doc(uid)
+      .doc(input.uid)
       .collection("notifications")
       .add({
 
-        uid,
+        uid: input.uid,
 
-        title,
+        title: input.title,
 
-        body,
+        body: input.body,
 
-        type,
+        type: input.type,
 
-        orderId,
+        icon: input.icon,
+
+        color: input.color,
+
+        deepLink: input.orderId
+          ? `/orders/${input.orderId}`
+          : undefined,
+
+        orderId: input.orderId,
 
         read: false,
 

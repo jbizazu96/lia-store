@@ -2,9 +2,10 @@
 
 /*
   Store profile management section.
+  ✅ Displays existing store data.
 */
 
-import {useState, useRef} from "react";
+import {useState, useRef, useEffect} from "react";
 import Image from "next/image";
 import {motion} from "framer-motion";
 import {
@@ -36,6 +37,12 @@ export function ProfileSection({
   const logoInputRef = useRef<HTMLInputElement>(null);
   const bannerInputRef = useRef<HTMLInputElement>(null);
 
+  // ✅ Update previews when storeData changes
+  useEffect(() => {
+    setLogoPreview(storeData?.logoUrl || "");
+    setBannerPreview(storeData?.bannerUrl || "");
+  }, [storeData?.logoUrl, storeData?.bannerUrl]);
+
   // Handle logo upload
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -60,6 +67,15 @@ export function ProfileSection({
     reader.readAsDataURL(file);
   };
 
+  // If no storeData, show a message
+  if (!storeData) {
+    return (
+      <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+        <p className="text-gray-500 text-center">No store data available</p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Store Banner */}
@@ -81,7 +97,7 @@ export function ProfileSection({
           <button
             type="button"
             onClick={() => bannerInputRef.current?.click()}
-            className="absolute bottom-4 right-4 px-4 py-2 bg-black/70 text-white text-sm font-medium rounded-xl hover:bg-black/80 transition flex items-center gap-2"
+            className="absolute bottom-4 right-4 px-4 py-2 bg-white text-black text-sm font-medium rounded-xl hover:bg-black/80 transition flex items-center gap-2"
             aria-label="Change store cover image"
           >
             <Upload className="w-4 h-4" />

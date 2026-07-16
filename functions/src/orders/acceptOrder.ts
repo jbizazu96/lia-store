@@ -14,7 +14,6 @@
 
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
-import { orderEvents } from "../events/orderEvents";
 
 export const acceptOrder = onCall(
   {
@@ -84,14 +83,6 @@ export const acceptOrder = onCall(
       }),
 
     });
-
-    // --------------------------------------------
-    // Raise the business event
-    // --------------------------------------------
-
-    await orderEvents.orderAccepted(
-      order.customer.uid
-    );
 
     return {
 

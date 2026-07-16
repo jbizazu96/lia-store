@@ -22,7 +22,7 @@ import {
   updateDoc,
   where,
   onSnapshot,
-   serverTimestamp,
+  serverTimestamp,
 } from "firebase/firestore";
 
 import { db } from "@/lib/firebase";
@@ -203,6 +203,50 @@ listenForUnreadCount(
 
       callback(
         snapshot.size
+      );
+
+    }
+
+  );
+
+}
+
+/**
+ * Listen for notification changes.
+ */
+listenForNotifications(
+  uid: string,
+  callback: (notifications: Notification[]) => void
+) {
+
+  const q = query(
+
+    collection(
+      db,
+      "users",
+      uid,
+      "notifications"
+    ),
+
+    orderBy(
+      "createdAt",
+      "desc"
+    )
+
+  );
+
+  return onSnapshot(
+
+    q,
+
+    (snapshot) => {
+
+      callback(
+
+        snapshot.docs.map(
+          mapFirestoreNotification
+        )
+
       );
 
     }

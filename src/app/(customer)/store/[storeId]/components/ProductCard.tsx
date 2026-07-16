@@ -1,14 +1,14 @@
 "use client";
 
 /*
-  Product card with quantity controls.
-  Shows "+" button initially, then "-" and "+" with count when added.
+  Product card with quantity controls and remove confirmation.
+  Shows confirmation modal when removing the last item.
 */
 
 import {useState} from "react";
-import {motion} from "framer-motion";
+import {motion, AnimatePresence} from "framer-motion";
 import Image from "next/image";
-import {Star, Plus, Minus, Package, TrendingUp, Clock} from "lucide-react";
+import {Star, Plus, Minus, Package, TrendingUp, Clock, AlertCircle} from "lucide-react";
 import {Product} from "../types";
 
 interface ProductCardProps {
@@ -25,6 +25,7 @@ export function ProductCard({
   quantity,
 }: ProductCardProps) {
   const [isHovered, setIsHovered] = useState(false);
+  const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
 
   // Format price with superscript cents
   const formatPrice = (price: number) => {
@@ -78,11 +79,25 @@ export function ProductCard({
     );
   };
 
-  // ✅ Handle quantity change
+  // ✅ Handle decrease with confirmation
   const handleDecrease = () => {
-    if (quantity > 0) {
+    if (quantity === 1) {
+      // Show confirmation modal when removing the last item
+      setShowRemoveConfirm(true);
+    } else if (quantity > 0) {
       onQuantityChange(product.id, quantity - 1);
     }
+  };
+
+  // ✅ Confirm remove
+  const confirmRemove = () => {
+    onQuantityChange(product.id, 0);
+    setShowRemoveConfirm(false);
+  };
+
+  // ✅ Cancel remove
+  const cancelRemove = () => {
+    setShowRemoveConfirm(false);
   };
 
   const handleIncrease = () => {
@@ -96,125 +111,167 @@ export function ProductCard({
   const isInCart = quantity > 0;
 
   return (
-    <motion.div
-      whileHover={{y: -2}}
-      className="bg-white rounded-xl overflow-hidden shadow-sm hover:shadow-md transition border border-gray-100 w-[140px] flex-shrink-0"
-    >
-      {/* Product Image */}
-      <div className="relative w-full h-[100px] bg-white">
-        {product.imageUrl ? (
-          <Image
-            src={product.imageUrl}
-            alt={product.name}
-            fill
-            className="object-contain p-1"
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center">
-            <Package className="w-8 h-8 text-gray-300" />
-          </div>
-        )}
-        
-        {/* Sale Badge */}
-        {isOnSale && (
-          <div className="absolute top-1 right-1 px-1.5 py-0.5 bg-red-500 text-white text-[8px] font-medium rounded-full">
-            Sale
-          </div>
-        )}
-      </div>
-
-      {/* Product Info */}
-      <div className="p-2">
-        {/* Product Name */}
-        <h4 className="font-semibold text-gray-800 text-xs truncate">
-          {product.name}
-        </h4>
-
-        {/* Size/Weight */}
-        {product.size && product.size.value > 0 && (
-          <p className="text-[10px] text-gray-400">
-            {product.size.value}{product.size.unit}
-          </p>
-        )}
-
-        {/* Price */}
-        <div className="flex items-center gap-1 mt-0.5">
-          {isOnSale ? (
-            <>
-              <span className="text-sm font-bold text-orange-600">
-                ${price.dollars}
-                <sup className="text-[8px] font-semibold text-orange-600">
-                  .{price.cents}
-                </sup>
-              </span>
-              <span className="text-[9px] text-gray-400 line-through">
-                ${displayPrice.dollars}
-                <sup>.{displayPrice.cents}</sup>
-              </span>
-            </>
+    <>
+      <motion.div
+        whileHover={{y: -2}}
+        className="bg-white rounded-xl overflow-hidden shadow-sm hover:shadow-md transition border border-gray-100 w-[140px] flex-shrink-0"
+      >
+        {/* Product Image */}
+        <div className="relative w-full h-[100px] bg-white">
+          {product.imageUrl ? (
+            <Image
+              src={product.imageUrl}
+              alt={product.name}
+              fill
+              className="object-contain p-1"
+            />
           ) : (
-            <span className="text-sm font-bold text-gray-800">
-              ${price.dollars}
-              <sup className="text-[8px] font-semibold text-gray-600">
-                .{price.cents}
-              </sup>
-            </span>
-          )}
-        </div>
-
-        {/* Stock Status */}
-        <p className={`text-[9px] font-medium ${stockStatus.color}`}>
-          {stockStatus.label}
-        </p>
-
-        {/* Rating & Sold */}
-        <div className="flex items-center gap-1 mt-0.5">
-          {product.rating > 0 && (
-            <div className="flex items-center gap-0.5">
-              {renderStars(product.rating)}
+            <div className="w-full h-full flex items-center justify-center">
+              <Package className="w-8 h-8 text-gray-300" />
             </div>
           )}
           
-          {product.soldCount > 0 && (
-            <div className="flex items-center gap-0.5 text-[9px] text-gray-500">
-              <TrendingUp className="w-2.5 h-2.5" />
-              <span>{formatSoldCount(product.soldCount)}</span>
+          {/* Sale Badge */}
+          {isOnSale && (
+            <div className="absolute top-1 right-1 px-1.5 py-0.5 bg-red-500 text-white text-[8px] font-medium rounded-full">
+              Sale
             </div>
           )}
         </div>
 
-        {/* ✅ Add/Quantity Button */}
-        {isInCart ? (
-          <div className="flex items-center justify-between mt-1.5 bg-orange-50 rounded-lg p-0.5 border border-orange-200">
+        {/* Product Info */}
+        <div className="p-2">
+          {/* Product Name */}
+          <h4 className="font-semibold text-gray-800 text-xs truncate">
+            {product.name}
+          </h4>
+
+          {/* Size/Weight */}
+          {product.size && product.size.value > 0 && (
+            <p className="text-[10px] text-gray-400">
+              {product.size.value}{product.size.unit}
+            </p>
+          )}
+
+          {/* Price */}
+          <div className="flex items-center gap-1 mt-0.5">
+            {isOnSale ? (
+              <>
+                <span className="text-sm font-bold text-orange-600">
+                  ${price.dollars}
+                  <sup className="text-[8px] font-semibold text-orange-600">
+                    .{price.cents}
+                  </sup>
+                </span>
+                <span className="text-[9px] text-gray-400 line-through">
+                  ${displayPrice.dollars}
+                  <sup>.{displayPrice.cents}</sup>
+                </span>
+              </>
+            ) : (
+              <span className="text-sm font-bold text-gray-800">
+                ${price.dollars}
+                <sup className="text-[8px] font-semibold text-gray-600">
+                  .{price.cents}
+                </sup>
+              </span>
+            )}
+          </div>
+
+          {/* Stock Status */}
+          <p className={`text-[9px] font-medium ${stockStatus.color}`}>
+            {stockStatus.label}
+          </p>
+
+          {/* Rating & Sold */}
+          <div className="flex items-center gap-1 mt-0.5">
+            {product.rating > 0 && (
+              <div className="flex items-center gap-0.5">
+                {renderStars(product.rating)}
+              </div>
+            )}
+            
+            {product.soldCount > 0 && (
+              <div className="flex items-center gap-0.5 text-[9px] text-gray-500">
+                <TrendingUp className="w-2.5 h-2.5" />
+                <span>{formatSoldCount(product.soldCount)}</span>
+              </div>
+            )}
+          </div>
+
+          {/* Add/Quantity Button */}
+          {isInCart ? (
+            <div className="flex items-center justify-between mt-1.5 bg-orange-50 rounded-lg p-0.5 border border-orange-200">
+              <button
+                onClick={handleDecrease}
+                className="w-6 h-6 rounded-lg flex items-center justify-center hover:bg-orange-100 transition text-orange-600"
+                aria-label="Decrease quantity"
+              >
+                <Minus className="w-3 h-3" />
+              </button>
+              <span className="text-xs font-semibold text-orange-600 min-w-[20px] text-center">
+                {quantity}
+              </span>
+              <button
+                onClick={handleIncrease}
+                className="w-6 h-6 rounded-lg flex items-center justify-center hover:bg-orange-100 transition text-orange-600"
+                aria-label="Increase quantity"
+              >
+                <Plus className="w-3 h-3" />
+              </button>
+            </div>
+          ) : (
             <button
-              onClick={handleDecrease}
-              className="w-6 h-6 rounded-lg flex items-center justify-center hover:bg-orange-100 transition text-orange-600"
-              aria-label="Decrease quantity"
-            >
-              <Minus className="w-3 h-3" />
-            </button>
-            <span className="text-xs font-semibold text-orange-600 min-w-[20px] text-center">
-              {quantity}
-            </span>
-            <button
-              onClick={handleIncrease}
-              className="w-6 h-6 rounded-lg flex items-center justify-center hover:bg-orange-100 transition text-orange-600"
-              aria-label="Increase quantity"
+              onClick={handleAdd}
+              className="w-full mt-1.5 py-1.5 bg-orange-500 text-white text-[10px] font-semibold rounded-lg hover:bg-orange-600 transition flex items-center justify-center gap-1"
+              aria-label={`Add ${product.name} to cart`}
             >
               <Plus className="w-3 h-3" />
+              Add
             </button>
+          )}
+        </div>
+      </motion.div>
+
+      {/* ✅ Remove Confirmation Modal */}
+      <AnimatePresence>
+        {showRemoveConfirm && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-3xl max-w-sm w-full p-6"
+            >
+              <div className="text-center">
+                <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <AlertCircle className="w-8 h-8 text-orange-600" />
+                </div>
+                <h3 className="text-xl font-bold text-gray-800 mb-2">
+                  Remove Item?
+                </h3>
+                <p className="text-gray-500 text-sm mb-6">
+                  Are you sure you want to remove <span className="font-semibold text-gray-700">{product.name}</span> from your cart?
+                </p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={cancelRemove}
+                    className="flex-1 py-3 border border-gray-200 rounded-xl text-gray-600 font-medium hover:bg-gray-50 transition"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={confirmRemove}
+                    className="flex-1 py-3 bg-red-600 text-white rounded-xl font-semibold hover:bg-red-700 transition"
+                  >
+                    Remove
+                  </button>
+                </div>
+              </div>
+            </motion.div>
           </div>
-        ) : (
-          <button
-            onClick={handleAdd}
-            className="w-full mt-1.5 py-1.5 bg-orange-500 text-white text-[10px] font-semibold rounded-lg hover:bg-orange-600 transition flex items-center justify-center gap-1"
-            aria-label={`Add ${product.name} to cart`}
-          >
-            <Plus className="w-3 h-3" />
-            Add
-          </button>
         )}
-      </div>
-    </motion.div>
+      </AnimatePresence>
+    </>
   );
 }

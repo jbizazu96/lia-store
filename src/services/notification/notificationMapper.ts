@@ -42,6 +42,12 @@ export function mapFirestoreNotification(
 
     type: data.type,
 
+    icon: data.icon ?? "bell",
+
+    color: data.color ?? "gray",
+
+    deepLink: data.deepLink,
+
     orderId: data.orderId,
 
     read: data.read ?? false,

@@ -210,6 +210,10 @@ console.log(
 
 console.log(shipdayOrder);
 
+console.log(
+  "Shipday order state:",
+  shipdayOrder.orderStatus.orderState
+);
 // ----------------------------------------------------
 // STEP 4
 // Convert Shipday status into LIA status.

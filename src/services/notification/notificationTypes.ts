@@ -57,6 +57,36 @@ export interface Notification {
   type: NotificationType;
 
   /**
+   * Icon displayed in the notification list.
+   *
+   * Examples:
+   * truck
+   * shopping-bag
+   * check-circle
+   * bell
+   */
+  icon: string;
+
+  /**
+   * Tailwind color used by the icon.
+   *
+   * Example:
+   * blue
+   * green
+   * orange
+   * red
+   */
+  color: string;
+
+  /**
+   * Opens a page when tapped.
+   *
+   * Example:
+   * /orders/abc123
+   */
+  deepLink?: string;
+
+  /**
    * Related order.
    */
   orderId?: string;

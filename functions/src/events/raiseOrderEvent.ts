@@ -67,36 +67,42 @@ export const raiseOrderEvent = onCall(
 
       case "accepted":
         await orderEvents.orderAccepted(
+          order.id,
           order.customer.uid
         );
         break;
 
       case "preparing":
         await orderEvents.orderPreparing(
+          order.id,
           order.customer.uid
         );
         break;
 
       case "ready_for_pickup":
         await orderEvents.orderReadyForPickup(
+          order.id,
           order.customer.uid
         );
         break;
 
       case "out_for_delivery":
         await orderEvents.orderOutForDelivery(
+          order.id,
           order.customer.uid
         );
         break;
 
       case "completed":
         await orderEvents.orderCompleted(
+          order.id,
           order.customer.uid
         );
         break;
 
       case "cancelled":
         await orderEvents.orderCancelled(
+          order.id,
           order.customer.uid
         );
         break;

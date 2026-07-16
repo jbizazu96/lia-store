@@ -15,6 +15,7 @@ import {
   onSnapshot,
 } from "firebase/firestore";
 import {onAuthStateChanged} from "firebase/auth";
+import { useRouter } from "next/navigation";
 
 interface TopNavigationProps {
   userName: string;
@@ -51,6 +52,7 @@ export function TopNavigation({userName, showSearch = false}: TopNavigationProps
   const [latestOrderStatus, setLatestOrderStatus] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const { unreadCount } = useNotifications();
+  const router = useRouter();
 
   // ✅ Fetch active orders (not completed or cancelled)
   useEffect(() => {
@@ -147,7 +149,7 @@ export function TopNavigation({userName, showSearch = false}: TopNavigationProps
               
               {/* ✅ Order count badge - shows number of active orders */}
               {orderCount > 0 && (
-                <span className="absolute -top-1 -right-1 min-w-[18px] h-4 bg-orange-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1">
+                <span className="absolute -top-1 -right-1 min-w-[18px] h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1">
                   {orderCount > 99 ? "99+" : orderCount}
                 </span>
               )}
@@ -162,10 +164,13 @@ export function TopNavigation({userName, showSearch = false}: TopNavigationProps
             </Link>
 
             {/* Notifications */}
-            <button 
+            <button
+              onClick={() => router.push("/notifications")}
               className="relative w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200 transition"
               aria-label="Notifications"
             >
+              <Bell className="w-5 h-5 text-gray-600" />
+
               {unreadCount > 0 && (
                 <span className="absolute -top-1 -right-1 min-w-[18px] h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1">
                   {unreadCount > 99

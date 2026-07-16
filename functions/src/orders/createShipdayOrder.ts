@@ -64,21 +64,23 @@ async (request) => {
 
     await orderDoc.ref.update({
     shipday: {
+          orderId: shipdayResponse.orderId,
 
-        orderId: shipdayResponse.orderId,
-        status: "created",
-        active: true,
+          status: "created",
+          active: true,
 
-        createdAt: new Date(),
-        lastUpdated: new Date(),
-        lastSyncAt: new Date(),
+          createdAt: new Date(),
+          lastUpdated: new Date(),
+          lastSyncAt: new Date(),
 
-        trackingUrl: shipdayResponse.trackingUrl,
-        driverName: shipdayResponse.driverName,
-        driverPhone: shipdayResponse.driverPhone,
-        eta: shipdayResponse.eta,
-        
-          },
+          trackingUrl: shipdayResponse.trackingUrl ?? null,
+
+          driverName: shipdayResponse.driverName ?? null,
+
+          driverPhone: shipdayResponse.driverPhone ?? null,
+
+          eta: shipdayResponse.eta ?? null,
+        },
     });
 
     console.log("Firestore Order:");

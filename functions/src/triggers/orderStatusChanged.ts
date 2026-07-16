@@ -52,6 +52,7 @@ export const orderStatusChanged =
         `Order status changed: ${before.status} -> ${after.status}`
       );
 
+      const orderId = event.params.orderId;
       const customerUid = after.customer?.uid;
 
       if (!customerUid) {
@@ -62,27 +63,45 @@ export const orderStatusChanged =
       switch (after.status) {
 
         case "accepted":
-          await orderEvents.orderAccepted(customerUid);
+          await orderEvents.orderAccepted(
+            orderId,
+            customerUid
+          );
           break;
 
         case "preparing":
-          await orderEvents.orderPreparing(customerUid);
+          await orderEvents.orderPreparing(
+            orderId,
+            customerUid
+          );
           break;
 
         case "ready_for_pickup":
-          await orderEvents.orderReadyForPickup(customerUid);
+          await orderEvents.orderReadyForPickup(
+            orderId,
+            customerUid
+          );
           break;
 
         case "out_for_delivery":
-          await orderEvents.orderOutForDelivery(customerUid);
+          await orderEvents.orderOutForDelivery(
+            orderId,
+            customerUid
+          );
           break;
 
         case "completed":
-          await orderEvents.orderCompleted(customerUid);
+          await orderEvents.orderCompleted(
+            orderId,
+            customerUid
+          );
           break;
 
         case "cancelled":
-          await orderEvents.orderCancelled(customerUid);
+          await orderEvents.orderCancelled(
+            orderId,
+            customerUid
+          );
           break;
 
         default:
