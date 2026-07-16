@@ -1,5 +1,6 @@
 import * as admin from "firebase-admin";
 import {onCall, HttpsError} from "firebase-functions/v2/https";
+import {onSchedule} from "firebase-functions/v2/scheduler"; 
 import {getFirestore} from "firebase-admin/firestore";
 import { createShipdayOrder } from "./orders/createShipdayOrder";
 import { shipdayWebhook } from "./webhooks/shipdayWebhook";
@@ -7,6 +8,7 @@ import { syncCustomerOrders } from "./delivery/syncCustomerOrders";
 import { syncStoreOrders } from "./delivery/syncStoreOrders";
 import { acceptOrder } from "./orders/acceptOrder";
 import { orderStatusChanged } from "./triggers/orderStatusChanged";
+import { syncShipdayDeliveries } from "./scheduler/syncShipdayDeliveries";
 
 /*
   Initialize the Firebase Admin SDK once.
@@ -288,9 +290,60 @@ export const setEmailVerifiedManually = onCall(
   }
 );
 
+/*
+  FUNCTION 5: cleanupExpiredCarts (Scheduled Function - v2)
+
+  Automatically deletes expired carts from Firestore.
+  Runs every 6 hours to clean up carts older than 48 hours.
+
+  Carts are stored in the "carts" collection with an "expiresAt" field.
+  This function removes any cart where expiresAt < current time.
+*/
+export const cleanupExpiredCarts = onSchedule(
+  {
+    schedule: "every 6 hours",
+    region: "us-central1",
+    timeZone: "America/Chicago", // Optional: set your timezone
+    retryCount: 3,
+    maxRetrySeconds: 60,
+  },
+  async () => {
+    const now = new Date();
+    console.log(`🧹 Starting cart cleanup at ${now.toISOString()}`);
+
+    try {
+      // Query all carts where expiresAt is in the past
+      const cartsRef = db.collection("carts");
+      const expiredCarts = await cartsRef
+        .where("expiresAt", "<", now)
+        .get();
+
+      if (expiredCarts.empty) {
+        console.log("✅ No expired carts to clean up.");
+        return;
+      }
+
+      // Delete expired carts in batches
+      const batch = db.batch();
+      let deletedCount = 0;
+
+      expiredCarts.forEach((doc) => {
+        batch.delete(doc.ref);
+        deletedCount++;
+      });
+
+      await batch.commit();
+      console.log(`✅ Cleaned up ${deletedCount} expired carts.`);
+    } catch (error) {
+      console.error("❌ Error cleaning up expired carts:", error);
+    }
+  }
+);
+
 export { createShipdayOrder };
 export { acceptOrder };
 export { shipdayWebhook };
 export { syncCustomerOrders };
 export { syncStoreOrders };
 export { orderStatusChanged };
+export { syncShipdayDeliveries };

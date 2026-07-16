@@ -91,7 +91,7 @@ export default function NotificationsPage() {
       <div className="bg-white border-b border-gray-100 sticky top-0 z-20">
         <div className="flex items-center gap-3 px-4 py-4 max-w-2xl mx-auto">
           <button
-            onClick={() => router.push("/home")}
+            onClick={() => router.back()}
             className="p-2 hover:bg-gray-100 rounded-full transition"
             aria-label="Go back home"
           >

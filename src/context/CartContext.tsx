@@ -2,29 +2,18 @@
 
 /*
   Cart context for managing cart state across the app.
-  Provides cart count, items, add/remove functions.
+  ✅ Persistent cart stored in Firestore with 48-hour expiry.
 */
 
 import {createContext, useContext, useState, useEffect, ReactNode} from "react";
 import {auth} from "@/lib/firebase";
-
-interface CartItem {
-  id: string;
-  name: string;
-  price: number;
-  imageUrl?: string;
-  quantity: number;
-  storeId: string;
-  storeName: string;
-  storeAddress?: string;
-  storePhone?: string;
-  storeLatitude?: number;
-  storeLongitude?: number;
-  size?: {
-    value: number;
-    unit: string;
-  };
-}
+import {onAuthStateChanged} from "firebase/auth";
+import {
+  CartItem,
+  saveCartToFirestore,
+  loadCartFromFirestore,
+  clearCartFromFirestore,
+} from "@/services/cart/cartService";
 
 interface CartContextType {
   items: CartItem[];
@@ -36,42 +25,65 @@ interface CartContextType {
   clearCart: () => void;
   getStoreId: () => string | null;
   getItemQuantity: (itemId: string) => number;
-  // ✅ New: Get items for a specific store
   getStoreItems: (storeId: string) => CartItem[];
   getStoreItemCount: (storeId: string) => number;
   getStoreTotalPrice: (storeId: string) => number;
+  isLoading: boolean;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
 export function CartProvider({children}: {children: ReactNode}) {
   const [items, setItems] = useState<CartItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [currentUser, setCurrentUser] = useState<any>(null);
 
-  // Load cart from localStorage on mount
+  // ✅ Load cart from Firestore on auth change
   useEffect(() => {
-    const loadCart = async () => {
-      const user = auth.currentUser;
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      setCurrentUser(user);
+
       if (user) {
-        const savedCart = localStorage.getItem(`cart_${user.uid}`);
-        if (savedCart) {
-          try {
-            setItems(JSON.parse(savedCart));
-          } catch {
+        setIsLoading(true);
+        try {
+          const savedItems = await loadCartFromFirestore(user.uid);
+          if (savedItems) {
+            setItems(savedItems);
+          } else {
             setItems([]);
           }
+        } catch (error) {
+          console.error("Error loading cart:", error);
+          setItems([]);
+        } finally {
+          setIsLoading(false);
         }
+      } else {
+        // User logged out - keep items in memory but don't clear
+        // They will be saved again when user logs in
+        setIsLoading(false);
       }
-    };
-    loadCart();
+    });
+
+    return () => unsubscribe();
   }, []);
 
-  // Save cart to localStorage whenever it changes
+  // ✅ Save cart to Firestore whenever it changes (debounced)
   useEffect(() => {
-    const user = auth.currentUser;
-    if (user) {
-      localStorage.setItem(`cart_${user.uid}`, JSON.stringify(items));
-    }
-  }, [items]);
+    if (!currentUser) return;
+
+    // Debounce saves to avoid too many writes
+    const timeoutId = setTimeout(() => {
+      if (items.length > 0) {
+        saveCartToFirestore(currentUser.uid, items);
+      } else {
+        // If cart is empty, clear it from Firestore
+        clearCartFromFirestore(currentUser.uid);
+      }
+    }, 500);
+
+    return () => clearTimeout(timeoutId);
+  }, [items, currentUser]);
 
   // Add item to cart
   const addItem = (item: Omit<CartItem, "quantity">) => {
@@ -107,6 +119,9 @@ export function CartProvider({children}: {children: ReactNode}) {
   // Clear cart
   const clearCart = () => {
     setItems([]);
+    if (currentUser) {
+      clearCartFromFirestore(currentUser.uid);
+    }
   };
 
   // Get store ID (all items should be from same store)
@@ -121,18 +136,18 @@ export function CartProvider({children}: {children: ReactNode}) {
     return item?.quantity || 0;
   };
 
-  // ✅ Get items for a specific store
+  // Get items for a specific store
   const getStoreItems = (storeId: string): CartItem[] => {
     return items.filter(item => item.storeId === storeId);
   };
 
-  // ✅ Get item count for a specific store
+  // Get item count for a specific store
   const getStoreItemCount = (storeId: string): number => {
     const storeItems = items.filter(item => item.storeId === storeId);
     return storeItems.reduce((sum, item) => sum + item.quantity, 0);
   };
 
-  // ✅ Get total price for a specific store
+  // Get total price for a specific store
   const getStoreTotalPrice = (storeId: string): number => {
     const storeItems = items.filter(item => item.storeId === storeId);
     return storeItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
@@ -155,9 +170,10 @@ export function CartProvider({children}: {children: ReactNode}) {
       clearCart,
       getStoreId,
       getItemQuantity,
-      getStoreItems,      // ✅ Added
-      getStoreItemCount,  // ✅ Added
-      getStoreTotalPrice, // ✅ Added
+      getStoreItems,
+      getStoreItemCount,
+      getStoreTotalPrice,
+      isLoading,
     }}>
       {children}
     </CartContext.Provider>

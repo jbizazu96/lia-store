@@ -3,6 +3,7 @@
 /*
   Modern cart page with proper spacing.
   All items visible, summary at bottom without overlapping.
+  ✅ Shows loading state while cart is being loaded from Firestore.
 */
 
 import {useState} from "react";
@@ -10,6 +11,7 @@ import {useRouter} from "next/navigation";
 import {motion, AnimatePresence} from "framer-motion";
 import Image from "next/image";
 import Link from "next/link";
+import {BrandedLoader} from "@/components/ui/BrandedLoader";
 import {
   ShoppingCart,
   Trash2,
@@ -28,7 +30,7 @@ import {useCart} from "@/context/CartContext";
 
 export default function CartPage() {
   const router = useRouter();
-  const {items, itemCount, totalPrice, updateQuantity, removeItem, clearCart} = useCart();
+  const {items, itemCount, totalPrice, updateQuantity, removeItem, clearCart, isLoading} = useCart();
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
   const [itemToRemove, setItemToRemove] = useState<string | null>(null);
@@ -91,6 +93,11 @@ export default function CartPage() {
       updateQuantity(itemId, currentQuantity - 1);
     }
   };
+
+  // ✅ Show loading state
+  if (isLoading) {
+    return <BrandedLoader message="Loading your cart..." />;
+  }
 
   // Empty state
   if (items.length === 0) {
@@ -178,7 +185,7 @@ export default function CartPage() {
         </div>
       </div>
 
-      {/* ✅ Cart Items - With extra bottom padding for summary */}
+      {/* Cart Items */}
       <div className="max-w-lg mx-auto px-4 py-4 pb-65 space-y-4">
         <AnimatePresence mode="popLayout">
           {items.map((item) => {
@@ -280,7 +287,7 @@ export default function CartPage() {
         </AnimatePresence>
       </div>
 
-      {/* ✅ Order Summary - Fixed at bottom with proper spacing */}
+      {/* Order Summary */}
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-30">
         <div className="max-w-lg mx-auto px-4 py-4">
           <div className="space-y-2">
