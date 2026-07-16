@@ -382,7 +382,7 @@ const syncCustomerOrders = httpsCallable(
                         </span>
                         <Link
                           href={`/orders/${order.id}`}
-                          className="px-3 py-1.5 text-xs font-medium text-orange-600 hover:bg-orange-50 rounded-lg transition"
+                          className="px-3 py-1.5 text-xs bg-orange-50 text-orange-600 font-medium text-orange-600 hover:bg-orange-50 rounded-lg transition"
                         >
                           View Details
                         </Link>
