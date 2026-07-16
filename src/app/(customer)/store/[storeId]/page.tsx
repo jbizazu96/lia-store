@@ -29,7 +29,7 @@ import {DistanceWarningModal} from "./components/DistanceWarningModal";
 import {Store, Category, Product} from "./types";
 
 // Services
-import {calculateDistance, getDeliveryFeeNumber, getEstimatedTimeNumber} from "@/services/distance";
+import {calculateDistance, getDeliveryFeeNumber, getEstimatedTimeNumber} from "@/services/delivery/distance";
 
 interface StorePageProps {
   params: Promise<{

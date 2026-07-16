@@ -1,10 +1,11 @@
 "use client";
 
+import { mapFirestoreOrder } from "@/mappers/orderMapper";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { auth, db } from "@/lib/firebase";
-import { collection, query, where, getDocs, orderBy } from "firebase/firestore";
+import { collection, query, where, orderBy, onSnapshot } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import {
   Package,
@@ -14,85 +15,97 @@ import {
   Truck,
   ArrowLeft,
   ShoppingBag,
+  HandshakeIcon,
   Calendar,
   CreditCard,
   MapPin,
+  BoxIcon,
 } from "lucide-react";
 import Link from "next/link";
-
-// ✅ Updated Order interface - deliveryAddress is now an object
-interface Order {
-  id: string;
-  storeName: string;
-  total: number;
-  status: string;
-  createdAt: string;
-  items: number;
-  deliveryAddress?: {
-    street: string;
-    city: string;
-    state: string;
-    zip: string;
-    formattedAddress?: string;
-  };
-}
+import {
+  getFunctions,
+  httpsCallable,
+} from "firebase/functions";
+import type { Order } from "@/types/order";
 
 export default function OrdersPage() {
   const router = useRouter();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const functions = getFunctions();
+
+const syncCustomerOrders = httpsCallable(
+  functions,
+  "syncCustomerOrders"
+);
+
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+    const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
       if (!user) {
         router.push("/login");
         return;
       }
 
+      // ----------------------------------------------------
+      // Synchronize this customer's active deliveries.
+      // ----------------------------------------------------
       try {
-        const ordersRef = collection(db, "orders");
-        const q = query(
-          ordersRef,
-          where("userId", "==", user.uid),
-          orderBy("createdAt", "desc")
+
+        await syncCustomerOrders();
+
+        console.log(
+          "Customer orders synchronized."
         );
-        const snapshot = await getDocs(q);
-        
-        const ordersData: Order[] = [];
-        snapshot.forEach((doc) => {
-          const data = doc.data();
-          ordersData.push({
-            id: doc.id,
-            storeName: data.storeName || "Unknown Store",
-            total: data.total || 0,
-            status: data.status || "pending",
-            createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
-            items: data.items?.length || 0,
-            deliveryAddress: data.deliveryAddress || null,
-          });
-        });
-        
-        setOrders(ordersData);
+
       } catch (error) {
-        console.error("Error fetching orders:", error);
-      } finally {
-        setLoading(false);
+
+        console.error(
+          "Synchronization failed:",
+          error
+        );
+
       }
+      // ✅ Set up real-time listener for orders
+      const ordersRef = collection(db, "orders");
+      const q = query(
+        ordersRef,
+        where("customer.uid", "==", user.uid),
+        orderBy("createdAt", "desc")
+      );
+
+      // ✅ Listen for real-time updates
+      const unsubscribeOrders = onSnapshot(q, (snapshot) => {
+        const ordersData = snapshot.docs.map(mapFirestoreOrder);
+
+        setOrders(ordersData);
+        setLoading(false);
+      }, (error) => {
+        console.error("Error listening to orders:", error);
+        setLoading(false);
+      });
+
+      // ✅ Cleanup listener on unmount
+      return () => unsubscribeOrders();
     });
 
-    return () => unsubscribe();
+    return () => unsubscribeAuth();
   }, [router]);
 
   const getStatusIcon = (status: string) => {
     switch (status) {
-      case "delivered":
-        return <CheckCircle className="w-5 h-5 text-green-500" />;
+      case "Completed":
+        return <HandshakeIcon className="w-5 h-5 text-green-500" />;
       case "cancelled":
         return <XCircle className="w-5 h-5 text-red-500" />;
       case "out_for_delivery":
         return <Truck className="w-5 h-5 text-blue-500" />;
       case "preparing":
         return <Package className="w-5 h-5 text-purple-500" />;
+      case "accepted":
+        return <CheckCircle className="w-5 h-5 text-green-500" />;
+      case "ready_for_pickup":
+        return <BoxIcon className="w-5 h-5 text-indigo-500" />;
       default:
         return <Clock className="w-5 h-5 text-orange-500" />;
     }
@@ -100,40 +113,42 @@ export default function OrdersPage() {
 
   const getStatusText = (status: string) => {
     switch (status) {
-      case "delivered": return "Delivered";
+      case "completed": return "Completed";
       case "cancelled": return "Cancelled";
       case "out_for_delivery": return "Out for Delivery";
       case "preparing": return "Preparing";
+      case "accepted": return "Accepted";
+      case "ready_for_pickup": return "Ready for Pickup";
       default: return "Pending";
     }
   };
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case "delivered": return "bg-green-100 text-green-800";
+      case "completed": return "bg-green-100 text-green-800";
       case "cancelled": return "bg-red-100 text-red-800";
       case "out_for_delivery": return "bg-blue-100 text-blue-800";
       case "preparing": return "bg-purple-100 text-purple-800";
+      case "accepted": return "bg-green-100 text-green-800";
+      case "ready_for_pickup": return "bg-indigo-100 text-indigo-800";
       default: return "bg-yellow-100 text-yellow-800";
     }
   };
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return new Intl.DateTimeFormat('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    }).format(date);
-  };
+  const formatDate = (date: Date) => {
+      return new Intl.DateTimeFormat("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      }).format(date);
+    };
 
-  const formatTime = (dateString: string) => {
-    const date = new Date(dateString);
-    return new Intl.DateTimeFormat('en-US', {
-      hour: 'numeric',
-      minute: 'numeric',
-    }).format(date);
-  };
+    const formatTime = (date: Date) => {
+      return new Intl.DateTimeFormat("en-US", {
+        hour: "numeric",
+        minute: "numeric",
+      }).format(date);
+    };
 
   // ✅ Helper function to format address object to string
   const formatAddress = (address: any) => {
@@ -293,7 +308,7 @@ export default function OrdersPage() {
             </h2>
             <p className="text-gray-500 text-sm mb-6 max-w-xs mx-auto">
               Start shopping and your orders will appear here. 
-              Fresh African groceries delivered to your door!
+              Fresh African groceries Completed to your door!
             </p>
 
             <Link
@@ -336,7 +351,7 @@ export default function OrdersPage() {
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex-1 min-w-0">
                       <h3 className="font-semibold text-gray-800 truncate">
-                        {order.storeName}
+                        {order.store.name || "Unknown Store"    }
                       </h3>
                       <div className="flex items-center gap-3 mt-1">
                         <div className="flex items-center gap-1 text-sm text-gray-500">
@@ -359,11 +374,11 @@ export default function OrdersPage() {
                   <div className="flex flex-col gap-2 pt-3 border-t border-gray-100">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-4 text-sm text-gray-500">
-                        <span>{order.items} item{order.items !== 1 ? 's' : ''}</span>
+                        <span>{order.items.length} item{order.items.length !== 1 ? 's' : ''}</span>
                       </div>
                       <div className="flex items-center gap-3">
                         <span className="text-lg font-bold text-gray-800">
-                          ${order.total.toFixed(2)}
+                          ${order.pricing.total.toFixed(2)}
                         </span>
                         <Link
                           href={`/orders/${order.id}`}
@@ -375,11 +390,11 @@ export default function OrdersPage() {
                     </div>
                     
                     {/* ✅ Delivery Address - Properly formatted from object */}
-                    {order.deliveryAddress && (
+                    {order.customer.address && (
                       <div className="flex items-center gap-1.5 text-xs text-gray-400 mt-1">
                         <MapPin className="w-3.5 h-3.5 flex-shrink-0" />
                         <span className="truncate">
-                          {formatAddress(order.deliveryAddress)}
+                          {formatAddress(order.customer.address)}
                         </span>
                       </div>
                     )}

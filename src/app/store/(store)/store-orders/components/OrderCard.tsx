@@ -1,39 +1,41 @@
 "use client";
 
 /*
-  Individual order card for the store orders list.
+|--------------------------------------------------------------------------
+| Store Order Card
+|--------------------------------------------------------------------------
+|
+| Displays a summary of one customer order.
+|
+| The Order has already been mapped into the application's
+| domain model, so this component only displays data.
+|
 */
 
+import type { Order } from "@/types/order";
 import {motion} from "framer-motion";
 import Link from "next/link";
 import {Eye, MapPin, User, Clock, DollarSign, Package} from "lucide-react";
 import {StatusBadge} from "./StatusBadge";
 
 interface OrderCardProps {
-  order: {
-    id: string;
-    customerName: string;
-    customerPhone: string;
-    customerAddress: string;
-    total: number;
-    status: string;
-    items: any[];
-    createdAt: string;
-  };
+  order: Order;
   index: number;
 }
 
 export function OrderCard({order, index}: OrderCardProps) {
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return new Intl.DateTimeFormat('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-      hour: 'numeric',
-      minute: 'numeric',
-    }).format(date);
-  };
+  const formatDate = (date: Date) => {
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "numeric",
+  }).format(date);
+};
+    const storeTotal =
+      order.pricing.subtotal +
+      order.pricing.tax;
 
   return (
     <motion.div
@@ -58,7 +60,7 @@ export function OrderCard({order, index}: OrderCardProps) {
           <div className="flex flex-wrap gap-4 text-sm">
             <div className="flex items-center gap-1.5 text-gray-600">
               <User className="w-4 h-4" />
-              {order.customerName}
+              {order.customer.name}
             </div>
             <div className="flex items-center gap-1.5 text-gray-600">
               <Package className="w-4 h-4" />
@@ -66,11 +68,12 @@ export function OrderCard({order, index}: OrderCardProps) {
             </div>
             <div className="flex items-center gap-1.5 text-gray-600">
               <MapPin className="w-4 h-4" />
-              {order.customerAddress || "Address not set"}
+              {order.customer.address || "Address not set"}
             </div>
-            <div className="flex items-center gap-1.5 text-gray-600">
+            {/* ✅ Show calculated store total */}
+            <div className="flex items-center gap-1.5 text-green-600 font-medium">
               <DollarSign className="w-4 h-4" />
-              ${order.total.toFixed(2)}
+              ${storeTotal.toFixed(2)}
             </div>
           </div>
         </div>
@@ -78,7 +81,7 @@ export function OrderCard({order, index}: OrderCardProps) {
         {/* Actions */}
         <div className="flex items-center gap-3">
           <Link
-            href={`/store/orders/${order.id}`}
+            href={`/store/store-orders/${order.id}`}
             className="px-4 py-2 bg-orange-50 text-orange-600 text-sm font-medium rounded-xl hover:bg-orange-100 transition flex items-center gap-2"
           >
             <Eye className="w-4 h-4" />

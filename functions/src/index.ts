@@ -1,6 +1,10 @@
 import * as admin from "firebase-admin";
 import {onCall, HttpsError} from "firebase-functions/v2/https";
 import {getFirestore} from "firebase-admin/firestore";
+import { createShipdayOrder } from "./orders/createShipdayOrder";
+import { shipdayWebhook } from "./webhooks/shipdayWebhook";
+import { syncCustomerOrders } from "./delivery/syncCustomerOrders";
+import { syncStoreOrders } from "./delivery/syncStoreOrders";
 
 /*
   Initialize the Firebase Admin SDK once.
@@ -281,3 +285,8 @@ export const setEmailVerifiedManually = onCall(
     }
   }
 );
+
+export { createShipdayOrder };
+export { shipdayWebhook };
+export { syncCustomerOrders };
+export { syncStoreOrders };

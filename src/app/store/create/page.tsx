@@ -14,7 +14,7 @@ import {AlertCircle} from "lucide-react";
 */
 import {addDoc, collection, setDoc, doc} from "firebase/firestore";
 import {auth, db} from "@/lib/firebase";
-import {geocodeAddress} from "@/services/geocode";
+import {geocodeAddress} from "@/services/delivery/geocode";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 
 /*

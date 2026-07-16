@@ -68,8 +68,8 @@ export default function StoreLayout({children}: {children: React.ReactNode}) {
         const ordersRef = collection(db, "orders");
         const q = query(
           ordersRef,
-          where("storeId", "==", storeId),
-          where("status", "in", ["pending", "accepted", "preparing", "ready", "ready_for_pickup", "picked_up", "out_for_delivery"])
+          where("store.id", "==", storeId),
+          where("status", "in", ["pending", "accepted", "preparing", "ready_for_pickup"])
         );
         const snapshot = await getDocs(q);
         setPendingOrdersCount(snapshot.size);

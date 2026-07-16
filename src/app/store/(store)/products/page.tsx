@@ -3,7 +3,7 @@
 /*
   Main products management page.
 */
-
+import {BrandedLoader} from "@/components/ui/BrandedLoader";
 import {useState, useEffect, useCallback} from "react";
 import {useRouter} from "next/navigation";
 import {motion, AnimatePresence} from "framer-motion";
@@ -220,27 +220,11 @@ export default function ProductsPage() {
     totalValue: products.reduce((sum, p) => sum + (p.price * p.stock), 0),
   };
 
+  /* ==========================================
+     LOADING STATE - WHITE BRANDED LOADER
+  ========================================== */
   if (loading) {
-    return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="h-8 w-48 bg-gray-200 rounded animate-pulse" />
-            <div className="h-4 w-32 bg-gray-200 rounded mt-1 animate-pulse" />
-          </div>
-          <div className="h-10 w-32 bg-gray-200 rounded-xl animate-pulse" />
-        </div>
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-          {[1, 2, 3, 4, 5].map((i) => (
-            <div key={i} className="h-20 bg-gray-200 rounded-xl animate-pulse" />
-          ))}
-        </div>
-        <div className="h-14 bg-gray-200 rounded-2xl animate-pulse" />
-        {[1, 2, 3, 4].map((i) => (
-          <ProductSkeleton key={i} />
-        ))}
-      </div>
-    );
+    return <BrandedLoader message="Loading products" />;
   }
 
   return (
@@ -314,7 +298,7 @@ export default function ProductsPage() {
           
           {/* Grid Layout - 3 columns on mobile, 4 on tablet, 5 on desktop */}
           <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 gap-3">
-            <AnimatePresence mode="wait">
+            <AnimatePresence initial={false} mode="popLayout">
               {filteredProducts.map((product) => (
                 <motion.div
                   key={product.id}

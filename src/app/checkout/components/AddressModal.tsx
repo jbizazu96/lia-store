@@ -1,7 +1,7 @@
 "use client";
 
 import {motion} from "framer-motion";
-import {ArrowLeft, MapPin} from "lucide-react";
+import {ArrowLeft, MapPin, User, Phone} from "lucide-react";
 
 interface AddressModalProps {
   isOpen: boolean;
@@ -12,6 +12,8 @@ interface AddressModalProps {
     city: string;
     state: string;
     zip: string;
+    name: string;
+    phone: string;
   };
   setFormData: (data: any) => void;
   loading: boolean;
@@ -27,9 +29,23 @@ export function AddressModal({
   setFormData,
   loading,
   error,
-  title = "Add Address",
+  title = "Delivery Information",
 }: AddressModalProps) {
   if (!isOpen) return null;
+
+  // Format phone as user types
+  const formatPhone = (value: string) => {
+    const digits = value.replace(/\D/g, "");
+    if (digits.length <= 3) return digits;
+    if (digits.length <= 6) return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
+    if (digits.length <= 10) return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)} - ${digits.slice(6)}`;
+    return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)} - ${digits.slice(6, 10)}`;
+  };
+
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const formatted = formatPhone(e.target.value);
+    setFormData({...formData, phone: formatted});
+  };
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
@@ -60,6 +76,46 @@ export function AddressModal({
         )}
 
         <form onSubmit={onSubmit} className="space-y-4">
+          {/* Contact Name */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Contact Name *
+            </label>
+            <div className="relative">
+              <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                type="text"
+                value={formData.name}
+                onChange={(e) => setFormData({...formData, name: e.target.value})}
+                className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500"
+                placeholder="Full name"
+                required
+                disabled={loading}
+              />
+            </div>
+          </div>
+
+          {/* Phone Number */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Phone Number *
+            </label>
+            <div className="relative">
+              <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                type="tel"
+                value={formData.phone}
+                onChange={handlePhoneChange}
+                className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500"
+                placeholder="(123) 456 - 7890"
+                required
+                disabled={loading}
+                maxLength={18}
+              />
+            </div>
+          </div>
+
+          {/* Street Address */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Street Address *

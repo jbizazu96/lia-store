@@ -7,7 +7,7 @@
 import {motion} from "framer-motion";
 import {X, MapPin, AlertCircle, Truck, Clock} from "lucide-react";
 import {Store} from "../types";
-import {formatDistance, getEstimatedTime} from "@/services/distance";
+import {formatDistance, getEstimatedTime} from "@/services/delivery/distance";
 
 interface DistanceWarningModalProps {
   store: Store;

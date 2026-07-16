@@ -13,7 +13,7 @@ import { PromoCarousel } from "./components/PromoCarousel";
 import { StoreCard } from "./components/StoreCard";
 import { StoreCardSkeleton } from "./components/StoreCardSkeleton";
 import { DistanceWarningModal } from "./components/DistanceWarningModal";
-import { calculateDistance } from "@/services/distance";
+import { calculateDistance } from "@/services/delivery/distance";
 
 export default function CustomerHomePage() {
   const router = useRouter();

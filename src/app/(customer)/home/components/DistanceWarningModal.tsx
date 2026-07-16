@@ -3,7 +3,7 @@
 import {motion} from "framer-motion";
 import {X, MapPin, AlertCircle, Truck} from "lucide-react";
 import {Store} from "@/types/store";
-import {formatDistance} from "@/services/distance";
+import {formatDistance} from "@/services/delivery/distance";
 
 interface DistanceWarningModalProps {
   store: Store;

@@ -11,7 +11,7 @@ import {motion} from "framer-motion";
 import {X, MapPin, Trash2, Edit2, Check, AlertCircle, Plus} from "lucide-react";
 import {doc, getDoc, setDoc, deleteDoc, collection, getDocs} from "firebase/firestore";
 import {db} from "@/lib/firebase";
-import {geocodeAddress} from "@/services/geocode";
+import {geocodeAddress} from "@/services/delivery/geocode";
 
 interface AddressesModalProps {
   userId: string;

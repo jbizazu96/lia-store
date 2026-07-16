@@ -2,10 +2,12 @@
 
 /*
   Store owner orders page.
+  ✅ Real-time updates using Firestore onSnapshot
   Displays all orders with filtering and status management.
-  Location: /store/store-orders
 */
 
+import type { Order } from "@/types/order";
+import {BrandedLoader} from "@/components/ui/BrandedLoader";
 import {useState, useEffect} from "react";
 import {useRouter, useSearchParams} from "next/navigation";
 import {motion, AnimatePresence} from "framer-motion";
@@ -18,24 +20,19 @@ import {
   orderBy,
   doc,
   getDoc,
+  onSnapshot,  // ✅ Import onSnapshot
 } from "firebase/firestore";
 
-// Components - relative imports
+// Components
 import {OrderStats} from "./components/OrderStats";
 import {OrderFilters} from "./components/OrderFilters";
 import {OrderCard} from "./components/OrderCard";
 import {EmptyOrders} from "./components/EmptyOrders";
-
-interface Order {
-  id: string;
-  customerName: string;
-  customerPhone: string;
-  customerAddress: string;
-  total: number;
-  status: string;
-  items: any[];
-  createdAt: string;
-}
+import { mapFirestoreOrder } from "@/mappers/orderMapper";
+import {
+  getFunctions,
+  httpsCallable,
+} from "firebase/functions";
 
 export default function StoreOrdersPage() {
   const router = useRouter();
@@ -44,14 +41,18 @@ export default function StoreOrdersPage() {
   const [filteredOrders, setFilteredOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [storeId, setStoreId] = useState("");
-
+  const functions = getFunctions();
+  const syncStoreOrders = httpsCallable(
+  functions,
+  "syncStoreOrders"
+  );
   // Filter states
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState(searchParams.get("status") || "all");
 
-  // Fetch orders
+  // Fetch orders with real-time listener
   useEffect(() => {
-    const fetchOrders = async () => {
+    const fetchStoreAndSetupListener = async () => {
       try {
         const user = auth.currentUser;
         if (!user) {
@@ -59,13 +60,12 @@ export default function StoreOrdersPage() {
           return;
         }
 
-        // Get store ID from user document
+        // Get store ID
         const userRef = doc(db, "users", user.uid);
         const userDoc = await getDoc(userRef);
         
         let storeId = userDoc.data()?.storeId;
 
-        // If no storeId in user doc, query stores by ownerId
         if (!storeId) {
           const storesRef = collection(db, "stores");
           const q = query(storesRef, where("ownerId", "==", user.uid));
@@ -84,56 +84,67 @@ export default function StoreOrdersPage() {
 
         setStoreId(storeId);
 
-        // Fetch orders for this store
+        // ----------------------------------------------------
+        // Synchronize this store's active deliveries.
+        // ----------------------------------------------------
+        try {
+
+          await syncStoreOrders();
+
+          console.log(
+            "Store orders synchronized."
+          );
+
+        } catch (error) {
+
+          console.error(
+            "Store synchronization failed:",
+            error
+          );
+
+        }
+        // ✅ Set up real-time listener for orders
         const ordersRef = collection(db, "orders");
         const q = query(
           ordersRef,
-          where("storeId", "==", storeId),
+          where("store.id", "==", storeId),
           orderBy("createdAt", "desc")
         );
-        const snapshot = await getDocs(q);
 
-        const ordersData: Order[] = [];
-        snapshot.forEach((doc) => {
-          const data = doc.data();
-          ordersData.push({
-            id: doc.id,
-            customerName: data.customerName || "Customer",
-            customerPhone: data.customerPhone || "",
-            customerAddress: data.customerAddress || "",
-            total: data.total || 0,
-            status: data.status || "pending",
-            items: data.items || [],
-            createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
-          });
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+          
+          const ordersData =
+            snapshot.docs.map(mapFirestoreOrder);
+
+          setOrders(ordersData);
+          setFilteredOrders(ordersData);
+          setLoading(false);
         });
 
-        setOrders(ordersData);
-        setFilteredOrders(ordersData);
+        // ✅ Cleanup listener on unmount
+        return () => unsubscribe();
+
       } catch (error) {
         console.error("Error fetching orders:", error);
-      } finally {
         setLoading(false);
       }
     };
 
-    fetchOrders();
+    fetchStoreAndSetupListener();
   }, [router]);
 
-  // Filter orders
+  // Filter orders (runs whenever orders or filter states change)
   useEffect(() => {
     let filtered = orders;
 
-    // Status filter
     if (statusFilter !== "all") {
       filtered = filtered.filter(order => order.status === statusFilter);
     }
 
-    // Search filter
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter(order =>
-        order.customerName.toLowerCase().includes(query) ||
+        order.customer.name.toLowerCase().includes(query) ||
         order.id.toLowerCase().includes(query)
       );
     }
@@ -145,7 +156,7 @@ export default function StoreOrdersPage() {
   const stats = {
     total: orders.length,
     pending: orders.filter(o => o.status === "pending").length,
-    completed: orders.filter(o => o.status === "delivered").length,
+    completed: orders.filter(o => o.status === "completed").length,
     cancelled: orders.filter(o => o.status === "cancelled").length,
   };
 
@@ -157,11 +168,12 @@ export default function StoreOrdersPage() {
 
   const hasFilters = searchQuery !== "" || statusFilter !== "all";
 
+  /* ==========================================
+     LOADING STATE - WHITE BRANDED LOADER
+  ========================================== */
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="w-8 h-8 border-4 border-orange-500 border-t-transparent rounded-full animate-spin" />
-      </div>
+      <BrandedLoader message="Loading orders" />
     );
   }
 

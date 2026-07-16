@@ -14,7 +14,7 @@ import {
 } from "firebase/firestore";
 import {db} from "@/lib/firebase";
 import {SearchResult, StoreData, StoreGroup} from "../types";
-import {calculateDistance, getDeliveryFeeNumber, getEstimatedTimeNumber} from "@/services/distance";
+import {calculateDistance, getDeliveryFeeNumber, getEstimatedTimeNumber} from "@/services/delivery/distance";
 
 export async function performSearch(
   searchTerm: string,

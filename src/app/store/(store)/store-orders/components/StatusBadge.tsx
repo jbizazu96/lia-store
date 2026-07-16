@@ -30,11 +30,6 @@ export function StatusBadge({status, showIcon = true, size = "md"}: StatusBadgeP
       color: "bg-purple-100 text-purple-800 border-purple-200",
       icon: Package,
     },
-    ready: {
-      label: "Ready",
-      color: "bg-indigo-100 text-indigo-800 border-indigo-200",
-      icon: CheckCircle,
-    },
     ready_for_pickup: {
       label: "Ready for Pickup",
       color: "bg-indigo-100 text-indigo-800 border-indigo-200",
@@ -50,8 +45,8 @@ export function StatusBadge({status, showIcon = true, size = "md"}: StatusBadgeP
       color: "bg-blue-100 text-blue-800 border-blue-200",
       icon: Truck,
     },
-    delivered: {
-      label: "Delivered",
+    completed: {
+      label: "Completed",
       color: "bg-green-100 text-green-800 border-green-200",
       icon: CheckCircle,
     },

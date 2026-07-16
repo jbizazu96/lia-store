@@ -4,8 +4,10 @@
   This is the main dashboard page.
   It will load the dashboard content with the sidebar layout.
   The layout.tsx in (store) folder provides the sidebar and header.
+  ✅ Real-time updates using Firestore onSnapshot
+  ✅ Store revenue = subtotal + tax (delivery fee excluded)
 */
-
+import {BrandedLoader} from "@/components/ui/BrandedLoader";
 import {useState, useEffect} from "react";
 import {useRouter} from "next/navigation";
 import {motion} from "framer-motion";
@@ -27,11 +29,12 @@ import {
   collection,
   query,
   where,
-  getDocs,
   orderBy,
   limit,
   doc,
-  getDoc
+  getDoc,
+  getDocs,  // ✅ Add getDocs import
+  onSnapshot,
 } from "firebase/firestore";
 import Link from "next/link";
 
@@ -49,7 +52,7 @@ interface Stats {
 interface RecentOrder {
   id: string;
   customerName: string;
-  total: number;
+  storeTotal: number;
   status: string;
   createdAt: string;
   items: number;
@@ -73,7 +76,7 @@ export default function DashboardPage() {
   const [recentOrders, setRecentOrders] = useState<RecentOrder[]>([]);
 
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchStoreAndSetupListener = async () => {
       try {
         const user = auth.currentUser;
         if (!user) {
@@ -81,17 +84,16 @@ export default function DashboardPage() {
           return;
         }
 
-        // Get store ID from user document or query
+        // Get store ID
         const userRef = doc(db, "users", user.uid);
         const userDoc = await getDoc(userRef);
         
         let storeId = userDoc.data()?.storeId;
 
-        // If no storeId in user doc, query by ownerId
         if (!storeId) {
           const storesRef = collection(db, "stores");
           const q = query(storesRef, where("ownerId", "==", user.uid));
-          const storeSnapshot = await getDocs(q);
+          const storeSnapshot = await getDocs(q); // ✅ getDocs is now imported
           
           if (!storeSnapshot.empty) {
             const storeDoc = storeSnapshot.docs[0];
@@ -102,7 +104,6 @@ export default function DashboardPage() {
             return;
           }
         } else {
-          // Get store name
           const storeRef = doc(db, "stores", storeId);
           const storeDoc = await getDoc(storeRef);
           if (storeDoc.exists()) {
@@ -112,68 +113,85 @@ export default function DashboardPage() {
 
         setStoreId(storeId);
 
-        // Fetch orders for this store
+        // ✅ Set up real-time listener for orders
         const ordersRef = collection(db, "orders");
         const q = query(
           ordersRef,
-          where("storeId", "==", storeId),
+          where("store.id", "==", storeId),
           orderBy("createdAt", "desc"),
           limit(10)
         );
-        const ordersSnapshot = await getDocs(q);
 
-        const orders: RecentOrder[] = [];
-        let totalRevenue = 0;
-        let pendingCount = 0;
-        let todayCount = 0;
-        const customers = new Set();
+        // ✅ Listen for real-time updates
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+          const orders: RecentOrder[] = [];
+          let totalRevenue = 0;
+          let pendingCount = 0;
+          let todayCount = 0;
+          const customers = new Set();
 
-        ordersSnapshot.forEach((doc) => {
-          const data = doc.data();
-          const order = {
-            id: doc.id,
-            customerName: data.customerName || "Customer",
-            total: data.total || 0,
-            status: data.status || "pending",
-            createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
-            items: data.items?.length || 0,
-          };
-          orders.push(order);
-          totalRevenue += order.total;
+          snapshot.forEach((doc) => {
+            const data = doc.data();
+            
+            // Calculate store total (subtotal + tax only, no delivery fee)
+            const subtotal = data.pricing?.subtotal || 0;
+            const tax = data.pricing?.tax || 0;
+
+            const storeTotal = subtotal + tax;
+            
+            const order = {
+              id: doc.id,
+              customerName: data.customer?.name || "Customer",
+              storeTotal: storeTotal,
+              status: data.status || "pending",
+              createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
+              items: data.items?.length || 0,
+            };
+            orders.push(order);
+            
+            totalRevenue += storeTotal;
+            
+            if (data.customer?.uid) {
+                customers.add(data.customer.uid);
+              }
+            
+            if (order.status === "pending") pendingCount++;
+            
+            const orderDate = new Date(order.createdAt);
+            const today = new Date();
+            if (orderDate.toDateString() === today.toDateString()) {
+              todayCount++;
+            }
+          });
+
+          setRecentOrders(orders);
+          setStats({
+            totalOrders: orders.length,
+            totalRevenue: totalRevenue,
+            totalCustomers: customers.size || Math.floor(orders.length * 0.7),
+            avgRating: 0.0,
+            pendingOrders: pendingCount,
+            todayOrders: todayCount,
+            weeklyGrowth: 0.0,
+            revenueGrowth: 0.0,
+          });
           
-          if (data.customerId) {
-            customers.add(data.customerId);
-          }
-          
-          if (order.status === "pending") pendingCount++;
-          
-          const orderDate = new Date(order.createdAt);
-          const today = new Date();
-          if (orderDate.toDateString() === today.toDateString()) {
-            todayCount++;
+          // ✅ Only set loading to false after first data load
+          if (loading) {
+            setLoading(false);
           }
         });
 
-        setRecentOrders(orders);
-        setStats({
-          totalOrders: orders.length,
-          totalRevenue,
-          totalCustomers: customers.size || Math.floor(orders.length * 0.7),
-          avgRating: 0.0,
-          pendingOrders: pendingCount,
-          todayOrders: todayCount,
-          weeklyGrowth: 0.0,
-          revenueGrowth: 0.0,
-        });
+        // ✅ Cleanup listener on unmount
+        return () => unsubscribe();
 
       } catch (error) {
-        console.error("Error fetching dashboard data:", error);
-      } finally {
+        console.error("Error fetching data:", error);
         setLoading(false);
       }
     };
 
-    fetchData();
+    fetchStoreAndSetupListener();
   }, [router]);
 
   const statusColors = {
@@ -181,6 +199,7 @@ export default function DashboardPage() {
     accepted: "bg-blue-100 text-blue-800",
     preparing: "bg-purple-100 text-purple-800",
     ready: "bg-indigo-100 text-indigo-800",
+    ready_for_pickup: "bg-indigo-100 text-indigo-800",
     out_for_delivery: "bg-orange-100 text-orange-800",
     delivered: "bg-green-100 text-green-800",
     cancelled: "bg-red-100 text-red-800",
@@ -191,6 +210,7 @@ export default function DashboardPage() {
     accepted: "Accepted",
     preparing: "Preparing",
     ready: "Ready",
+    ready_for_pickup: "Ready for Pickup",
     out_for_delivery: "Out for Delivery",
     delivered: "Delivered",
     cancelled: "Cancelled",
@@ -205,8 +225,6 @@ export default function DashboardPage() {
       bgColor: "bg-blue-50",
       textColor: "text-blue-600",
     },
-
-    
     {
       title: "Revenue",
       value: `$${stats.totalRevenue.toFixed(2)}`,
@@ -215,8 +233,7 @@ export default function DashboardPage() {
       bgColor: "bg-green-50",
       textColor: "text-green-600",
       growth: `+${stats.revenueGrowth}%`,
-    }, 
-
+    },
     {
       title: "Customers",
       value: stats.totalCustomers,
@@ -225,7 +242,6 @@ export default function DashboardPage() {
       bgColor: "bg-purple-50",
       textColor: "text-purple-600",
     },
-    
     {
       title: "Rating",
       value: `${stats.avgRating} ★`,
@@ -235,14 +251,10 @@ export default function DashboardPage() {
       textColor: "text-yellow-600",
     },
   ];
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="w-8 h-8 border-4 border-orange-500 border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
-  }
+// Replace the loading state with:
+if (loading) {
+  return <BrandedLoader message="Loading dashboard" />;
+}
 
   return (
     <div className="space-y-6">
@@ -300,8 +312,6 @@ export default function DashboardPage() {
         {[
           {label: "View Orders", icon: ShoppingBag, color: "bg-orange-500", href: "/store/store-orders"},
           {label: "Add Product", icon: Package, color: "bg-blue-500", href: "/store/products/add"},
-        //  {label: "Earnings", icon: DollarSign, color: "bg-green-500", href: "/store/earnings"},
-        //  {label: "Analytics", icon: BarChart3, color: "bg-purple-500", href: "/store/analytics"},
         ].map((action) => (
           <Link
             key={action.label}
@@ -360,7 +370,7 @@ export default function DashboardPage() {
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className="font-bold text-gray-800">${order.total.toFixed(2)}</p>
+                    <p className="font-bold text-gray-800">${order.storeTotal.toFixed(2)}</p>
                   </div>
                 </Link>
               ))}

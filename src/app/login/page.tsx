@@ -242,7 +242,7 @@ export default function LoginPage() {
         return;
       }
 
-      const {geocodeAddress} = await import("@/services/geocode");
+      const {geocodeAddress} = await import("@/services/delivery/geocode");
       const fullAddress = `${addressData.street}, ${addressData.city}, ${addressData.state} ${addressData.zip}`;
       const location = await geocodeAddress(fullAddress);
 

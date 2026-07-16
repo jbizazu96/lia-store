@@ -5,6 +5,7 @@
   Complete store management with modern UI.
 */
 
+import {BrandedLoader} from "@/components/ui/BrandedLoader";
 import {useState, useEffect} from "react";
 import {useRouter} from "next/navigation";
 import {motion} from "framer-motion";
@@ -112,11 +113,12 @@ export default function SettingsPage() {
     }
   };
 
+  /* ==========================================
+     LOADING STATE - WHITE BRANDED LOADER
+  ========================================== */
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="w-8 h-8 border-4 border-orange-500 border-t-transparent rounded-full animate-spin" />
-      </div>
+      <BrandedLoader message="Loading settings" />
     );
   }
 

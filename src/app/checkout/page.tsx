@@ -1,17 +1,20 @@
 "use client";
 
 /*
-  Checkout page with clean component structure.
+  Checkout page with complete order data for Firestore.
+  All fields needed for future Shipday integration.
 */
 
+import { calculateDistance } from "@/services/delivery/distance";
+import { orderService } from "@/services/order/orderService";
+import { createOrder } from "@/mappers/orderMapper";
 import {useState, useEffect} from "react";
 import {useRouter} from "next/navigation";
 import {AnimatePresence} from "framer-motion";
 import {CreditCard, AlertCircle} from "lucide-react";
 import {auth, db} from "@/lib/firebase";
-import {doc, getDoc, setDoc, addDoc, serverTimestamp} from "firebase/firestore";
+import {doc, getDoc, setDoc, serverTimestamp} from "firebase/firestore";
 import {useCart} from "@/context/CartContext";
-import {collection} from "firebase/firestore";
 
 // Components
 import {CheckoutHeader} from "./components/CheckoutHeader";
@@ -19,9 +22,21 @@ import {DeliveryAddressSection} from "./components/DeliveryAddressSection";
 import {OrderSummary} from "./components/OrderSummary";
 import {OrderSuccess} from "./components/OrderSuccess";
 import {AddressModal} from "./components/AddressModal";
+import {TipSelector} from "./components/TipSelector";
+import {DeliveryInstructions} from "./components/DeliveryInstructions";
 
 // Types
 import {Address, CheckoutItem, OrderTotals} from "./types";
+
+// ✅ Store data interface
+interface StoreData {
+  id: string;
+  name: string;
+  address: string;
+  phone: string;
+  latitude: number;
+  longitude: number;
+}
 
 export default function CheckoutPage() {
   const router = useRouter();
@@ -33,17 +48,30 @@ export default function CheckoutPage() {
   const [orderId, setOrderId] = useState("");
   const [error, setError] = useState("");
 
-  // Address form state
+  // ✅ User info
+  const [userName, setUserName] = useState("");
+  const [userPhone, setUserPhone] = useState("");
+
+  // ✅ Delivery info
+  const [deliveryInstructions, setDeliveryInstructions] = useState("");
+  const [tip, setTip] = useState(0);
+
+  // ✅ Store info (will be fetched from Firestore)
+  const [storeData, setStoreData] = useState<StoreData | null>(null);
+
+  // Address form state with name and phone
   const [formData, setFormData] = useState({
     street: "",
     city: "",
     state: "",
     zip: "",
+    name: "",
+    phone: "",
   });
 
-  // Get user address
+  // Get user data and address
   useEffect(() => {
-    const fetchAddress = async () => {
+    const fetchUserData = async () => {
       try {
         const user = auth.currentUser;
         if (!user) {
@@ -54,6 +82,12 @@ export default function CheckoutPage() {
         const userDoc = await getDoc(doc(db, "users", user.uid));
         if (userDoc.exists()) {
           const data = userDoc.data();
+          const name = data.displayName || user.email?.split("@")[0] || "Customer";
+          const phone = data.phone || "";
+
+          setUserName(name);
+          setUserPhone(phone);
+
           if (data.defaultAddress) {
             setAddress(data.defaultAddress);
             setFormData({
@@ -61,15 +95,44 @@ export default function CheckoutPage() {
               city: data.defaultAddress.city || "",
               state: data.defaultAddress.state || "",
               zip: data.defaultAddress.zip || "",
+              name: name,
+              phone: phone,
+            });
+          } else {
+            setFormData({
+              street: "",
+              city: "",
+              state: "",
+              zip: "",
+              name: name,
+              phone: phone,
+            });
+          }
+        }
+
+        // ✅ Fetch store data if we have a storeId
+        const storeId = items[0]?.storeId;
+        if (storeId) {
+          const storeRef = doc(db, "stores", storeId);
+          const storeDoc = await getDoc(storeRef);
+          if (storeDoc.exists()) {
+            const storeData = storeDoc.data();
+            setStoreData({
+              id: storeDoc.id,
+              name: storeData.name || "",
+              address: storeData.address || "",
+              phone: storeData.phone || "",
+              latitude: storeData.latitude || 0,
+              longitude: storeData.longitude || 0,
             });
           }
         }
       } catch (error) {
-        console.error("Error fetching address:", error);
+        console.error("Error fetching user data:", error);
       }
     };
-    fetchAddress();
-  }, [router]);
+    fetchUserData();
+  }, [items, router]);
 
   // If cart is empty, redirect to home
   if (items.length === 0 && !orderPlaced) {
@@ -77,23 +140,25 @@ export default function CheckoutPage() {
     return null;
   }
 
-  // Calculate order totals
+  // Calculate order totals with tip
   const subtotal = totalPrice;
   const deliveryFee = subtotal > 30 ? 0 : 5.99;
   const tax = subtotal * 0.08;
-  const total = subtotal + deliveryFee + tax;
+  const total = subtotal + deliveryFee + tax + tip;
 
   const totals: OrderTotals = {
     subtotal,
     deliveryFee,
     tax,
     total,
+    tip,
   };
 
-  // Get store name from first item
+  // Get store info from cart
+  const storeId = items[0]?.storeId || "";
   const storeName = items[0]?.storeName || "";
 
-  // Place order
+  // Place order with all user info
   const handlePlaceOrder = async () => {
     if (!address) {
       setError("Please add a delivery address");
@@ -111,37 +176,91 @@ export default function CheckoutPage() {
         return;
       }
 
-      // Create order in Firestore
-      const orderData = {
-        userId: user.uid,
-        items: items.map(item => ({
-          id: item.id,
-          name: item.name,
-          price: item.price,
-          quantity: item.quantity,
-          imageUrl: item.imageUrl || "",
-          size: item.size || null,
-        })),
-        storeId: items[0]?.storeId || "",
-        storeName: items[0]?.storeName || "",
-        subtotal: subtotal,
-        deliveryFee: deliveryFee,
-        tax: tax,
-        total: total,
-        deliveryAddress: {
-          street: address.street || "",
-          city: address.city || "",
-          state: address.state || "",
-          zip: address.zip || "",
-          formattedAddress: address.formattedAddress || "",
-        },
-        status: "pending",
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      };
+      // Calculate delivery distance between the store and the customer.
+          const distanceMiles = calculateDistance(
+            storeData?.latitude || 0,
+            storeData?.longitude || 0,
+            address.latitude || 0,
+            address.longitude || 0
+          );
 
-      const docRef = await addDoc(collection(db, "orders"), orderData);
-      setOrderId(docRef.id);
+console.log("Distance:", distanceMiles);
+
+      const order = createOrder({
+
+          userId: user.uid,
+
+          customerName: formData.name || userName,
+
+          customerPhone: formData.phone || userPhone,
+
+          customerEmail: user.email || "",
+
+          storeId,
+
+          storeName,
+
+          storeAddress: storeData?.address || "",
+
+          storePhone: storeData?.phone || "",
+
+          storeLatitude: storeData?.latitude || 0,
+
+          storeLongitude: storeData?.longitude || 0,
+
+          deliveryAddress: {
+
+            street: address.street || "",
+
+            city: address.city || "",
+
+            state: address.state || "",
+
+            zip: address.zip || "",
+
+            formattedAddress: address.formattedAddress || "",
+
+          },
+
+          customerLatitude: address.latitude || 0,
+
+          customerLongitude: address.longitude || 0,
+
+          deliveryInstructions,
+
+          deliveryFee,
+          distanceMiles,
+
+          items: items.map(item => ({
+
+            id: item.id,
+
+            name: item.name,
+
+            price: item.price,
+
+            quantity: item.quantity,
+
+            imageUrl: item.imageUrl,
+
+            size: item.size,
+
+          })),
+
+          subtotal,
+
+          tax,
+
+          tip,
+
+          total,
+
+        });
+console.log(order);
+      const orderId =
+          await orderService.createOrder(order);
+
+      setOrderId(orderId);
 
       // Clear cart
       clearCart();
@@ -167,13 +286,14 @@ export default function CheckoutPage() {
     router.back();
   };
 
-  // Save address
+  // Save address with name and phone
   const handleSaveAddress = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!formData.street.trim() || !formData.city.trim() || 
-        !formData.state.trim() || !formData.zip.trim()) {
-      setError("Please fill in all address fields");
+        !formData.state.trim() || !formData.zip.trim() ||
+        !formData.name.trim() || !formData.phone.trim()) {
+      setError("Please fill in all fields");
       return;
     }
 
@@ -186,7 +306,7 @@ export default function CheckoutPage() {
       
       let location = null;
       try {
-        const {geocodeAddress} = await import("@/services/geocode");
+        const {geocodeAddress} = await import("@/services/delivery/geocode");
         location = await geocodeAddress(fullAddress);
       } catch (geoError) {
         console.warn("Geocoding failed:", geoError);
@@ -202,11 +322,16 @@ export default function CheckoutPage() {
         formattedAddress: location?.formattedAddress || fullAddress,
       };
 
+      // Update user profile with address, name, and phone
       await setDoc(doc(db, "users", user.uid), {
         defaultAddress: addressData,
+        displayName: formData.name,
+        phone: formData.phone,
       }, { merge: true });
 
       setAddress(addressData);
+      setUserName(formData.name);
+      setUserPhone(formData.phone);
       setShowAddressModal(false);
       setError("");
     } catch (error) {
@@ -243,10 +368,25 @@ export default function CheckoutPage() {
           </div>
         )}
 
-        {/* Delivery Address */}
+        {/* Delivery Address with User Info */}
         <DeliveryAddressSection
           address={address}
+          userName={userName}
+          userPhone={userPhone}
           onEdit={() => setShowAddressModal(true)}
+        />
+
+        {/* Delivery Instructions */}
+        <DeliveryInstructions
+          value={deliveryInstructions}
+          onChange={setDeliveryInstructions}
+        />
+
+        {/* Driver Tip */}
+        <TipSelector
+          selectedTip={tip}
+          onTipChange={setTip}
+          subtotal={subtotal}
         />
 
         {/* Order Summary */}
@@ -254,6 +394,7 @@ export default function CheckoutPage() {
           items={items as CheckoutItem[]}
           totals={totals}
           storeName={storeName}
+          storeAddress={storeData?.address ? `${storeData.address}` : ""}
         />
 
         {/* Place Order Button */}
@@ -267,7 +408,7 @@ export default function CheckoutPage() {
           ) : (
             <>
               <CreditCard className="w-5 h-5" />
-              Place Order
+              Pay ${total.toFixed(2)}
             </>
           )}
         </button>
@@ -288,7 +429,7 @@ export default function CheckoutPage() {
             setFormData={setFormData}
             loading={loading}
             error={error}
-            title={address ? "Update Address" : "Add Address"}
+            title="Delivery Information"
           />
         )}
       </AnimatePresence>

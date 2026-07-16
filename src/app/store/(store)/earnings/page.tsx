@@ -1,5 +1,5 @@
 "use client";
-
+import {BrandedLoader} from "@/components/ui/BrandedLoader";
 import {useState, useEffect} from "react";
 import {motion} from "framer-motion";
 import {
@@ -106,13 +106,13 @@ export default function EarningsPage() {
     fetchData();
   }, []);
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="w-8 h-8 border-4 border-orange-500 border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
-  }
+  /* ==========================================
+     LOADING STATE - WHITE BRANDED LOADER
+  ========================================== */
+
+    if (loading) {
+  return <BrandedLoader message="Loading earnings" />;
+}
 
   return (
     <div className="space-y-6">

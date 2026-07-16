@@ -11,7 +11,7 @@ import {
   formatDistance,
   getDeliveryFee,
   getEstimatedTime,
-} from "@/services/distance";
+} from "@/services/delivery/distance";
 
 interface StoreInfoProps {
   name: string;

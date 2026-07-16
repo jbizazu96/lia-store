@@ -5,6 +5,7 @@
   Uses React.use() to unwrap params Promise in Next.js 15.
 */
 
+import {BrandedLoader} from "@/components/ui/BrandedLoader";
 import {useState, useEffect, use} from "react";
 import {useRouter} from "next/navigation";
 import {motion} from "framer-motion";
@@ -135,9 +136,7 @@ export default function EditProductPage({params}: EditProductPageProps) {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="w-8 h-8 border-4 border-orange-500 border-t-transparent rounded-full animate-spin" />
-      </div>
+        <BrandedLoader message="Loading product details" />
     );
   }
 

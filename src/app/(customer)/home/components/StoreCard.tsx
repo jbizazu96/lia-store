@@ -15,7 +15,7 @@ import {
   getEstimatedTime,
   getDeliveryFeeNumber,
   getEstimatedTimeNumber,
-} from "@/services/distance";
+} from "@/services/delivery/distance";
 
 interface Store {
   id: string;
