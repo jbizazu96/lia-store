@@ -6,12 +6,12 @@
   ✅ Shows loading state while cart is being loaded from Firestore.
 */
 
-import {useState} from "react";
-import {useRouter} from "next/navigation";
-import {motion, AnimatePresence} from "framer-motion";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
 import Link from "next/link";
-import {BrandedLoader} from "@/components/ui/BrandedLoader";
+import { BrandedLoader } from "@/components/ui/BrandedLoader";
 import {
   ShoppingCart,
   Trash2,
@@ -26,11 +26,11 @@ import {
   X,
   AlertCircle,
 } from "lucide-react";
-import {useCart} from "@/context/CartContext";
+import { useCart } from "@/context/CartContext";
 
 export default function CartPage() {
   const router = useRouter();
-  const {items, itemCount, totalPrice, updateQuantity, removeItem, clearCart, isLoading} = useCart();
+  const { items, itemCount, totalPrice, updateQuantity, removeItem, clearCart, isLoading } = useCart();
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
   const [itemToRemove, setItemToRemove] = useState<string | null>(null);
@@ -103,9 +103,18 @@ export default function CartPage() {
   if (items.length === 0) {
     return (
       <main className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        {/* Back button in empty state */}
+        <button
+          onClick={goBack}
+          className="fixed top-4 left-4 z-10 p-2 bg-white rounded-full shadow-md hover:shadow-lg transition"
+          aria-label="Go back"
+        >
+          <ArrowLeft className="w-5 h-5 text-gray-700" />
+        </button>
+
         <motion.div
-          initial={{opacity: 0, y: 20}}
-          animate={{opacity: 1, y: 0}}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
           className="text-center max-w-sm mx-auto"
         >
           {/* Empty State Illustration */}
@@ -162,9 +171,9 @@ export default function CartPage() {
 
   return (
     <main className="min-h-screen bg-gray-50">
-      {/* Header */}
+      {/* Header with Back Button - Matching Notifications Page Style */}
       <div className="bg-white border-b border-gray-100 sticky top-0 z-20">
-        <div className="flex items-center justify-between px-4 py-3 max-w-lg mx-auto">
+        <div className="flex items-center gap-3 px-4 py-4 max-w-2xl mx-auto">
           <button
             onClick={goBack}
             className="p-2 hover:bg-gray-100 rounded-full transition"
@@ -172,21 +181,15 @@ export default function CartPage() {
           >
             <ArrowLeft className="w-5 h-5 text-gray-700" />
           </button>
-          <h1 className="text-lg font-bold text-gray-800">
-            Your Cart ({itemCount})
-          </h1>
-          <button
-            onClick={() => setShowClearConfirm(true)}
-            className="p-2 hover:bg-red-50 rounded-full transition text-red-500"
-            aria-label="Clear cart"
-          >
-            <Trash2 className="w-5 h-5" />
-          </button>
+          <h1 className="text-xl font-bold text-gray-800">Cart</h1>
+          <span className="text-xs text-gray-400 ml-auto">
+            {itemCount} item{itemCount !== 1 ? 's' : ''}
+          </span>
         </div>
       </div>
 
       {/* Cart Items */}
-      <div className="max-w-lg mx-auto px-4 py-4 pb-65 space-y-4">
+      <div className="max-w-2xl mx-auto px-4 py-4 pb-65 space-y-4">
         <AnimatePresence mode="popLayout">
           {items.map((item) => {
             const price = formatPrice(item.price);
@@ -195,9 +198,9 @@ export default function CartPage() {
             return (
               <motion.div
                 key={item.id}
-                initial={{opacity: 0, x: -20}}
-                animate={{opacity: 1, x: 0}}
-                exit={{opacity: 0, x: 20}}
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 20 }}
                 layout
                 className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100"
               >
@@ -289,7 +292,7 @@ export default function CartPage() {
 
       {/* Order Summary */}
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-30">
-        <div className="max-w-lg mx-auto px-4 py-4">
+        <div className="max-w-2xl mx-auto px-4 py-4">
           <div className="space-y-2">
             <div className="flex justify-between text-sm">
               <span className="text-gray-500">Subtotal</span>
@@ -338,9 +341,9 @@ export default function CartPage() {
       {showRemoveConfirm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <motion.div
-            initial={{opacity: 0, scale: 0.95}}
-            animate={{opacity: 1, scale: 1}}
-            exit={{opacity: 0, scale: 0.95}}
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
             className="bg-white rounded-3xl max-w-sm w-full p-6"
           >
             <div className="text-center">
@@ -376,9 +379,9 @@ export default function CartPage() {
       {showClearConfirm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <motion.div
-            initial={{opacity: 0, scale: 0.95}}
-            animate={{opacity: 1, scale: 1}}
-            exit={{opacity: 0, scale: 0.95}}
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
             className="bg-white rounded-3xl max-w-sm w-full p-6"
           >
             <div className="text-center">

@@ -230,9 +230,9 @@ export default function OrdersPage() {
 
   return (
     <main className="min-h-screen bg-gray-50">
-      {/* Header with Back Button */}
+      {/* Header with Back Button and Order Count */}
       <div className="bg-white border-b border-gray-100 sticky top-0 z-20">
-        <div className="flex items-center gap-3 px-4 py-4 max-w-lg mx-auto">
+        <div className="flex items-center gap-3 px-4 py-4 max-w-2xl mx-auto">
           <button
             onClick={() => router.back()}
             className="p-2 hover:bg-gray-100 rounded-full transition"
@@ -241,10 +241,13 @@ export default function OrdersPage() {
             <ArrowLeft className="w-5 h-5 text-gray-700" />
           </button>
           <h1 className="text-xl font-bold text-gray-800">My Orders</h1>
+          <span className="text-xs text-gray-400 ml-auto">
+            {orders.length} order{orders.length !== 1 ? 's' : ''}
+          </span>
         </div>
       </div>
 
-      <div className="max-w-lg mx-auto px-4 py-6">
+      <div className="max-w-2xl mx-auto px-4 py-6">
         {orders.length === 0 ? (
           // Beautiful Empty State
           <motion.div
@@ -303,10 +306,6 @@ export default function OrdersPage() {
         ) : (
           // Orders List
           <div className="space-y-4">
-            <p className="text-sm text-gray-400 px-1">
-              {orders.length} order{orders.length !== 1 ? 's' : ''}
-            </p>
-            
             <AnimatePresence mode="popLayout">
               {orders.map((order, index) => (
                 <motion.div
@@ -321,7 +320,7 @@ export default function OrdersPage() {
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex-1 min-w-0">
                       <h3 className="font-semibold text-gray-800 truncate">
-                        {order.store.name || "Unknown Store"    }
+                        {order.store.name || "Unknown Store"}
                       </h3>
                       <div className="flex items-center gap-3 mt-1">
                         <div className="flex items-center gap-1 text-sm text-gray-500">
@@ -352,7 +351,7 @@ export default function OrdersPage() {
                         </span>
                         <Link
                           href={`/orders/${order.id}`}
-                          className="px-3 py-1.5 text-xs bg-orange-50 text-orange-600 font-medium text-orange-600 hover:bg-orange-50 rounded-lg transition"
+                          className="px-3 py-1.5 text-xs bg-orange-50 text-orange-600 font-medium hover:bg-orange-100 rounded-lg transition"
                         >
                           View Details
                         </Link>
