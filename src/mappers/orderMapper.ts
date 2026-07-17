@@ -39,6 +39,7 @@ export interface CreateOrderInput {
 
   storeId: string;
   storeName: string;
+  storeOwnerId: string;
   storeAddress: string;
   storePhone: string;
   storeLatitude: number;
@@ -92,6 +93,7 @@ return {
 
   store: {
     id: input.storeId,
+    ownerId: input.storeOwnerId,
     name: input.storeName,
     address: input.storeAddress,
     phone: input.storePhone,

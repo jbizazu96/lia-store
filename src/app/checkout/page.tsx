@@ -31,6 +31,7 @@ import {Address, CheckoutItem, OrderTotals} from "./types";
 // Store data interface
 interface StoreData {
   id: string;
+  ownerId: string;
   name: string;
   address: string;
   phone: string;
@@ -126,6 +127,7 @@ export default function CheckoutPage() {
             const storeData = storeDoc.data();
             setStoreData({
               id: storeDoc.id,
+              ownerId: storeData.ownerId || "",
               name: storeData.name || "",
               address: storeData.address || "",
               phone: storeData.phone || "",
@@ -200,6 +202,7 @@ export default function CheckoutPage() {
         storeId,
         storeName,
         storeAddress: storeData?.address || "",
+        storeOwnerId: storeData?.ownerId || "",
         storePhone: storeData?.phone || "",
         storeLatitude: storeData?.latitude || 0,
         storeLongitude: storeData?.longitude || 0,

@@ -9,6 +9,7 @@ import { syncStoreOrders } from "./delivery/syncStoreOrders";
 import { acceptOrder } from "./orders/acceptOrder";
 import { orderStatusChanged } from "./triggers/orderStatusChanged";
 import { syncShipdayDeliveries } from "./scheduler/syncShipdayDeliveries";
+import { createOrder } from "./orders/createOrder";
 
 /*
   Initialize the Firebase Admin SDK once.
@@ -347,3 +348,4 @@ export { syncCustomerOrders };
 export { syncStoreOrders };
 export { orderStatusChanged };
 export { syncShipdayDeliveries };
+export { createOrder };

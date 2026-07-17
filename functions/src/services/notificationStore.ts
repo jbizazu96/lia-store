@@ -34,6 +34,16 @@ interface CreateNotificationInput {
 
   orderId?: string;
 
+  /**
+   * Base path the notification should open.
+   *
+   * Examples:
+   * /orders
+   * /store/store-orders
+   * /admin/orders
+   */
+  navigationPath?: string;
+
 }
 export class NotificationStore {
 
@@ -62,9 +72,10 @@ export class NotificationStore {
 
         color: input.color,
 
-        deepLink: input.orderId
-          ? `/orders/${input.orderId}`
-          : undefined,
+        deepLink:
+  input.navigationPath && input.orderId
+    ? `${input.navigationPath}/${input.orderId}`
+    : undefined,
 
         orderId: input.orderId,
 

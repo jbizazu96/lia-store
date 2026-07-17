@@ -1,5 +1,13 @@
+/*
+|--------------------------------------------------------------------------
+| Store layout
+|--------------------------------------------------------------------------
+|
+|
+*/
 "use client";
 
+import { useNotifications } from "@/context/NotificationContext";
 import { useState, useEffect, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
@@ -36,9 +44,9 @@ export default function StoreLayout({ children }: { children: React.ReactNode })
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [storeData, setStoreData] = useState<StoreData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [notifications, setNotifications] = useState(3);
   const sidebarRef = useRef<HTMLDivElement>(null);
   const [isMobile, setIsMobile] = useState(false);
+  const { unreadCount } = useNotifications();
   
   // ✅ State for pending orders count
   const [pendingOrdersCount, setPendingOrdersCount] = useState(0);
@@ -350,11 +358,17 @@ export default function StoreLayout({ children }: { children: React.ReactNode })
               </div>
 
               {/* Notifications */}
-              <button className="relative p-2 hover:bg-gray-100 rounded-lg transition">
+              <button
+                  onClick={() => router.push("/store/notifications")}
+                  className="relative p-2 hover:bg-gray-100 rounded-lg transition"
+                  aria-label="Notifications"
+                >
                 <Bell className="w-5 h-5 text-gray-600" />
-                {notifications > 0 && (
+                {unreadCount > 0 && (
                   <span className="absolute top-1 right-1 w-4 h-4 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center">
-                    {notifications}
+                    {unreadCount > 99
+                      ? "99+"
+                      : unreadCount}
                   </span>
                 )}
               </button>

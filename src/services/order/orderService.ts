@@ -16,9 +16,7 @@
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { mapOrderToShipday } from "@/mappers/shipdayMapper";
 import {
-  addDoc,
   arrayUnion,
-  collection,
   doc,
   getDoc,
   updateDoc,
@@ -47,47 +45,30 @@ export class OrderService {
  * The Checkout page passes us an Order object.
  * We are responsible for storing it correctly.
  */
-async createOrder(order: Order): Promise<string> {
 
-  // Business Rule #1
-  // Generate a human-readable order number.
-  const orderNumber =
-    `LIA-${Date.now()}`;
+    async createOrder(
+      order: Order
+    ): Promise<string> {
 
-  // Business Rule #2
-  // Every new order starts as pending.
-  const status = "pending";
+      const createOrder = httpsCallable(
+        functions,
+        "createOrder"
+      );
 
-  // Business Rule #3
-  // The first entry in the order timeline.
-  const statusHistory = [
-    {
-      status,
-      timestamp: new Date(),
-      note: "Order created.",
-    },
-  ];
+      const response = await createOrder({
+        order,
+      });
 
-  const docRef = await addDoc(
-    collection(db, "orders"),
-    {
+      const data =
+        response.data as {
+          success: boolean;
+          orderId: string;
+        };
 
-      ...order,
+      return data.orderId;
 
-      orderNumber,
-
-      status,
-
-      statusHistory,
-
-      createdAt: serverTimestamp(),
-
-      updatedAt: serverTimestamp(),
     }
-  );
 
-  return docRef.id;
-}
 
     /**
      * Retrieves a single order from Firestore.

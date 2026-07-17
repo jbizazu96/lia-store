@@ -50,6 +50,17 @@ export interface OrderCustomer {
 export interface OrderStore {
   id: string;
 
+  /**
+   * Firebase Authentication UID of the store owner.
+   *
+   * Used for:
+   * • Store notifications
+   * • Push notifications
+   * • Analytics
+   * • Future payouts
+   */
+  ownerId: string;
+
   name: string;
 
   address: string;
