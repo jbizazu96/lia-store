@@ -2,18 +2,18 @@
 
 /*
 |--------------------------------------------------------------------------
-| Notifications Page
+| Store Notifications Page
 |--------------------------------------------------------------------------
 |
-| Displays all notifications for the current user.
+| Displays all notifications for the store owner.
 | ✅ Branded loading screen with logo and orbit animation
-| ✅ Back button to navigate home
-| ✅ Beautiful modern design
+| ✅ Back button to navigate to dashboard
+| ✅ Store-specific design matching store layout
 |
 */
 
 import { useEffect, useState } from "react";
-import { ArrowLeft, Bell } from "lucide-react";
+import { ArrowLeft, Bell, Store, Package, ShoppingBag, Clock } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -32,12 +32,11 @@ import {
   NotificationCard,
 } from "@/components/notifications/NotificationCard";
 
-export default function NotificationsPage() {
+export default function StoreNotificationsPage() {
   const { user } = useAuth();
   const router = useRouter();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
-
 
   useEffect(() => {
     if (!user) {
@@ -67,132 +66,208 @@ export default function NotificationsPage() {
 
   return (
     <main className="min-h-screen bg-gray-50">
-      {/* Header with Back Button */}
-      <div className="bg-white border-b border-gray-100 sticky top-0 z-20">
-        <div className="flex items-center gap-3 px-4 py-4 max-w-2xl mx-auto">
+      {/* Store Header with Back Button */}
+      <div className="bg-white border-b border-gray-200 sticky top-0 z-20">
+        <div className="flex items-center gap-3 px-6 py-4">
           <button
-            onClick={() => router.back()}
-            className="p-2 hover:bg-gray-100 rounded-full transition"
-            aria-label="Go back home"
+            onClick={() => router.push("/store/dashboard")}
+            className="p-2 hover:bg-gray-100 rounded-lg transition"
+            aria-label="Go back to dashboard"
           >
             <ArrowLeft className="w-5 h-5 text-gray-700" />
           </button>
-          <h1 className="text-xl font-bold text-gray-800">
-                Store Notifications
-                </h1>
-          <span className="text-xs text-gray-400 ml-auto">
-            {notifications.length} notification{notifications.length !== 1 ? 's' : ''}
+          <div className="flex items-center gap-2">
+            <Bell className="w-5 h-5 text-orange-500" />
+            <h1 className="text-xl font-bold text-gray-800">Notifications</h1>
+          </div>
+          <span className="text-xs text-gray-400 ml-auto bg-gray-100 px-3 py-1 rounded-full">
+            {notifications.length} total
           </span>
         </div>
       </div>
 
-      <div className="max-w-2xl mx-auto p-4">
+      <div className="max-w-4xl mx-auto p-6">
+        {/* Store Stats Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+          <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-orange-50 rounded-lg">
+                <Bell className="w-4 h-4 text-orange-500" />
+              </div>
+              <div>
+                <p className="text-xs text-gray-400">Total</p>
+                <p className="text-lg font-bold text-gray-800">{notifications.length}</p>
+              </div>
+            </div>
+          </div>
+          <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-blue-50 rounded-lg">
+                <Clock className="w-4 h-4 text-blue-500" />
+              </div>
+              <div>
+                <p className="text-xs text-gray-400">Unread</p>
+                <p className="text-lg font-bold text-blue-600">{unreadNotifications.length}</p>
+              </div>
+            </div>
+          </div>
+          <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-green-50 rounded-lg">
+                <Package className="w-4 h-4 text-green-500" />
+              </div>
+              <div>
+                <p className="text-xs text-gray-400">Read</p>
+                <p className="text-lg font-bold text-green-600">{readNotifications.length}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
         {notifications.length === 0 ? (
-          // ✅ Empty State
+          // ✅ Store Empty State
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="bg-white rounded-2xl border border-gray-100 p-12 text-center shadow-sm"
+            className="bg-white rounded-2xl border border-gray-200 p-16 text-center shadow-sm"
           >
-            <div className="relative w-24 h-24 mx-auto mb-4">
+            <div className="relative w-32 h-32 mx-auto mb-6">
               <div className="absolute inset-0 bg-orange-100 rounded-full opacity-20 scale-150" />
               <div className="relative w-full h-full flex items-center justify-center">
-                <Bell className="w-12 h-12 text-orange-300" />
+                <div className="w-20 h-20 bg-gradient-to-br from-orange-400 to-orange-600 rounded-2xl flex items-center justify-center shadow-lg">
+                  <Bell className="w-10 h-10 text-white" />
+                </div>
                 <motion.div
                   animate={{
-                    y: [0, -8, 0],
+                    y: [0, -10, 0],
                   }}
                   transition={{
                     repeat: Infinity,
                     duration: 2,
                     ease: "easeInOut",
                   }}
-                  className="absolute -top-1 -right-1 w-6 h-6 bg-orange-500 rounded-full flex items-center justify-center"
+                  className="absolute -top-2 -right-2 w-8 h-8 bg-orange-500 rounded-full flex items-center justify-center border-2 border-white"
                 >
                   <span className="text-xs">🔔</span>
                 </motion.div>
               </div>
             </div>
-            <p className="text-gray-500 text-lg font-medium">No notifications yet</p>
-            <p className="text-gray-400 text-sm mt-1">
-              We'll notify you about new orders and important store updates.
+            <h3 className="text-xl font-bold text-gray-800 mb-2">No notifications yet</h3>
+            <p className="text-gray-500 text-sm max-w-sm mx-auto">
+              You'll receive notifications here when customers place new orders or when there are important store updates.
             </p>
-            <button
-              onClick={() => router.push("/store/dashboard")}
-              className="mt-4 px-6 py-2 bg-orange-500 text-white rounded-xl font-medium hover:bg-orange-600 transition"
-            >
-             Back to Dashboard
-            </button>
+            <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-3">
+              <button
+                onClick={() => router.push("/store/dashboard")}
+                className="px-6 py-2.5 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-xl font-medium hover:shadow-lg hover:from-orange-600 hover:to-orange-700 transition"
+              >
+                Back to Dashboard
+              </button>
+              <button
+                onClick={() => router.push("/store/store-orders")}
+                className="px-6 py-2.5 border border-gray-200 text-gray-600 rounded-xl font-medium hover:bg-gray-50 transition"
+              >
+                View Orders
+              </button>
+            </div>
           </motion.div>
         ) : (
           // ✅ Notifications List
-          <AnimatePresence mode="popLayout">
-            <div className="space-y-3">
-              {/* Unread Section */}
-              {unreadNotifications.length > 0 && (
-                <div className="mb-2">
-                  <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">
-                    New
-                  </p>
-                </div>
-              )}
-              
-              {unreadNotifications.map((notification) => (
-                <motion.div
-                  key={notification.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, x: -20 }}
-                >
-                  <NotificationCard
-                    notification={notification}
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+            <div className="p-4 border-b border-gray-100">
+              <div className="flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-gray-700">All Notifications</h2>
+                {unreadNotifications.length > 0 && (
+                  <button
                     onClick={async () => {
                       if (!user) return;
-                      await notificationService.markAsRead(
-                        user.uid,
-                        notification.id
-                      );
-                      if (notification.deepLink) {
-                        router.push(notification.deepLink);
+                      // Mark all as read
+                      for (const notification of unreadNotifications) {
+                        await notificationService.markAsRead(user.uid, notification.id);
                       }
                     }}
-                  />
-                </motion.div>
-              ))}
-
-              {/* Read Section */}
-              {readNotifications.length > 0 && (
-                <div className="mt-4 mb-2">
-                  <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">
-                    Earlier
-                  </p>
-                </div>
-              )}
-              
-              {readNotifications.map((notification) => (
-                <motion.div
-                  key={notification.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, x: -20 }}
-                >
-                  <NotificationCard
-                    notification={notification}
-                    onClick={async () => {
-                      if (!user) return;
-                      await notificationService.markAsRead(
-                        user.uid,
-                        notification.id
-                      );
-                      if (notification.deepLink) {
-                        router.push(notification.deepLink);
-                      }
-                    }}
-                  />
-                </motion.div>
-              ))}
+                    className="text-xs text-orange-600 font-medium hover:text-orange-700 transition"
+                  >
+                    Mark all as read
+                  </button>
+                )}
+              </div>
             </div>
-          </AnimatePresence>
+            
+            <div className="p-4">
+              <AnimatePresence mode="popLayout">
+                <div className="space-y-3">
+                  {/* Unread Section */}
+                  {unreadNotifications.length > 0 && (
+                    <div className="mb-3">
+                      <p className="text-xs font-medium text-orange-600 uppercase tracking-wider flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-orange-500" />
+                        New ({unreadNotifications.length})
+                      </p>
+                    </div>
+                  )}
+                  
+                  {unreadNotifications.map((notification) => (
+                    <motion.div
+                      key={notification.id}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, x: -20 }}
+                      className="bg-orange-50/30 rounded-xl border border-orange-100 hover:border-orange-200 transition"
+                    >
+                      <NotificationCard
+                        notification={notification}
+                        onClick={async () => {
+                          if (!user) return;
+                          await notificationService.markAsRead(
+                            user.uid,
+                            notification.id
+                          );
+                          if (notification.deepLink) {
+                            router.push(notification.deepLink);
+                          }
+                        }}
+                      />
+                    </motion.div>
+                  ))}
+
+                  {/* Read Section */}
+                  {readNotifications.length > 0 && (
+                    <div className="mt-4 mb-3">
+                      <p className="text-xs font-medium text-gray-400 uppercase tracking-wider flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-gray-300" />
+                        Earlier ({readNotifications.length})
+                      </p>
+                    </div>
+                  )}
+                  
+                  {readNotifications.map((notification) => (
+                    <motion.div
+                      key={notification.id}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, x: -20 }}
+                      className="rounded-xl border border-gray-100 hover:border-gray-200 transition"
+                    >
+                      <NotificationCard
+                        notification={notification}
+                        onClick={async () => {
+                          if (!user) return;
+                          await notificationService.markAsRead(
+                            user.uid,
+                            notification.id
+                          );
+                          if (notification.deepLink) {
+                            router.push(notification.deepLink);
+                          }
+                        }}
+                      />
+                    </motion.div>
+                  ))}
+                </div>
+              </AnimatePresence>
+            </div>
+          </div>
         )}
       </div>
     </main>

@@ -24,12 +24,16 @@ import {
   Store,
   Bell,
   Clock,
+  ChevronRight,
+  CheckCircle,
 } from "lucide-react";
 import { auth, db } from "@/lib/firebase";
 import { collection, query, where, getDocs, doc, getDoc } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import Image from "next/image";
 import Link from "next/link";
+import { notificationService } from "@/services/notification/notificationService";
+import type { Notification } from "@/services/notification/notificationTypes";
 
 interface StoreData {
   id: string;
@@ -47,6 +51,11 @@ export default function StoreLayout({ children }: { children: React.ReactNode })
   const sidebarRef = useRef<HTMLDivElement>(null);
   const [isMobile, setIsMobile] = useState(false);
   const { unreadCount } = useNotifications();
+  
+  // ✅ Notification dropdown state
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [unreadNotifications, setUnreadNotifications] = useState<Notification[]>([]);
+  const notificationRef = useRef<HTMLDivElement>(null);
   
   // ✅ State for pending orders count
   const [pendingOrdersCount, setPendingOrdersCount] = useState(0);
@@ -81,6 +90,18 @@ export default function StoreLayout({ children }: { children: React.ReactNode })
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [sidebarOpen, isMobile]);
 
+  // ✅ Close notification dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (showNotifications && notificationRef.current && !notificationRef.current.contains(event.target as Node)) {
+        setShowNotifications(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showNotifications]);
+
   // ✅ Close sidebar on route change (mobile only)
   useEffect(() => {
     if (isMobile) {
@@ -94,6 +115,24 @@ export default function StoreLayout({ children }: { children: React.ReactNode })
       setSidebarOpen(true);
     }
   }, [isMobile]);
+
+  // ✅ Fetch ONLY unread notifications for dropdown
+  useEffect(() => {
+    if (!auth.currentUser) return;
+
+    const unsubscribe = notificationService.listenForNotifications(
+      auth.currentUser.uid,
+      (notifications) => {
+        // ✅ Filter ONLY unread notifications
+        const unread = notifications.filter(n => !n.read);
+        // Sort by date (newest first) and take the 4 most recent
+        const sorted = unread.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+        setUnreadNotifications(sorted.slice(0, 4));
+      }
+    );
+
+    return unsubscribe;
+  }, []);
 
   // ✅ Fetch pending orders count
   useEffect(() => {
@@ -206,7 +245,56 @@ export default function StoreLayout({ children }: { children: React.ReactNode })
     if (isMobile) {
       setSidebarOpen(!sidebarOpen);
     }
-    // On desktop, we keep it always open, so toggle does nothing
+  };
+
+  // ✅ Toggle notification dropdown
+  const toggleNotifications = () => {
+    setShowNotifications(!showNotifications);
+  };
+
+  // ✅ Handle notification click - marks as read and removes from dropdown
+  const handleNotificationClick = async (notification: Notification) => {
+    const user = auth.currentUser;
+    if (!user) return;
+    
+    if (!notification.read) {
+      await notificationService.markAsRead(user.uid, notification.id);
+      // ✅ Remove from unread list immediately
+      setUnreadNotifications(prev => prev.filter(n => n.id !== notification.id));
+    }
+    
+    setShowNotifications(false);
+    if (notification.deepLink) {
+      router.push(notification.deepLink);
+    }
+  };
+
+  // ✅ Mark all as read
+  const handleMarkAllAsRead = async () => {
+    const user = auth.currentUser;
+    if (!user || unreadNotifications.length === 0) return;
+
+    for (const notification of unreadNotifications) {
+      await notificationService.markAsRead(user.uid, notification.id);
+    }
+    // ✅ Clear all unread from dropdown
+    setUnreadNotifications([]);
+    setShowNotifications(false);
+  };
+
+  // ✅ Format time
+  const formatTime = (date: Date) => {
+    const now = new Date();
+    const diff = now.getTime() - date.getTime();
+    const minutes = Math.floor(diff / 60000);
+    const hours = Math.floor(diff / 3600000);
+    const days = Math.floor(diff / 86400000);
+
+    if (minutes < 1) return "Just now";
+    if (minutes < 60) return `${minutes}m ago`;
+    if (hours < 24) return `${hours}h ago`;
+    if (days < 7) return `${days}d ago`;
+    return date.toLocaleDateString();
   };
 
   if (loading) {
@@ -357,21 +445,104 @@ export default function StoreLayout({ children }: { children: React.ReactNode })
                 </div>
               </div>
 
-              {/* Notifications */}
-              <button
-                  onClick={() => router.push("/store/notifications")}
+              {/* Notifications Dropdown */}
+              <div className="relative" ref={notificationRef}>
+                <button
+                  onClick={toggleNotifications}
                   className="relative p-2 hover:bg-gray-100 rounded-lg transition"
                   aria-label="Notifications"
                 >
-                <Bell className="w-5 h-5 text-gray-600" />
-                {unreadCount > 0 && (
-                  <span className="absolute top-1 right-1 w-4 h-4 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center">
-                    {unreadCount > 99
-                      ? "99+"
-                      : unreadCount}
-                  </span>
-                )}
-              </button>
+                  <Bell className="w-5 h-5 text-gray-600" />
+                  {unreadCount > 0 && (
+                    <span className="absolute top-1 right-1 w-4 h-4 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center">
+                      {unreadCount > 99 ? "99+" : unreadCount}
+                    </span>
+                  )}
+                </button>
+
+                {/* Notification Dropdown - ONLY SHOWS UNREAD */}
+                <AnimatePresence>
+                  {showNotifications && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: -10, scale: 0.95 }}
+                      transition={{ duration: 0.2 }}
+                      className="absolute right-0 mt-2 w-80 bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden z-50"
+                    >
+                      {/* Dropdown Header */}
+                      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+                        <h3 className="font-semibold text-gray-800 text-sm">Unread Notifications</h3>
+                        <div className="flex items-center gap-2">
+                          {unreadNotifications.length > 0 && (
+                            <button
+                              onClick={handleMarkAllAsRead}
+                              className="text-xs text-orange-600 hover:text-orange-700 font-medium transition"
+                            >
+                              Mark all read
+                            </button>
+                          )}
+                          <span className="text-xs text-gray-400">
+                            {unreadNotifications.length}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Notification List - Only Unread */}
+                      <div className="max-h-96 overflow-y-auto">
+                        {unreadNotifications.length === 0 ? (
+                          <div className="p-8 text-center">
+                            <div className="w-12 h-12 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-3">
+                              <CheckCircle className="w-6 h-6 text-green-500" />
+                            </div>
+                            <p className="text-sm font-medium text-gray-600">All caught up!</p>
+                            <p className="text-xs text-gray-400 mt-1">No unread notifications</p>
+                          </div>
+                        ) : (
+                          <div className="divide-y divide-gray-100">
+                            {unreadNotifications.map((notification) => (
+                              <button
+                                key={notification.id}
+                                onClick={() => handleNotificationClick(notification)}
+                                className="w-full text-left px-4 py-3 hover:bg-orange-50/70 transition bg-orange-50/30"
+                              >
+                                <div className="flex items-start gap-3">
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-semibold text-gray-800">
+                                      {notification.title}
+                                    </p>
+                                    <p className="text-xs text-gray-500 truncate mt-0.5">
+                                      {notification.body}
+                                    </p>
+                                    <p className="text-xs text-gray-400 mt-1">
+                                      {formatTime(notification.createdAt)}
+                                    </p>
+                                  </div>
+                                  <div className="w-2 h-2 rounded-full bg-orange-500 flex-shrink-0 mt-1.5" />
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* View All Link */}
+                      <div className="border-t border-gray-100 p-2">
+                        <button
+                          onClick={() => {
+                            setShowNotifications(false);
+                            router.push("/store/notifications");
+                          }}
+                          className="w-full flex items-center justify-center gap-1 py-2 text-sm font-medium text-orange-600 hover:bg-orange-50 rounded-xl transition"
+                        >
+                          View all notifications
+                          <ChevronRight className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
             </div>
           </div>
         </header>
