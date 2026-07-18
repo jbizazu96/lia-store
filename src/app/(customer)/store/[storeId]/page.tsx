@@ -542,7 +542,6 @@ export default function StorePage({
         estimatedPrepTime={
           store.estimatedPrepTime
         }
-        minimumOrder={store.minimumOrder}
         rating={store.rating ?? 0}
         reviewCount={store.reviewCount}
         schedule={store.schedule}

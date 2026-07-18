@@ -53,7 +53,6 @@ export function CategoryScroll({
           }`}
         >
           All
-          <span className="text-xs opacity-70 ml-1">({totalProducts})</span>
         </button>
 
         {/* Category Buttons */}
@@ -65,14 +64,11 @@ export function CategoryScroll({
             className={`flex-shrink-0 px-4 py-2 rounded-full text-sm font-medium transition flex items-center gap-1.5 whitespace-nowrap snap-start ${
               selectedCategory === category.id
                 ? "bg-orange-500 text-white shadow-md"
-                : "bg-white text-gray-600 hover:bg-gray-50 border border-gray-200"
+                : "bg-white text-gray-600 hover:bg-orange-500 hover:text-white border border-gray-200"
             }`}
           >
             <span className="text-base">{category.icon}</span>
             {capitalize(category.name)}
-            <span className="text-xs opacity-70 ml-0.5">
-              ({category.products.length})
-            </span>
           </button>
         ))}
       </div>

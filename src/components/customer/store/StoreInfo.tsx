@@ -17,6 +17,7 @@ import {
   getDeliveryFee,
   getEstimatedTime,
 } from "@/services/delivery/distance";
+import { PRICING_CONFIG } from "@/config/pricing";
 
 interface ScheduleDay {
   day: string;
@@ -31,7 +32,6 @@ interface StoreInfoProps {
   distance: number;
   deliveryFee: number;
   estimatedPrepTime: number;
-  minimumOrder: number;
   rating: number;
   reviewCount: number;
   schedule?: ScheduleDay[];
@@ -45,7 +45,6 @@ export function StoreInfo({
   distance,
   deliveryFee,
   estimatedPrepTime,
-  minimumOrder,
   rating,
   reviewCount,
   schedule,
@@ -76,7 +75,7 @@ export function StoreInfo({
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="bg-white rounded-2xl p-4 shadow-lg border border-gray-100 mt-12 relative z-10"
+      className="relative z-10 mx-auto mt-12 w-[95%] rounded-2xl border border-gray-100 bg-white p-4 shadow-lg"
     >
       {/* Store Name & Rating */}
       <div className="flex items-start justify-between">
@@ -94,7 +93,7 @@ export function StoreInfo({
         <button
             type="button"
             onClick={onViewMore}
-            className="text-sm text-orange-600 font-medium hover:text-orange-700 transition flex items-center gap-1"
+            className="flex items-center gap-1 rounded-full bg-orange-500 px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:bg-orange-600 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
           >
             View More
             <ChevronRight className="w-4 h-4" />
@@ -143,7 +142,7 @@ export function StoreInfo({
 
       {/* Minimum Order */}
       <div className="mt-2 text-xs text-gray-400">
-        Minimum order: ${minimumOrder.toFixed(2)}
+        Minimum order: ${PRICING_CONFIG.DEFAULT_MINIMUM_ORDER.toFixed(2)}
       </div>
     </motion.div>
   );

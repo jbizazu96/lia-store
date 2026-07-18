@@ -6,8 +6,7 @@
 */
 
 import Image from "next/image";
-import {motion} from "framer-motion";
-import {X, Heart, Star} from "lucide-react";
+import {X, Heart} from "lucide-react";
 
 interface StoreHeaderProps {
   bannerUrl: string;
@@ -29,7 +28,7 @@ export function StoreHeader({
   return (
     <div className="relative">
       {/* Banner */}
-      <div className="relative h-48 w-full bg-gray-200">
+      <div className="relative h-30 w-full bg-gray-200">
         {bannerUrl ? (
           <Image
             src={bannerUrl}
@@ -89,7 +88,7 @@ export function StoreHeader({
             )}
           </div>
           {/* Green ring */}
-          <div className="absolute inset-0 rounded-full border-4 border-green-500 pointer-events-none" />
+          <div className="absolute inset-0 rounded-full border-4 border-orange-500 pointer-events-none" />
         </div>
       </div>
     </div>
