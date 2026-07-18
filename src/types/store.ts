@@ -1,3 +1,10 @@
+
+export interface StoreScheduleDay {
+  day: string;
+  open: string;
+  close: string;
+  isClosed: boolean;
+}
 export interface Store {
   id: string;
   ownerId: string;
@@ -22,6 +29,7 @@ export interface Store {
   minimumOrder: number;
   status: "pending" | "active" | "suspended";
   isOpen: boolean;
+  schedule?: StoreScheduleDay[];
   createdAt: string;
   updatedAt: string;
   // Stripe

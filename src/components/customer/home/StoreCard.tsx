@@ -4,67 +4,42 @@
   Store card component with proper spacing and padding.
 */
 
+import { DELIVERY_CONFIG } from "@/config/delivery";
+import type { CustomerStore } from "@/types/view-models/customerStore";
+import { getStoreStatus } from "@/services/store/storeSchedule";
 import {useState} from "react";
 import Image from "next/image";
-import {useRouter} from "next/navigation";
 import {motion} from "framer-motion";
 import {Heart, Star, MapPin, Truck, Clock, AlertCircle} from "lucide-react";
-import {
-  formatDistance,
-  getDeliveryFee,
-  getEstimatedTime,
-  getDeliveryFeeNumber,
-  getEstimatedTimeNumber,
-} from "@/services/delivery/distance";
-
-interface Store {
-  id: string;
-  name: string;
-  description?: string;
-  logoUrl?: string;
-  bannerUrl?: string;
-  city?: string;
-  state?: string;
-  distance?: number;
-  rating?: number;
-  isOpen?: boolean;
-  status?: string;
-}
+import { formatDistance } from "@/services/delivery/distance";
 
 interface StoreCardProps {
-  store: Store;
+  store: CustomerStore;
   onClick: () => void;
 }
 
-export function StoreCard({store}: StoreCardProps) {
-  const router = useRouter();
-  const [isFavorite, setIsFavorite] = useState(false);
-  const maxRadius = 25;
+export function StoreCard({
+  store,
+  onClick,
+}: StoreCardProps) {
+  const [isFavorite, setIsFavorite] = useState(store.isFavorite);
+  const maxRadius = DELIVERY_CONFIG.MAX_RADIUS_MILES;
   const distance = store.distance || 0;
   const isTooFar = distance > maxRadius;
 
   const formattedDistance = formatDistance(distance);
-  const deliveryFee = getDeliveryFee(distance);
-  const estimatedTime = getEstimatedTime(distance);
+  const deliveryFee = store.deliveryFeeDisplay;
+  const estimatedTime = store.estimatedDeliveryTime;
 
-  const isOpen = store.isOpen && store.status === "active";
-
-  const handleStoreClick = () => {
-    const deliveryFeeNumber = getDeliveryFeeNumber(distance);
-    const estimatedTimeNumber = getEstimatedTimeNumber(distance);
-    
-    const params = new URLSearchParams();
-    if (store.distance) params.set("distance", store.distance.toString());
-    params.set("deliveryFee", deliveryFeeNumber.toString());
-    params.set("estimatedTime", estimatedTimeNumber.toString());
-    
-    router.push(`/store/${store.id}?${params.toString()}`);
-  };
+  const storeStatus = getStoreStatus(
+  store.schedule ?? [],
+  store.isOpen ?? false
+);
 
   return (
     <motion.div
       whileTap={{scale: 0.98}}
-      onClick={handleStoreClick}
+      onClick={onClick}
       className={`bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition cursor-pointer mb-4 ${
         isTooFar ? "opacity-80" : ""
       }`}
@@ -104,21 +79,27 @@ export function StoreCard({store}: StoreCardProps) {
             className={`w-5 h-5 transition ${isFavorite ? "fill-orange-500 text-orange-500" : "text-gray-600"}`}
           />
         </button>
-
+      
         {/* Status Badges */}
-        {!isOpen && (
-          <div className="absolute top-3 left-3 px-3 py-1 bg-red-500 text-white text-xs font-semibold rounded-full">
-            Store is closed
+        <div className="absolute top-3 left-3 flex flex-col items-start gap-2">
+          <div
+            className={`px-3 py-1 rounded-full text-xs font-semibold ${
+              storeStatus.isOpen
+                ? "bg-green-600 text-white"
+                : "bg-red-500 text-white"
+            }`}
+          >
+            {storeStatus.statusText}
           </div>
-        )}
-        {isTooFar && (
-          <div className="absolute top-3 left-3 px-3 py-1.5 bg-orange-500 text-white text-xs font-semibold rounded-full flex items-center gap-1">
-            <AlertCircle className="w-3 h-3" />
-            <span>Outside delivery radius</span>
-          </div>
-        )}
-      </div>
 
+          {isTooFar && (
+            <div className="px-3 py-1.5 bg-orange-500 text-white text-xs font-semibold rounded-full flex items-center gap-1">
+              <AlertCircle className="w-3 h-3" />
+              <span>Outside delivery radius</span>
+            </div>
+          )}
+        </div>
+        </div>
       {/* Store Info - With more padding */}
       <div className="p-4 space-y-3">
         {/* Store Name & Rating */}
@@ -140,7 +121,7 @@ export function StoreCard({store}: StoreCardProps) {
           <div className="flex items-center gap-1">
             <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
             <span className="text-sm font-medium text-gray-700">
-              {store.rating || "4.5"} ★
+              {store.rating ?? 0}
             </span>
           </div>
         </div>
@@ -171,6 +152,24 @@ export function StoreCard({store}: StoreCardProps) {
           {isTooFar && (
             <span className="text-xs text-orange-500 font-medium">
               Outside delivery radius
+            </span>
+          )}
+        </div>
+
+        <div className="flex items-center gap-2 text-sm">
+          <div
+            className={`w-2 h-2 rounded-full ${storeStatus.statusColor}`}
+          />
+
+          <span
+            className={`font-medium ${storeStatus.textColor}`}
+          >
+            {storeStatus.statusText}
+          </span>
+
+          {storeStatus.message && (
+            <span className="text-gray-400">
+              • {storeStatus.message}
             </span>
           )}
         </div>

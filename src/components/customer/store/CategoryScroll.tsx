@@ -7,7 +7,7 @@
 */
 
 import {useRef} from "react";
-import {Category} from "../types";
+import type { Category } from "@/types/category";
 
 interface CategoryScrollProps {
   categories: Category[];

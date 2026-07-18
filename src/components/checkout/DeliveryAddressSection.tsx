@@ -1,10 +1,10 @@
 "use client";
 
 import {MapPin, User, Phone, Edit2} from "lucide-react";
-import {Address} from "../types";
+import type { CheckoutAddress } from "@/app/checkout/types";
 
 interface DeliveryAddressSectionProps {
-  address: Address | null;
+  address: CheckoutAddress | null;
   userName: string;
   userPhone: string;
   onEdit: () => void;
@@ -53,7 +53,7 @@ export function DeliveryAddressSection({
             <p>{address.street}</p>
             <p>{address.city}, {address.state} {address.zip}</p>
             {address.formattedAddress && (
-              <p className="text-xs text-gray-400 mt-0.5">{address.formattedAddress}</p>
+              <p className="text-xs text-gray-400 mt-0.5"></p>
             )}
           </div>
         </div>

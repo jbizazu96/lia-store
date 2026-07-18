@@ -8,8 +8,15 @@
 import {useState} from "react";
 import {motion, AnimatePresence} from "framer-motion";
 import Image from "next/image";
-import {Star, Plus, Minus, Package, TrendingUp, Clock, AlertCircle} from "lucide-react";
-import {Product} from "../types";
+import {
+  Star,
+  Plus,
+  Minus,
+  Package,
+  TrendingUp,
+  AlertCircle,
+} from "lucide-react";
+import type { Product } from "@/types/product";
 
 interface ProductCardProps {
   product: Product;
@@ -24,7 +31,6 @@ export function ProductCard({
   onQuantityChange,
   quantity,
 }: ProductCardProps) {
-  const [isHovered, setIsHovered] = useState(false);
   const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
 
   // Format price with superscript cents
@@ -35,7 +41,6 @@ export function ProductCard({
   };
 
   const price = formatPrice(product.price);
-  const displayPrice = formatPrice(product.displayPrice);
 
   // Get stock status
   const getStockStatus = (stock: number) => {
@@ -46,7 +51,6 @@ export function ProductCard({
   };
 
   const stockStatus = getStockStatus(product.stock);
-  const isOnSale = product.displayPrice > product.price;
 
   // Format sold count
   const formatSoldCount = (count: number) => {
@@ -131,12 +135,6 @@ export function ProductCard({
             </div>
           )}
           
-          {/* Sale Badge */}
-          {isOnSale && (
-            <div className="absolute top-1 right-1 px-1.5 py-0.5 bg-red-500 text-white text-[8px] font-medium rounded-full">
-              Sale
-            </div>
-          )}
         </div>
 
         {/* Product Info */}
@@ -153,29 +151,14 @@ export function ProductCard({
             </p>
           )}
 
-          {/* Price */}
+          {/* Product price */}
           <div className="flex items-center gap-1 mt-0.5">
-            {isOnSale ? (
-              <>
-                <span className="text-sm font-bold text-orange-600">
-                  ${price.dollars}
-                  <sup className="text-[8px] font-semibold text-orange-600">
-                    .{price.cents}
-                  </sup>
-                </span>
-                <span className="text-[9px] text-gray-400 line-through">
-                  ${displayPrice.dollars}
-                  <sup>.{displayPrice.cents}</sup>
-                </span>
-              </>
-            ) : (
-              <span className="text-sm font-bold text-gray-800">
-                ${price.dollars}
-                <sup className="text-[8px] font-semibold text-gray-600">
-                  .{price.cents}
-                </sup>
-              </span>
-            )}
+            <span className="text-sm font-bold text-gray-800">
+              ${price.dollars}
+              <sup className="text-[8px] font-semibold text-gray-600">
+                .{price.cents}
+              </sup>
+            </span>
           </div>
 
           {/* Stock Status */}
@@ -184,19 +167,20 @@ export function ProductCard({
           </p>
 
           {/* Rating & Sold */}
-          <div className="flex items-center gap-1 mt-0.5">
-            {product.rating > 0 && (
+          {(product.rating ?? 0) > 0 && (
               <div className="flex items-center gap-0.5">
-                {renderStars(product.rating)}
+                {renderStars(product.rating ?? 0)}
               </div>
             )}
             
-            {product.soldCount > 0 && (
-              <div className="flex items-center gap-0.5 text-[9px] text-gray-500">
-                <TrendingUp className="w-2.5 h-2.5" />
-                <span>{formatSoldCount(product.soldCount)}</span>
-              </div>
-            )}
+           {(product.soldCount ?? 0) > 0 && (
+            <div className="flex items-center gap-0.5 text-[9px] text-gray-500">
+              <TrendingUp className="w-2.5 h-2.5" />
+              <span>
+                {formatSoldCount(product.soldCount ?? 0)}
+              </span>
+            </div>
+          )}
           </div>
 
           {/* Add/Quantity Button */}
@@ -230,7 +214,7 @@ export function ProductCard({
               Add
             </button>
           )}
-        </div>
+     
       </motion.div>
 
       {/* ✅ Remove Confirmation Modal */}

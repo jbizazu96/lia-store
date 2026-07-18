@@ -4,17 +4,31 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { auth, db } from "@/lib/firebase";
-import { doc, getDoc, collection, getDocs } from "firebase/firestore";
+import {
+  doc,
+  getDoc,
+} from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
-import { Store } from "@/types/store";
-import { TopNavigation } from "./components/TopNavigation";
-import { SearchBar } from "./components/SearchBar";
-import { PromoCarousel } from "./components/PromoCarousel";
-import { StoreCard } from "./components/StoreCard";
-import { StoreCardSkeleton } from "./components/StoreCardSkeleton";
-import { DistanceWarningModal } from "./components/DistanceWarningModal";
-import { calculateDistance } from "@/services/delivery/distance";
-import { FloatingCart } from "./components/FloatingCart";
+import type { CustomerStore } from "@/types/view-models/customerStore";
+import { DELIVERY_CONFIG } from "@/config/delivery";
+import { storeMapper } from "@/mappers/storeMapper";
+import { storeService } from "@/services/store/storeService";
+import {
+  calculateDeliveryFee,
+  getDeliveryFeeDisplay,
+} from "@/services/delivery/deliveryPricing";
+import {
+  calculateDistance,
+  getEstimatedTime,
+  getEstimatedTimeNumber,
+} from "@/services/delivery/distance";
+import { TopNavigation } from "@/components/customer/home/TopNavigation";
+import { SearchBar } from "@/components/customer/home/SearchBar";
+import { PromoCarousel } from "@/components/customer/home/PromoCarousel";
+import { StoreCard } from "@/components/customer/home/StoreCard";
+import { StoreCardSkeleton } from "@/components/customer/home/StoreCardSkeleton";
+import { DistanceWarningModal } from "@/components/customer/home/DistanceWarningModal";
+import { FloatingCart } from "@/components/customer/home/FloatingCart";
 import { useCart } from "@/context/CartContext";
 
 export default function CustomerHomePage() {
@@ -22,16 +36,15 @@ export default function CustomerHomePage() {
   const { itemCount, totalPrice } = useCart();
   const [userName, setUserName] = useState("Guest");
   const [userLocation, setUserLocation] = useState<{lat: number; lng: number} | null>(null);
-  const [stores, setStores] = useState<Store[]>([]);
-  const [nearbyStores, setNearbyStores] = useState<Store[]>([]);
-  const [farStores, setFarStores] = useState<Store[]>([]);
-  const [filteredNearby, setFilteredNearby] = useState<Store[]>([]);
+  const [nearbyStores, setNearbyStores] = useState<CustomerStore[]>([]);
+  const [farStores, setFarStores] = useState<CustomerStore[]>([]);
+  const [filteredNearby, setFilteredNearby] = useState<CustomerStore[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const endOfListRef = useRef<HTMLDivElement>(null);
 
   // Distance warning modal state
-  const [selectedStore, setSelectedStore] = useState<Store | null>(null);
+  const [selectedStore, setSelectedStore] = useState<CustomerStore | null>(null);
   const [selectedDistance, setSelectedDistance] = useState(0);
   const [showDistanceWarning, setShowDistanceWarning] = useState(false);
 
@@ -64,31 +77,35 @@ export default function CustomerHomePage() {
     const fetchStores = async () => {
       try {
         setLoading(true);
-        const storesRef = collection(db, "stores");
-        const snapshot = await getDocs(storesRef);
-        
-        const storesData: Store[] = [];
-        snapshot.forEach((doc) => {
-          const data = doc.data();
-          storesData.push({
-            id: doc.id,
-            ...data,
-          } as Store);
-        });
-        
-        let storesWithDistance = storesData;
-        if (userLocation) {
-          storesWithDistance = storesData.map(store => ({
-            ...store,
-            distance: calculateDistance(
-              userLocation.lat,
-              userLocation.lng,
-              store.latitude,
-              store.longitude
-            ),
-          }));
-        }
-        
+        const storesData = await storeService.getStores();
+
+          const storesWithDistance: CustomerStore[] = storesData.map((store) => {
+            const distance = userLocation
+              ? calculateDistance(
+                  userLocation.lat,
+                  userLocation.lng,
+                  store.latitude,
+                  store.longitude
+                )
+              : 0;
+
+            const pricing = calculateDeliveryFee(distance, 0);
+
+            return storeMapper.toCustomerStore(store, {
+              distance,
+
+              deliveryFee: pricing.deliveryFee,
+              deliveryFeeDisplay: getDeliveryFeeDisplay(distance),
+
+              estimatedPrepTime: getEstimatedTimeNumber(distance),
+              estimatedDeliveryTime: getEstimatedTime(distance),
+
+              reviewCount: 0,
+              categories: [],
+              promotions: [],
+              isFavorite: false,
+            });
+          });
         // Sort by distance (closest first)
         storesWithDistance.sort((a, b) => (a.distance || 999) - (b.distance || 999));
         
@@ -97,11 +114,16 @@ export default function CustomerHomePage() {
           store.status === "active" && store.isOpen
         );
         
-        setStores(activeStores);
-        
         // Split stores into nearby (≤25mi) and far (>25mi)
-        const nearby = activeStores.filter(store => (store.distance || 0) <= 25);
-        const far = activeStores.filter(store => (store.distance || 0) > 25);
+        const nearby = activeStores.filter(
+          (store) =>
+            store.distance <= DELIVERY_CONFIG.MAX_RADIUS_MILES
+        );
+
+        const far = activeStores.filter(
+          (store) =>
+            store.distance > DELIVERY_CONFIG.MAX_RADIUS_MILES
+        );
         
         setNearbyStores(nearby);
         setFarStores(far);
@@ -133,9 +155,9 @@ export default function CustomerHomePage() {
   }, [searchQuery, nearbyStores]);
 
   // Handle store click
-  const handleStoreClick = (store: Store) => {
+  const handleStoreClick = (store: CustomerStore) => {
     const distance = store.distance || 0;
-    const maxRadius = 25;
+    const maxRadius = DELIVERY_CONFIG.MAX_RADIUS_MILES;
     
     if (distance > maxRadius) {
       setSelectedStore(store);
@@ -325,7 +347,9 @@ export default function CustomerHomePage() {
                   <div className="flex-1 h-px bg-gray-200" />
                   <div className="flex items-center gap-2 text-xs text-gray-400 whitespace-nowrap">
                     <span className="w-1.5 h-1.5 rounded-full bg-gray-300" />
-                    <span>Stores beyond 25 miles</span>
+                    <span>
+                        Stores beyond {DELIVERY_CONFIG.MAX_RADIUS_MILES} miles
+                      </span>
                     <span className="w-1.5 h-1.5 rounded-full bg-gray-300" />
                   </div>
                   <div className="flex-1 h-px bg-gray-200" />
@@ -383,7 +407,6 @@ export default function CustomerHomePage() {
       <AnimatePresence>
         {showDistanceWarning && selectedStore && (
           <DistanceWarningModal
-            store={selectedStore}
             distance={selectedDistance}
             onClose={() => setShowDistanceWarning(false)}
             onContinue={handleContinueToStore}

@@ -20,174 +20,234 @@
 |
 */
 
-import type { Order } from "@/types/order";
-import type { DocumentSnapshot } from "firebase/firestore";
+import type {
+  Order,
+  OrderItem,
+  OrderStatus,
+  StatusHistory,
+} from "@/types/order";
+
+import type { CheckoutSubmission } from "@/app/checkout/types";
+
+import {
+  Timestamp,
+  type DocumentData,
+  type DocumentSnapshot,
+} from "firebase/firestore";
 
 /**
- * Everything the Checkout page knows.
- *
- * The Checkout page will pass ONE object
- * instead of dozens of individual parameters.
- */
-export interface CreateOrderInput {
-
-  userId: string;
-
-  customerName: string;
-  customerPhone: string;
-  customerEmail: string;
-
-  storeId: string;
-  storeName: string;
-  storeOwnerId: string;
-  storeAddress: string;
-  storePhone: string;
-  storeLatitude: number;
-  storeLongitude: number;
-
-  deliveryAddress: {
-    street: string;
-    city: string;
-    state: string;
-    zip: string;
-    formattedAddress: string;
-  };
-
-  customerLatitude: number;
-  customerLongitude: number;
-
-  deliveryInstructions: string;
-
-  deliveryFee: number;
-  distanceMiles: number;
-  items: Order["items"];
-
-  subtotal: number;
-  tax: number;
-  tip: number;
-  total: number;
-}
-
-/**
- * Creates a new Order object.
+ * Converts Checkout UI data into the shared Order domain model.
  */
 export function createOrder(
-  input: CreateOrderInput
+  input: CheckoutSubmission
 ): Order {
-return {
-  // Firestore will generate this.
-  id: "",
-
-  // OrderService will generate this.
-  orderNumber: "",
-
-  customer: {
-    uid: input.userId,
-    name: input.customerName,
-    email: input.customerEmail,
-    phone: input.customerPhone,
-    address: input.deliveryAddress.formattedAddress,
-    latitude: input.customerLatitude,
-    longitude: input.customerLongitude,
-  },
-
-  store: {
-    id: input.storeId,
-    ownerId: input.storeOwnerId,
-    name: input.storeName,
-    address: input.storeAddress,
-    phone: input.storePhone,
-    latitude: input.storeLatitude,
-    longitude: input.storeLongitude,
-  },
-
-  items: input.items,
-
-  pricing: {
-    subtotal: input.subtotal,
-    deliveryFee: input.deliveryFee,
-    tax: input.tax,
-    tip: input.tip,
-    total: input.total,
-  },
-
-  delivery: {
-      instructions: input.deliveryInstructions,
-      distanceMiles: input.distanceMiles,
-    },
-
-  // OrderService decides the initial status.
-  status: "pending",
-
-  // These will be set by OrderService.
-  createdAt: new Date(),
-
-  updatedAt: undefined,
-
-  payment: {
-      status: "pending",
-    },
-
-  shipday: {
-      status: "pending",
-    },
-
-  statusHistory: [],
-};
-}
-
-/*
-|--------------------------------------------------------------------------
-| Firestore -> Order Mapper
-|--------------------------------------------------------------------------
-|
-| Converts a Firestore document into our application's Order model.
-|
-| WHY?
-| ----
-| Firestore stores raw document data.
-|
-| Our React components should work with the Order model instead.
-|
-| This gives us one place to translate Firestore data into the
-| application's domain model.
-|
-*/
-
-/**
- * Converts a Firestore document into an Order.
- */
-export function mapFirestoreOrder(
-  doc: DocumentSnapshot
-): Order {
-
-  const data = doc.data();
-
-  if (!data) {
-    throw new Error("Order document does not exist.");
-  }
+  const items: OrderItem[] = input.items.map((item) => ({
+    id: item.id,
+    name: item.name,
+    price: item.price,
+    quantity: item.quantity,
+    imageUrl: item.imageUrl,
+    size: item.size ?? null,
+  }));
 
   return {
-    id: doc.id,
-    orderNumber: data.orderNumber,
+    /**
+     * Firestore and OrderService will populate these values.
+     */
+    id: "",
+    orderNumber: "",
+
+    customer: {
+      uid: input.userId,
+      name: input.customerName,
+      email: input.customerEmail,
+      phone: input.customerPhone,
+      address:
+        input.deliveryAddress.formattedAddress ||
+        [
+          input.deliveryAddress.street,
+          input.deliveryAddress.city,
+          input.deliveryAddress.state,
+          input.deliveryAddress.zip,
+        ]
+          .filter(Boolean)
+          .join(", "),
+      latitude: input.customerLatitude,
+      longitude: input.customerLongitude,
+    },
+
+    store: {
+      id: input.storeId,
+      ownerId: input.storeOwnerId,
+      name: input.storeName,
+      address: input.storeAddress,
+      phone: input.storePhone,
+      latitude: input.storeLatitude,
+      longitude: input.storeLongitude,
+    },
+
+    items,
+
+    pricing: {
+      subtotal: input.totals.subtotal,
+      deliveryFee: input.totals.deliveryFee,
+      tax: input.totals.tax,
+      tip: input.totals.tip,
+      total: input.totals.total,
+    },
+
+    delivery: {
+      instructions:
+        input.deliveryInstructions?.trim() || undefined,
+      distanceMiles: input.deliveryDistanceMiles,
+      estimatedMinutes:
+        input.estimatedDeliveryMinutes,
+    },
+
+    status: "pending",
+
+    statusHistory: [],
+
+    payment: {
+      status: "pending",
+    },
+
+    shipday: {
+      status: "pending",
+      active: false,
+    },
+
+    createdAt: new Date(),
+    updatedAt: undefined,
+  };
+}
+
+/**
+ * Convert supported Firestore/date values into a JavaScript Date.
+ */
+function toDate(
+  value: unknown,
+  fallback: Date = new Date()
+): Date {
+  if (value instanceof Date) {
+    return value;
+  }
+
+  if (value instanceof Timestamp) {
+    return value.toDate();
+  }
+
+  if (
+    typeof value === "object" &&
+    value !== null &&
+    "toDate" in value &&
+    typeof (value as { toDate?: unknown }).toDate === "function"
+  ) {
+    return (
+      value as {
+        toDate: () => Date;
+      }
+    ).toDate();
+  }
+
+  if (
+    typeof value === "string" ||
+    typeof value === "number"
+  ) {
+    const parsedDate = new Date(value);
+
+    if (!Number.isNaN(parsedDate.getTime())) {
+      return parsedDate;
+    }
+  }
+
+  return fallback;
+}
+
+/**
+ * Convert an optional timestamp into a Date when available.
+ */
+function toOptionalDate(
+  value: unknown
+): Date | undefined {
+  if (value === null || value === undefined) {
+    return undefined;
+  }
+
+  return toDate(value);
+}
+/**
+ * Converts a Firestore order document into the shared Order domain model.
+ */
+export function mapFirestoreOrder(
+  document: DocumentSnapshot<DocumentData>
+): Order {
+  const data = document.data();
+
+  if (!data) {
+    throw new Error(
+      "Order document does not exist."
+    );
+  }
+
+  const statusHistory: StatusHistory[] = (
+    data.statusHistory ?? []
+  ).map((history: DocumentData) => ({
+    status: history.status as OrderStatus,
+    note: history.note ?? undefined,
+    timestamp: toDate(history.timestamp),
+  }));
+
+  return {
+    id: document.id,
+
+    orderNumber: data.orderNumber ?? "",
+
     customer: data.customer,
+
     store: data.store,
-    items: data.items,
+
+    items: data.items ?? [],
+
     pricing: data.pricing,
+
     delivery: data.delivery,
-    status: data.status,
-    payment: data.payment,
-    shipday: data.shipday,
-    statusHistory: (data.statusHistory ?? []).map((history: any) => ({
-        status: history.status,
-        note: history.note,
-        timestamp:
-          history.timestamp?.toDate?.() ??
-          (history.timestamp instanceof Date
-            ? history.timestamp
-            : new Date(history.timestamp)),
-      })),
-    createdAt: data.createdAt?.toDate?.() ?? new Date(),
-    updatedAt: data.updatedAt?.toDate?.(),
+
+    status: data.status as OrderStatus,
+
+    payment: data.payment
+      ? {
+          ...data.payment,
+          paidAt: toOptionalDate(
+            data.payment.paidAt
+          ),
+        }
+      : undefined,
+
+    shipday: data.shipday
+      ? {
+          ...data.shipday,
+          eta: toOptionalDate(
+            data.shipday.eta
+          ),
+          createdAt: toOptionalDate(
+            data.shipday.createdAt
+          ),
+          lastUpdated: toOptionalDate(
+            data.shipday.lastUpdated
+          ),
+          lastSyncAt: toOptionalDate(
+            data.shipday.lastSyncAt
+          ),
+        }
+      : undefined,
+
+    statusHistory,
+
+    createdAt: toDate(data.createdAt),
+
+    updatedAt: toOptionalDate(
+      data.updatedAt
+    ),
   };
 }

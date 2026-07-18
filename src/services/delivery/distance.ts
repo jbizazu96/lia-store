@@ -1,9 +1,32 @@
+
 /*
-  Distance calculation service.
-  Uses Haversine formula to calculate distance between two coordinates.
+|--------------------------------------------------------------------------
+| Distance Service
+|--------------------------------------------------------------------------
+|
+| Responsible for:
+|
+| • Coordinate calculations
+| • Distance formatting
+| • ETA calculations
+| • Delivery radius checks
+| • Delivery availability messages
+|
+| Does NOT:
+|
+| • Calculate delivery pricing
+| • Calculate commissions
+| • Calculate service fees
+|
 */
 
-interface Coordinates {
+import { DELIVERY_CONFIG } from "@/config/delivery";
+import {
+  calculateDeliveryFee,
+  getDeliveryFeeDisplay,
+} from "./deliveryPricing";
+
+export interface Coordinates {
   latitude: number;
   longitude: number;
 }
@@ -18,7 +41,7 @@ export function calculateDistance(
   lat2: number,
   lon2: number
 ): number {
-  const R = 3959; // Earth's radius in miles
+  const R = DELIVERY_CONFIG.EARTH_RADIUS_MILES;
   const dLat = (lat2 - lat1) * Math.PI / 180;
   const dLon = (lon2 - lon1) * Math.PI / 180;
   const a =
@@ -36,7 +59,9 @@ export function calculateDistance(
 export function formatDistance(distance: number): string {
   if (distance < 0.1) {
     // Less than 0.1 mile, show in meters
-    const meters = Math.round(distance * 1609.34);
+    const meters = Math.round(
+  distance * DELIVERY_CONFIG.METERS_PER_MILE
+);
     return `${meters} m`;
   }
   return `${distance.toFixed(1)} mi`;
@@ -47,24 +72,14 @@ export function formatDistance(distance: number): string {
  * Updated fee structure
  */
 export function getDeliveryFee(distance: number): string {
-  if (distance < 3) return "$5.99";
-  if (distance < 5) return "$6.99";
-  if (distance < 8) return "$8.99";
-  if (distance < 12) return "$10.99";
-  if (distance < 25) return "$15.99";
-  return "Unavailable";
+  return getDeliveryFeeDisplay(distance);
 }
 
 /**
  * Get delivery fee as a number (for calculations)
  */
 export function getDeliveryFeeNumber(distance: number): number {
-  if (distance < 3) return 5.99;
-  if (distance < 5) return 6.99;
-  if (distance < 8) return 8.99;
-  if (distance < 12) return 10.99;
-  if (distance < 25) return 15.99;
-  return 0;
+  return calculateDeliveryFee(distance, 0).deliveryFee;
 }
 
 /**
@@ -72,8 +87,12 @@ export function getDeliveryFeeNumber(distance: number): number {
  * 2 min per mile + 5 min prep time
  */
 export function getEstimatedTime(distance: number): string {
-  if (!distance || distance === 0) return "5 min";
-  const totalMinutes = Math.round(distance * 2 + 5);
+  if (!distance || distance === 0) {
+  return `${DELIVERY_CONFIG.DEFAULT_PREP_MINUTES} min`;
+}
+  const totalMinutes = Math.round(
+  distance * DELIVERY_CONFIG.MINUTES_PER_MILE + DELIVERY_CONFIG.DEFAULT_PREP_MINUTES
+);
   
   if (totalMinutes < 60) {
     return `${totalMinutes} min`;
@@ -88,8 +107,10 @@ export function getEstimatedTime(distance: number): string {
  * Get estimated time as a number (for calculations)
  */
 export function getEstimatedTimeNumber(distance: number): number {
-  if (!distance || distance === 0) return 5;
-  return Math.round(distance * 2 + 5);
+  if (!distance || distance === 0) return DELIVERY_CONFIG.DEFAULT_PREP_MINUTES;
+  return Math.round(
+  distance * DELIVERY_CONFIG.MINUTES_PER_MILE + DELIVERY_CONFIG.DEFAULT_PREP_MINUTES
+);
 }
 
 /**
@@ -97,7 +118,7 @@ export function getEstimatedTimeNumber(distance: number): number {
  */
 export function isWithinDeliveryRadius(
   distance: number,
-  maxRadius: number = 25
+  maxRadius: number = DELIVERY_CONFIG.MAX_RADIUS_MILES
 ): boolean {
   return distance <= maxRadius;
 }
@@ -110,16 +131,21 @@ export function getDeliveryStatusMessage(distance: number): {
   message: string;
   title: string;
 } {
-  const maxRadius = 25;
-  
-  if (distance <= maxRadius) {
+  const maxRadius = DELIVERY_CONFIG.MAX_RADIUS_MILES;
+
+  const canDeliver = isWithinDeliveryRadius(
+    distance,
+    maxRadius
+  );
+
+  if (canDeliver) {
     return {
       canDeliver: true,
       message: `We deliver to your area! Distance: ${formatDistance(distance)}`,
       title: "Available for Delivery",
     };
   }
-  
+
   return {
     canDeliver: false,
     message: `This store is ${formatDistance(distance)} away, which is beyond our ${maxRadius}-mile delivery radius. Please try a store closer to you.`,

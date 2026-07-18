@@ -14,14 +14,14 @@ import {ArrowLeft, User, MapPin, Globe, FileText, Shield, LogOut, Trash2} from "
 /*
   Components.
 */
-import {ProfileHeader} from "@/app/(customer)/profile/components/ProfileHeader";
-import {ProfileMenuItem} from "@/app/(customer)/profile/components/ProfileMenuItem";
-import {EditProfileModal} from "@/app/(customer)/profile/components/EditProfileModal";
-import {AddressesModal} from "@/app/(customer)/profile/components/AddressesModal";
-import {LanguageModal} from "@/app/(customer)/profile/components/LanguageModal";
-import {SecurityModal} from "@/app/(customer)/profile/components/SecurityModal";
-import {LogoutModal} from "@/app/(customer)/profile/components/LogoutModal";
-import {DeleteAccountModal} from "@/app/(customer)/profile/components/DeleteAccountModal";
+import {ProfileHeader} from "@/components/customer/profile/ProfileHeader";
+import {ProfileMenuItem} from "@/components/customer/profile/ProfileMenuItem";
+import {EditProfileModal} from "@/components/customer/profile/EditProfileModal";
+import {AddressesModal} from "@/components/customer/profile/AddressesModal";
+import {LanguageModal} from "@/components/customer/profile/LanguageModal";
+import {SecurityModal} from "@/components/customer/profile/SecurityModal";
+import {LogoutModal} from "@/components/customer/profile/LogoutModal";
+import {DeleteAccountModal} from "@/components/customer/profile/DeleteAccountModal";
 
 export default function ProfilePage() {
   const router = useRouter();

@@ -24,10 +24,10 @@ import {
 } from "firebase/firestore";
 
 // Components
-import {OrderStats} from "./components/OrderStats";
-import {OrderFilters} from "./components/OrderFilters";
-import {OrderCard} from "./components/OrderCard";
-import {EmptyOrders} from "./components/EmptyOrders";
+import {OrderStats} from "@/components/store/orders/OrderStats";
+import {OrderFilters} from "@/components/store/orders/OrderFilters";
+import {OrderCard} from "@/components/store/orders/OrderCard";
+import {EmptyOrders} from "@/components/store/orders/EmptyOrders";
 import { mapFirestoreOrder } from "@/mappers/orderMapper";
 import {
   getFunctions,

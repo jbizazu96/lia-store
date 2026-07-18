@@ -1,37 +1,45 @@
 "use client";
 
-/*
-  Customer store page.
-  Fetches real products from Firestore based on store ID.
-  ✅ Bottom sticky search bar with cart summary
-  ✅ Product cards show quantity controls when added
-*/
 
+import {
+  doc,
+  getDoc,
+} from "firebase/firestore";
+import { storeMapper } from "@/mappers/storeMapper";
+import { storeService } from "@/services/store/storeService";
 import {useState, useEffect, use} from "react";
 import {useRouter, useSearchParams} from "next/navigation";
 import {motion, AnimatePresence} from "framer-motion";
-import {doc, getDoc, collection, query, where, getDocs} from "firebase/firestore";
 import {auth, db} from "@/lib/firebase";
 import {useCart} from "@/context/CartContext";
+import { productService } from "@/services/product/productService";
+import { DELIVERY_CONFIG } from "@/config/delivery";
 
 // Components
-import {StoreHeader} from "./components/StoreHeader";
-import {StoreInfo} from "./components/StoreInfo";
-import {SearchBar} from "./components/SearchBar";
-import {CategoryScroll} from "./components/CategoryScroll";
-import {PromoBanner} from "./components/PromoBanner";
-import {ProductSection} from "./components/ProductSection";
-import {ProductSkeleton} from "./components/ProductSkeleton";
-import {CartButton} from "./components/CartButton";
-import {ProductCard} from "./components/ProductCard";
-import {DistanceWarningModal} from "./components/DistanceWarningModal";
-import {BottomBar} from "./components/BottomBar";
+import {StoreHeader} from "@/components/customer/store/StoreHeader";
+import {StoreInfo} from "@/components/customer/store/StoreInfo";
+import {CategoryScroll} from "@/components/customer/store/CategoryScroll";
+import {PromoBanner} from "@/components/customer/store/PromoBanner";
+import {ProductSection} from "@/components/customer/store/ProductSection";
+import {ProductCard} from "@/components/customer/store/ProductCard";
+import {DistanceWarningModal} from "@/components/customer/store/DistanceWarningModal";
+import {BottomBar} from "@/components/customer/store/BottomBar";
 
 // Types
-import {Store, Category, Product} from "./types";
+import type { Category } from "@/types/category";
+import type { Product } from "@/types/product";
+import type { CustomerStore } from "@/types/view-models/customerStore";
 
 // Services
-import {calculateDistance, getDeliveryFeeNumber, getEstimatedTimeNumber} from "@/services/delivery/distance";
+import {
+  calculateDeliveryFee,
+  getDeliveryFeeDisplay,
+} from "@/services/delivery/deliveryPricing";
+import {
+  calculateDistance,
+  getEstimatedTime,
+  getEstimatedTimeNumber,
+} from "@/services/delivery/distance";
 
 interface StorePageProps {
   params: Promise<{
@@ -58,7 +66,7 @@ export default function StorePage({params}: StorePageProps) {
   const storeItemCount = getStoreItemCount(storeId);
   const storeTotalPrice = getStoreTotalPrice(storeId);
 
-  const [store, setStore] = useState<Store | null>(null);
+  const [store, setStore] = useState<CustomerStore | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [allProducts, setAllProducts] = useState<Product[]>([]);
   const [displayProducts, setDisplayProducts] = useState<Product[]>([]);
@@ -70,7 +78,6 @@ export default function StorePage({params}: StorePageProps) {
   // Distance warning modal state
   const [showDistanceWarning, setShowDistanceWarning] = useState(false);
   const [distanceValue, setDistanceValue] = useState(0);
-  const [storeData, setStoreData] = useState<Store | null>(null);
 
   // Get user location from auth
   useEffect(() => {
@@ -98,40 +105,15 @@ export default function StorePage({params}: StorePageProps) {
       try {
         setLoading(true);
 
-        const storeRef = doc(db, "stores", storeId);
-        const storeDoc = await getDoc(storeRef);
+        const domainStore = await storeService.getStore(storeId);
 
-        if (!storeDoc.exists()) {
-          router.push("/home");
-          return;
-        }
-
-        const data = storeDoc.data();
+          if (!domainStore) {
+            router.push("/home");
+            return;
+          }
         
-        const productsRef = collection(db, "products");
-        const q = query(productsRef, where("storeId", "==", storeId));
-        const productsSnapshot = await getDocs(q);
-
-        const productsData: Product[] = [];
-        productsSnapshot.forEach((doc) => {
-          const p = doc.data();
-          productsData.push({
-            id: doc.id,
-            name: p.name || "Unnamed Product",
-            description: p.description || "",
-            price: p.price || 0,
-            displayPrice: p.displayPrice || p.price || 0,
-            imageUrl: p.imageUrl || "",
-            category: p.category || "Uncategorized",
-            stock: p.stock || 0,
-            rating: p.rating || 4.5,
-            reviewCount: p.reviewCount || 0,
-            soldCount: p.soldCount || 0,
-            brand: p.brand || "",
-            size: p.size || null,
-            promotion: p.promotion || null,
-          });
-        });
+        const productsData =
+        await productService.getStoreProducts(storeId);
 
         setAllProducts(productsData);
         setDisplayProducts(productsData);
@@ -172,56 +154,79 @@ export default function StorePage({params}: StorePageProps) {
         let deliveryFee = parseFloat(deliveryFeeParam || "0");
         let estimatedTime = parseInt(estimatedTimeParam || "0");
 
-        if (!distance && userLocation && data.latitude && data.longitude) {
-          distance = calculateDistance(
-            userLocation.lat,
-            userLocation.lng,
-            data.latitude,
-            data.longitude
-          );
-          deliveryFee = getDeliveryFeeNumber(distance);
-          estimatedTime = getEstimatedTimeNumber(distance);
-        }
+        const hasUserCoordinates =
+        userLocation !== null &&
+        Number.isFinite(userLocation.lat) &&
+        Number.isFinite(userLocation.lng);
 
-        const storeData: Store = {
-          id: storeDoc.id,
-          name: data.name || "Store",
-          description: data.description || "",
-          logoUrl: data.logoUrl || "",
-          bannerUrl: data.bannerUrl || "",
-          address: data.address || "",
-          city: data.city || "",
-          state: data.state || "",
-          zip: data.zip || "",
-          phone: data.phone || "",
-          email: data.email || "",
-          latitude: data.latitude || 0,
-          longitude: data.longitude || 0,
-          distance: distance,
-          deliveryFee: deliveryFee,
-          minimumOrder: data.minimumOrder || 20,
-          estimatedPrepTime: data.estimatedPrepTime || estimatedTime || 15,
-          isOpen: data.isOpen !== false,
-          rating: data.rating || 4.5,
-          reviewCount: data.reviewCount || 0,
-          categories: categoriesList,
-          promotions: [
-            {
-              id: "promo1",
-              title: "Free Delivery",
-              description: `On orders over $${data.minimumOrder || 20}`,
-              imageUrl: "",
-              type: "free_shipping",
-            },
-          ],
-        };
+      const hasStoreCoordinates =
+        Number.isFinite(domainStore.latitude) &&
+        Number.isFinite(domainStore.longitude);
 
-        setStore(storeData);
+      if (
+        distance <= 0 &&
+        hasUserCoordinates &&
+        hasStoreCoordinates
+      ) {
+        distance = calculateDistance(
+          userLocation.lat,
+          userLocation.lng,
+          domainStore.latitude,
+          domainStore.longitude
+        );
 
-        const maxRadius = 25;
+        const pricing =
+          calculateDeliveryFee(distance, 0);
+
+        deliveryFee = pricing.deliveryFee;
+
+        estimatedTime =
+          getEstimatedTimeNumber(distance);
+      }
+
+        
+      const customerStore =
+  storeMapper.toCustomerStore(
+    domainStore,
+    {
+      distance,
+
+      deliveryFee,
+
+      deliveryFeeDisplay:
+        getDeliveryFeeDisplay(distance),
+
+      estimatedPrepTime:
+        estimatedTime ||
+        DELIVERY_CONFIG.DEFAULT_PREP_MINUTES,
+
+      estimatedDeliveryTime:
+        getEstimatedTime(distance),
+
+      reviewCount: 0,
+
+      categories: categoriesList,
+
+      promotions: [
+        {
+          id: "promo1",
+          title: "Free Delivery",
+          description:
+            "Free delivery on qualifying orders",
+          imageUrl: "",
+          type: "free_shipping",
+        },
+      ],
+
+      isFavorite: false,
+    }
+  );
+
+        setStore(customerStore);
+
+       const maxRadius = DELIVERY_CONFIG.MAX_RADIUS_MILES;
         if (distance > maxRadius) {
           setDistanceValue(distance);
-          setStoreData(storeData);
           setShowDistanceWarning(true);
         }
         
@@ -290,7 +295,7 @@ export default function StorePage({params}: StorePageProps) {
         storePhone: store.phone,
         storeLatitude: store.latitude,
         storeLongitude: store.longitude,
-        size: product.size,
+        size: product.size ?? undefined,
       });
     }
   };
@@ -400,31 +405,32 @@ export default function StorePage({params}: StorePageProps) {
     );
   }
 
-  return (
-    <main className="min-h-screen bg-gray-50 pb-20">
+ 
+    return (
+    <main className="min-h-screen bg-gray-50 pb-2">
       {/* Store Header */}
       <StoreHeader
         bannerUrl={store.bannerUrl}
         logoUrl={store.logoUrl}
         name={store.name}
-        rating={store.rating}
+        rating={store.rating ?? 0}
         reviewCount={store.reviewCount}
         onBack={() => router.push("/home")}
       />
 
-      {/* Store Info */}
-      <div className="px-4 -mt-8 relative z-10">
-        <StoreInfo
-          name={store.name}
-          isOpen={store.isOpen}
-          distance={store.distance}
-          deliveryFee={store.deliveryFee}
-          estimatedPrepTime={store.estimatedPrepTime}
-          minimumOrder={store.minimumOrder}
-          rating={store.rating}
-          reviewCount={store.reviewCount}
-        />
-      </div>
+      {/* Store Info - ✅ Use store.id instead of storeData.id */}
+      <StoreInfo
+        name={store.name}
+        isOpen={store.isOpen}
+        distance={store.distance}
+        deliveryFee={store.deliveryFee}
+        estimatedPrepTime={store.estimatedPrepTime}
+        minimumOrder={store.minimumOrder}
+        rating={store.rating ?? 0}
+        reviewCount={store.reviewCount}
+        schedule={store.schedule}
+        onViewMore={() => router.push(`/store/${store.id}/info`)}
+      />
 
       {/* Promo Banner */}
       {store.promotions && store.promotions.length > 0 && (
@@ -486,22 +492,21 @@ export default function StorePage({params}: StorePageProps) {
         ))
       )}
 
-   
-      {/* In the return section, pass the storeId to BottomBar */}
+      {/* Bottom Bar */}
       <BottomBar
         searchQuery={searchQuery}
         onSearchChange={handleSearch}
-        itemCount={storeItemCount}      // ✅ Only items from this store
-        totalPrice={storeTotalPrice}    // ✅ Only total from this store
+        itemCount={storeItemCount}
+        totalPrice={storeTotalPrice}
         storeId={store.id}
         onCartClick={() => router.push("/cart")}
       />
 
       {/* Distance Warning Modal */}
       <AnimatePresence>
-        {showDistanceWarning && storeData && (
-          <DistanceWarningModal
-            store={storeData}
+        {showDistanceWarning && store && (
+            <DistanceWarningModal
+              store={store}
             distance={distanceValue}
             onClose={handleGoBack}
             onContinue={handleContinueToStore}

@@ -216,7 +216,8 @@ listenForUnreadCount(
  */
 listenForNotifications(
   uid: string,
-  callback: (notifications: Notification[]) => void
+  callback: (notifications: Notification[]) => void,
+  onError?: (error: Error) => void
 ) {
 
   const q = query(
@@ -249,6 +250,11 @@ listenForNotifications(
 
       );
 
+    },
+
+    (error) => {
+      console.error("Unable to listen for notifications:", error);
+      onError?.(error);
     }
 
   );

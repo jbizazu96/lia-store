@@ -6,10 +6,10 @@
   ✅ Fetches store data by ownerId instead of document ID.
 */
 
-import {BrandedLoader} from "@/components/ui/BrandedLoader";
-import {useState, useEffect} from "react";
-import {useRouter} from "next/navigation";
-import {motion} from "framer-motion";
+import { BrandedLoader } from "@/components/ui/BrandedLoader";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { motion } from "framer-motion";
 import {
   Store,
   User,
@@ -22,18 +22,19 @@ import {
   ChevronRight,
   Save,
   Settings as SettingsIcon,
+  Clock,
 } from "lucide-react";
-import {auth, db} from "@/lib/firebase";
-import {doc, getDoc, updateDoc, collection, query, where, getDocs} from "firebase/firestore";
+import { auth, db } from "@/lib/firebase";
+import { doc, getDoc, updateDoc, collection, query, where, getDocs } from "firebase/firestore";
 
 // Components
-import {ProfileSection} from "./components/ProfileSection";
-import {SecuritySection} from "./components/SecuritySection";
-import {NotificationsSection} from "./components/NotificationsSection";
-import {PaymentSection} from "./components/PaymentSection";
-import {DeliverySection} from "./components/DeliverySection";
-import {BusinessSection} from "./components/BusinessSection";
-import {DangerSection} from "./components/DangerSection";
+import { ProfileSection } from "@/components/store/settings/ProfileSection";
+import { SecuritySection } from "@/components/store/settings/SecuritySection";
+import { NotificationsSection } from "@/components/store/settings/NotificationsSection";
+import { PaymentSection } from "@/components/store/settings/PaymentSection";
+import { BusinessSection } from "@/components/store/settings/BusinessSection";
+import { DangerSection } from "@/components/store/settings/DangerSection";
+import { StoreSchedule } from "@/components/store/settings/StoreSchedule";
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -70,7 +71,7 @@ export default function SettingsPage() {
         if (!storeSnapshot.empty) {
           const storeDoc = storeSnapshot.docs[0];
           setStoreId(storeDoc.id);
-          setStoreData({id: storeDoc.id, ...storeDoc.data()});
+          setStoreData({ id: storeDoc.id, ...storeDoc.data() });
         } else {
           // No store found - redirect to create
           router.push("/store/create");
@@ -133,13 +134,13 @@ export default function SettingsPage() {
   }
 
   const sections = [
-    {id: "profile", label: "Store Profile", icon: Store},
-    {id: "business", label: "Business Info", icon: Building},
-    {id: "delivery", label: "Delivery Settings", icon: Truck},
-    {id: "payment", label: "Payment & Payouts", icon: CreditCard},
-    {id: "notifications", label: "Notifications", icon: Bell},
-    {id: "security", label: "Security", icon: Shield},
-    {id: "danger", label: "Danger Zone", icon: AlertTriangle},
+    { id: "profile", label: "Store Profile", icon: Store },
+    { id: "business", label: "Business Info", icon: Building },
+    { id: "schedule", label: "Store Schedule", icon: Clock }, // ✅ Added schedule section
+    { id: "payment", label: "Payment & Payouts", icon: CreditCard },
+    { id: "notifications", label: "Notifications", icon: Bell },
+    { id: "security", label: "Security", icon: Shield },
+    { id: "danger", label: "Danger Zone", icon: AlertTriangle },
   ];
 
   return (
@@ -165,8 +166,8 @@ export default function SettingsPage() {
       {/* Save Message */}
       {saveMessage && (
         <motion.div
-          initial={{opacity: 0, y: -10}}
-          animate={{opacity: 1, y: 0}}
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
           className={`p-3 rounded-xl text-sm ${
             saveMessage.includes("✅") 
               ? "bg-green-50 text-green-700 border border-green-200"
@@ -212,9 +213,9 @@ export default function SettingsPage() {
         <div className="lg:col-span-3 space-y-4">
           <motion.div
             key={activeSection}
-            initial={{opacity: 0, y: 10}}
-            animate={{opacity: 1, y: 0}}
-            transition={{duration: 0.3}}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3 }}
           >
             {activeSection === "profile" && (
               <ProfileSection 
@@ -230,10 +231,11 @@ export default function SettingsPage() {
                 setStoreData={setStoreData}
               />
             )}
-            {activeSection === "delivery" && (
-              <DeliverySection 
+            {activeSection === "schedule" && ( // ✅ New schedule section
+              <StoreSchedule 
                 storeData={storeData}
                 setStoreData={setStoreData}
+                storeId={storeId}
               />
             )}
             {activeSection === "payment" && (

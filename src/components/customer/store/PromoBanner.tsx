@@ -7,7 +7,7 @@
 
 import {motion} from "framer-motion";
 import {Gift, Tag, Truck, Percent} from "lucide-react";
-import {Promotion} from "../types";
+import {Promotion} from "@/app/(customer)/store/[storeId]/types";
 
 interface PromoBannerProps {
   promotions: Promotion[];

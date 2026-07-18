@@ -5,7 +5,12 @@
   All fields needed for future Shipday integration.
 */
 
-import { calculateDistance } from "@/services/delivery/distance";
+import type { Store } from "@/types/store";
+import { storeService } from "@/services/store/storeService";
+import {
+  calculateDistance,
+  getEstimatedTimeNumber,
+} from "@/services/delivery/distance";
 import { orderService } from "@/services/order/orderService";
 import { createOrder } from "@/mappers/orderMapper";
 import {useState, useEffect} from "react";
@@ -13,37 +18,36 @@ import {useRouter} from "next/navigation";
 import {AnimatePresence} from "framer-motion";
 import {CreditCard, AlertCircle} from "lucide-react";
 import {auth, db} from "@/lib/firebase";
-import {doc, getDoc, setDoc, serverTimestamp} from "firebase/firestore";
+import {
+  doc,
+  getDoc,
+  setDoc,
+} from "firebase/firestore";
 import {useCart} from "@/context/CartContext";
+import { PRICING_CONFIG } from "@/config/pricing";
+import { calculateDeliveryFee } from "@/services/delivery/deliveryPricing";
 
 // Components
-import {CheckoutHeader} from "./components/CheckoutHeader";
-import {DeliveryAddressSection} from "./components/DeliveryAddressSection";
-import {OrderSummary} from "./components/OrderSummary";
-import {OrderSuccess} from "./components/OrderSuccess";
-import {AddressModal} from "./components/AddressModal";
-import {TipSelector} from "./components/TipSelector";
-import {DeliveryInstructions} from "./components/DeliveryInstructions";
+import {CheckoutHeader} from "@/components/checkout/CheckoutHeader";
+import {DeliveryAddressSection} from "@/components/checkout/DeliveryAddressSection";
+import {OrderSummary} from "@/components/checkout/OrderSummary";
+import {OrderSuccess} from "@/components/checkout/OrderSuccess";
+import {AddressModal} from "@/components/checkout/AddressModal";
+import {TipSelector} from "@/components/checkout/TipSelector";
+import {DeliveryInstructions} from "@/components/checkout/DeliveryInstructions";
 
 // Types
-import {Address, CheckoutItem, OrderTotals} from "./types";
-
-// Store data interface
-interface StoreData {
-  id: string;
-  ownerId: string;
-  name: string;
-  address: string;
-  phone: string;
-  latitude: number;
-  longitude: number;
-}
+import type {
+  CheckoutAddress,
+  CheckoutItem,
+  CheckoutTotals,
+} from "./types";
 
 export default function CheckoutPage() {
   const router = useRouter();
   const {items, totalPrice, clearCart} = useCart();
   const [loading, setLoading] = useState(false);
-  const [address, setAddress] = useState<Address | null>(null);
+  const [address, setAddress] = useState<CheckoutAddress | null>(null);
   const [showAddressModal, setShowAddressModal] = useState(false);
   const [orderPlaced, setOrderPlaced] = useState(false);
   const [orderId, setOrderId] = useState("");
@@ -58,7 +62,7 @@ export default function CheckoutPage() {
   const [tip, setTip] = useState(0);
 
   // Store info (will be fetched from Firestore)
-  const [storeData, setStoreData] = useState<StoreData | null>(null);
+  const [storeData, setStoreData] = useState<Store | null>(null);
 
   // Address form state with name and phone
   const [formData, setFormData] = useState({
@@ -120,116 +124,163 @@ export default function CheckoutPage() {
 
         // Fetch store data if we have a storeId
         const storeId = items[0]?.storeId;
+
         if (storeId) {
-          const storeRef = doc(db, "stores", storeId);
-          const storeDoc = await getDoc(storeRef);
-          if (storeDoc.exists()) {
-            const storeData = storeDoc.data();
-            setStoreData({
-              id: storeDoc.id,
-              ownerId: storeData.ownerId || "",
-              name: storeData.name || "",
-              address: storeData.address || "",
-              phone: storeData.phone || "",
-              latitude: storeData.latitude || 0,
-              longitude: storeData.longitude || 0,
-            });
-          }
+          const store = await storeService.getStore(storeId);
+
+          setStoreData(store);
         }
-      } catch (error) {
-        console.error("Error fetching user data:", error);
-      }
-    };
-    fetchUserData();
-  }, [items, router]);
+              } catch (error) {
+                console.error("Error fetching user data:", error);
+              }
+            };
+            fetchUserData();
+          }, [items, router]);
 
-  // If cart is empty, return null (redirect handled by useEffect)
-  if (items.length === 0 && !orderPlaced) {
-    return null;
-  }
+        // If cart is empty, return null (redirect handled by useEffect)
+        if (items.length === 0 && !orderPlaced) {
+          return null;
+        }
 
-  // Calculate order totals with tip
-  const subtotal = totalPrice;
-  const deliveryFee = subtotal > 30 ? 0 : 5.99;
-  const tax = subtotal * 0.08;
-  const total = subtotal + deliveryFee + tax + tip;
+        // Calculate order totals with tip
+        // Calculate the distance between the store and customer.
+        //
+        // We calculate it here so the Checkout summary and the saved Order
+        // use the exact same distance.
+        const distanceMiles =
+          storeData &&
+          address?.latitude !== undefined &&
+          address?.longitude !== undefined
+            ? calculateDistance(
+                storeData.latitude,
+                storeData.longitude,
+                address.latitude,
+                address.longitude
+              )
+            : 0;
 
-  const totals: OrderTotals = {
-    subtotal,
-    deliveryFee,
-    tax,
-    total,
-    tip,
-  };
+        // Calculate order totals using centralized pricing rules.
+        const subtotal = totalPrice;
 
-  // Get store info from cart
-  const storeId = items[0]?.storeId || "";
-  const storeName = items[0]?.storeName || "";
+        const deliveryPricing = calculateDeliveryFee(
+          distanceMiles,
+          subtotal
+        );
 
-  // Place order with all user info
-  const handlePlaceOrder = async () => {
-    if (!address) {
-      setError("Please add a delivery address");
-      setShowAddressModal(true);
-      return;
-    }
+        const deliveryFee =
+          deliveryPricing.deliveryFee;
 
-    try {
-      setLoading(true);
-      setError("");
+        const tax = Math.round(subtotal * PRICING_CONFIG.SALES_TAX_RATE * 100) / 100;
 
-      const user = auth.currentUser;
-      if (!user) {
-        router.push("/login");
-        return;
-      }
+        const total =
+          subtotal +
+          deliveryFee +
+          tax +
+          tip;
 
-      // Calculate delivery distance between the store and the customer.
-      const distanceMiles = calculateDistance(
-        storeData?.latitude || 0,
-        storeData?.longitude || 0,
-        address.latitude || 0,
-        address.longitude || 0
-      );
+        const totals: CheckoutTotals = {
+          subtotal,
+          deliveryFee,
+          tax,
+          total,
+          tip,
+        };
 
-      console.log("Distance:", distanceMiles);
+        // Get store info from cart
+        const storeId = items[0]?.storeId || "";
+        const storeName = items[0]?.storeName || "";
 
-      const order = createOrder({
+        // Place order with all user info
+        const handlePlaceOrder = async () => {
+          if (!address) {
+            setError("Please add a delivery address");
+            setShowAddressModal(true);
+            return;
+          }
+
+          try {
+            setLoading(true);
+            setError("");
+
+            const user = auth.currentUser;
+            if (!user) {
+              router.push("/login");
+              return;
+            }
+
+            const order = createOrder({
         userId: user.uid,
-        customerName: formData.name || userName,
-        customerPhone: formData.phone || userPhone,
-        customerEmail: user.email || "",
+
+        customerName:
+          formData.name || userName,
+
+        customerPhone:
+          formData.phone || userPhone,
+
+        customerEmail:
+          user.email || "",
+
         storeId,
+        storeOwnerId:
+          storeData?.ownerId || "",
+
         storeName,
-        storeAddress: storeData?.address || "",
-        storeOwnerId: storeData?.ownerId || "",
-        storePhone: storeData?.phone || "",
-        storeLatitude: storeData?.latitude || 0,
-        storeLongitude: storeData?.longitude || 0,
+
+        storeAddress:
+          storeData?.address || "",
+
+        storePhone:
+          storeData?.phone || "",
+
+        storeLatitude:
+          storeData?.latitude || 0,
+
+        storeLongitude:
+          storeData?.longitude || 0,
+
         deliveryAddress: {
           street: address.street || "",
           city: address.city || "",
           state: address.state || "",
           zip: address.zip || "",
-          formattedAddress: address.formattedAddress || "",
+          latitude: address.latitude,
+          longitude: address.longitude,
+          formattedAddress:
+            address.formattedAddress || "",
         },
-        customerLatitude: address.latitude || 0,
-        customerLongitude: address.longitude || 0,
+
+        customerLatitude:
+          address.latitude || 0,
+
+        customerLongitude:
+          address.longitude || 0,
+
         deliveryInstructions,
-        deliveryFee,
-        distanceMiles,
-        items: items.map(item => ({
+
+        deliveryDistanceMiles:
+          distanceMiles,
+
+        estimatedDeliveryMinutes:
+          getEstimatedTimeNumber(distanceMiles),
+
+        items: items.map((item) => ({
           id: item.id,
+          storeId: item.storeId,
+          storeName: item.storeName,
           name: item.name,
           price: item.price,
           quantity: item.quantity,
           imageUrl: item.imageUrl,
-          size: item.size,
+          size: item.size ?? null,
         })),
-        subtotal,
-        tax,
-        tip,
-        total,
+
+        totals: {
+          subtotal,
+          deliveryFee,
+          tax,
+          tip,
+          total,
+        },
       });
       
       console.log(order);
@@ -286,7 +337,7 @@ export default function CheckoutPage() {
         console.warn("Geocoding failed:", geoError);
       }
 
-      const addressData: Address = {
+      const addressData: CheckoutAddress = {
         street: formData.street,
         city: formData.city,
         state: formData.state,

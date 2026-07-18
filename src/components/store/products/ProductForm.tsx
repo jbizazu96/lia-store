@@ -21,7 +21,7 @@ import {
   Save,
   Link2,
 } from "lucide-react";
-import {ProductFormData, CATEGORIES, SIZE_UNITS, PROMOTION_TYPES} from "../types";
+import {ProductFormData, CATEGORIES, SIZE_UNITS, PROMOTION_TYPES} from "@/app/store/(store)/products/types";
 import Link from "next/link";
 
 interface ProductFormProps {

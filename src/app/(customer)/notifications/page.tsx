@@ -37,6 +37,7 @@ export default function NotificationsPage() {
   const router = useRouter();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
+  const [listenerError, setListenerError] = useState<string | null>(null);
 
 
   useEffect(() => {
@@ -46,10 +47,18 @@ export default function NotificationsPage() {
       return;
     }
 
+    setLoading(true);
+    setListenerError(null);
+
     const unsubscribe = notificationService.listenForNotifications(
       user.uid,
       (notifications) => {
         setNotifications(notifications);
+        setLoading(false);
+      },
+      (error) => {
+        console.error("Failed to load customer notifications:", error);
+        setListenerError("We couldn't load your notifications. Please try again.");
         setLoading(false);
       }
     );
@@ -59,6 +68,24 @@ export default function NotificationsPage() {
 
   if (loading) {
     return <BrandedLoader message="Loading notifications" />;
+  }
+
+  if (listenerError) {
+    return (
+      <main className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="max-w-sm w-full bg-white rounded-2xl border border-gray-100 p-6 text-center shadow-sm">
+          <Bell className="w-12 h-12 text-orange-400 mx-auto mb-3" />
+          <h1 className="text-lg font-bold text-gray-800">Notifications unavailable</h1>
+          <p className="text-sm text-gray-500 mt-2">{listenerError}</p>
+          <button
+            onClick={() => router.refresh()}
+            className="mt-5 px-5 py-2.5 bg-orange-500 text-white rounded-xl font-medium hover:bg-orange-600 transition"
+          >
+            Try again
+          </button>
+        </div>
+      </main>
+    );
   }
 
   // ✅ Separate read and unread notifications

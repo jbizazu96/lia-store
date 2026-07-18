@@ -1,67 +1,121 @@
 /*
-  Checkout page types.
+|--------------------------------------------------------------------------
+| Checkout View Models
+|--------------------------------------------------------------------------
+|
+| These types describe data used temporarily by the Checkout UI.
+|
+| They are NOT:
+|
+| • Firestore documents
+| • Order domain models
+| • Shipday models
+| • Stripe models
+|
+| The checkout page sends this data to the order mapper, which creates
+| the shared Order domain model from src/types/order.ts.
+|
 */
 
-export interface Address {
+/**
+ * Customer delivery address entered or selected during checkout.
+ */
+export interface CheckoutAddress {
   street: string;
+
   city: string;
+
   state: string;
+
   zip: string;
+
   latitude?: number;
+
   longitude?: number;
+
   formattedAddress?: string;
 }
 
+/**
+ * Product displayed in the checkout order summary.
+ */
 export interface CheckoutItem {
   id: string;
+
+  storeId: string;
+
+  storeName: string;
+
   name: string;
+
   price: number;
+
   quantity: number;
+
   imageUrl?: string;
+
   size?: {
     value: number;
     unit: string;
-  };
-  storeId: string;
-  storeName: string;
+  } | null;
 }
 
-export interface OrderTotals {
+/**
+ * Calculated totals displayed during checkout.
+ */
+export interface CheckoutTotals {
   subtotal: number;
+
   deliveryFee: number;
+
   tax: number;
-  total: number;
+
   tip: number;
+
+  total: number;
 }
 
-export interface OrderData {
+/**
+ * Values collected by the checkout page before creating an Order.
+ *
+ * The order mapper transforms this into the shared Order domain model.
+ */
+export interface CheckoutSubmission {
   userId: string;
+
   customerName: string;
+
   customerPhone: string;
+
   customerEmail: string;
+
   storeId: string;
+
+  storeOwnerId: string;
+
   storeName: string;
+
   storeAddress: string;
+
   storePhone: string;
+
   storeLatitude: number;
+
   storeLongitude: number;
-  deliveryAddress: Address;
+
+  deliveryAddress: CheckoutAddress;
+
   customerLatitude: number;
+
   customerLongitude: number;
-  deliveryInstructions: string;
-  deliveryFee: number;
+
+  deliveryInstructions?: string;
+
+  deliveryDistanceMiles: number;
+
+  estimatedDeliveryMinutes?: number;
+
   items: CheckoutItem[];
-  subtotal: number;
-  tax: number;
-  tip: number;
-  total: number;
-  status: string;
-  createdAt: any;
-  updatedAt: any;
-  shipdayOrderId: string | null;
-  shipdayTrackingId: string | null;
-  shipdayTrackingUrl: string | null;
-  shipdayStatus: string | null;
-  shipdayCreated: boolean;
-  shipdayError: string | null;
+
+  totals: CheckoutTotals;
 }

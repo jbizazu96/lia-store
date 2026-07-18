@@ -17,7 +17,7 @@ import {auth, db} from "@/lib/firebase";
 import {doc, getDoc, updateDoc, serverTimestamp, deleteDoc} from "firebase/firestore";
 
 // Components
-import {ProductForm} from "../components/ProductForm";
+import {ProductForm} from "@/components/store/products/ProductForm";
 
 // Types
 import {Product, ProductFormData} from "../types";

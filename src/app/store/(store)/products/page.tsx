@@ -26,10 +26,10 @@ import {
 } from "firebase/firestore";
 
 // Components
-import {ProductStats} from "./components/ProductStats";
-import {ProductFilters} from "./components/ProductFilters";
-import {ProductCard} from "./components/ProductCard";
-import {ProductSkeleton} from "./components/ProductSkeleton";
+import {ProductStats} from "@/components/store/products/ProductStats";
+import {ProductFilters} from "@/components/store/products/ProductFilters";
+import {ProductCard} from "@/components/store/products/ProductCard";
+import {ProductSkeleton} from "@/components/store/products/ProductSkeleton";
 
 // Types
 import {Product} from "./types";

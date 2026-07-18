@@ -3,24 +3,21 @@
 | Shipday Service
 |--------------------------------------------------------------------------
 |
-| PURPOSE
-| -------
-| This service is responsible for communicating with the Shipday API.
+| Responsible for communicating with the Shipday API.
 |
-| IMPORTANT
-| ---------
-| This file DOES NOT define Shipday interfaces.
+| This is a server-only service because it uses the private
+| Shipday API key.
 |
-| Those live in:
+| It does NOT:
 |
-|     src/types/shipday.ts
-|
-| This keeps our architecture clean by separating:
-|
-|   Types  -> describe data
-|   Service -> performs actions
+| • Define Shipday models
+| • Map LIA orders into Shipday orders
+| • Decide when a delivery should be created
+| • Update Firestore orders
 |
 */
+
+import "server-only";
 
 import type {
   ShipdayOrder,
@@ -28,64 +25,139 @@ import type {
 } from "@/types/shipday";
 
 /**
- * ShipdayService
+ * Retrieve and validate the Shipday configuration.
  *
- * Every function inside this class communicates with Shipday.
+ * Failing here gives us a clear error instead of sending a request to
+ * "undefined/orders" or using an empty API key.
+ */
+function getShipdayConfig(): {
+  apiUrl: string;
+  apiKey: string;
+} {
+  const apiUrl =
+    process.env.SHIPDAY_API_URL?.replace(/\/+$/, "");
+
+  const apiKey = process.env.SHIPDAY_API_KEY;
+
+  if (!apiUrl) {
+    throw new Error(
+      "SHIPDAY_API_URL is not configured."
+    );
+  }
+
+  if (!apiKey) {
+    throw new Error(
+      "SHIPDAY_API_KEY is not configured."
+    );
+  }
+
+  return {
+    apiUrl,
+    apiKey,
+  };
+}
+
+/**
+ * Safely read a Shipday response.
+ *
+ * Some failed HTTP responses may not contain valid JSON.
+ */
+async function readResponseBody(
+  response: Response
+): Promise<unknown> {
+  const contentType =
+    response.headers.get("content-type") ?? "";
+
+  if (
+    contentType.includes("application/json")
+  ) {
+    return response.json();
+  }
+
+  return response.text();
+}
+
+/**
+ * Extract a useful error message from an unknown response body.
+ */
+function getErrorMessage(
+  body: unknown
+): string {
+  if (typeof body === "string" && body.trim()) {
+    return body;
+  }
+
+  if (
+    typeof body === "object" &&
+    body !== null &&
+    "message" in body &&
+    typeof body.message === "string"
+  ) {
+    return body.message;
+  }
+
+  return "Shipday request failed.";
+}
+
+/**
+ * Service responsible only for Shipday API communication.
  */
 export class ShipdayService {
   /**
-   * Creates a delivery inside Shipday.
-   *
-   * @param order
-   * Information about the order we want Shipday to deliver.
-   *
-   * @returns
-   * The response returned by Shipday.
+   * Create a delivery order in Shipday.
    */
   async createOrder(
     order: ShipdayOrder
   ): Promise<ShipdayCreateOrderResponse> {
-    // Build the Shipday endpoint from our environment variable.
-    const url = `${process.env.SHIPDAY_API_URL}/orders`;
+    const {
+      apiUrl,
+      apiKey,
+    } = getShipdayConfig();
 
-    // HTTP headers required by Shipday.
-    const headers = {
-      Accept: "application/json",
+    const response = await fetch(
+      `${apiUrl}/orders`,
+      {
+        method: "POST",
 
-      "Content-Type": "application/json",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+          Authorization: `Basic ${apiKey}`,
+        },
 
-      Authorization: `Basic ${process.env.SHIPDAY_API_KEY}`,
-    };
+        body: JSON.stringify(order),
 
-    // Send the request to Shipday.
-    const response = await fetch(url, {
-      method: "POST",
+        /**
+         * Delivery creation must always reach Shipday and should not
+         * be cached by Next.js.
+         */
+        cache: "no-store",
+      }
+    );
 
-      headers,
+    const body = await readResponseBody(response);
 
-      body: JSON.stringify(order),
-    });
-
-    // Convert the JSON response into a JavaScript object.
-    const result = await response.json();
-
-    // If Shipday rejected our request,
-    // throw an error so the API route can handle it.
     if (!response.ok) {
       throw new Error(
-        result.message || "Shipday request failed."
+        `Shipday order creation failed (${response.status}): ${getErrorMessage(body)}`
       );
     }
 
-    // Return the successful response.
-    return result;
+    if (
+      typeof body !== "object" ||
+      body === null
+    ) {
+      throw new Error(
+        "Shipday returned an invalid response."
+      );
+    }
+
+    return body as ShipdayCreateOrderResponse;
   }
 }
 
 /**
- * Singleton instance.
- *
- * We export one shared instance instead of creating
- * a new ShipdayService everywhere.
+ * Shared Shipday service instance.
  */
-export const shipdayService = new ShipdayService();
+export const shipdayService =
+  new ShipdayService();

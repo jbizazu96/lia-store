@@ -5,7 +5,7 @@
 */
 
 import {Receipt} from "lucide-react";
-import {OrderItem} from "../types";
+import {OrderItem} from "@/app/store/(store)/store-orders/types";
 
 interface OrderItemsProps {
   items: OrderItem[];

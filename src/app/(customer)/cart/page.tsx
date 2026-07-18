@@ -6,6 +6,8 @@
   ✅ Shows loading state while cart is being loaded from Firestore.
 */
 
+import { PRICING_CONFIG } from "@/config/pricing";
+import { calculateDeliveryFee } from "@/services/delivery/deliveryPricing";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
@@ -44,10 +46,32 @@ export default function CartPage() {
   };
 
   // Calculate subtotal
-  const subtotal = totalPrice;
-  const deliveryFee = subtotal > 30 ? 0 : 5.99;
-  const tax = subtotal * 0.08;
-  const total = subtotal + deliveryFee + tax;
+// Calculate cart totals using the same centralized rules
+// that Checkout uses.
+//
+// The exact delivery distance is calculated during Checkout after
+// the customer address and store coordinates are loaded.
+// Until then, the Cart displays the base delivery estimate.
+const subtotal = totalPrice;
+
+const deliveryPricing = calculateDeliveryFee(
+  0,
+  subtotal
+);
+
+const deliveryFee =
+  deliveryPricing.deliveryFee;
+
+const tax = Math.round(
+  subtotal *
+    PRICING_CONFIG.SALES_TAX_RATE *
+    100
+) / 100;
+
+const total =
+  subtotal +
+  deliveryFee +
+  tax;
 
   // Go back to previous page
   const goBack = () => {
@@ -157,7 +181,11 @@ export default function CartPage() {
           <div className="mt-8 flex flex-col gap-3 text-sm text-gray-400">
             <div className="flex items-center justify-center gap-2">
               <Truck className="w-4 h-4" />
-              <span>Free delivery on orders over $30</span>
+              <span>
+                Free delivery on orders of $
+                {PRICING_CONFIG.FREE_DELIVERY_MINIMUM.toFixed(2)}
+                {" "}or more
+              </span>
             </div>
             <div className="flex items-center justify-center gap-2">
               <Clock className="w-4 h-4" />
@@ -305,7 +333,9 @@ export default function CartPage() {
               </span>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-gray-500">Tax (8%)</span>
+              <span className="text-gray-500">
+                Tax ({PRICING_CONFIG.SALES_TAX_RATE * 100}%)
+              </span>
               <span className="text-gray-800">${tax.toFixed(2)}</span>
             </div>
             <div className="border-t border-gray-200 pt-2">
@@ -329,11 +359,17 @@ export default function CartPage() {
               🎉 Free delivery applied!
             </p>
           )}
-          {deliveryFee > 0 && subtotal < 30 && (
-            <p className="text-xs text-gray-400 text-center mt-2">
-              Add ${(30 - subtotal).toFixed(2)} more for free delivery
-            </p>
-          )}
+          {deliveryFee > 0 &&
+        subtotal < PRICING_CONFIG.FREE_DELIVERY_MINIMUM && (
+          <p className="text-xs text-gray-400 text-center mt-2">
+            Add $
+            {(
+              PRICING_CONFIG.FREE_DELIVERY_MINIMUM -
+              subtotal
+            ).toFixed(2)}
+            {" "}more for free delivery
+          </p>
+        )}
         </div>
       </div>
 

@@ -3,216 +3,213 @@
 | Order Service
 |--------------------------------------------------------------------------
 |
-| PURPOSE
-| -------
-| This service is the only place responsible for interacting with the
-| "orders" collection in Firestore.
+| Responsible for:
 |
-| React pages should never call Firestore directly.
-| Instead, they should call functions in this service.
+| • Creating orders through Firebase Functions
+| • Retrieving orders from Firestore
+| • Updating order statuses
+| • Triggering the Shipday workflow at the correct status
+|
+| React pages should never interact with the orders collection directly.
 |
 */
 
 import { getFunctions, httpsCallable } from "firebase/functions";
-import { mapOrderToShipday } from "@/mappers/shipdayMapper";
+
 import {
   arrayUnion,
   doc,
   getDoc,
-  updateDoc,
   serverTimestamp,
+  updateDoc,
 } from "firebase/firestore";
 
 import { db } from "@/lib/firebase";
 
-import type { Order } from "@/types/order";
+import type {
+  Order,
+  OrderStatus,
+} from "@/types/order";
+
 import { mapFirestoreOrder } from "@/mappers/orderMapper";
 
 const functions = getFunctions();
+
+/**
+ * Expected response from the createOrder Firebase Function.
+ */
+interface CreateOrderResponse {
+  success: boolean;
+  orderId: string;
+}
+
+/**
+ * Expected response from workflow Firebase Functions.
+ */
+interface WorkflowResponse {
+  success: boolean;
+  message?: string;
+}
+
 export class OrderService {
   /**
-   * Creates a new order in Firestore.
+   * Create a new order through the backend.
    *
-   * @param order
-   * The application's Order model.
+   * The backend is responsible for:
    *
-   * @returns
-   * The Firestore document ID.
+   * • Generating the Firestore document
+   * • Generating the order number
+   * • Applying server timestamps
+   * • Validating the order payload
    */
-  /*
- * Saves a new order into Firestore.
- *
- * The Checkout page passes us an Order object.
- * We are responsible for storing it correctly.
- */
+  async createOrder(
+    order: Order
+  ): Promise<string> {
+    const createOrderFunction = httpsCallable<
+      { order: Order },
+      CreateOrderResponse
+    >(
+      functions,
+      "createOrder"
+    );
 
-    async createOrder(
-      order: Order
-    ): Promise<string> {
-
-      const createOrder = httpsCallable(
-        functions,
-        "createOrder"
-      );
-
-      const response = await createOrder({
-        order,
-      });
-
-      const data =
-        response.data as {
-          success: boolean;
-          orderId: string;
-        };
-
-      return data.orderId;
-
-    }
-
-
-    /**
-     * Retrieves a single order from Firestore.
-     *
-     * The React page does NOT know anything about Firestore.
-     * It simply asks the OrderService for an Order.
-     */
-    async getOrder(
-      orderId: string
-    ): Promise<Order | null> {
-
-      // Read the Firestore document
-      const snapshot = await getDoc(
-        doc(db, "orders", orderId)
-      );
-
-      // If it doesn't exist, return null
-      if (!snapshot.exists()) {
-        return null;
-      }
-
-      // Convert Firestore document into our Order model
-      return mapFirestoreOrder(snapshot);
-    }
-
-  /**
-   * Updates the status of an existing order.
-   */
-  async updateStatus(
-  orderId: string,
-  newStatus: Order["status"]
-): Promise<Date> {
-    const now = new Date();
-
-    await updateDoc(doc(db, "orders", orderId), {
-      status: newStatus,
-
-      updatedAt: serverTimestamp(),
-
-      statusHistory: arrayUnion({
-        status: newStatus,
-
-        timestamp: now,
-
-        note: `Order status changed to ${newStatus}`,
-      }),
+    const response = await createOrderFunction({
+      order,
     });
 
+    if (
+      !response.data.success ||
+      !response.data.orderId
+    ) {
+      throw new Error(
+        "The order could not be created."
+      );
+    }
 
+    return response.data.orderId;
+  }
 
-    // ----------------------------------------------------
-    // Business Rule
-    // Create the Shipday delivery only when the order
-    // is ready for pickup.
-    // ----------------------------------------------------
+  /**
+   * Retrieve one order by its Firestore document ID.
+   */
+  async getOrder(
+    orderId: string
+  ): Promise<Order | null> {
+    if (!orderId.trim()) {
+      throw new Error(
+        "An order ID is required."
+      );
+    }
+
+    const snapshot = await getDoc(
+      doc(db, "orders", orderId)
+    );
+
+    if (!snapshot.exists()) {
+      return null;
+    }
+
+    return mapFirestoreOrder(snapshot);
+  }
+
+  /**
+   * Update an order's status.
+   *
+   * Shipday delivery creation occurs only when the order becomes
+   * ready for pickup.
+   */
+  async updateStatus(
+    orderId: string,
+    newStatus: OrderStatus
+  ): Promise<Date> {
+    if (!orderId.trim()) {
+      throw new Error(
+        "An order ID is required."
+      );
+    }
+
+    const changedAt = new Date();
+
+    await updateDoc(
+      doc(db, "orders", orderId),
+      {
+        status: newStatus,
+
+        updatedAt: serverTimestamp(),
+
+        statusHistory: arrayUnion({
+          status: newStatus,
+          timestamp: changedAt,
+          note:
+            `Order status changed to ${newStatus}`,
+        }),
+      }
+    );
+
+    /**
+     * Business rule:
+     *
+     * Shipday should receive the delivery only after the store has
+     * finished preparing the order.
+     */
     if (newStatus === "ready_for_pickup") {
-      const createShipdayOrder = httpsCallable(
+      await this.createShipdayDelivery(
+        orderId
+      );
+    }
+
+    return changedAt;
+  }
+
+  /**
+   * Accept an order.
+   *
+   * Accepting an order does not create the Shipday delivery.
+   * The delivery is created later when the status becomes
+   * ready_for_pickup.
+   */
+  async acceptOrder(
+    orderId: string
+  ): Promise<void> {
+    await this.updateStatus(
+      orderId,
+      "accepted"
+    );
+  }
+
+  /**
+   * Ask the backend to create the Shipday delivery.
+   *
+   * Kept private so pages cannot bypass the order-status workflow.
+   */
+  private async createShipdayDelivery(
+    orderId: string
+  ): Promise<void> {
+    const createShipdayOrderFunction =
+      httpsCallable<
+        { orderId: string },
+        WorkflowResponse
+      >(
         functions,
         "createShipdayOrder"
       );
 
-      const response = await createShipdayOrder({
+    const response =
+      await createShipdayOrderFunction({
         orderId,
       });
 
-      console.log(
-        "Firebase Function Response:",
-        response.data
+    if (!response.data.success) {
+      throw new Error(
+        response.data.message ||
+          "The Shipday delivery could not be created."
       );
     }
-
-    return now;
   }
-
-
-/**
- * Accepts an order.
- *
- * This is the main business workflow for dispatching
- * a delivery to Shipday.
- */
-async acceptOrder(
-  orderId: string
-): Promise<void> {
-
-  // ----------------------------------------------------
-  // STEP 1
-  // Load the order from Firestore.
-  // ----------------------------------------------------
-  const order = await this.getOrder(orderId);
-
-  if (!order) {
-    throw new Error("Order not found.");
-  }
-
-  // ----------------------------------------------------
-  // STEP 2
-  // Convert our Order model into Shipday's model.
-  // ----------------------------------------------------
-  const shipdayOrder =
-    mapOrderToShipday(order);
-
-  console.log(
-    "Shipday Payload:",
-    shipdayOrder
-  );
-
- // ----------------------------------------------------
-// STEP 3
-// Ask our backend to create the Shipday delivery.
-// ----------------------------------------------------
-
-const createShipdayOrder = httpsCallable(
-  functions,
-  "createShipdayOrder"
-);
-
-const response = await createShipdayOrder({
-  orderId,
-});
-
-console.log(
-  "Firebase Function Response:",
-  response.data
-);
-
-  // ----------------------------------------------------
-  // STEP 4
-  // Update our own order status.
-  // ----------------------------------------------------
-  await this.updateStatus(
-    orderId,
-    "accepted"
-  );
-
 }
 
-}
-
-
-
 /**
- * Singleton instance.
- *
- * The application shares one OrderService.
+ * Shared OrderService instance.
  */
-export const orderService = new OrderService();
+export const orderService =
+  new OrderService();

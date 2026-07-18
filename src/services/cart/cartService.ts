@@ -1,132 +1,244 @@
 /*
-  Cart Service - Handles cart persistence in Firestore.
-  Items are saved for 48 hours before automatic cleanup.
+|--------------------------------------------------------------------------
+| Cart Service
+|--------------------------------------------------------------------------
+|
+| Responsible for:
+|
+| • Saving the signed-in customer's cart
+| • Loading the signed-in customer's cart
+| • Clearing the signed-in customer's cart
+| • Refreshing the cart's 48-hour expiration time
+| • Defensively deleting an expired cart when it is loaded
+|
+| Global expired-cart cleanup is handled by the scheduled
+| Firebase Cloud Function.
+|
 */
 
-import { 
-  collection, 
-  doc, 
-  setDoc, 
-  getDoc, 
-  deleteDoc, 
-  query, 
-  where, 
-  getDocs,
+import {
+  deleteDoc,
+  doc,
+  getDoc,
   serverTimestamp,
-  Timestamp 
+  setDoc,
+  Timestamp,
 } from "firebase/firestore";
+
 import { db } from "@/lib/firebase";
 
+/**
+ * Number of hours a saved cart remains available after its latest update.
+ */
+const CART_EXPIRY_HOURS = 48;
+
+/**
+ * One product stored in the customer's cart.
+ */
 export interface CartItem {
   id: string;
+
   name: string;
+
   price: number;
+
   imageUrl?: string;
+
   quantity: number;
+
   storeId: string;
+
   storeName: string;
+
   storeAddress?: string;
+
   storePhone?: string;
+
   storeLatitude?: number;
+
   storeLongitude?: number;
+
   size?: {
     value: number;
     unit: string;
   };
 }
 
-export interface CartData {
+/**
+ * Cart document as it exists after being read from Firestore.
+ */
+interface CartDocumentData {
   userId: string;
+
   items: CartItem[];
-  updatedAt: Timestamp;
-  expiresAt: Timestamp; // 48 hours from last update
+
+  updatedAt?: Timestamp;
+
+  /**
+   * Cart expiration time.
+   *
+   * Every cart update extends this by another 48 hours.
+   */
+  expiresAt?: Timestamp;
 }
 
-const CART_EXPIRY_HOURS = 48;
+/**
+ * Build the expiration timestamp for a newly saved cart.
+ */
+function createCartExpiration(): Timestamp {
+  const expirationDate = new Date(
+    Date.now() +
+      CART_EXPIRY_HOURS *
+        60 *
+        60 *
+        1000
+  );
+
+  return Timestamp.fromDate(
+    expirationDate
+  );
+}
 
 /**
- * Save cart to Firestore
+ * Validate that a cart belongs to the user requesting it.
+ *
+ * The document ID already uses the user's UID, but this additional
+ * check protects against malformed or incorrectly written data.
  */
-export async function saveCartToFirestore(userId: string, items: CartItem[]): Promise<void> {
-  if (!userId) return;
+function belongsToUser(
+  cart: CartDocumentData,
+  userId: string
+): boolean {
+  return cart.userId === userId;
+}
+
+/**
+ * Save or replace a customer's cart.
+ *
+ * Saving the cart refreshes its expiration time to 48 hours
+ * from the latest update.
+ */
+export async function saveCartToFirestore(
+  userId: string,
+  items: CartItem[]
+): Promise<void> {
+  if (!userId.trim()) {
+    throw new Error(
+      "A user ID is required to save a cart."
+    );
+  }
+
+  const cartReference = doc(
+    db,
+    "carts",
+    userId
+  );
 
   try {
-    const cartRef = doc(db, "carts", userId);
-    const now = new Date();
-    const expiryDate = new Date(now.getTime() + CART_EXPIRY_HOURS * 60 * 60 * 1000);
-
-    await setDoc(cartRef, {
+    await setDoc(cartReference, {
       userId,
       items,
       updatedAt: serverTimestamp(),
-      expiresAt: Timestamp.fromDate(expiryDate),
-    }, { merge: true });
+      expiresAt: createCartExpiration(),
+    });
   } catch (error) {
-    console.error("Error saving cart to Firestore:", error);
+    console.error(
+      "Error saving cart to Firestore:",
+      error
+    );
+
+    throw error;
   }
 }
 
 /**
- * Load cart from Firestore
+ * Load the signed-in customer's saved cart.
+ *
+ * This function can only read:
+ *
+ * carts/{userId}
+ *
+ * It never queries another customer's cart.
  */
-export async function loadCartFromFirestore(userId: string): Promise<CartItem[] | null> {
-  if (!userId) return null;
+export async function loadCartFromFirestore(
+  userId: string
+): Promise<CartItem[] | null> {
+  if (!userId.trim()) {
+    return null;
+  }
+
+  const cartReference = doc(
+    db,
+    "carts",
+    userId
+  );
 
   try {
-    const cartRef = doc(db, "carts", userId);
-    const cartDoc = await getDoc(cartRef);
+    const cartSnapshot =
+      await getDoc(cartReference);
 
-    if (cartDoc.exists()) {
-      const data = cartDoc.data() as CartData;
-      
-      // Check if cart has expired
-      const now = new Date();
-      const expiresAt = data.expiresAt?.toDate?.() || new Date(0);
-      
-      if (expiresAt < now) {
-        // Cart expired - delete it
-        await deleteDoc(cartRef);
-        return null;
-      }
-
-      return data.items || [];
+    if (!cartSnapshot.exists()) {
+      return null;
     }
-    return null;
+
+    const cart =
+      cartSnapshot.data() as CartDocumentData;
+
+    if (!belongsToUser(cart, userId)) {
+      console.error(
+        "Cart document does not belong to the signed-in customer."
+      );
+
+      return null;
+    }
+
+    /**
+     * A missing expiration timestamp is treated as expired.
+     *
+     * This prevents old or malformed carts from remaining forever.
+     */
+    const expirationDate =
+      cart.expiresAt?.toDate() ??
+      new Date(0);
+
+    if (expirationDate.getTime() <= Date.now()) {
+      await deleteDoc(cartReference);
+      return null;
+    }
+
+    return Array.isArray(cart.items)
+      ? cart.items
+      : [];
   } catch (error) {
-    console.error("Error loading cart from Firestore:", error);
-    return null;
+    console.error(
+      "Error loading cart from Firestore:",
+      error
+    );
+
+    throw error;
   }
 }
 
 /**
- * Clear cart from Firestore
+ * Delete the signed-in customer's cart.
  */
-export async function clearCartFromFirestore(userId: string): Promise<void> {
-  if (!userId) return;
-
-  try {
-    const cartRef = doc(db, "carts", userId);
-    await deleteDoc(cartRef);
-  } catch (error) {
-    console.error("Error clearing cart from Firestore:", error);
+export async function clearCartFromFirestore(
+  userId: string
+): Promise<void> {
+  if (!userId.trim()) {
+    return;
   }
-}
 
-/**
- * Clean up expired carts (can be called periodically)
- */
-export async function cleanupExpiredCarts(): Promise<void> {
   try {
-    const cartsRef = collection(db, "carts");
-    const now = new Date();
-    const q = query(cartsRef, where("expiresAt", "<", now));
-    const snapshot = await getDocs(q);
-
-    const deletePromises = snapshot.docs.map((doc) => deleteDoc(doc.ref));
-    await Promise.all(deletePromises);
-
-    console.log(`Cleaned up ${snapshot.size} expired carts`);
+    await deleteDoc(
+      doc(db, "carts", userId)
+    );
   } catch (error) {
-    console.error("Error cleaning up expired carts:", error);
+    console.error(
+      "Error clearing cart from Firestore:",
+      error
+    );
+
+    throw error;
   }
 }

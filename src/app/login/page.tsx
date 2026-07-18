@@ -31,10 +31,10 @@ import {doc, getDoc, collection, query, where, getDocs} from "firebase/firestore
 /*
   Components.
 */
-import {LoginForm} from "./components/LoginForm";
-import {PasswordResetModal} from "./components/PasswordResetModal";
-import {AddressModal} from "./components/AddressModal";
-import {StoreStatusModal} from "./components/StoreStatusModal";
+import {LoginForm} from "@/components/login/LoginForm";
+import {PasswordResetModal} from "@/components/login/PasswordResetModal";
+import {AddressModal} from "@/components/login/AddressModal";
+import {StoreStatusModal} from "@/components/login/StoreStatusModal";
 
 export default function LoginPage() {
   const router = useRouter();

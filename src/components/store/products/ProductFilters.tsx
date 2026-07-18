@@ -5,7 +5,7 @@
 */
 
 import {Search, Filter, Grid3x3, List} from "lucide-react";
-import {CATEGORIES} from "../types";
+import {CATEGORIES} from "@/app/store/(store)/products/types";
 
 interface ProductFiltersProps {
   searchQuery: string;

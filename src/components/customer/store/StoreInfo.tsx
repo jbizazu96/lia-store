@@ -3,15 +3,27 @@
 /*
   Store information section.
   Uses consistent distance, delivery fee, and time formatting.
+  ✅ Checks store schedule to determine if open/closed
+  ✅ Shows "No schedule" when schedule is not set
 */
 
-import {motion} from "framer-motion";
-import {Clock, MapPin, Truck, Star, ChevronRight} from "lucide-react";
+import {
+  getStoreStatus,
+} from "@/services/store/storeSchedule";
+import { motion } from "framer-motion";
+import { Clock, MapPin, Truck, Star, ChevronRight, AlertCircle } from "lucide-react";
 import {
   formatDistance,
   getDeliveryFee,
   getEstimatedTime,
 } from "@/services/delivery/distance";
+
+interface ScheduleDay {
+  day: string;
+  open: string;
+  close: string;
+  isClosed: boolean;
+}
 
 interface StoreInfoProps {
   name: string;
@@ -22,18 +34,29 @@ interface StoreInfoProps {
   minimumOrder: number;
   rating: number;
   reviewCount: number;
+  schedule?: ScheduleDay[];
+
+  onViewMore: () => void;
 }
 
 export function StoreInfo({
   name,
-  isOpen,
+  isOpen: fallbackIsOpen,
   distance,
   deliveryFee,
   estimatedPrepTime,
   minimumOrder,
   rating,
   reviewCount,
+  schedule,
+  onViewMore,
 }: StoreInfoProps) {
+  // Debug: Log schedule data
+  console.log("StoreInfo - schedule received:", schedule);
+  console.log("StoreInfo - schedule type:", typeof schedule);
+  console.log("StoreInfo - is array:", Array.isArray(schedule));
+  console.log("StoreInfo - length:", schedule?.length);
+
   // Use the shared formatting functions
   const formattedDistance = formatDistance(distance);
   
@@ -43,10 +66,16 @@ export function StoreInfo({
   // Get estimated time from the service
   const formattedTime = getEstimatedTime(distance || estimatedPrepTime / 2);
 
+
+      const status = getStoreStatus(
+          schedule,
+          fallbackIsOpen
+        );
+
   return (
     <motion.div
-      initial={{opacity: 0, y: 20}}
-      animate={{opacity: 1, y: 0}}
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
       className="bg-white rounded-2xl p-4 shadow-lg border border-gray-100 mt-12 relative z-10"
     >
       {/* Store Name & Rating */}
@@ -63,22 +92,35 @@ export function StoreInfo({
           </div>
         </div>
         <button
-          type="button"
-          className="text-sm text-orange-600 font-medium hover:text-orange-700 transition flex items-center gap-1"
-        >
-          View More <ChevronRight className="w-4 h-4" />
-        </button>
+            type="button"
+            onClick={onViewMore}
+            className="text-sm text-orange-600 font-medium hover:text-orange-700 transition flex items-center gap-1"
+          >
+            View More
+            <ChevronRight className="w-4 h-4" />
+          </button>
       </div>
 
       {/* Open/Close Status */}
       <div className="flex items-center gap-2 mt-3">
-        <div className={`w-2 h-2 rounded-full ${isOpen ? "bg-green-500" : "bg-red-500"}`} />
-        <span className={`text-sm font-medium ${isOpen ? "text-green-600" : "text-red-600"}`}>
-          {isOpen ? "Open" : "Closed"}
+        <div className={`w-2 h-2 rounded-full ${status.statusColor}`} />
+        <span className={`text-sm font-medium ${status.textColor}`}>
+          {status.statusText}
         </span>
-        {isOpen && (
+        {!status.isScheduleSet && (
+          <span className="text-xs text-gray-400 flex items-center gap-1">
+            <AlertCircle className="w-3 h-3" />
+            No schedule set
+          </span>
+        )}
+        {status.isScheduleSet && status.closingTime && (
           <span className="text-xs text-gray-400">
-            • Closes at 10:00 PM
+            • {status.message}
+          </span>
+        )}
+        {status.isScheduleSet && !status.isOpen && status.message && (
+          <span className="text-xs text-gray-400">
+            • {status.message}
           </span>
         )}
       </div>

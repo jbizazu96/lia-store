@@ -6,7 +6,7 @@
 
 import Link from "next/link";
 import {ArrowLeft, Printer, Calendar} from "lucide-react";
-import {StatusBadge} from "@/app/store/(store)/store-orders/components/StatusBadge";
+import {StatusBadge} from "@/components/store/orders/StatusBadge";
 
 interface OrderDetailHeaderProps {
   orderId: string;

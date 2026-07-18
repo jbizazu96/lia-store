@@ -20,7 +20,7 @@ import {
   Copy,
   ShoppingBag,
 } from "lucide-react";
-import {Product} from "../types";
+import {Product} from "@/app/store/(store)/products/types";
 
 interface ProductCardProps {
   product: Product;

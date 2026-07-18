@@ -1,13 +1,34 @@
-/*
-  Simple Delivery Pricing for LIA
 
-  Based on:
-  - Base fee for first 5 miles
-  - $0.75 per additional mile up to 20 miles
-  - Commission: 10-15% (configurable in admin panel)
+/*
+|--------------------------------------------------------------------------
+| Delivery Pricing Service
+|--------------------------------------------------------------------------
+|
+| Responsible for:
+|
+| • Delivery fee calculation
+| • Service fee calculation
+| • Store commission calculation
+| • Free delivery logic
+|
+| Does NOT:
+|
+| • Calculate distance
+| • Format distance
+| • Geocode addresses
+| • Calculate ETA
+|
 */
 
-interface DeliveryPricingConfig {
+import { DELIVERY_CONFIG } from "@/config/delivery";
+import { PRICING_CONFIG } from "@/config/pricing";
+
+
+function roundMoney(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+export interface DeliveryPricingConfig {
   baseFee: number;          // Base fee for first 5 miles (e.g., $4.99)
   perMileRate: number;      // $0.75 per mile after base
   maxDistance: number;      // 20 miles maximum
@@ -15,7 +36,7 @@ interface DeliveryPricingConfig {
   freeDeliveryThreshold: number; // Free delivery over this amount (e.g., $30)
 }
 
-interface DeliveryPricingResult {
+export interface DeliveryPricingResult {
   deliveryFee: number;
   serviceFee: number;
   commission: number;
@@ -32,18 +53,23 @@ interface DeliveryPricingResult {
 
 // Default configuration (can be overridden from admin panel)
 const DEFAULT_CONFIG: DeliveryPricingConfig = {
-  baseFee: 4.99,
-  perMileRate: 0.75,
-  maxDistance: 20,
-  commissionRate: 0.12, // 12% default
-  freeDeliveryThreshold: 150,
+  baseFee: DELIVERY_CONFIG.BASE_DELIVERY_FEE,
+  perMileRate: DELIVERY_CONFIG.COST_PER_MILE,
+  maxDistance: DELIVERY_CONFIG.MAX_RADIUS_MILES,
+  commissionRate: PRICING_CONFIG.DEFAULT_COMMISSION_RATE,
+  freeDeliveryThreshold: PRICING_CONFIG.FREE_DELIVERY_MINIMUM,
 };
 
 // Admin config (fetched from Firestore in production)
-let adminConfig: DeliveryPricingConfig = { ...DEFAULT_CONFIG };
+let adminConfig: DeliveryPricingConfig = Object.freeze({
+  ...DEFAULT_CONFIG,
+});
 
 export function setDeliveryConfig(config: Partial<DeliveryPricingConfig>) {
-  adminConfig = { ...adminConfig, ...config };
+  adminConfig = Object.freeze({
+  ...adminConfig,
+  ...config,
+});
 }
 
 export function getDeliveryConfig(): DeliveryPricingConfig {
@@ -54,83 +80,87 @@ export function calculateDeliveryFee(
   distanceMiles: number,
   subtotal: number,
   isPeakTime: boolean = false,
-  driverAvailability: number = 0.5
 ): DeliveryPricingResult {
   const config = adminConfig;
 
   // 1. Calculate distance-based fee
   let distanceFee = 0;
   
-  if (distanceMiles <= 5) {
+ if (distanceMiles <= DELIVERY_CONFIG.BASE_DISTANCE_MILES) {
     // Base fee for up to 5 miles
     distanceFee = config.baseFee;
   } else if (distanceMiles <= config.maxDistance) {
     // Base fee + $0.75 per mile over 5
-    const extraMiles = distanceMiles - 5;
+    const extraMiles = distanceMiles - DELIVERY_CONFIG.BASE_DISTANCE_MILES;
     distanceFee = config.baseFee + (extraMiles * config.perMileRate);
   } else {
     // Maximum distance reached
-    distanceFee = config.baseFee + ((config.maxDistance - 5) * config.perMileRate);
+    distanceFee =
+  config.baseFee +
+  ((config.maxDistance - DELIVERY_CONFIG.BASE_DISTANCE_MILES) *
+    config.perMileRate);
   }
 
   // Round to 2 decimal places
-  distanceFee = Math.round(distanceFee * 100) / 100;
+ distanceFee = roundMoney(distanceFee);
 
   // 2. Check if delivery is free (orders over threshold)
   const isFreeDelivery = subtotal >= config.freeDeliveryThreshold;
 
   // 3. Calculate service fee (10% of subtotal)
-  let serviceFee = subtotal * 0.10;
-  serviceFee = Math.max(0.99, Math.min(serviceFee, 5.99)); // Min $0.99, Max $5.99
-  serviceFee = Math.round(serviceFee * 100) / 100;
+let serviceFee =
+  subtotal * PRICING_CONFIG.SERVICE_FEE_PERCENTAGE;
+
+serviceFee = Math.max(
+  PRICING_CONFIG.MIN_SERVICE_FEE,
+  Math.min(
+    serviceFee,
+    PRICING_CONFIG.MAX_SERVICE_FEE
+  )
+);
 
   // 4. Peak time surcharge (if enabled)
   let peakSurcharge = 0;
   if (isPeakTime) {
-    peakSurcharge = 1.99;
+    peakSurcharge = DELIVERY_CONFIG.PEAK_SURCHARGE;
   }
 
   // 5. Calculate commission (for store owner)
-  const commission = Math.round(subtotal * config.commissionRate * 100) / 100;
+const commission = roundMoney(
+  subtotal * config.commissionRate
+);
 
   // 6. Calculate final delivery fee
-  let deliveryFee = isFreeDelivery ? 0 : distanceFee + peakSurcharge;
+let deliveryFee = isFreeDelivery ? 0 : distanceFee + peakSurcharge;
+
+deliveryFee = roundMoney(deliveryFee);
   
   // Add service fee even if delivery is free
-  const totalFees = deliveryFee + serviceFee;
+  const totalFees = roundMoney(
+  deliveryFee + serviceFee
+);
 
   return {
-    deliveryFee: Math.round(deliveryFee * 100) / 100,
-    serviceFee: serviceFee,
-    commission: commission,
-    totalFees: Math.round(totalFees * 100) / 100,
+    deliveryFee,
+    serviceFee,
+    commission,
+    totalFees,
     isFreeDelivery,
     breakdown: {
-      baseFee: config.baseFee,
-      distanceFee: Math.round(distanceFee * 100) / 100,
-      serviceFee: serviceFee,
-      peakSurcharge: peakSurcharge,
-      commission: commission,
+      baseFee: roundMoney(config.baseFee),
+      distanceFee,
+      serviceFee,
+      peakSurcharge,
+      commission,
     },
   };
 }
 
 // Helper to format distance-based fee for display
 export function getDeliveryFeeDisplay(distanceMiles: number): string {
-  const config = adminConfig;
-  
-  let fee = 0;
-  
-  if (distanceMiles <= 5) {
-    fee = config.baseFee;
-  } else if (distanceMiles <= config.maxDistance) {
-    const extraMiles = distanceMiles - 5;
-    fee = config.baseFee + (extraMiles * config.perMileRate);
-  } else {
-    fee = config.baseFee + ((config.maxDistance - 5) * config.perMileRate);
-  }
+  const { deliveryFee } = calculateDeliveryFee(distanceMiles, 0);
 
-  // ✅ Round to 2 decimal places and format
-  const roundedFee = Math.round(fee * 100) / 100;
-  return `$${roundedFee.toFixed(2)}`;
+  return deliveryFee === 0
+    ? "Free"
+    : `$${deliveryFee.toFixed(2)}`;
 }

@@ -7,7 +7,8 @@
 import {useRef} from "react";
 import {motion} from "framer-motion";
 import {ChevronRight} from "lucide-react";
-import {Category, Product} from "../types";
+import type { Category } from "@/types/category";
+import type { Product } from "@/types/product";
 import {ProductCard} from "./ProductCard";
 
 interface ProductSectionProps {

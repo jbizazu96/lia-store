@@ -25,11 +25,11 @@ import {getStorage, ref, uploadBytes, getDownloadURL} from "firebase/storage";
 /*
   Components
 */
-import {StepIndicator} from "./components/StepIndicator";
-import {Step1StoreInfo} from "./components/Step1StoreInfo";
-import {Step2LegalPhotos} from "./components/Step2LegalPhotos";
-import {Step3Stripe} from "./components/Step3Stripe";
-import {NavigationButtons} from "./components/NavigationButtons";
+import {StepIndicator} from "@/components/store/create/StepIndicator";
+import {Step1StoreInfo} from "@/components/store/create/Step1StoreInfo";
+import {Step2LegalPhotos} from "@/components/store/create/Step2LegalPhotos";
+import {Step3Stripe} from "@/components/store/create/Step3Stripe";
+import {NavigationButtons} from "@/components/store/create/NavigationButtons";
 
 export default function CreateStorePage() {
   const router = useRouter();

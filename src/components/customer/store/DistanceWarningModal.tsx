@@ -1,12 +1,16 @@
 "use client";
 
+/*
+  Distance warning modal - Shows when user tries to view a store outside delivery radius.
+*/
+
 import {motion} from "framer-motion";
-import {X, MapPin, AlertCircle, Truck} from "lucide-react";
-import {Store} from "@/types/store";
-import {formatDistance} from "@/services/delivery/distance";
+import {X, MapPin, AlertCircle, Truck, Clock} from "lucide-react";
+import type { CustomerStore } from "@/types/view-models/customerStore";
+import {formatDistance, getEstimatedTime} from "@/services/delivery/distance";
 
 interface DistanceWarningModalProps {
-  store: Store;
+  store: CustomerStore;
   distance: number;
   onClose: () => void;
   onContinue: () => void;
@@ -19,6 +23,14 @@ export function DistanceWarningModal({
   onContinue,
 }: DistanceWarningModalProps) {
   const maxRadius = 25;
+  const formattedDistance = formatDistance(distance);
+  const estimatedTime = getEstimatedTime(distance);
+
+  // Format delivery fee
+  const formatDeliveryFee = (fee: number) => {
+    if (fee === 0) return "Free";
+    return `$${fee.toFixed(2)}`;
+  };
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
@@ -54,11 +66,25 @@ export function DistanceWarningModal({
               <MapPin className="w-5 h-5 text-gray-500" />
               <span className="text-gray-600">Distance:</span>
             </div>
-            <span className="font-bold text-gray-800">{formatDistance(distance)}</span>
+            <span className="font-bold text-gray-800">{formattedDistance}</span>
           </div>
           <div className="flex items-center justify-between mt-2">
             <div className="flex items-center gap-2">
               <Truck className="w-5 h-5 text-gray-500" />
+              <span className="text-gray-600">Delivery: </span>
+            </div>
+            <span className="font-bold text-gray-800">No Delivery</span>
+          </div>
+          <div className="flex items-center justify-between mt-2">
+            <div className="flex items-center gap-2">
+              <Clock className="w-5 h-5 text-gray-500" />
+              <span className="text-gray-600">Est. Time:</span>
+            </div>
+            <span className="font-bold text-gray-800">{estimatedTime}</span>
+          </div>
+          <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-200">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="w-5 h-5 text-orange-500" />
               <span className="text-gray-600">Max Delivery:</span>
             </div>
             <span className="font-bold text-gray-800">{maxRadius} miles</span>
@@ -68,11 +94,11 @@ export function DistanceWarningModal({
         {/* Store info */}
         <div className="text-center mb-6">
           <p className="text-gray-600 text-sm">
-            <span className="font-semibold">{store.name}</span> is outside our delivery radius.
-            Unfortunately, we cannot deliver to your location from this store.
+            <span className="font-semibold">{store.name}</span> is outside your delivery radius.
+            Delivery may take longer or not be available.
           </p>
           <p className="text-gray-500 text-xs mt-2">
-            Please try a store closer to you for faster delivery.
+            You can still browse products, but checkout may be limited.
           </p>
         </div>
 
@@ -81,7 +107,7 @@ export function DistanceWarningModal({
           <button
             onClick={onContinue}
             className="w-full py-3 bg-orange-500 text-white rounded-xl font-semibold hover:bg-orange-600 transition"
-            aria-label="Continue browsing"
+            aria-label="Continue browsing store"
           >
             View Store Anyway
           </button>

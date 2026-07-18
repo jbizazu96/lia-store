@@ -5,24 +5,43 @@
   ✅ Persistent cart stored in Firestore with 48-hour expiry.
 */
 
-import {createContext, useContext, useState, useEffect, ReactNode} from "react";
-import {auth} from "@/lib/firebase";
-import {onAuthStateChanged} from "firebase/auth";
 import {
-  CartItem,
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  type ReactNode,
+} from "react";
+import {auth} from "@/lib/firebase";
+import {
+  onAuthStateChanged,
+  type User,
+} from "firebase/auth";
+import {
   saveCartToFirestore,
   loadCartFromFirestore,
   clearCartFromFirestore,
+  type CartItem,
 } from "@/services/cart/cartService";
 
 interface CartContextType {
   items: CartItem[];
   itemCount: number;
   totalPrice: number;
-  addItem: (item: Omit<CartItem, "quantity">) => void;
-  removeItem: (itemId: string) => void;
-  updateQuantity: (itemId: string, quantity: number) => void;
-  clearCart: () => void;
+  addItem: (
+  item: Omit<CartItem, "quantity">
+  ) => Promise<void>;
+
+  removeItem: (
+    itemId: string
+  ) => void;
+
+  updateQuantity: (
+    itemId: string,
+    quantity: number
+  ) => void;
+
+  clearCart: () => Promise<void>;
   getStoreId: () => string | null;
   getItemQuantity: (itemId: string) => number;
   getStoreItems: (storeId: string) => CartItem[];
@@ -36,7 +55,7 @@ const CartContext = createContext<CartContextType | undefined>(undefined);
 export function CartProvider({children}: {children: ReactNode}) {
   const [items, setItems] = useState<CartItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
 
   // ✅ Load cart from Firestore on auth change
   useEffect(() => {
@@ -58,19 +77,36 @@ export function CartProvider({children}: {children: ReactNode}) {
         } finally {
           setIsLoading(false);
         }
-      } else {
-        // User logged out - keep items in memory but don't clear
-        // They will be saved again when user logs in
+     
+        } else {
+        /**
+         * Remove the previous customer's cart from browser memory.
+         *
+         * We do not delete the Firestore document. The same customer
+         * can recover it after logging back in within 48 hours.
+         */
+        setItems([]);
         setIsLoading(false);
       }
+      
     });
 
     return () => unsubscribe();
   }, []);
 
-  // ✅ Save cart to Firestore whenever it changes (debounced)
-  useEffect(() => {
-    if (!currentUser) return;
+    useEffect(() => {
+      /**
+       * Do not save while:
+       *
+       * • No customer is signed in
+       * • The customer's saved cart is still loading
+       *
+       * Without this guard, an empty local cart could delete the saved
+       * Firestore cart before loadCartFromFirestore() finishes.
+       */
+      if (!currentUser || isLoading) {
+        return;
+      }
 
     // Debounce saves to avoid too many writes
     const timeoutId = setTimeout(() => {
@@ -83,20 +119,67 @@ export function CartProvider({children}: {children: ReactNode}) {
     }, 500);
 
     return () => clearTimeout(timeoutId);
-  }, [items, currentUser]);
+  }, [items, currentUser, isLoading]);
+/**
+ * Add a product to the cart.
+ *
+ * Business rule:
+ * A cart may contain products from only one store.
+ *
+ * When a product from another store is added,
+ * the previous store's cart is replaced.
+ */
+const addItem = async (
+  item: Omit<CartItem, "quantity">
+): Promise<void> => {
+  const existingStoreId =
+    items[0]?.storeId ?? null;
 
-  // Add item to cart
-  const addItem = (item: Omit<CartItem, "quantity">) => {
-    setItems(prev => {
-      const existing = prev.find(i => i.id === item.id);
-      if (existing) {
-        return prev.map(i =>
-          i.id === item.id ? {...i, quantity: i.quantity + 1} : i
-        );
-      }
-      return [...prev, {...item, quantity: 1}];
-    });
-  };
+  const isDifferentStore =
+    existingStoreId !== null &&
+    existingStoreId !== item.storeId;
+
+  if (isDifferentStore) {
+    const newCart: CartItem[] = [
+      {
+        ...item,
+        quantity: 1,
+      },
+    ];
+
+    setItems(newCart);
+    return;
+  }
+
+  setItems((previousItems) => {
+    const existingItem =
+      previousItems.find(
+        (cartItem) =>
+          cartItem.id === item.id
+      );
+
+    if (existingItem) {
+      return previousItems.map(
+        (cartItem) =>
+          cartItem.id === item.id
+            ? {
+                ...cartItem,
+                quantity:
+                  cartItem.quantity + 1,
+              }
+            : cartItem
+      );
+    }
+
+    return [
+      ...previousItems,
+      {
+        ...item,
+        quantity: 1,
+      },
+    ];
+  });
+};
 
   // Remove item from cart
   const removeItem = (itemId: string) => {
@@ -117,10 +200,14 @@ export function CartProvider({children}: {children: ReactNode}) {
   };
 
   // Clear cart
-  const clearCart = () => {
+  const clearCart =
+  async (): Promise<void> => {
     setItems([]);
+
     if (currentUser) {
-      clearCartFromFirestore(currentUser.uid);
+      await clearCartFromFirestore(
+        currentUser.uid
+      );
     }
   };
 

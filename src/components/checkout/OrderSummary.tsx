@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import {Store} from "lucide-react";
-import {CheckoutItem, OrderTotals} from "../types";
+import {CheckoutItem, OrderTotals} from "@/app/checkout/types";
 
 interface OrderSummaryProps {
   items: CheckoutItem[];
