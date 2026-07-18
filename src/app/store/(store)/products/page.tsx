@@ -224,7 +224,7 @@ export default function ProductsPage() {
      LOADING STATE - WHITE BRANDED LOADER
   ========================================== */
   if (loading) {
-    return <BrandedLoader message="Loading products" />;
+    return <BrandedLoader message="Loading Products" />;
   }
 
   return (

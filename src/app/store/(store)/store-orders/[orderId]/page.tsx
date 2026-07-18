@@ -39,6 +39,7 @@ import {
 } from "firebase/firestore";
 import Link from "next/link";
 import { orderService } from "@/services/order/orderService";
+import { BrandedLoader } from "@/components/ui/BrandedLoader";
 
 interface OrderDetailsPageProps {
   params: Promise<{
@@ -210,11 +211,7 @@ export default function OrderDetailsPage({params}: OrderDetailsPageProps) {
   const storeTotal = (order?.pricing.subtotal || 0) + (order?.pricing.tax || 0);
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="w-8 h-8 border-4 border-orange-500 border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
+    return <BrandedLoader message="Loading Order Details" />;
   }
 
   if (error || !order) {

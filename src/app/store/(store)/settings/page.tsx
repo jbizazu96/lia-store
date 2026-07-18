@@ -129,7 +129,7 @@ export default function SettingsPage() {
   ========================================== */
   if (loading) {
     return (
-      <BrandedLoader message="Loading settings" />
+      <BrandedLoader message="Loading Settings" />
     );
   }
 

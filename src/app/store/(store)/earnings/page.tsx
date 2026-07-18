@@ -111,7 +111,7 @@ export default function EarningsPage() {
   ========================================== */
 
     if (loading) {
-  return <BrandedLoader message="Loading earnings" />;
+  return <BrandedLoader message="Loading Earnings" />;
 }
 
   return (

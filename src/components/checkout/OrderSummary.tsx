@@ -2,11 +2,14 @@
 
 import Image from "next/image";
 import {Store} from "lucide-react";
-import {CheckoutItem, OrderTotals} from "@/app/checkout/types";
+import type {
+  CheckoutItem,
+  CheckoutTotals,
+} from "@/app/checkout/types";
 
 interface OrderSummaryProps {
   items: CheckoutItem[];
-  totals: OrderTotals;
+  totals: CheckoutTotals;
   storeName?: string;
   storeAddress?: string;
 }
@@ -49,7 +52,6 @@ export function OrderSummary({
       {/* Items */}
       <div className="space-y-3 max-h-60 overflow-y-auto">
         {items.map((item) => {
-          const price = formatPrice(item.price);
           const totalPrice = formatPrice(item.price * item.quantity);
           return (
             <div key={item.id} className="flex items-center gap-3 py-2 border-b border-gray-100 last:border-0">

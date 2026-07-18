@@ -11,6 +11,7 @@ import {useRouter} from "next/navigation";
 */
 import {auth, db} from "@/lib/firebase";
 import {collection, query, where, getDocs} from "firebase/firestore";
+import { BrandedLoader } from "@/components/ui/BrandedLoader";
 
 export default function StorePage() {
   const router = useRouter();
@@ -56,8 +57,6 @@ export default function StorePage() {
   }, [router]);
 
   return (
-    <div className="min-h-screen flex items-center justify-center">
-      <div className="w-8 h-8 border-4 border-orange-500 border-t-transparent rounded-full animate-spin" />
-    </div>
+    <BrandedLoader message="Loading Store" />
   );
 }

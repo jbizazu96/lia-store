@@ -57,7 +57,7 @@ export default function StoreNotificationsPage() {
   }, [user]);
 
   if (loading) {
-    return <BrandedLoader message="Loading notifications" />;
+    return <BrandedLoader message="Loading Notifications" />;
   }
 
   // ✅ Separate read and unread notifications

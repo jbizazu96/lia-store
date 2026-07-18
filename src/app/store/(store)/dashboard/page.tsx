@@ -253,7 +253,7 @@ export default function DashboardPage() {
   ];
 // Replace the loading state with:
 if (loading) {
-  return <BrandedLoader message="Loading dashboard" />;
+  return <BrandedLoader message="Loading Dashboard" />;
 }
 
   return (

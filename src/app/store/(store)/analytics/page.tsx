@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import {auth, db} from "@/lib/firebase";
 import {collection, query, where, getDocs, doc, getDoc} from "firebase/firestore";
+import { BrandedLoader } from "@/components/ui/BrandedLoader";
 
 interface AnalyticsData {
   totalOrders: number;
@@ -106,11 +107,7 @@ export default function AnalyticsPage() {
   }, []);
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="w-8 h-8 border-4 border-orange-500 border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
+    return <BrandedLoader message="Loading Analytics" />;
   }
 
   const statCards = [

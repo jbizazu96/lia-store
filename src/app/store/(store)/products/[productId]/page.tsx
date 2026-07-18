@@ -136,7 +136,7 @@ export default function EditProductPage({params}: EditProductPageProps) {
 
   if (loading) {
     return (
-        <BrandedLoader message="Loading product details" />
+        <BrandedLoader message="Loading Product Details" />
     );
   }
 

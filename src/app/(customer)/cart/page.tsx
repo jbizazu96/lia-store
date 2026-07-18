@@ -120,7 +120,7 @@ const total =
 
   // ✅ Show loading state
   if (isLoading) {
-    return <BrandedLoader message="Loading your cart..." />;
+    return <BrandedLoader message="Loading Cart" />;
   }
 
   // Empty state

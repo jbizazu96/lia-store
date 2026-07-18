@@ -173,7 +173,7 @@ export default function StoreOrdersPage() {
   ========================================== */
   if (loading) {
     return (
-      <BrandedLoader message="Loading orders" />
+      <BrandedLoader message="Loading Orders" />
     );
   }
 

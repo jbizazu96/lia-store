@@ -1,45 +1,58 @@
 "use client";
 
+/*
+|--------------------------------------------------------------------------
+| Customer Store Page
+|--------------------------------------------------------------------------
+|
+| Displays one store and its products to the customer.
+|
+| Data loading, delivery calculations, category grouping, and distance
+| warning state are handled by useCustomerStore.
+|
+| This page is responsible only for:
+| - Rendering the store UI
+| - Searching and filtering products
+| - Adding products to the cart
+| - Navigation
+|
+*/
 
 import {
-  doc,
-  getDoc,
-} from "firebase/firestore";
-import { storeMapper } from "@/mappers/storeMapper";
-import { storeService } from "@/services/store/storeService";
-import {useState, useEffect, use} from "react";
-import {useRouter, useSearchParams} from "next/navigation";
-import {motion, AnimatePresence} from "framer-motion";
-import {auth, db} from "@/lib/firebase";
-import {useCart} from "@/context/CartContext";
-import { productService } from "@/services/product/productService";
-import { DELIVERY_CONFIG } from "@/config/delivery";
+  use,
+  useEffect,
+  useState,
+} from "react";
 
-// Components
-import {StoreHeader} from "@/components/customer/store/StoreHeader";
-import {StoreInfo} from "@/components/customer/store/StoreInfo";
-import {CategoryScroll} from "@/components/customer/store/CategoryScroll";
-import {PromoBanner} from "@/components/customer/store/PromoBanner";
-import {ProductSection} from "@/components/customer/store/ProductSection";
-import {ProductCard} from "@/components/customer/store/ProductCard";
-import {DistanceWarningModal} from "@/components/customer/store/DistanceWarningModal";
-import {BottomBar} from "@/components/customer/store/BottomBar";
+import {
+  useRouter,
+  useSearchParams,
+} from "next/navigation";
 
-// Types
-import type { Category } from "@/types/category";
+import {
+  AnimatePresence,
+  motion,
+} from "framer-motion";
+
+import { useCart } from "@/context/CartContext";
+import { useCustomerStore } from "@/hooks/useCustomerStore";
+
+import { BottomBar } from "@/components/customer/store/BottomBar";
+import { CategoryScroll } from "@/components/customer/store/CategoryScroll";
+import { DistanceWarningModal } from "@/components/customer/store/DistanceWarningModal";
+import { ProductCard } from "@/components/customer/store/ProductCard";
+import { ProductSection } from "@/components/customer/store/ProductSection";
+import { PromoBanner } from "@/components/customer/store/PromoBanner";
+import { StoreHeader } from "@/components/customer/store/StoreHeader";
+import { StoreInfo } from "@/components/customer/store/StoreInfo";
+
 import type { Product } from "@/types/product";
-import type { CustomerStore } from "@/types/view-models/customerStore";
 
-// Services
-import {
-  calculateDeliveryFee,
-  getDeliveryFeeDisplay,
-} from "@/services/delivery/deliveryPricing";
-import {
-  calculateDistance,
-  getEstimatedTime,
-  getEstimatedTimeNumber,
-} from "@/services/delivery/distance";
+/*
+|--------------------------------------------------------------------------
+| Page Props
+|--------------------------------------------------------------------------
+*/
 
 interface StorePageProps {
   params: Promise<{
@@ -47,349 +60,428 @@ interface StorePageProps {
   }>;
 }
 
-export default function StorePage({params}: StorePageProps) {
-  const {storeId} = use(params);
+/*
+|--------------------------------------------------------------------------
+| Page Component
+|--------------------------------------------------------------------------
+*/
+
+export default function StorePage({
+  params,
+}: StorePageProps) {
+  const { storeId } = use(params);
+
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { 
-    addItem, 
-    updateQuantity, 
+
+  /*
+  |--------------------------------------------------------------------------
+  | Cart
+  |--------------------------------------------------------------------------
+  */
+
+  const {
+    addItem,
+    updateQuantity,
     getItemQuantity,
     getStoreItemCount,
     getStoreTotalPrice,
   } = useCart();
-  
-  // Get data passed from home page via URL params
-  const distanceParam = searchParams.get("distance");
-  const deliveryFeeParam = searchParams.get("deliveryFee");
-  const estimatedTimeParam = searchParams.get("estimatedTime");
-  const storeItemCount = getStoreItemCount(storeId);
-  const storeTotalPrice = getStoreTotalPrice(storeId);
 
-  const [store, setStore] = useState<CustomerStore | null>(null);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [allProducts, setAllProducts] = useState<Product[]>([]);
-  const [displayProducts, setDisplayProducts] = useState<Product[]>([]);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState<string>("all");
-  const [loading, setLoading] = useState(true);
-  const [userLocation, setUserLocation] = useState<{lat: number; lng: number} | null>(null);
+  /*
+  |--------------------------------------------------------------------------
+  | URL Delivery Values
+  |--------------------------------------------------------------------------
+  |
+  | The home page may pass delivery information through the URL.
+  | The hook recalculates missing values when necessary.
+  |
+  */
 
-  // Distance warning modal state
-  const [showDistanceWarning, setShowDistanceWarning] = useState(false);
-  const [distanceValue, setDistanceValue] = useState(0);
+  const distanceParam =
+    searchParams.get("distance");
 
-  // Get user location from auth
+  const deliveryFeeParam =
+    searchParams.get("deliveryFee");
+
+  const estimatedTimeParam =
+    searchParams.get("estimatedTime");
+
+  /*
+  |--------------------------------------------------------------------------
+  | Store Data Hook
+  |--------------------------------------------------------------------------
+  */
+
+  const {
+    store,
+    categories,
+    products: allProducts,
+    loading,
+    error,
+    showDistanceWarning,
+    distanceValue,
+    closeDistanceWarning,
+  } = useCustomerStore({
+    storeId,
+    distanceParam,
+    deliveryFeeParam,
+    estimatedTimeParam,
+  });
+
+  /*
+  |--------------------------------------------------------------------------
+  | Local UI State
+  |--------------------------------------------------------------------------
+  */
+
+  const [
+    displayProducts,
+    setDisplayProducts,
+  ] = useState<Product[]>([]);
+
+  const [
+    searchQuery,
+    setSearchQuery,
+  ] = useState("");
+
+  const [
+    selectedCategory,
+    setSelectedCategory,
+  ] = useState("all");
+
+  /*
+  |--------------------------------------------------------------------------
+  | Cart Summary
+  |--------------------------------------------------------------------------
+  */
+
+  const storeItemCount =
+    getStoreItemCount(storeId);
+
+  const storeTotalPrice =
+    getStoreTotalPrice(storeId);
+
+  /*
+  |--------------------------------------------------------------------------
+  | Product Filtering
+  |--------------------------------------------------------------------------
+  |
+  | Search takes priority over category filtering.
+  |
+  */
+
   useEffect(() => {
-    const getUserLocation = async () => {
-      const user = auth.currentUser;
-      if (user) {
-        const userDoc = await getDoc(doc(db, "users", user.uid));
-        if (userDoc.exists()) {
-          const data = userDoc.data();
-          if (data.defaultAddress) {
-            setUserLocation({
-              lat: data.defaultAddress.latitude,
-              lng: data.defaultAddress.longitude,
-            });
-          }
-        }
-      }
-    };
-    getUserLocation();
-  }, []);
+    const normalizedSearch =
+      searchQuery.trim().toLowerCase();
 
-  // Fetch store data and products
-  useEffect(() => {
-    const fetchStoreAndProducts = async () => {
-      try {
-        setLoading(true);
+    /*
+    |--------------------------------------------------------------------------
+    | Search Products
+    |--------------------------------------------------------------------------
+    */
 
-        const domainStore = await storeService.getStore(storeId);
+    if (normalizedSearch) {
+      const filteredProducts =
+        allProducts.filter((product) => {
+          const productName =
+            product.name.toLowerCase();
 
-          if (!domainStore) {
-            router.push("/home");
-            return;
-          }
-        
-        const productsData =
-        await productService.getStoreProducts(storeId);
+          const productDescription =
+            product.description.toLowerCase();
 
-        setAllProducts(productsData);
-        setDisplayProducts(productsData);
+          const productCategory =
+            product.category.toLowerCase();
 
-        const categoryMap = new Map<string, Category>();
-        const categoryIcons: {[key: string]: string} = {
-          "produce": "🥬",
-          "meat": "🥩",
-          "seafood": "🦞",
-          "dairy": "🧀",
-          "pantry": "🥫",
-          "spices": "🌶️",
-          "snacks": "🍿",
-          "beverages": "🥤",
-          "frozen": "❄️",
-          "international": "🌍",
-          "health": "💪",
-          "household": "🏠",
-        };
-
-        productsData.forEach((product) => {
-          const categoryName = product.category || "Uncategorized";
-          if (!categoryMap.has(categoryName)) {
-            categoryMap.set(categoryName, {
-              id: categoryName.toLowerCase().replace(/\s+/g, "_"),
-              name: categoryName,
-              icon: categoryIcons[categoryName.toLowerCase()] || "📦",
-              products: [],
-            });
-          }
-          categoryMap.get(categoryName)!.products.push(product);
+          return (
+            productName.includes(
+              normalizedSearch
+            ) ||
+            productDescription.includes(
+              normalizedSearch
+            ) ||
+            productCategory.includes(
+              normalizedSearch
+            )
+          );
         });
 
-        const categoriesList = Array.from(categoryMap.values());
-        setCategories(categoriesList);
-
-        let distance = parseFloat(distanceParam || "0");
-        let deliveryFee = parseFloat(deliveryFeeParam || "0");
-        let estimatedTime = parseInt(estimatedTimeParam || "0");
-
-        const hasUserCoordinates =
-        userLocation !== null &&
-        Number.isFinite(userLocation.lat) &&
-        Number.isFinite(userLocation.lng);
-
-      const hasStoreCoordinates =
-        Number.isFinite(domainStore.latitude) &&
-        Number.isFinite(domainStore.longitude);
-
-      if (
-        distance <= 0 &&
-        hasUserCoordinates &&
-        hasStoreCoordinates
-      ) {
-        distance = calculateDistance(
-          userLocation.lat,
-          userLocation.lng,
-          domainStore.latitude,
-          domainStore.longitude
-        );
-
-        const pricing =
-          calculateDeliveryFee(distance, 0);
-
-        deliveryFee = pricing.deliveryFee;
-
-        estimatedTime =
-          getEstimatedTimeNumber(distance);
-      }
-
-        
-      const customerStore =
-  storeMapper.toCustomerStore(
-    domainStore,
-    {
-      distance,
-
-      deliveryFee,
-
-      deliveryFeeDisplay:
-        getDeliveryFeeDisplay(distance),
-
-      estimatedPrepTime:
-        estimatedTime ||
-        DELIVERY_CONFIG.DEFAULT_PREP_MINUTES,
-
-      estimatedDeliveryTime:
-        getEstimatedTime(distance),
-
-      reviewCount: 0,
-
-      categories: categoriesList,
-
-      promotions: [
-        {
-          id: "promo1",
-          title: "Free Delivery",
-          description:
-            "Free delivery on qualifying orders",
-          imageUrl: "",
-          type: "free_shipping",
-        },
-      ],
-
-      isFavorite: false,
-    }
-  );
-
-        setStore(customerStore);
-
-       const maxRadius = DELIVERY_CONFIG.MAX_RADIUS_MILES;
-        if (distance > maxRadius) {
-          setDistanceValue(distance);
-          setShowDistanceWarning(true);
-        }
-        
-      } catch (error) {
-        console.error("Error fetching store:", error);
-        router.push("/home");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchStoreAndProducts();
-  }, [storeId, router, distanceParam, deliveryFeeParam, estimatedTimeParam, userLocation]);
-
-  // Handle filtering based on category and search
-  useEffect(() => {
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      const filtered = allProducts.filter(
-        p =>
-          p.name.toLowerCase().includes(query) ||
-          p.description.toLowerCase().includes(query) ||
-          p.category.toLowerCase().includes(query)
+      setDisplayProducts(
+        filteredProducts
       );
-      setDisplayProducts(filtered);
+
       return;
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | Show All Products
+    |--------------------------------------------------------------------------
+    */
+
     if (selectedCategory === "all") {
       setDisplayProducts(allProducts);
-    } else {
-      const category = categories.find(c => c.id === selectedCategory);
-      setDisplayProducts(category?.products || []);
+      return;
     }
-  }, [selectedCategory, allProducts, searchQuery, categories]);
 
-  const handleSearch = (query: string) => {
+    /*
+    |--------------------------------------------------------------------------
+    | Show Selected Category
+    |--------------------------------------------------------------------------
+    */
+
+    const selectedCategoryData =
+      categories.find(
+        (category) =>
+          category.id ===
+          selectedCategory
+      );
+
+    setDisplayProducts(
+      selectedCategoryData?.products ??
+        []
+    );
+  }, [
+    allProducts,
+    categories,
+    searchQuery,
+    selectedCategory,
+  ]);
+
+  /*
+  |--------------------------------------------------------------------------
+  | Search Handler
+  |--------------------------------------------------------------------------
+  */
+
+  const handleSearch = (
+    query: string
+  ) => {
     setSearchQuery(query);
   };
 
-  const handleCategorySelect = (categoryId: string) => {
+  /*
+  |--------------------------------------------------------------------------
+  | Category Handler
+  |--------------------------------------------------------------------------
+  */
+
+  const handleCategorySelect = (
+    categoryId: string
+  ) => {
     setSelectedCategory(categoryId);
+
+    /*
+     * Clear search when the customer selects a category.
+     */
+
     if (searchQuery) {
       setSearchQuery("");
     }
   };
 
-  // ✅ Handle add to cart with quantity update
-  const handleAddToCart = (product: Product) => {
-    if (!store) return;
-    
-    const currentQty = getItemQuantity(product.id);
-    if (currentQty > 0) {
-      // If already in cart, increase quantity
-      updateQuantity(product.id, currentQty + 1);
-    } else {
-      // Add new item
-      addItem({
-        id: product.id,
-        name: product.name,
-        price: product.price,
-        imageUrl: product.imageUrl,
-        storeId: store.id,
-        storeName: store.name,
-        storeAddress: store.address,
-        storePhone: store.phone,
-        storeLatitude: store.latitude,
-        storeLongitude: store.longitude,
-        size: product.size ?? undefined,
-      });
+  /*
+  |--------------------------------------------------------------------------
+  | Add Product To Cart
+  |--------------------------------------------------------------------------
+  */
+
+  const handleAddToCart = (
+    product: Product
+  ) => {
+    if (!store) {
+      return;
     }
+
+    const currentQuantity =
+      getItemQuantity(product.id);
+
+    /*
+     * If the item already exists, increase its quantity.
+     */
+
+    if (currentQuantity > 0) {
+      updateQuantity(
+        product.id,
+        currentQuantity + 1
+      );
+
+      return;
+    }
+
+    /*
+     * Otherwise, create a new cart item.
+     */
+
+    void addItem({
+      id: product.id,
+      name: product.name,
+      price: product.price,
+      imageUrl: product.imageUrl,
+
+      storeId: store.id,
+      storeName: store.name,
+      storeAddress: store.address,
+      storePhone: store.phone,
+      storeLatitude: store.latitude,
+      storeLongitude: store.longitude,
+
+      size: product.size ?? undefined,
+    });
   };
 
-  // ✅ Handle quantity change from product card
-  const handleQuantityChange = (productId: string, newQuantity: number) => {
-    if (newQuantity <= 0) {
-      // Remove from cart (handled by updateQuantity with 0)
-      updateQuantity(productId, 0);
-    } else {
-      updateQuantity(productId, newQuantity);
-    }
+  /*
+  |--------------------------------------------------------------------------
+  | Quantity Handler
+  |--------------------------------------------------------------------------
+  */
+
+  const handleQuantityChange = (
+    productId: string,
+    newQuantity: number
+  ) => {
+    updateQuantity(
+      productId,
+      Math.max(0, newQuantity)
+    );
   };
+
+  /*
+  |--------------------------------------------------------------------------
+  | Distance Warning Handlers
+  |--------------------------------------------------------------------------
+  */
 
   const handleContinueToStore = () => {
-    setShowDistanceWarning(false);
+    closeDistanceWarning();
   };
 
   const handleGoBack = () => {
-    setShowDistanceWarning(false);
+    closeDistanceWarning();
     router.push("/home");
   };
 
+  /*
+  |--------------------------------------------------------------------------
+  | Loading State
+  |--------------------------------------------------------------------------
+  */
+
   if (loading) {
     return (
-      <div className="min-h-screen bg-white flex flex-col justify-center items-center relative overflow-hidden">
-        <div className="absolute top-0 right-0 h-[500px] w-[500px] rounded-full bg-yellow-400/5 blur-[120px] pointer-events-none" />
-        <div className="absolute bottom-0 left-0 h-[400px] w-[400px] rounded-full bg-blue-500/5 blur-[100px] pointer-events-none" />
+      <div className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-white">
+        <div className="pointer-events-none absolute right-0 top-0 h-[500px] w-[500px] rounded-full bg-yellow-400/5 blur-[120px]" />
 
-        <motion.div 
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.5 }}
-          className="flex flex-col items-center justify-center p-8 relative z-10"
+        <div className="pointer-events-none absolute bottom-0 left-0 h-[400px] w-[400px] rounded-full bg-blue-500/5 blur-[100px]" />
+
+        <motion.div
+          initial={{
+            opacity: 0,
+            scale: 0.9,
+          }}
+          animate={{
+            opacity: 1,
+            scale: 1,
+          }}
+          transition={{
+            duration: 0.5,
+          }}
+          className="relative z-10 flex flex-col items-center justify-center p-8"
         >
-          <div className="relative w-28 h-28 mb-8 flex items-center justify-center">
-            <motion.div 
-              animate={{ rotate: 360 }}
-              transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
+          <div className="relative mb-8 flex h-28 w-28 items-center justify-center">
+            <motion.div
+              animate={{
+                rotate: 360,
+              }}
+              transition={{
+                duration: 8,
+                repeat: Infinity,
+                ease: "linear",
+              }}
               className="absolute inset-0 rounded-full border-2 border-dashed border-yellow-400/30"
             />
-            <motion.div 
-              animate={{ rotate: -360 }}
-              transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
+
+            <motion.div
+              animate={{
+                rotate: -360,
+              }}
+              transition={{
+                duration: 4,
+                repeat: Infinity,
+                ease: "linear",
+              }}
               className="absolute inset-2 rounded-full border border-yellow-400/10"
             />
-            <motion.div 
-              animate={{ rotate: 360 }}
-              transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
+
+            <motion.div
+              animate={{
+                rotate: 360,
+              }}
+              transition={{
+                duration: 8,
+                repeat: Infinity,
+                ease: "linear",
+              }}
               className="absolute inset-0"
             >
-              <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-yellow-400 shadow-[0_0_15px_rgba(234,179,8,0.8)]" />
-              <div className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 w-2 h-2 rounded-full bg-yellow-400/40" />
-              <div className="absolute left-0 top-1/2 -translate-x-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-yellow-400/40" />
-              <div className="absolute right-0 top-1/2 translate-x-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-yellow-400/40" />
+              <div className="absolute left-1/2 top-0 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-yellow-400 shadow-[0_0_15px_rgba(234,179,8,0.8)]" />
+
+              <div className="absolute bottom-0 left-1/2 h-2 w-2 -translate-x-1/2 translate-y-1/2 rounded-full bg-yellow-400/40" />
+
+              <div className="absolute left-0 top-1/2 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-yellow-400/40" />
+
+              <div className="absolute right-0 top-1/2 h-2 w-2 translate-x-1/2 -translate-y-1/2 rounded-full bg-yellow-400/40" />
             </motion.div>
 
-            <div className="relative w-16 h-16 z-10 bg-white/80 backdrop-blur-md rounded-full border-2 border-yellow-400/50 shadow-[0_0_30px_rgba(234,179,8,0.15)] flex items-center justify-center overflow-hidden">
-              <img 
-                src="/icon/icon-192.png" 
-                alt="LIA Logo" 
-                className="w-12 h-12 object-contain" 
+            <div className="relative z-10 flex h-16 w-16 items-center justify-center overflow-hidden rounded-full border-2 border-yellow-400/50 bg-white/80 shadow-[0_0_30px_rgba(234,179,8,0.15)] backdrop-blur-md">
+              <img
+                src="/icon/icon-192.png"
+                alt="LIA Store"
+                className="h-12 w-12 object-contain"
               />
             </div>
           </div>
 
           <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4, delay: 0.2 }}
+            initial={{
+              opacity: 0,
+              y: 10,
+            }}
+            animate={{
+              opacity: 1,
+              y: 0,
+            }}
+            transition={{
+              duration: 0.4,
+              delay: 0.2,
+            }}
             className="text-center"
           >
-            <h3 className="text-lg font-medium text-gray-600 mb-1 tracking-wide opacity-100">
+            <h3 className="mb-1 text-lg font-medium tracking-wide text-gray-600">
               Loading store
             </h3>
-            <div className="flex items-center justify-center gap-1 mt-2">
-              <motion.span 
-                initial={{ opacity: 0.5 }} 
-                animate={{ opacity: [0.5, 1, 0.5] }} 
-                transition={{ duration: 1.5, repeat: Infinity, delay: 0 }} 
-                className="w-1.5 h-1.5 rounded-full bg-yellow-400"
-              />
-              <motion.span 
-                initial={{ opacity: 0.5 }} 
-                animate={{ opacity: [0.5, 1, 0.5] }} 
-                transition={{ duration: 1.5, repeat: Infinity, delay: 0.3 }} 
-                className="w-1.5 h-1.5 rounded-full bg-yellow-400"
-              />
-              <motion.span 
-                initial={{ opacity: 0.5 }} 
-                animate={{ opacity: [0.5, 1, 0.5] }} 
-                transition={{ duration: 1.5, repeat: Infinity, delay: 0.6 }} 
-                className="w-1.5 h-1.5 rounded-full bg-yellow-400"
-              />
+
+            <div className="mt-2 flex items-center justify-center gap-1">
+              {[0, 0.3, 0.6].map(
+                (delay) => (
+                  <motion.span
+                    key={delay}
+                    animate={{
+                      opacity: [
+                        0.5,
+                        1,
+                        0.5,
+                      ],
+                    }}
+                    transition={{
+                      duration: 1.5,
+                      repeat: Infinity,
+                      delay,
+                    }}
+                    className="h-1.5 w-1.5 rounded-full bg-yellow-400"
+                  />
+                )
+              )}
             </div>
           </motion.div>
         </motion.div>
@@ -397,81 +489,170 @@ export default function StorePage({params}: StorePageProps) {
     );
   }
 
-  if (!store) {
+  /*
+  |--------------------------------------------------------------------------
+  | Error State
+  |--------------------------------------------------------------------------
+  */
+
+  if (error || !store) {
     return (
-      <main className="min-h-screen flex items-center justify-center">
-        <p className="text-gray-500">Store not found</p>
+      <main className="flex min-h-screen flex-col items-center justify-center gap-4 px-6 text-center">
+        <p className="text-gray-500">
+          {error ?? "Store not found"}
+        </p>
+
+        <button
+          type="button"
+          onClick={() =>
+            router.push("/home")
+          }
+          className="rounded-xl bg-orange-500 px-5 py-2.5 font-semibold text-white transition hover:bg-orange-600"
+        >
+          Return Home
+        </button>
       </main>
     );
   }
 
- 
-    return (
-    <main className="min-h-screen bg-gray-50 pb-2">
-      {/* Store Header */}
+  /*
+  |--------------------------------------------------------------------------
+  | Store Page
+  |--------------------------------------------------------------------------
+  */
+
+  return (
+    <main className="min-h-screen bg-gray-50 pb-20">
       <StoreHeader
         bannerUrl={store.bannerUrl}
         logoUrl={store.logoUrl}
         name={store.name}
         rating={store.rating ?? 0}
         reviewCount={store.reviewCount}
-        onBack={() => router.push("/home")}
+        onBack={() =>
+          router.push("/home")
+        }
       />
 
-      {/* Store Info - ✅ Use store.id instead of storeData.id */}
       <StoreInfo
         name={store.name}
         isOpen={store.isOpen}
         distance={store.distance}
         deliveryFee={store.deliveryFee}
-        estimatedPrepTime={store.estimatedPrepTime}
+        estimatedPrepTime={
+          store.estimatedPrepTime
+        }
         minimumOrder={store.minimumOrder}
         rating={store.rating ?? 0}
         reviewCount={store.reviewCount}
         schedule={store.schedule}
-        onViewMore={() => router.push(`/store/${store.id}/info`)}
+        onViewMore={() =>
+          router.push(
+            `/store/${store.id}/info`
+          )
+        }
       />
 
-      {/* Promo Banner */}
-      {store.promotions && store.promotions.length > 0 && (
-        <div className="px-4 mt-4">
-          <PromoBanner promotions={store.promotions} />
-        </div>
-      )}
-
-      {/* Categories - Dynamic from products */}
-      {categories.length > 0 && (
-        <div className="px-4 mt-4">
-          <CategoryScroll
-            categories={categories}
-            selectedCategory={selectedCategory}
-            onSelect={handleCategorySelect}
+      {store.promotions.length > 0 && (
+        <div className="mt-4 px-4">
+          <PromoBanner
+            promotions={
+              store.promotions
+            }
           />
         </div>
       )}
 
-      {/* Products Display */}
-      {searchQuery ? (
-        <div className="px-4 mt-4 pb-24">
-          <h3 className="font-bold text-gray-800 mb-3">
-            Search Results ({displayProducts.length})
+      {categories.length > 0 && (
+        <div className="mt-4 px-4">
+          <CategoryScroll
+            categories={categories}
+            selectedCategory={
+              selectedCategory
+            }
+            onSelect={
+              handleCategorySelect
+            }
+          />
+        </div>
+      )}
+
+      {searchQuery.trim() ? (
+        <div className="mt-4 px-4 pb-24">
+          <h3 className="mb-3 font-bold text-gray-800">
+            Search Results (
+            {displayProducts.length})
           </h3>
+
           {displayProducts.length === 0 ? (
-            <div className="text-center py-8">
-              <p className="text-gray-500">No products found</p>
-              <p className="text-sm text-gray-400">Try adjusting your search</p>
+            <div className="py-8 text-center">
+              <p className="text-gray-500">
+                No products found
+              </p>
+
+              <p className="text-sm text-gray-400">
+                Try adjusting your search
+              </p>
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-3">
-              {displayProducts.map((product) => (
-                <ProductCard
-                  key={product.id}
-                  product={product}
-                  onAddToCart={handleAddToCart}
-                  onQuantityChange={handleQuantityChange}
-                  quantity={getItemQuantity(product.id)}
-                />
-              ))}
+              {displayProducts.map(
+                (product) => (
+                  <ProductCard
+                    key={product.id}
+                    product={product}
+                    onAddToCart={
+                      handleAddToCart
+                    }
+                    onQuantityChange={
+                      handleQuantityChange
+                    }
+                    quantity={getItemQuantity(
+                      product.id
+                    )}
+                  />
+                )
+              )}
+            </div>
+          )}
+        </div>
+      ) : selectedCategory !== "all" ? (
+        <div className="mt-4 px-4 pb-24">
+          <h3 className="mb-3 font-bold text-gray-800">
+            {
+              categories.find(
+                (category) =>
+                  category.id ===
+                  selectedCategory
+              )?.name
+            }
+          </h3>
+
+          {displayProducts.length === 0 ? (
+            <div className="py-8 text-center">
+              <p className="text-gray-500">
+                No products in this category
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-3">
+              {displayProducts.map(
+                (product) => (
+                  <ProductCard
+                    key={product.id}
+                    product={product}
+                    onAddToCart={
+                      handleAddToCart
+                    }
+                    onQuantityChange={
+                      handleQuantityChange
+                    }
+                    quantity={getItemQuantity(
+                      product.id
+                    )}
+                  />
+                )
+              )}
             </div>
           )}
         </div>
@@ -481,35 +662,46 @@ export default function StorePage({params}: StorePageProps) {
             key={category.id}
             category={category}
             products={category.products}
-            onAddToCart={handleAddToCart}
-            onQuantityChange={handleQuantityChange}
-            getQuantity={getItemQuantity}
+            onAddToCart={
+              handleAddToCart
+            }
+            onQuantityChange={
+              handleQuantityChange
+            }
+            getQuantity={
+              getItemQuantity
+            }
             onViewAll={() => {
-              setSelectedCategory(category.id);
+              setSelectedCategory(
+                category.id
+              );
+
               setSearchQuery("");
             }}
           />
         ))
       )}
 
-      {/* Bottom Bar */}
       <BottomBar
         searchQuery={searchQuery}
         onSearchChange={handleSearch}
         itemCount={storeItemCount}
         totalPrice={storeTotalPrice}
         storeId={store.id}
-        onCartClick={() => router.push("/cart")}
+        onCartClick={() =>
+          router.push("/cart")
+        }
       />
 
-      {/* Distance Warning Modal */}
       <AnimatePresence>
-        {showDistanceWarning && store && (
-            <DistanceWarningModal
-              store={store}
+        {showDistanceWarning && (
+          <DistanceWarningModal
+            store={store}
             distance={distanceValue}
             onClose={handleGoBack}
-            onContinue={handleContinueToStore}
+            onContinue={
+              handleContinueToStore
+            }
           />
         )}
       </AnimatePresence>

@@ -67,7 +67,7 @@ export default function NotificationsPage() {
   }, [user]);
 
   if (loading) {
-    return <BrandedLoader message="Loading notifications" />;
+    return <BrandedLoader message="Loading Notifications" />;
   }
 
   if (listenerError) {
