@@ -62,8 +62,12 @@ export function StoreCard({
         )}
 
         {/* Store Name Overlay */}
-        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-4">
-          <h3 className="text-white font-bold text-lg">{store.name}</h3>
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center p-4">
+          <div className="max-w-[80%] rounded-xl bg-white/95 px-4 py-2 text-center shadow-md backdrop-blur-sm">
+            <h3 className="text-lg font-bold tracking-wide text-gray-800">
+              {store.name.toUpperCase()}
+            </h3>
+          </div>
         </div>
 
         {/* Favorite Button */}

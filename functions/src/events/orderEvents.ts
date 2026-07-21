@@ -38,6 +38,7 @@ export class OrderEvents {
       icon: "shopping-bag",
       color: "orange",
       orderId,
+      navigationPath: "/orders",
     });
 
       await notificationService.sendToUser(
@@ -64,6 +65,7 @@ export class OrderEvents {
       icon: "package",
       color: "purple",
       orderId,
+      navigationPath: "/orders",
     });
 
     await notificationService.sendToUser(
@@ -92,6 +94,7 @@ export class OrderEvents {
       icon: "package-check",
       color: "indigo",
       orderId,
+      navigationPath: "/orders",
     });
 
     await notificationService.sendToUser(
@@ -118,6 +121,7 @@ export class OrderEvents {
         icon: "truck",
         color: "blue",
         orderId,
+        navigationPath: "/orders",
       });
 
     await notificationService.sendToUser(
@@ -144,6 +148,7 @@ export class OrderEvents {
       icon: "check-circle",
       color: "green",
       orderId,
+      navigationPath: "/orders",
     });
 
     await notificationService.sendToUser(
@@ -170,6 +175,7 @@ export class OrderEvents {
       icon: "x-circle",
       color: "red",
       orderId,
+      navigationPath: "/orders",
     });
 
     await notificationService.sendToUser(

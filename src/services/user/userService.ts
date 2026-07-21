@@ -90,4 +90,43 @@ export const userService = {
       lng: longitude,
     };
   },
+
+  
+  /*
+  |--------------------------------------------------------------------------
+  | Get Store ID
+  |--------------------------------------------------------------------------
+  |
+  | Returns the store ID linked to a user account.
+  |
+  */
+
+  async getStoreId(
+    userId: string
+  ): Promise<string | null> {
+    const userReference = doc(
+      db,
+      "users",
+      userId
+    );
+
+    const userSnapshot =
+      await getDoc(userReference);
+
+    if (!userSnapshot.exists()) {
+      return null;
+    }
+
+    const storeId =
+      userSnapshot.data().storeId;
+
+    if (
+      typeof storeId !== "string" ||
+      !storeId.trim()
+    ) {
+      return null;
+    }
+
+    return storeId;
+  },
 };

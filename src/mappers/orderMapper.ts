@@ -215,6 +215,8 @@ export function mapFirestoreOrder(
 
     status: data.status as OrderStatus,
 
+    cancellationReason: data.cancellationReason ?? undefined,
+
     payment: data.payment
       ? {
           ...data.payment,

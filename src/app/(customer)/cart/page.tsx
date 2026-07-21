@@ -6,8 +6,13 @@
   ✅ Shows loading state while cart is being loaded from Firestore.
 */
 
+import {
+  useCartPricing,
+} from "@/hooks/useCartPricing";
+import {
+  useCartStoreStatus,
+} from "@/hooks/useCartStoreStatus";
 import { PRICING_CONFIG } from "@/config/pricing";
-import { calculateDeliveryFee } from "@/services/delivery/deliveryPricing";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
@@ -16,7 +21,6 @@ import Link from "next/link";
 import { BrandedLoader } from "@/components/ui/BrandedLoader";
 import {
   ShoppingCart,
-  Trash2,
   Plus,
   Minus,
   ArrowLeft,
@@ -24,7 +28,6 @@ import {
   Truck,
   Clock,
   CreditCard,
-  MapPin,
   X,
   AlertCircle,
 } from "lucide-react";
@@ -33,6 +36,7 @@ import { useCart } from "@/context/CartContext";
 export default function CartPage() {
   const router = useRouter();
   const { items, itemCount, totalPrice, updateQuantity, removeItem, clearCart, isLoading } = useCart();
+  const storeId = items[0]?.storeId;
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
   const [itemToRemove, setItemToRemove] = useState<string | null>(null);
@@ -45,33 +49,24 @@ export default function CartPage() {
     return { dollars, cents: cents.toString().padStart(2, '0') };
   };
 
-  // Calculate subtotal
-// Calculate cart totals using the same centralized rules
-// that Checkout uses.
-//
-// The exact delivery distance is calculated during Checkout after
-// the customer address and store coordinates are loaded.
-// Until then, the Cart displays the base delivery estimate.
-const subtotal = totalPrice;
+  const {
+      loading: storeLoading,
+      isOpen: isStoreOpen,
+      error: storeError,
+    } = useCartStoreStatus({
+      storeId,
+    });
 
-const deliveryPricing = calculateDeliveryFee(
-  0,
-  subtotal
-);
-
-const deliveryFee =
-  deliveryPricing.deliveryFee;
-
-const tax = Math.round(
-  subtotal *
-    PRICING_CONFIG.SALES_TAX_RATE *
-    100
-) / 100;
-
-const total =
-  subtotal +
-  deliveryFee +
-  tax;
+    const {
+      subtotal,
+      deliveryFee,
+      tax,
+      total,
+      amountUntilFreeDelivery,
+      hasFreeDelivery,
+    } = useCartPricing({
+      subtotal: totalPrice,
+    });
 
   // Go back to previous page
   const goBack = () => {
@@ -119,7 +114,10 @@ const total =
   };
 
   // ✅ Show loading state
-  if (isLoading) {
+  if (
+  isLoading ||
+  storeLoading
+) {
     return <BrandedLoader message="Loading Cart" />;
   }
 
@@ -221,7 +219,6 @@ const total =
         <AnimatePresence mode="popLayout">
           {items.map((item) => {
             const price = formatPrice(item.price);
-            const itemTotal = formatPrice(item.price * item.quantity);
 
             return (
               <motion.div
@@ -346,27 +343,50 @@ const total =
             </div>
           </div>
 
+          {storeError && (
+            <div className="mb-3 rounded-xl border border-red-200 bg-red-50 p-3 text-center">
+              <p className="text-sm text-red-600">
+                {storeError}
+              </p>
+            </div>
+          )}
+
+          {!storeError && !isStoreOpen && (
+            <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-center">
+              <p className="text-sm font-medium text-amber-700">
+                This store is currently closed. Checkout will be available when it reopens.
+              </p>
+            </div>
+          )}
+
           <button
+            type="button"
             onClick={handleCheckout}
-            className="w-full mt-4 py-3 bg-gradient-to-r from-orange-500 to-orange-600 text-white font-semibold rounded-xl hover:shadow-lg hover:from-orange-600 hover:to-orange-700 transition flex items-center justify-center gap-2"
+            disabled={
+              !isStoreOpen ||
+              Boolean(storeError)
+            }
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-orange-500 to-orange-600 py-3 font-semibold text-white transition hover:from-orange-600 hover:to-orange-700 hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <CreditCard className="w-5 h-5" />
-            Proceed to Checkout
+            <CreditCard className="h-5 w-5" />
+
+            {!isStoreOpen
+              ? "Store Closed"
+              : storeError
+                ? "Store Unavailable"
+                : "Proceed to Checkout"}
           </button>
 
-          {deliveryFee === 0 && subtotal > 0 && (
+         {hasFreeDelivery && (
             <p className="text-xs text-green-600 text-center mt-2">
               🎉 Free delivery applied!
             </p>
           )}
-          {deliveryFee > 0 &&
-        subtotal < PRICING_CONFIG.FREE_DELIVERY_MINIMUM && (
+          {!hasFreeDelivery &&
+             amountUntilFreeDelivery > 0 && (
           <p className="text-xs text-gray-400 text-center mt-2">
             Add $
-            {(
-              PRICING_CONFIG.FREE_DELIVERY_MINIMUM -
-              subtotal
-            ).toFixed(2)}
+            {amountUntilFreeDelivery.toFixed(2)}
             {" "}more for free delivery
           </p>
         )}

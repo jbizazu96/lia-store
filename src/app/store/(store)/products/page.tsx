@@ -1,287 +1,490 @@
 "use client";
 
 /*
-  Main products management page.
+|--------------------------------------------------------------------------
+| Products Management Page
+|--------------------------------------------------------------------------
+|
+| Loads products through useStoreProducts.
+| Product writes go through productService.
+| This page handles filtering, statistics, redirects, and rendering.
+|
 */
-import {BrandedLoader} from "@/components/ui/BrandedLoader";
-import {useState, useEffect, useCallback} from "react";
-import {useRouter} from "next/navigation";
-import {motion, AnimatePresence} from "framer-motion";
-import {Plus, Package, AlertCircle, Filter} from "lucide-react";
+
+import {
+  useEffect,
+  useState,
+} from "react";
+
+import {
+  useRouter,
+} from "next/navigation";
+
+import {
+  AnimatePresence,
+  motion,
+} from "framer-motion";
+
+import {
+  AlertCircle,
+  Package,
+  Plus,
+} from "lucide-react";
+
 import Link from "next/link";
 
-// Firebase imports
-import {auth, db} from "@/lib/firebase";
 import {
-  collection,
-  query,
-  where,
-  getDocs,
-  doc,
-  getDoc,
-  updateDoc,
-  deleteDoc,
-  addDoc,
-  serverTimestamp,
-} from "firebase/firestore";
+  useStoreProducts,
+} from "@/hooks/useStoreProducts";
 
-// Components
-import {ProductStats} from "@/components/store/products/ProductStats";
-import {ProductFilters} from "@/components/store/products/ProductFilters";
-import {ProductCard} from "@/components/store/products/ProductCard";
-import {ProductSkeleton} from "@/components/store/products/ProductSkeleton";
+import {
+  productService,
+} from "@/services/product/productService";
 
-// Types
-import {Product} from "./types";
+import {
+  BrandedLoader,
+} from "@/components/ui/BrandedLoader";
+
+import {
+  ProductCard,
+} from "@/components/store/products/ProductCard";
+
+import {
+  ProductFilters,
+} from "@/components/store/products/ProductFilters";
+
+import {
+  ProductStats,
+} from "@/components/store/products/ProductStats";
+
+import type {
+  Product,
+} from "@/types/product";
 
 export default function ProductsPage() {
   const router = useRouter();
-  const [products, setProducts] = useState<Product[]>([]);
-  const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [storeId, setStoreId] = useState("");
 
-  // Filter states
-  const [searchQuery, setSearchQuery] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState("all");
-  const [statusFilter, setStatusFilter] = useState("all");
+  const {
+    products,
+    loading,
+    error,
+    isAuthenticated,
+    needsStoreSetup,
+    refreshProducts,
+  } = useStoreProducts();
+
+  const [
+    filteredProducts,
+    setFilteredProducts,
+  ] = useState<Product[]>([]);
+
+  const [
+    searchQuery,
+    setSearchQuery,
+  ] = useState("");
+
+  const [
+    categoryFilter,
+    setCategoryFilter,
+  ] = useState("all");
+
+  const [
+    statusFilter,
+    setStatusFilter,
+  ] = useState("all");
 
   /*
-    Fetch products from Firestore.
+  |--------------------------------------------------------------------------
+  | Redirects
+  |--------------------------------------------------------------------------
   */
-  const fetchProducts = useCallback(async () => {
-    try {
-      setLoading(true);
-      const user = auth.currentUser;
-      if (!user) return;
 
-      // Get store ID from user document
-      const userDoc = await getDoc(doc(db, "users", user.uid));
-      const storeId = userDoc.data()?.storeId;
-
-      if (!storeId) {
-        router.push("/store/create");
-        return;
-      }
-
-      setStoreId(storeId);
-
-      // Query products for this store
-      const productsRef = collection(db, "products");
-      const q = query(productsRef, where("storeId", "==", storeId));
-      const snapshot = await getDocs(q);
-
-      const productsData: Product[] = [];
-      snapshot.forEach((doc) => {
-        const data = doc.data();
-        productsData.push({
-          id: doc.id,
-          ...data,
-          createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
-          updatedAt: data.updatedAt?.toDate?.()?.toISOString() || new Date().toISOString(),
-        } as Product);
-      });
-
-      setProducts(productsData);
-      setFilteredProducts(productsData);
-    } catch (error) {
-      console.error("Error fetching products:", error);
-    } finally {
-      setLoading(false);
-    }
-  }, [router]);
-
-  // Initial fetch
   useEffect(() => {
-    fetchProducts();
-  }, [fetchProducts]);
-
-  /*
-    Filter products.
-  */
-  useEffect(() => {
-    let filtered = products;
-
-    // Search filter
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(
-        (p) =>
-          p.name.toLowerCase().includes(query) ||
-          p.description?.toLowerCase().includes(query) ||
-          p.category.toLowerCase().includes(query)
-      );
-    }
-
-    // Category filter
-    if (categoryFilter !== "all") {
-      filtered = filtered.filter((p) => p.category === categoryFilter);
-    }
-
-    // Status filter
-    if (statusFilter === "active") {
-      filtered = filtered.filter((p) => p.isActive);
-    } else if (statusFilter === "inactive") {
-      filtered = filtered.filter((p) => !p.isActive);
-    }
-
-    setFilteredProducts(filtered);
-  }, [searchQuery, categoryFilter, statusFilter, products]);
-
-  /*
-    Toggle product active status.
-  */
-  const toggleProductActive = async (productId: string, currentStatus: boolean) => {
-    try {
-      await updateDoc(doc(db, "products", productId), {
-        isActive: !currentStatus,
-        updatedAt: serverTimestamp(),
-      });
-
-      setProducts((prev) =>
-        prev.map((p) =>
-          p.id === productId ? { ...p, isActive: !currentStatus } : p
-        )
-      );
-    } catch (error) {
-      console.error("Error toggling product status:", error);
-      alert("Failed to update product status");
-    }
-  };
-
-  /*
-    Toggle product featured status.
-  */
-  const toggleProductFeatured = async (productId: string, currentStatus: boolean) => {
-    try {
-      await updateDoc(doc(db, "products", productId), {
-        isFeatured: !currentStatus,
-        updatedAt: serverTimestamp(),
-      });
-
-      setProducts((prev) =>
-        prev.map((p) =>
-          p.id === productId ? { ...p, isFeatured: !currentStatus } : p
-        )
-      );
-    } catch (error) {
-      console.error("Error toggling featured status:", error);
-      alert("Failed to update featured status");
-    }
-  };
-
-  /*
-    Delete product with confirmation.
-  */
-  const deleteProduct = async (productId: string) => {
-    if (!confirm("Are you sure you want to delete this product? This action cannot be undone.")) {
+    if (loading) {
       return;
     }
 
-    try {
-      await deleteDoc(doc(db, "products", productId));
-      setProducts((prev) => prev.filter((p) => p.id !== productId));
-    } catch (error) {
-      console.error("Error deleting product:", error);
-      alert("Failed to delete product");
+    if (!isAuthenticated) {
+      router.replace("/login");
+      return;
     }
-  };
+
+    if (needsStoreSetup) {
+      router.replace("/store/create");
+    }
+  }, [
+    loading,
+    isAuthenticated,
+    needsStoreSetup,
+    router,
+  ]);
 
   /*
-    Duplicate product.
+  |--------------------------------------------------------------------------
+  | Product Filtering
+  |--------------------------------------------------------------------------
   */
-  const duplicateProduct = async (product: Product) => {
-    try {
-      const { id, createdAt, updatedAt, ...productData } = product;
-      
-      await addDoc(collection(db, "products"), {
-        ...productData,
-        name: `${product.name} (Copy)`,
-        isActive: false,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
 
-      await fetchProducts();
-    } catch (error) {
-      console.error("Error duplicating product:", error);
-      alert("Failed to duplicate product");
+  useEffect(() => {
+    let filtered = products;
+
+    const normalizedSearch =
+      searchQuery
+        .trim()
+        .toLowerCase();
+
+    if (normalizedSearch) {
+      filtered = filtered.filter(
+        (product) =>
+          product.name
+            .toLowerCase()
+            .includes(
+              normalizedSearch
+            ) ||
+          product.description
+            .toLowerCase()
+            .includes(
+              normalizedSearch
+            ) ||
+          product.category
+            .toLowerCase()
+            .includes(
+              normalizedSearch
+            )
+      );
     }
-  };
+
+    if (
+      categoryFilter !== "all"
+    ) {
+      filtered = filtered.filter(
+        (product) =>
+          product.category ===
+          categoryFilter
+      );
+    }
+
+    if (
+      statusFilter === "active"
+    ) {
+      filtered = filtered.filter(
+        (product) =>
+          product.isAvailable
+      );
+    }
+
+    if (
+      statusFilter === "inactive"
+    ) {
+      filtered = filtered.filter(
+        (product) =>
+          !product.isAvailable
+      );
+    }
+
+    setFilteredProducts(filtered);
+  }, [
+    products,
+    searchQuery,
+    categoryFilter,
+    statusFilter,
+  ]);
 
   /*
-    Calculate stats - including total stock.
+  |--------------------------------------------------------------------------
+  | Product Actions
+  |--------------------------------------------------------------------------
   */
+
+  const toggleProductActive =
+    async (
+      productId: string,
+      currentStatus: boolean
+    ) => {
+      try {
+        await productService
+          .updateAvailability(
+            productId,
+            !currentStatus
+          );
+
+        await refreshProducts();
+      } catch (actionError) {
+        console.error(
+          "Error updating product availability:",
+          actionError
+        );
+
+        alert(
+          "Failed to update product availability"
+        );
+      }
+    };
+
+  const toggleProductFeatured =
+    async (
+      productId: string,
+      currentStatus: boolean
+    ) => {
+      try {
+        await productService
+          .updateFeatured(
+            productId,
+            !currentStatus
+          );
+
+        await refreshProducts();
+      } catch (actionError) {
+        console.error(
+          "Error updating featured status:",
+          actionError
+        );
+
+        alert(
+          "Failed to update featured status"
+        );
+      }
+    };
+
+  const deleteProduct =
+    async (
+      productId: string
+    ) => {
+      const confirmed =
+        window.confirm(
+          "Are you sure you want to delete this product? This action cannot be undone."
+        );
+
+      if (!confirmed) {
+        return;
+      }
+
+      try {
+        await productService
+          .deleteProduct(
+            productId
+          );
+
+        await refreshProducts();
+      } catch (actionError) {
+        console.error(
+          "Error deleting product:",
+          actionError
+        );
+
+        alert(
+          "Failed to delete product"
+        );
+      }
+    };
+
+  const duplicateProduct =
+    async (
+      product: Product
+    ) => {
+      try {
+        await productService
+          .duplicateProduct(
+            product
+          );
+
+        await refreshProducts();
+      } catch (actionError) {
+        console.error(
+          "Error duplicating product:",
+          actionError
+        );
+
+        alert(
+          "Failed to duplicate product"
+        );
+      }
+    };
+
+  /*
+  |--------------------------------------------------------------------------
+  | Statistics
+  |--------------------------------------------------------------------------
+  */
+
   const stats = {
-    totalProducts: products.length,
-    activeProducts: products.filter((p) => p.isActive).length,
-    featuredProducts: products.filter((p) => p.isFeatured).length,
-    totalStock: products.reduce((sum, p) => sum + (p.stock || 0), 0), // ✅ Calculate total stock
-    totalValue: products.reduce((sum, p) => sum + (p.price * p.stock), 0),
+    totalProducts:
+      products.length,
+
+    activeProducts:
+      products.filter(
+        (product) =>
+          product.isAvailable
+      ).length,
+
+    featuredProducts:
+      products.filter(
+        (product) =>
+          product.featured
+      ).length,
+
+    totalStock:
+      products.reduce(
+        (sum, product) =>
+          sum +
+          (product.stock || 0),
+        0
+      ),
+
+    totalValue:
+      products.reduce(
+        (sum, product) =>
+          sum +
+          product.price *
+            product.stock,
+        0
+      ),
   };
 
-  /* ==========================================
-     LOADING STATE - WHITE BRANDED LOADER
-  ========================================== */
+  /*
+  |--------------------------------------------------------------------------
+  | Loading
+  |--------------------------------------------------------------------------
+  */
+
   if (loading) {
-    return <BrandedLoader message="Loading Products" />;
+    return (
+      <BrandedLoader
+        message="Loading Products"
+      />
+    );
   }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Redirect State
+  |--------------------------------------------------------------------------
+  */
+
+  if (
+    !isAuthenticated ||
+    needsStoreSetup
+  ) {
+    return null;
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Error
+  |--------------------------------------------------------------------------
+  */
+
+  if (error) {
+    return (
+      <div className="rounded-2xl border border-gray-100 bg-white p-12 text-center">
+        <AlertCircle className="mx-auto mb-4 h-16 w-16 text-gray-300" />
+
+        <p className="text-lg text-gray-500">
+          {error}
+        </p>
+
+        <button
+          type="button"
+          onClick={() =>
+            refreshProducts()
+          }
+          className="mt-4 rounded-xl bg-orange-500 px-6 py-2 font-semibold text-white transition hover:bg-orange-600"
+        >
+          Try Again
+        </button>
+      </div>
+    );
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Page
+  |--------------------------------------------------------------------------
+  */
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
         <div>
-          <h1 className="text-2xl font-bold text-gray-800">Products</h1>
-          <p className="text-gray-500 text-sm">Manage your store inventory</p>
+          <h1 className="text-2xl font-bold text-gray-800">
+            Products
+          </h1>
+
+          <p className="text-sm text-gray-500">
+            Manage your store inventory
+          </p>
         </div>
+
         <Link
           href="/store/products/add"
-          className="px-4 py-2.5 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-xl font-semibold hover:shadow-lg hover:from-orange-600 hover:to-orange-700 transition flex items-center gap-2 text-sm"
+          className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-orange-500 to-orange-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:from-orange-600 hover:to-orange-700 hover:shadow-lg"
         >
-          <Plus className="w-4 h-4" />
+          <Plus className="h-4 w-4" />
           Add Product
         </Link>
       </div>
 
-      {/* Stats */}
       <ProductStats {...stats} />
 
-      {/* Filters */}
       <ProductFilters
         searchQuery={searchQuery}
-        onSearchChange={setSearchQuery}
-        categoryFilter={categoryFilter}
-        onCategoryChange={setCategoryFilter}
-        statusFilter={statusFilter}
-        onStatusChange={setStatusFilter}
+        onSearchChange={
+          setSearchQuery
+        }
+        categoryFilter={
+          categoryFilter
+        }
+        onCategoryChange={
+          setCategoryFilter
+        }
+        statusFilter={
+          statusFilter
+        }
+        onStatusChange={
+          setStatusFilter
+        }
       />
 
-      {/* Products Grid */}
-      {filteredProducts.length === 0 ? (
-        <div className="bg-white rounded-2xl p-12 text-center border border-gray-100">
-          <Package className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-          <p className="text-gray-500 text-lg font-medium">No products found</p>
-          <p className="text-gray-400 text-sm mt-1">
-            {searchQuery || categoryFilter !== "all" || statusFilter !== "all"
+      {filteredProducts.length ===
+      0 ? (
+        <div className="rounded-2xl border border-gray-100 bg-white p-12 text-center">
+          <Package className="mx-auto mb-4 h-16 w-16 text-gray-300" />
+
+          <p className="text-lg font-medium text-gray-500">
+            No products found
+          </p>
+
+          <p className="mt-1 text-sm text-gray-400">
+            {searchQuery ||
+            categoryFilter !==
+              "all" ||
+            statusFilter !== "all"
               ? "Try adjusting your filters"
               : "Start adding products to your store"}
           </p>
-          {(searchQuery || categoryFilter !== "all" || statusFilter !== "all") ? (
+
+          {searchQuery ||
+          categoryFilter !== "all" ||
+          statusFilter !== "all" ? (
             <button
+              type="button"
               onClick={() => {
                 setSearchQuery("");
-                setCategoryFilter("all");
-                setStatusFilter("all");
+                setCategoryFilter(
+                  "all"
+                );
+                setStatusFilter(
+                  "all"
+                );
               }}
-              className="mt-4 text-sm text-orange-600 hover:text-orange-700 font-medium"
+              className="mt-4 text-sm font-medium text-orange-600 hover:text-orange-700"
             >
               Clear all filters
             </button>
           ) : (
             <Link
               href="/store/products/add"
-              className="inline-block mt-4 px-6 py-3 bg-orange-500 text-white rounded-xl font-semibold hover:bg-orange-600 transition"
+              className="mt-4 inline-block rounded-xl bg-orange-500 px-6 py-3 font-semibold text-white transition hover:bg-orange-600"
             >
               Add Your First Product
             </Link>
@@ -290,32 +493,65 @@ export default function ProductsPage() {
       ) : (
         <>
           <div className="flex items-center justify-between text-xs text-gray-500">
-            <span>{filteredProducts.length} products</span>
+            <span>
+              {filteredProducts.length}{" "}
+              products
+            </span>
+
             <span className="text-green-600">
-              {filteredProducts.filter((p) => p.isActive).length} active
+              {
+                filteredProducts.filter(
+                  (product) =>
+                    product.isAvailable
+                ).length
+              }{" "}
+              active
             </span>
           </div>
-          
-          {/* Grid Layout - 3 columns on mobile, 4 on tablet, 5 on desktop */}
-          <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 gap-3">
-            <AnimatePresence initial={false} mode="popLayout">
-              {filteredProducts.map((product) => (
-                <motion.div
-                  key={product.id}
-                  initial={{opacity: 0, scale: 0.95}}
-                  animate={{opacity: 1, scale: 1}}
-                  exit={{opacity: 0, scale: 0.9}}
-                  transition={{duration: 0.2}}
-                >
-                  <ProductCard
-                    product={product}
-                    onToggleActive={toggleProductActive}
-                    onToggleFeatured={toggleProductFeatured}
-                    onDelete={deleteProduct}
-                    onDuplicate={duplicateProduct}
-                  />
-                </motion.div>
-              ))}
+
+          <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-5">
+            <AnimatePresence
+              initial={false}
+              mode="popLayout"
+            >
+              {filteredProducts.map(
+                (product) => (
+                  <motion.div
+                    key={product.id}
+                    initial={{
+                      opacity: 0,
+                      scale: 0.95,
+                    }}
+                    animate={{
+                      opacity: 1,
+                      scale: 1,
+                    }}
+                    exit={{
+                      opacity: 0,
+                      scale: 0.9,
+                    }}
+                    transition={{
+                      duration: 0.2,
+                    }}
+                  >
+                    <ProductCard
+                      product={product}
+                      onToggleActive={
+                        toggleProductActive
+                      }
+                      onToggleFeatured={
+                        toggleProductFeatured
+                      }
+                      onDelete={
+                        deleteProduct
+                      }
+                      onDuplicate={
+                        duplicateProduct
+                      }
+                    />
+                  </motion.div>
+                )
+              )}
             </AnimatePresence>
           </div>
         </>

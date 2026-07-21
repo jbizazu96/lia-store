@@ -267,6 +267,11 @@ export interface Order {
   status: OrderStatus;
 
   /**
+   * Reason supplied by the store when it cancels an order.
+   */
+  cancellationReason?: string;
+
+  /**
    * Timeline of status changes.
    */
   statusHistory?: StatusHistory[];

@@ -12,10 +12,14 @@
 |
 */
 
+import {
+  formatOrderCurrency,
+  formatOrderDate,
+} from "@/utils/orderDisplay";
 import type { Order } from "@/types/order";
 import {motion} from "framer-motion";
 import Link from "next/link";
-import {Eye, MapPin, User, Clock, DollarSign, Package} from "lucide-react";
+import {Eye, MapPin, User, DollarSign, Package} from "lucide-react";
 import {StatusBadge} from "./StatusBadge";
 
 interface OrderCardProps {
@@ -24,15 +28,6 @@ interface OrderCardProps {
 }
 
 export function OrderCard({order, index}: OrderCardProps) {
-  const formatDate = (date: Date) => {
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "numeric",
-  }).format(date);
-};
     const storeTotal =
       order.pricing.subtotal +
       order.pricing.tax;
@@ -53,7 +48,7 @@ export function OrderCard({order, index}: OrderCardProps) {
             </span>
             <StatusBadge status={order.status} size="sm" />
             <span className="text-sm text-gray-400">
-              {formatDate(order.createdAt)}
+              {formatOrderDate(order.createdAt)}
             </span>
           </div>
 
@@ -73,7 +68,7 @@ export function OrderCard({order, index}: OrderCardProps) {
             {/* ✅ Show calculated store total */}
             <div className="flex items-center gap-1.5 text-green-600 font-medium">
               <DollarSign className="w-4 h-4" />
-              ${storeTotal.toFixed(2)}
+              {formatOrderCurrency(storeTotal)}
             </div>
           </div>
         </div>

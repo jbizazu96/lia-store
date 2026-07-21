@@ -18,12 +18,12 @@ export const DELIVERY_CONFIG = {
   /**
    * Base delivery fee.
    */
-  BASE_DELIVERY_FEE: 4.99,
+  BASE_DELIVERY_FEE: 7.99,
 
   /**
    * Additional cost per mile after the base distance.
    */
-  COST_PER_MILE: 0.75,
+  COST_PER_MILE: 1.75,
 
   /**
    * Base distance included in the base fee.
@@ -33,7 +33,7 @@ export const DELIVERY_CONFIG = {
   /**
    * Minimum delivery fee.
    */
-  MIN_DELIVERY_FEE: 2.99,
+  MIN_DELIVERY_FEE: 5.99,
 
   /**
    * Minutes per mile.

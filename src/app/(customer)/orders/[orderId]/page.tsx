@@ -5,31 +5,28 @@
   ✅ Real-time updates using Firestore onSnapshot
 */
 
-import { mapFirestoreOrder } from "@/mappers/orderMapper";
-import type { Order } from "@/types/order";
-import {useState, useEffect, use} from "react";
+import {
+  formatOrderDate,
+  formatOrderPrice,
+  getCurrentOrderStep,
+  getStatusTimestamp,
+} from "@/utils/orderDisplay";
+import {
+  ORDER_STATUS_CONFIG,
+  ORDER_STATUS_STEPS,
+} from "@/config/orderStatus";
+import { useCustomerOrder } from "@/hooks/useCustomerOrder";
 import {useRouter} from "next/navigation";
+import { use } from "react";
 import Image from "next/image";
 import {
   ArrowLeft,
   MapPin,
-  Truck,
-  Clock,
-  Calendar,
   Package,
   CreditCard,
-  CheckCircle,
-  HandshakeIcon,
-  XCircle,
   Store,
-  Phone,
-  Mail,
-  BoxIcon,
-  User,
   Receipt,
 } from "lucide-react";
-import {auth, db} from "@/lib/firebase";
-import {doc, onSnapshot} from "firebase/firestore";
 import { BrandedLoader } from "@/components/ui/BrandedLoader";
 
 
@@ -39,127 +36,42 @@ interface OrderPageProps {
   }>;
 }
 
-// ✅ Complete status steps in order
-const STATUS_STEPS = [
-  {key: "pending", label: "Pending", icon: Clock, color: "bg-yellow-100 text-yellow-800"},
-  {key: "accepted", label: "Accepted", icon: CheckCircle, color: "bg-green-100 text-green-800"},
-  {key: "preparing", label: "Preparing", icon: Package, color: "bg-purple-100 text-purple-800"},
-  {key: "ready_for_pickup", label: "Ready for Pickup", icon: BoxIcon, color: "bg-indigo-100 text-indigo-800"},
-  {key: "out_for_delivery", label: "Out for Delivery", icon: Truck, color: "bg-blue-100 text-blue-800"},
-  {key: "completed", label: "Completed", icon: HandshakeIcon, color: "bg-green-100 text-green-800"},
-];
-
-// ✅ Status config for individual status display
-const STATUS_CONFIG: Record<string, {label: string; color: string; icon: any}> = {
-  pending: {label: "Pending", color: "bg-yellow-100 text-yellow-800 border-yellow-200", icon: Clock},
-  accepted: {label: "Accepted", color: "bg-green-100 text-green-800 border-green-200", icon: CheckCircle},
-  preparing: {label: "Preparing", color: "bg-purple-100 text-purple-800 border-purple-200", icon: Package},
-  ready_for_pickup: {label: "Ready for Pickup", color: "bg-indigo-100 text-indigo-800 border-indigo-200", icon: BoxIcon},
-  out_for_delivery: {label: "Out for Delivery", color: "bg-blue-100 text-blue-800 border-blue-200", icon: Truck},
-  completed: {label: "Completed", color: "bg-green-100 text-green-800 border-green-200", icon: HandshakeIcon},
-  cancelled: {label: "Cancelled", color: "bg-red-100 text-red-800 border-red-200", icon: XCircle},
-};
 
 export default function OrderDetailPage({params}: OrderPageProps) {
   const {orderId} = use(params);
   const router = useRouter();
-  const [order, setOrder] = useState<Order | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    // ✅ Check authentication
-    const checkAuth = async () => {
-      const user = auth.currentUser;
-      if (!user) {
-        router.push("/login");
-        return;
-      }
-      return user;
-    };
-
-    // ✅ Set up real-time listener for the order
-    const setupListener = async () => {
-      const user = await checkAuth();
-      if (!user) return;
-
-      const orderRef = doc(db, "orders", orderId);
-
-      const unsubscribe = onSnapshot(orderRef, (docSnapshot) => {
-        if (!docSnapshot.exists()) {
-          setError("Order not found");
-          setLoading(false);
-          return;
-        }
-
-        const data = docSnapshot.data();
-
-          // Convert Firestore document into our domain model
-          const order = mapFirestoreOrder(docSnapshot);
-
-          // Verify this order belongs to the logged-in customer
-          if (order.customer.uid !== user.uid) {
-            setError("You don't have permission to view this order.");
-            setLoading(false);
-            return;
-          }
-
-          setOrder(order);
-
-          setLoading(false);
-      }, (error) => {
-        console.error("Error listening to order:", error);
-        setError("Failed to load order");
-        setLoading(false);
-      });
-
-      // ✅ Cleanup listener on unmount
-      return unsubscribe;
-    };
-
-    setupListener();
-  }, [orderId, router]);
-
+  const {
+      order,
+      loading,
+      error,
+      isAuthenticated,
+    } = useCustomerOrder({
+      orderId,
+    });
 
   // Get status config
-  const getStatusConfig = (status: string) => {
-    return STATUS_CONFIG[status] || STATUS_CONFIG.pending;
-  };
+  const getStatusConfig = (
+      status: string
+    ) => {
+      if (
+        status in
+        ORDER_STATUS_CONFIG
+      ) {
+        return ORDER_STATUS_CONFIG[
+          status as keyof typeof ORDER_STATUS_CONFIG
+        ];
+      }
 
-  const formatDate = (date: Date | undefined | null) => {
-  console.log("formatDate received:", date);
-
-  if (!(date instanceof Date) || isNaN(date.getTime())) {
-    return "Unknown";
-  }
-
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "numeric",
-  }).format(date);
+  return ORDER_STATUS_CONFIG.pending;
 };
 
-  // ✅ Get timestamp for a specific status from history
-  const getStatusTimestamp = (
-  statusKey: string
-    ): Date | null => {
-      if (!order?.statusHistory) return null;
 
-      const entry = order.statusHistory.find(
-        h => h.status === statusKey
-      );
 
-      return entry?.timestamp ?? null;
-    };
 
-  const formatPrice = (price: number) => {
-    const dollars = Math.floor(price);
-    const cents = Math.round((price - dollars) * 100);
-    return { dollars, cents: cents.toString().padStart(2, '0') };
-  };
+  if (!loading && !isAuthenticated) {
+    router.push("/login");
+    return null;
+  }
 
   if (loading) {
     return <BrandedLoader message="Loading Order Details" />;
@@ -186,7 +98,10 @@ export default function OrderDetailPage({params}: OrderPageProps) {
   const StatusIcon = statusConfig.icon;
   
   // ✅ Calculate which steps are completed
-  const currentStepIndex = STATUS_STEPS.findIndex(s => s.key === order.status);
+  const currentStepIndex =
+    getCurrentOrderStep(
+      order.status
+    );
   const iscompleted = (index: number) => index <= currentStepIndex;
 
   return (
@@ -220,15 +135,29 @@ export default function OrderDetailPage({params}: OrderPageProps) {
             </div>
             <div className="text-right">
               <p className="text-xs text-gray-400">Order Placed</p>
-              <p className="text-sm font-medium text-gray-700">{formatDate(order.createdAt)}</p>
+              <p className="text-sm font-medium text-gray-700">{formatOrderDate(order.createdAt)}</p>
             </div>
           </div>
         </div>
 
+        {order.cancellationReason?.trim() && (
+          <div className="rounded-2xl border border-red-100 bg-red-50 p-5 shadow-sm">
+            <div className="flex items-start gap-3">
+              <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-red-100">
+              </div>
+              <div>
+                <h3 className="font-semibold text-red-800">Order cancellation reason</h3>
+                <p className="mt-1 text-sm leading-6 text-red-700">
+                  {order.cancellationReason}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* ✅ Full Order Timeline with Server Timestamps */}
         <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
           <div className="flex items-center gap-2 mb-4">
-            <Clock className="w-5 h-5 text-orange-500" />
             <h3 className="font-semibold text-gray-800">Order Timeline</h3>
           </div>
           <div className="relative">
@@ -236,10 +165,14 @@ export default function OrderDetailPage({params}: OrderPageProps) {
             <div className="absolute left-4 top-6 bottom-6 w-0.5 bg-gray-200" />
             
             <div className="space-y-6">
-              {STATUS_STEPS.map((step, index) => {
+              {ORDER_STATUS_STEPS.map((step, index) => {
                 const completed = iscompleted(index);
                 const Icon = step.icon;
-                const timestamp = getStatusTimestamp(step.key);
+                const timestamp =
+                  getStatusTimestamp(
+                    order.statusHistory,
+                    step.key
+                  );
                 
                 return (
                   <div key={step.key} className="flex items-start gap-4 relative">
@@ -264,7 +197,7 @@ export default function OrderDetailPage({params}: OrderPageProps) {
                       </div>
                       {timestamp ? (
                         <p className="text-xs text-gray-400">
-                          {formatDate(timestamp)}
+                          {formatOrderDate(timestamp)}
                         </p>
                       ) : !completed && step.key === order.status ? (
                         <p className="text-xs text-orange-500 font-medium">In progress...</p>
@@ -318,8 +251,8 @@ export default function OrderDetailPage({params}: OrderPageProps) {
           </div>
           <div className="space-y-3">
             {order.items.map((item) => {
-              const price = formatPrice(item.price);
-              const totalPrice = formatPrice(item.price * item.quantity);
+              const price = formatOrderPrice(item.price);
+              const totalPrice = formatOrderPrice(item.price * item.quantity);
               return (
                 <div key={item.id} className="flex items-center gap-3 py-2 border-b border-gray-100 last:border-0">
                   <div className="relative w-14 h-14 rounded-lg overflow-hidden flex-shrink-0 bg-white border border-gray-100">

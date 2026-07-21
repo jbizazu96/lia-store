@@ -4,6 +4,9 @@
   Search and filter bar for orders.
 */
 
+import {
+  ORDER_STATUS_CONFIG,
+} from "@/config/orderStatus";
 import {Search, Filter, X} from "lucide-react";
 
 interface OrderFiltersProps {
@@ -16,14 +19,19 @@ interface OrderFiltersProps {
 }
 
 const statusOptions = [
-  {value: "all", label: "All Statuses"},
-  {value: "pending", label: "Pending"},
-  {value: "accepted", label: "Accepted"},
-  {value: "preparing", label: "Preparing"},
-  {value: "ready", label: "Ready"},
-  {value: "out_for_delivery", label: "Out for Delivery"},
-  {value: "completed", label: "Completed"},
-  {value: "cancelled", label: "Cancelled"},
+  {
+    value: "all",
+    label: "All Statuses",
+  },
+
+  ...Object.entries(
+    ORDER_STATUS_CONFIG
+  ).map(
+    ([value, config]) => ({
+      value,
+      label: config.label,
+    })
+  ),
 ];
 
 export function OrderFilters({

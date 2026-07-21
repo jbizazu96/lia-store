@@ -40,7 +40,9 @@ export function ProductCard({
     return { dollars, cents: cents.toString().padStart(2, '0') };
   };
 
-  const price = formatPrice(product.price);
+  const displayPrice = formatPrice(product.displayPrice);
+  const originalPrice = formatPrice(product.price);
+  const isOnSale = product.price > product.displayPrice;
 
   // Get stock status
   const getStockStatus = (stock: number) => {
@@ -134,7 +136,11 @@ export function ProductCard({
               <Package className="w-8 h-8 text-gray-300" />
             </div>
           )}
-          
+          {isOnSale && (
+            <span className="absolute left-1.5 top-1.5 rounded-full bg-red-500 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white shadow-sm">
+              On sale
+            </span>
+          )}
         </div>
 
         {/* Product Info */}
@@ -152,13 +158,18 @@ export function ProductCard({
           )}
 
           {/* Product price */}
-          <div className="flex items-center gap-1 mt-0.5">
-            <span className="text-sm font-bold text-gray-800">
-              ${price.dollars}
-              <sup className="text-[8px] font-semibold text-gray-600">
-                .{price.cents}
+          <div className="mt-0.5 flex items-center gap-1.5">
+            <span className={`text-sm font-bold ${isOnSale ? "text-red-600" : "text-gray-800"}`}>
+              ${displayPrice.dollars}
+              <sup className={`text-[8px] font-semibold ${isOnSale ? "text-red-500" : "text-gray-600"}`}>
+                .{displayPrice.cents}
               </sup>
             </span>
+            {isOnSale && (
+              <span className="text-[10px] text-gray-400 line-through">
+                ${originalPrice.dollars}.{originalPrice.cents}
+              </span>
+            )}
           </div>
 
           {/* Stock Status */}

@@ -4,6 +4,9 @@
   Order detail header with back button, order ID, and status.
 */
 
+import {
+  formatOrderDate,
+} from "@/utils/orderDisplay";
 import Link from "next/link";
 import {ArrowLeft, Printer, Calendar} from "lucide-react";
 import {StatusBadge} from "@/components/store/orders/StatusBadge";
@@ -15,16 +18,6 @@ interface OrderDetailHeaderProps {
 }
 
 export function OrderDetailHeader({orderId, status, createdAt}: OrderDetailHeaderProps) {
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return new Intl.DateTimeFormat('en-US', {
-      month: 'long',
-      day: 'numeric',
-      year: 'numeric',
-      hour: 'numeric',
-      minute: 'numeric',
-    }).format(date);
-  };
 
   return (
     <div className="flex items-center gap-4">
@@ -42,7 +35,9 @@ export function OrderDetailHeader({orderId, status, createdAt}: OrderDetailHeade
           <StatusBadge status={status} size="sm" />
           <span className="text-sm text-gray-400">
             <Calendar className="w-3.5 h-3.5 inline mr-1" />
-            {formatDate(createdAt)}
+            {formatOrderDate(
+              new Date(createdAt)
+            )}
           </span>
         </div>
       </div>

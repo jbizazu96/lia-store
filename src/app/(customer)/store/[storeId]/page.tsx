@@ -18,11 +18,8 @@
 |
 */
 
-import {
-  use,
-  useEffect,
-  useState,
-} from "react";
+import { useProductFilter } from "@/hooks/useProductFilter";
+import { use } from "react";
 
 import {
   useRouter,
@@ -45,7 +42,6 @@ import { ProductSection } from "@/components/customer/store/ProductSection";
 import { PromoBanner } from "@/components/customer/store/PromoBanner";
 import { StoreHeader } from "@/components/customer/store/StoreHeader";
 import { StoreInfo } from "@/components/customer/store/StoreInfo";
-
 import type { Product } from "@/types/product";
 
 /*
@@ -129,27 +125,19 @@ export default function StorePage({
     estimatedTimeParam,
   });
 
-  /*
-  |--------------------------------------------------------------------------
-  | Local UI State
-  |--------------------------------------------------------------------------
-  */
-
-  const [
-    displayProducts,
-    setDisplayProducts,
-  ] = useState<Product[]>([]);
-
-  const [
-    searchQuery,
-    setSearchQuery,
-  ] = useState("");
-
-  const [
-    selectedCategory,
-    setSelectedCategory,
-  ] = useState("all");
-
+  const {
+  searchQuery,
+  selectedCategory,
+  displayProducts,
+  selectedCategoryData,
+  isSearching,
+  isFilteringByCategory,
+  setSearchQuery,
+  selectCategory,
+} = useProductFilter({
+  products: allProducts,
+  categories,
+});
   /*
   |--------------------------------------------------------------------------
   | Cart Summary
@@ -161,124 +149,6 @@ export default function StorePage({
 
   const storeTotalPrice =
     getStoreTotalPrice(storeId);
-
-  /*
-  |--------------------------------------------------------------------------
-  | Product Filtering
-  |--------------------------------------------------------------------------
-  |
-  | Search takes priority over category filtering.
-  |
-  */
-
-  useEffect(() => {
-    const normalizedSearch =
-      searchQuery.trim().toLowerCase();
-
-    /*
-    |--------------------------------------------------------------------------
-    | Search Products
-    |--------------------------------------------------------------------------
-    */
-
-    if (normalizedSearch) {
-      const filteredProducts =
-        allProducts.filter((product) => {
-          const productName =
-            product.name.toLowerCase();
-
-          const productDescription =
-            product.description.toLowerCase();
-
-          const productCategory =
-            product.category.toLowerCase();
-
-          return (
-            productName.includes(
-              normalizedSearch
-            ) ||
-            productDescription.includes(
-              normalizedSearch
-            ) ||
-            productCategory.includes(
-              normalizedSearch
-            )
-          );
-        });
-
-      setDisplayProducts(
-        filteredProducts
-      );
-
-      return;
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Show All Products
-    |--------------------------------------------------------------------------
-    */
-
-    if (selectedCategory === "all") {
-      setDisplayProducts(allProducts);
-      return;
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Show Selected Category
-    |--------------------------------------------------------------------------
-    */
-
-    const selectedCategoryData =
-      categories.find(
-        (category) =>
-          category.id ===
-          selectedCategory
-      );
-
-    setDisplayProducts(
-      selectedCategoryData?.products ??
-        []
-    );
-  }, [
-    allProducts,
-    categories,
-    searchQuery,
-    selectedCategory,
-  ]);
-
-  /*
-  |--------------------------------------------------------------------------
-  | Search Handler
-  |--------------------------------------------------------------------------
-  */
-
-  const handleSearch = (
-    query: string
-  ) => {
-    setSearchQuery(query);
-  };
-
-  /*
-  |--------------------------------------------------------------------------
-  | Category Handler
-  |--------------------------------------------------------------------------
-  */
-
-  const handleCategorySelect = (
-    categoryId: string
-  ) => {
-    setSelectedCategory(categoryId);
-
-    /*
-     * Clear search when the customer selects a category.
-     */
-
-    if (searchQuery) {
-      setSearchQuery("");
-    }
-  };
 
   /*
   |--------------------------------------------------------------------------
@@ -316,7 +186,7 @@ export default function StorePage({
     void addItem({
       id: product.id,
       name: product.name,
-      price: product.price,
+      price: product.displayPrice,
       imageUrl: product.imageUrl,
 
       storeId: store.id,
@@ -535,22 +405,22 @@ export default function StorePage({
       />
 
       <StoreInfo
-        name={store.name}
-        isOpen={store.isOpen}
-        distance={store.distance}
-        deliveryFee={store.deliveryFee}
-        estimatedPrepTime={
-          store.estimatedPrepTime
-        }
-        rating={store.rating ?? 0}
-        reviewCount={store.reviewCount}
-        schedule={store.schedule}
-        onViewMore={() =>
-          router.push(
-            `/store/${store.id}/info`
-          )
-        }
-      />
+          name={store.name}
+          isOpen={store.isOpen}
+          distance={store.distance}
+          deliveryFee={store.deliveryFee}
+          estimatedPrepTime={
+            store.estimatedPrepTime
+          }
+          rating={store.rating ?? 0}
+          reviewCount={store.reviewCount}
+          schedule={store.schedule}
+          onViewMore={() =>
+            router.push(
+              `/store/${store.id}/info`
+            )
+          }
+        />
 
       {store.promotions.length > 0 && (
         <div className="mt-4 px-4">
@@ -566,17 +436,13 @@ export default function StorePage({
         <div className="mt-4 px-4">
           <CategoryScroll
             categories={categories}
-            selectedCategory={
-              selectedCategory
-            }
-            onSelect={
-              handleCategorySelect
-            }
+            selectedCategory={selectedCategory}
+            onSelect={selectCategory}
           />
         </div>
       )}
 
-      {searchQuery.trim() ? (
+      {isSearching ? (
         <div className="mt-4 px-4 pb-24">
           <h3 className="mb-3 font-bold text-gray-800">
             Search Results (
@@ -615,16 +481,10 @@ export default function StorePage({
             </div>
           )}
         </div>
-      ) : selectedCategory !== "all" ? (
+     ) : isFilteringByCategory ? (
         <div className="mt-4 px-4 pb-24">
           <h3 className="mb-3 font-bold text-gray-800">
-            {
-              categories.find(
-                (category) =>
-                  category.id ===
-                  selectedCategory
-              )?.name
-            }
+            {selectedCategoryData?.name}
           </h3>
 
           {displayProducts.length === 0 ? (
@@ -670,20 +530,16 @@ export default function StorePage({
             getQuantity={
               getItemQuantity
             }
-            onViewAll={() => {
-              setSelectedCategory(
-                category.id
-              );
-
-              setSearchQuery("");
-            }}
+            onViewAll={() =>
+              selectCategory(category.id)
+            }
           />
         ))
       )}
 
       <BottomBar
         searchQuery={searchQuery}
-        onSearchChange={handleSearch}
+        onSearchChange={setSearchQuery}
         itemCount={storeItemCount}
         totalPrice={storeTotalPrice}
         storeId={store.id}

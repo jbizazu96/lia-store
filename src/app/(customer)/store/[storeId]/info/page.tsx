@@ -10,10 +10,18 @@
   ✅ Phone number with call link
 */
 
-import type { CustomerStore } from "@/types/view-models/customerStore";
-import { storeService } from "@/services/store/storeService";
-import { storeMapper } from "@/mappers/storeMapper";
-import { useState, useEffect, use } from "react";
+import {
+  buildStoreAddress,
+  getStoreMapsUrl,
+  getStorePhoneUrl,
+  getStoreStaticMapUrl,
+} from "@/utils/storeLinks";
+import { useStoreInfo } from "@/hooks/useStoreInfo";
+import {
+  formatStoreTime,
+  getStoreStatus,
+} from "@/services/store/storeSchedule";
+import { use } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
@@ -27,151 +35,18 @@ import {
   Star,
 } from "lucide-react";
 import Image from "next/image";
-import Link from "next/link";
 import { BrandedLoader } from "@/components/ui/BrandedLoader";
-
-interface ScheduleDay {
-  day: string;
-  open: string;
-  close: string;
-  isClosed: boolean;
-}
 
 
 interface StoreInfoPageProps {params: Promise<{storeId: string;}>;}export default function StoreInfoPage({params,}: StoreInfoPageProps) {
   const router = useRouter();
   const { storeId } = use(params);
-  const [store, setStore] = useState<CustomerStore | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const fetchStore = async () => {
-           try {
-            setLoading(true);
+  const {store,loading,error,} = useStoreInfo({
+        storeId,
+      });
+     
 
-          const domainStore = await storeService.getStore(storeId);
-
-          if (!domainStore) {
-            setError("Store not found");
-            return;
-          }
-
-            const customerStore = storeMapper.toCustomerStore(domainStore);
-
-            setStore(customerStore);
-          } catch (error) {
-            console.error("Error fetching store:", error);
-           setError("Failed to load store information");
-         } finally {
-           setLoading(false);
-        }
-    };
-
-    fetchStore();
-    }, [storeId]);
-
-  // Format time for display
-  const formatTime = (time: string) => {
-    if (!time || time === "00:00") return "Closed";
-    const [hours, minutes] = time.split(":").map(Number);
-    const ampm = hours >= 12 ? "PM" : "AM";
-    const h12 = hours % 12 || 12;
-    return `${h12}:${minutes.toString().padStart(2, "0")} ${ampm}`;
-  };
-
-  // Format schedule for display
-  const formatSchedule = (schedule: ScheduleDay[]) => {
-    if (!schedule || schedule.length === 0) {
-      return [
-        { day: "Mon", open: "", close: "", isClosed: true },
-        { day: "Tue", open: "", close: "", isClosed: true },
-        { day: "Wed", open: "", close: "", isClosed: true },
-        { day: "Thu", open: "", close: "", isClosed: true },
-        { day: "Fri", open: "", close: "", isClosed: true },
-        { day: "Sat", open: "", close: "", isClosed: true },
-        { day: "Sun", open: "", close: "", isClosed: true },
-      ];
-    }
-
-    const dayMap: { [key: string]: string } = {
-      Monday: "Mon",
-      Tuesday: "Tue",
-      Wednesday: "Wed",
-      Thursday: "Thu",
-      Friday: "Fri",
-      Saturday: "Sat",
-      Sunday: "Sun",
-    };
-
-    return schedule.map(day => ({
-      ...day,
-      day: dayMap[day.day] || day.day.substring(0, 3),
-    }));
-  };
-
-  // Check if today
-  const isToday = (day: string) => {
-    const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-    const today = days[new Date().getDay()];
-    return day === today;
-  };
-
-  // Get today's schedule
-  const getTodaySchedule = (schedule: ScheduleDay[]) => {
-    if (!schedule || schedule.length === 0) return null;
-    const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-    const today = days[new Date().getDay()];
-    return schedule.find(s => s.day === today);
-  };
-
-  // Get current day status
-  const getCurrentStatus = (schedule: ScheduleDay[]) => {
-    const today = getTodaySchedule(schedule);
-    if (!today) {
-      return { isOpen: false, message: "No schedule set" };
-    }
-
-    if (today.isClosed) {
-      return { isOpen: false, message: "Closed today" };
-    }
-
-    const now = new Date();
-    const currentTime = now.getHours() * 60 + now.getMinutes();
-    const [openHours, openMinutes] = today.open.split(":").map(Number);
-    const [closeHours, closeMinutes] = today.close.split(":").map(Number);
-    const openTime = openHours * 60 + openMinutes;
-    const closeTime = closeHours * 60 + closeMinutes;
-
-    const isCurrentlyOpen = currentTime >= openTime && currentTime < closeTime;
-
-    return {
-      isOpen: isCurrentlyOpen,
-      message: isCurrentlyOpen
-        ? `Open until ${formatTime(today.close)}`
-        : `Opens at ${formatTime(today.open)}`,
-    };
-  };
-
-  // Build Google Maps URL for navigation
-  const getMapsUrl = () => {
-    if (!store) return "#";
-    const address = `${store.address}, ${store.city}, ${store.state} ${store.zip}`;
-    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
-  };
-
-  // Build Google Maps URL for the map image (static map)
-  const getStaticMapUrl = () => {
-    if (!store) return "";
-    const address = `${store.address}, ${store.city}, ${store.state} ${store.zip}`;
-    return `https://maps.googleapis.com/maps/api/staticmap?center=${encodeURIComponent(address)}&zoom=15&size=600x300&markers=color:red%7C${encodeURIComponent(address)}&key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}`;
-  };
-
-  // Build phone link
-  const getPhoneLink = () => {
-    if (!store || !store.phone) return "#";
-    return `tel:${store.phone.replace(/\s/g, "")}`;
-  };
 
   if (loading) {
     return <BrandedLoader message="Loading Store Information" />;
@@ -195,10 +70,63 @@ interface StoreInfoPageProps {params: Promise<{storeId: string;}>;}export defaul
     );
   }
 
-  const formattedSchedule = formatSchedule(store.schedule ?? []);
-  const todayStatus = getCurrentStatus(store.schedule ?? []);
-  const fullAddress = `${store.address}, ${store.city}, ${store.state} ${store.zip}`;
+          const storeStatus = getStoreStatus(
+          store.schedule,
+          store.isOpen
+        );
 
+        const fullSchedule = [
+          "Monday",
+          "Tuesday",
+          "Wednesday",
+          "Thursday",
+          "Friday",
+          "Saturday",
+          "Sunday",
+        ];
+
+        const todayName = new Intl.DateTimeFormat(
+          "en-US",
+          {
+            weekday: "long",
+          }
+        ).format(new Date());
+
+        const formattedSchedule =
+          fullSchedule.map((dayName) => {
+            const scheduleDay =
+              store.schedule?.find(
+                (day) =>
+                  day.day === dayName
+              );
+
+            return {
+              day: dayName.substring(0, 3),
+
+              fullDay: dayName,
+
+              open:
+                scheduleDay?.open ?? "",
+
+              close:
+                scheduleDay?.close ?? "",
+
+              isClosed:
+                scheduleDay?.isClosed ??
+                true,
+            };
+          });
+
+      const fullAddress = buildStoreAddress(store);
+      const mapsUrl = getStoreMapsUrl(store);
+      const staticMapUrl = getStoreStaticMapUrl(
+        store,
+        process.env
+          .NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+      );
+
+const phoneUrl =
+  getStorePhoneUrl(store.phone);
   return (
     <main className="min-h-screen bg-gray-50 pb-8">
       {/* Header with Back Button */}
@@ -221,7 +149,7 @@ interface StoreInfoPageProps {params: Promise<{storeId: string;}>;}export defaul
           <>
             {/* Static Map Image */}
             <img
-              src={getStaticMapUrl()}
+              src={staticMapUrl}
               alt={`${store.name} location`}
               className="w-full h-full object-cover"
               onError={(event) => {
@@ -277,14 +205,14 @@ interface StoreInfoPageProps {params: Promise<{storeId: string;}>;}export defaul
 
           {/* Status */}
           <div className="flex items-center gap-2 mb-4">
-            <div className={`w-2 h-2 rounded-full ${todayStatus.isOpen ? "bg-green-500" : "bg-red-500"}`} />
-            <span className={`text-sm font-medium ${todayStatus.isOpen ? "text-green-600" : "text-red-600"}`}>
-              {todayStatus.isOpen ? "Open" : "Closed"}
-            </span>
-            {todayStatus.message && (
-              <span className="text-xs text-gray-400">• {todayStatus.message}</span>
-            )}
-          </div>
+              <div className={`w-2 h-2 rounded-full ${storeStatus.statusColor}`}/>
+              <span className={`text-sm font-medium ${storeStatus.textColor}`}>
+                {storeStatus.statusText}
+              </span>
+              <span className="text-xs text-gray-400">
+                • {storeStatus.message}
+              </span>
+            </div>
 
           {/* Address */}
           {store.address && (
@@ -299,7 +227,7 @@ interface StoreInfoPageProps {params: Promise<{storeId: string;}>;}export defaul
                 </div>
               </div>
               <a
-                href={getMapsUrl()}
+                href={mapsUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="p-2 hover:bg-gray-100 rounded-full transition"
@@ -323,7 +251,7 @@ interface StoreInfoPageProps {params: Promise<{storeId: string;}>;}export defaul
                 </div>
               </div>
               <a
-                href={getPhoneLink()}
+                href={phoneUrl}
                 className="p-2 hover:bg-gray-100 rounded-full transition"
                 aria-label="Call store"
               >
@@ -342,25 +270,43 @@ interface StoreInfoPageProps {params: Promise<{storeId: string;}>;}export defaul
             </div>
 
             <div className="space-y-1.5">
-              {formattedSchedule.map((day, index) => {
-                const today = isToday(
-                  ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][index]
-                );
-                const isClosed = day.isClosed || !day.open || !day.close;
+              {formattedSchedule.map((day) => {
+                const today =
+                  day.fullDay === todayName;
+
+                const isClosed =
+                  day.isClosed ||
+                  !day.open ||
+                  !day.close;
 
                 return (
                   <div
-                    key={day.day}
+                    key={day.fullDay}
                     className={`flex items-center justify-between text-sm ${
-                      today ? "font-semibold text-gray-800" : "text-gray-600"
+                      today
+                        ? "font-semibold text-gray-800"
+                        : "text-gray-600"
                     }`}
                   >
-                    <span className={today ? "font-semibold" : ""}>
+                    <span>
                       {day.day}
                       {today && " (Today)"}
                     </span>
-                    <span className={isClosed ? "text-gray-400" : ""}>
-                      {isClosed ? "Closed" : `${formatTime(day.open)} - ${formatTime(day.close)}`}
+
+                    <span
+                      className={
+                        isClosed
+                          ? "text-gray-400"
+                          : ""
+                      }
+                    >
+                      {isClosed
+                        ? "Closed"
+                        : `${formatStoreTime(
+                            day.open
+                          )} - ${formatStoreTime(
+                            day.close
+                          )}`}
                     </span>
                   </div>
                 );

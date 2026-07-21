@@ -66,6 +66,12 @@ export interface Product {
   price: number;
 
   /**
+   * Price currently shown to customers. When lower than `price`,
+   * the product is on sale.
+   */
+  displayPrice: number;
+
+  /**
    * Current inventory quantity.
    */
   stock: number;

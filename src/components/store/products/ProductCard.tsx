@@ -13,14 +13,14 @@ import {
   Edit2,
   Trash2,
   Star,
-  StarOff,
   Package,
   DollarSign,
   MoreVertical,
   Copy,
-  ShoppingBag,
 } from "lucide-react";
-import {Product} from "@/app/store/(store)/products/types";
+import type {
+  Product,
+} from "@/types/product";
 
 interface ProductCardProps {
   product: Product;
@@ -91,7 +91,7 @@ export function ProductCard({
         )}
 
         {/* Featured Badge - Top Left */}
-        {product.isFeatured && (
+        {product.featured && (
           <div className="absolute top-1.5 left-1.5 px-1.5 py-0.5 bg-yellow-400 text-white text-[10px] font-bold rounded-full flex items-center gap-0.5">
             <Star className="w-2.5 h-2.5 fill-white" />
           </div>
@@ -187,7 +187,8 @@ export function ProductCard({
               </span>
             )}
           </div>
-          {product.size?.value > 0 && (
+          {product.size &&
+             product.size.value > 0 && (
             <span className="text-[9px] text-gray-500">
               {product.size.value}{product.size.unit}
             </span>
@@ -198,40 +199,45 @@ export function ProductCard({
         <div className="flex items-center gap-1 pt-1 border-t border-gray-100">
           {/* Active/Inactive Button */}
           <button
-            onClick={() => onToggleActive(product.id, product.isActive)}
+            onClick={() => onToggleActive(product.id, product.isAvailable)}
             className={`flex-1 text-[10px] font-medium px-1.5 py-1 rounded-full transition ${
-              product.isActive
+              product.isAvailable
                 ? "bg-green-100 text-green-700 hover:bg-green-200"
                 : "bg-gray-100 text-gray-600 hover:bg-gray-200"
             }`}
-            aria-label={product.isActive ? "Deactivate product" : "Activate product"}
+            aria-label={product.isAvailable ? "Deactivate product" : "Activate product"}
           >
-            {product.isActive ? "Active" : "Inactive"}
+            {product.isAvailable ? "Active" : "Inactive"}
           </button>
           
           {/* Feature Button */}
           <button
-            onClick={() => onToggleFeatured(product.id, product.isFeatured)}
+            onClick={() => onToggleFeatured(product.id, product.featured)}
             className={`flex-1 text-[10px] font-medium px-1.5 py-1 rounded-full transition flex items-center justify-center gap-0.5 ${
-              product.isFeatured
+              product.featured
                 ? "bg-yellow-100 text-yellow-700 hover:bg-yellow-200"
                 : "bg-gray-100 text-gray-600 hover:bg-gray-200"
             }`}
-            aria-label={product.isFeatured ? "Remove from featured" : "Add to featured"}
+            aria-label={product.featured ? "Remove from featured" : "Add to featured"}
           >
-            <Star className={`w-2.5 h-2.5 ${product.isFeatured ? "fill-yellow-500" : ""}`} />
-            {product.isFeatured ? "Featured" : "Feature"}
+            <Star className={`w-2.5 h-2.5 ${product.featured ? "fill-yellow-500" : ""}`} />
+            {product.featured ? "Featured" : "Feature"}
           </button>
 
           {/* Promotion indicator */}
           {product.promotion && (
-            <span className="text-[9px] text-orange-600 font-medium bg-orange-50 px-1 py-0.5 rounded truncate max-w-[35px]">
-              {product.promotion.type === "bogo" && "BOGO"}
-              {product.promotion.type === "discount" && `${product.promotion.discountAmount}%`}
-              {product.promotion.type === "code" && "Code"}
-              {product.promotion.type === "free_shipping" && "FreeShip"}
-            </span>
-          )}
+              <span className="max-w-[55px] truncate rounded bg-orange-50 px-1 py-0.5 text-[9px] font-medium text-orange-600">
+                {product.promotion.type === "bogo" &&
+                  "BOGO"}
+
+                {product.promotion.type === "discount" &&
+                  "Discount"}
+
+                {product.promotion.type ===
+                  "free_shipping" &&
+                  "Free Ship"}
+              </span>
+            )}
         </div>
       </div>
     </motion.div>

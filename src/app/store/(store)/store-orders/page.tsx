@@ -1,193 +1,214 @@
 "use client";
 
 /*
-  Store owner orders page.
-  ✅ Real-time updates using Firestore onSnapshot
-  Displays all orders with filtering and status management.
+|--------------------------------------------------------------------------
+| Store Orders Page
+|--------------------------------------------------------------------------
+|
+| Displays the signed-in store owner's orders.
+|
+| Data loading, authentication, store resolution, synchronization, and the
+| real-time Firestore listener are handled by useStoreOrders.
+|
+| This page handles only:
+| - Searching
+| - Status filtering
+| - Statistics
+| - Rendering
+|
 */
 
-import type { Order } from "@/types/order";
-import {BrandedLoader} from "@/components/ui/BrandedLoader";
-import {useState, useEffect} from "react";
-import {useRouter, useSearchParams} from "next/navigation";
-import {motion, AnimatePresence} from "framer-motion";
-import {auth, db} from "@/lib/firebase";
 import {
-  collection,
-  query,
-  where,
-  getDocs,
-  orderBy,
-  doc,
-  getDoc,
-  onSnapshot,  // ✅ Import onSnapshot
-} from "firebase/firestore";
+  useEffect,
+} from "react";
 
-// Components
-import {OrderStats} from "@/components/store/orders/OrderStats";
-import {OrderFilters} from "@/components/store/orders/OrderFilters";
-import {OrderCard} from "@/components/store/orders/OrderCard";
-import {EmptyOrders} from "@/components/store/orders/EmptyOrders";
-import { mapFirestoreOrder } from "@/mappers/orderMapper";
 import {
-  getFunctions,
-  httpsCallable,
-} from "firebase/functions";
+  useRouter,
+  useSearchParams,
+} from "next/navigation";
+
+import {
+  AnimatePresence,
+} from "framer-motion";
+
+import {
+  useStoreOrders,
+} from "@/hooks/useStoreOrders";
+
+import {
+  useStoreOrderFilters,
+} from "@/hooks/useStoreOrderFilters";
+
+import {
+  BrandedLoader,
+} from "@/components/ui/BrandedLoader";
+
+import {
+  EmptyOrders,
+} from "@/components/store/orders/EmptyOrders";
+
+import {
+  OrderCard,
+} from "@/components/store/orders/OrderCard";
+
+import {
+  OrderFilters,
+} from "@/components/store/orders/OrderFilters";
+
+import {
+  OrderStats,
+} from "@/components/store/orders/OrderStats";
+
+/*
+|--------------------------------------------------------------------------
+| Page Component
+|--------------------------------------------------------------------------
+*/
 
 export default function StoreOrdersPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [filteredOrders, setFilteredOrders] = useState<Order[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [storeId, setStoreId] = useState("");
-  const functions = getFunctions();
-  const syncStoreOrders = httpsCallable(
-  functions,
-  "syncStoreOrders"
-  );
-  // Filter states
-  const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState(searchParams.get("status") || "all");
 
-  // Fetch orders with real-time listener
+  const searchParams =
+    useSearchParams();
+
+  /*
+  |--------------------------------------------------------------------------
+  | Store Orders Hook
+  |--------------------------------------------------------------------------
+  */
+
+  const {
+    orders,
+    loading,
+    error,
+    isAuthenticated,
+    needsStoreSetup,
+  } = useStoreOrders();
+
+  /*
+  |--------------------------------------------------------------------------
+  | Store Order Filters
+  |--------------------------------------------------------------------------
+  */
+
+  const {
+    filteredOrders,
+    searchQuery,
+    statusFilter,
+    hasFilters,
+    stats,
+    setSearchQuery,
+    setStatusFilter,
+    clearFilters,
+  } = useStoreOrderFilters({
+    orders,
+
+    initialStatus:
+      searchParams.get("status") ??
+      "all",
+  });
+
+  /*
+  |--------------------------------------------------------------------------
+  | Authentication Redirect
+  |--------------------------------------------------------------------------
+  */
+
   useEffect(() => {
-    const fetchStoreAndSetupListener = async () => {
-      try {
-        const user = auth.currentUser;
-        if (!user) {
-          router.push("/login");
-          return;
-        }
-
-        // Get store ID
-        const userRef = doc(db, "users", user.uid);
-        const userDoc = await getDoc(userRef);
-        
-        let storeId = userDoc.data()?.storeId;
-
-        if (!storeId) {
-          const storesRef = collection(db, "stores");
-          const q = query(storesRef, where("ownerId", "==", user.uid));
-          const storeSnapshot = await getDocs(q);
-          
-          if (!storeSnapshot.empty) {
-            storeId = storeSnapshot.docs[0].id;
-          }
-        }
-
-        if (!storeId) {
-          console.error("No store found for user:", user.uid);
-          router.push("/store/create");
-          return;
-        }
-
-        setStoreId(storeId);
-
-        // ----------------------------------------------------
-        // Synchronize this store's active deliveries.
-        // ----------------------------------------------------
-        try {
-
-          await syncStoreOrders();
-
-          console.log(
-            "Store orders synchronized."
-          );
-
-        } catch (error) {
-
-          console.error(
-            "Store synchronization failed:",
-            error
-          );
-
-        }
-        // ✅ Set up real-time listener for orders
-        const ordersRef = collection(db, "orders");
-        const q = query(
-          ordersRef,
-          where("store.id", "==", storeId),
-          orderBy("createdAt", "desc")
-        );
-
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-          
-          const ordersData =
-            snapshot.docs.map(mapFirestoreOrder);
-
-          setOrders(ordersData);
-          setFilteredOrders(ordersData);
-          setLoading(false);
-        });
-
-        // ✅ Cleanup listener on unmount
-        return () => unsubscribe();
-
-      } catch (error) {
-        console.error("Error fetching orders:", error);
-        setLoading(false);
-      }
-    };
-
-    fetchStoreAndSetupListener();
-  }, [router]);
-
-  // Filter orders (runs whenever orders or filter states change)
-  useEffect(() => {
-    let filtered = orders;
-
-    if (statusFilter !== "all") {
-      filtered = filtered.filter(order => order.status === statusFilter);
+    if (loading) {
+      return;
     }
 
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(order =>
-        order.customer.name.toLowerCase().includes(query) ||
-        order.id.toLowerCase().includes(query)
-      );
+    if (!isAuthenticated) {
+      router.replace("/login");
+      return;
     }
 
-    setFilteredOrders(filtered);
-  }, [statusFilter, searchQuery, orders]);
+    if (needsStoreSetup) {
+      router.replace("/store/create");
+    }
+  }, [
+    loading,
+    isAuthenticated,
+    needsStoreSetup,
+    router,
+  ]);
 
-  // Calculate stats
-  const stats = {
-    total: orders.length,
-    pending: orders.filter(o => o.status === "pending").length,
-    completed: orders.filter(o => o.status === "completed").length,
-    cancelled: orders.filter(o => o.status === "cancelled").length,
-  };
+  /*
+  |--------------------------------------------------------------------------
+  | Loading State
+  |--------------------------------------------------------------------------
+  */
 
-  // Clear filters
-  const handleClearFilters = () => {
-    setSearchQuery("");
-    setStatusFilter("all");
-  };
-
-  const hasFilters = searchQuery !== "" || statusFilter !== "all";
-
-  /* ==========================================
-     LOADING STATE - WHITE BRANDED LOADER
-  ========================================== */
   if (loading) {
     return (
-      <BrandedLoader message="Loading Orders" />
+      <BrandedLoader
+        message="Loading Orders"
+      />
     );
   }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Redirect State
+  |--------------------------------------------------------------------------
+  */
+
+  if (
+    !isAuthenticated ||
+    needsStoreSetup
+  ) {
+    return null;
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Error State
+  |--------------------------------------------------------------------------
+  */
+
+  if (error) {
+    return (
+      <div className="rounded-2xl border border-gray-100 bg-white p-12 text-center">
+        <p className="text-lg text-gray-500">
+          {error}
+        </p>
+
+        <button
+          type="button"
+          onClick={() =>
+            router.refresh()
+          }
+          className="mt-4 rounded-xl bg-orange-500 px-6 py-2 font-semibold text-white transition hover:bg-orange-600"
+        >
+          Try Again
+        </button>
+      </div>
+    );
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Page
+  |--------------------------------------------------------------------------
+  */
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
         <div>
-          <h1 className="text-2xl font-bold text-gray-800">Store Orders</h1>
-          <p className="text-gray-500 text-sm">Manage all your store orders</p>
+          <h1 className="text-2xl font-bold text-gray-800">
+            Store Orders
+          </h1>
+
+          <p className="text-sm text-gray-500">
+            Manage all your store orders
+          </p>
         </div>
       </div>
 
-      {/* Stats */}
+      {/* Statistics */}
       <OrderStats {...stats} />
 
       {/* Filters */}
@@ -196,23 +217,31 @@ export default function StoreOrdersPage() {
         onSearchChange={setSearchQuery}
         statusFilter={statusFilter}
         onStatusChange={setStatusFilter}
-        onClearFilters={handleClearFilters}
+        onClearFilters={clearFilters}
         hasFilters={hasFilters}
       />
 
-      {/* Orders List */}
+      {/* Orders */}
       {orders.length === 0 ? (
         <EmptyOrders />
-      ) : filteredOrders.length === 0 ? (
-        <div className="bg-white rounded-2xl p-12 text-center border border-gray-100">
-          <p className="text-gray-500 text-lg">No orders found</p>
-          <p className="text-gray-400 text-sm">
-            {hasFilters ? "Try adjusting your filters" : "Orders will appear here"}
+      ) : filteredOrders.length ===
+        0 ? (
+        <div className="rounded-2xl border border-gray-100 bg-white p-12 text-center">
+          <p className="text-lg text-gray-500">
+            No orders found
           </p>
+
+          <p className="text-sm text-gray-400">
+            {hasFilters
+              ? "Try adjusting your filters"
+              : "Orders will appear here"}
+          </p>
+
           {hasFilters && (
             <button
-              onClick={handleClearFilters}
-              className="mt-4 text-sm text-orange-600 hover:text-orange-700 font-medium"
+              type="button"
+              onClick={clearFilters}
+              className="mt-4 text-sm font-medium text-orange-600 hover:text-orange-700"
             >
               Clear all filters
             </button>
@@ -221,12 +250,21 @@ export default function StoreOrdersPage() {
       ) : (
         <div className="space-y-3">
           <p className="text-sm text-gray-400">
-            Showing {filteredOrders.length} of {orders.length} orders
+            Showing{" "}
+            {filteredOrders.length} of{" "}
+            {orders.length} orders
           </p>
+
           <AnimatePresence mode="popLayout">
-            {filteredOrders.map((order, index) => (
-              <OrderCard key={order.id} order={order} index={index} />
-            ))}
+            {filteredOrders.map(
+              (order, index) => (
+                <OrderCard
+                  key={order.id}
+                  order={order}
+                  index={index}
+                />
+              )
+            )}
           </AnimatePresence>
         </div>
       )}

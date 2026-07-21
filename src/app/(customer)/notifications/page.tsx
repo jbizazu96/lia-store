@@ -88,9 +88,18 @@ export default function NotificationsPage() {
     );
   }
 
-  // ✅ Separate read and unread notifications
-  const unreadNotifications = notifications.filter(n => !n.read);
-  const readNotifications = notifications.filter(n => n.read);
+  // Keep unread notifications first, with newest notifications at the top
+  // of both sections even if Firestore sends them in a different order.
+  const newestFirst = (a: Notification, b: Notification) =>
+    b.createdAt.getTime() - a.createdAt.getTime();
+
+  const unreadNotifications = notifications
+    .filter((notification) => !notification.read)
+    .sort(newestFirst);
+
+  const readNotifications = notifications
+    .filter((notification) => notification.read)
+    .sort(newestFirst);
 
   return (
     <main className="min-h-screen bg-gray-50">

@@ -1,56 +1,102 @@
 "use client";
 
 /*
-  Order status timeline with visual steps.
+|--------------------------------------------------------------------------
+| Order Timeline
+|--------------------------------------------------------------------------
+|
+| Displays the progress of an order using the shared order-status
+| configuration.
+|
 */
 
-import {Clock, CheckCircle, Package, Truck} from "lucide-react";
+import {
+  ORDER_STATUS_STEPS,
+} from "@/config/orderStatus";
+
+import {
+  getCurrentOrderStep,
+} from "@/utils/orderDisplay";
 
 interface OrderTimelineProps {
   currentStatus: string;
 }
 
-const STATUS_STEPS = [
-  {key: "pending", label: "Pending", icon: Clock},
-  {key: "accepted", label: "Accepted", icon: CheckCircle},
-  {key: "preparing", label: "Preparing", icon: Package},
-  {key: "ready_for_pickup", label: "Ready for Pickup", icon: Truck},
-  {key: "out_for_delivery", label: "Out for Delivery", icon: Truck},
-  {key: "completed", label: "Completed", icon: CheckCircle},
-];
-
-export function OrderTimeline({currentStatus}: OrderTimelineProps) {
-  const currentStepIndex = STATUS_STEPS.findIndex(s => s.key === currentStatus);
+export function OrderTimeline({
+  currentStatus,
+}: OrderTimelineProps) {
+  const currentStepIndex =
+    getCurrentOrderStep(
+      currentStatus as never
+    );
 
   return (
-    <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+    <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
       <div className="flex items-center justify-between">
-        {STATUS_STEPS.map((step, index) => {
-          const isCompleted = index <= currentStepIndex;
-          const Icon = step.icon;
+        {ORDER_STATUS_STEPS.map(
+          (step, index) => {
+            const isCompleted =
+              index <=
+              currentStepIndex;
 
-          return (
-            <div key={step.key} className="flex-1 flex items-center">
-              <div className={`flex flex-col items-center flex-1 ${index > 0 ? "ml-[-8px]" : ""}`}>
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                  isCompleted ? "bg-green-500" : "bg-gray-200"
-                }`}>
-                  <Icon className={`w-5 h-5 ${isCompleted ? "text-white" : "text-gray-400"}`} />
+            const Icon =
+              step.icon;
+
+            return (
+              <div
+                key={step.key}
+                className="flex flex-1 items-center"
+              >
+                <div
+                  className={`flex flex-1 flex-col items-center ${
+                    index > 0
+                      ? "ml-[-8px]"
+                      : ""
+                  }`}
+                >
+                  <div
+                    className={`flex h-10 w-10 items-center justify-center rounded-full ${
+                      isCompleted
+                        ? "bg-green-500"
+                        : "bg-gray-200"
+                    }`}
+                  >
+                    <Icon
+                      className={`h-5 w-5 ${
+                        isCompleted
+                          ? "text-white"
+                          : "text-gray-400"
+                      }`}
+                    />
+                  </div>
+
+                  <p
+                    className={`mt-1 text-xs font-medium ${
+                      isCompleted
+                        ? "text-gray-800"
+                        : "text-gray-400"
+                    }`}
+                  >
+                    {step.label}
+                  </p>
                 </div>
-                <p className={`text-xs font-medium mt-1 ${
-                  isCompleted ? "text-gray-800" : "text-gray-400"
-                }`}>
-                  {step.label}
-                </p>
+
+                {index <
+                  ORDER_STATUS_STEPS.length -
+                    1 && (
+                  <div
+                    className={`h-0.5 flex-1 ${
+                      index <
+                      currentStepIndex
+                        ? "bg-green-500"
+                        : "bg-gray-200"
+                    }`}
+                  />
+                )}
               </div>
-              {index < STATUS_STEPS.length - 1 && (
-                <div className={`flex-1 h-0.5 ${
-                  index < currentStepIndex ? "bg-green-500" : "bg-gray-200"
-                }`} />
-              )}
-            </div>
-          );
-        })}
+            );
+          }
+        )}
       </div>
     </div>
   );

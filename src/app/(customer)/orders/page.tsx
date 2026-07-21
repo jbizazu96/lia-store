@@ -1,131 +1,40 @@
 "use client";
 
-import { mapFirestoreOrder } from "@/mappers/orderMapper";
-import { useEffect, useState } from "react";
+import {
+  ORDER_STATUS_CONFIG,
+} from "@/config/orderStatus";
+
+import {
+  formatOrderDateOnly,
+  formatOrderTime,
+} from "@/utils/orderDisplay";
+import { useCustomerOrders } from "@/hooks/useCustomerOrders";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { auth, db } from "@/lib/firebase";
-import { collection, query, where, orderBy, onSnapshot } from "firebase/firestore";
-import { onAuthStateChanged } from "firebase/auth";
 import {
   Package,
   Clock,
-  CheckCircle,
-  XCircle,
   Truck,
   ArrowLeft,
   ShoppingBag,
-  HandshakeIcon,
   Calendar,
-  CreditCard,
   MapPin,
-  BoxIcon,
 } from "lucide-react";
 import Link from "next/link";
-import type { Order } from "@/types/order";
 
 export default function OrdersPage() {
   const router = useRouter();
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [loading, setLoading] = useState(true);
+      const {
+      orders,
+      loading,
+      error,
+      isAuthenticated,
+    } = useCustomerOrders();
 
-  useEffect(() => {
-    const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
-      if (!user) {
-        router.push("/login");
-        return;
-      }
-
-      // ✅ Set up real-time listener for orders
-      const ordersRef = collection(db, "orders");
-      const q = query(
-        ordersRef,
-        where("customer.uid", "==", user.uid),
-        orderBy("createdAt", "desc")
-      );
-
-      // ✅ Listen for real-time updates
-      const unsubscribeOrders = onSnapshot(q, (snapshot) => {
-        const ordersData = snapshot.docs.map(mapFirestoreOrder);
-
-        setOrders(ordersData);
-        setLoading(false);
-      }, (error) => {
-        console.error("Error listening to orders:", error);
-        setLoading(false);
-      });
-
-      // ✅ Cleanup listener on unmount
-      return () => unsubscribeOrders();
-    });
-
-    return () => unsubscribeAuth();
-  }, [router]);
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case "completed":
-        return <HandshakeIcon className="w-5 h-5 text-green-500" />;
-      case "cancelled":
-        return <XCircle className="w-5 h-5 text-red-500" />;
-      case "out_for_delivery":
-        return <Truck className="w-5 h-5 text-blue-500" />;
-      case "preparing":
-        return <Package className="w-5 h-5 text-purple-500" />;
-      case "accepted":
-        return <CheckCircle className="w-5 h-5 text-green-500" />;
-      case "ready_for_pickup":
-        return <BoxIcon className="w-5 h-5 text-indigo-500" />;
-      default:
-        return <Clock className="w-5 h-5 text-orange-500" />;
+  if (!loading && !isAuthenticated) {
+      router.push("/login");
+      return null;
     }
-  };
-
-  const getStatusText = (status: string) => {
-    switch (status) {
-      case "completed": return "Completed";
-      case "cancelled": return "Cancelled";
-      case "out_for_delivery": return "Out for Delivery";
-      case "preparing": return "Preparing";
-      case "accepted": return "Accepted";
-      case "ready_for_pickup": return "Ready for Pickup";
-      default: return "Pending";
-    }
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "completed": return "bg-green-100 text-green-800";
-      case "cancelled": return "bg-red-100 text-red-800";
-      case "out_for_delivery": return "bg-blue-100 text-blue-800";
-      case "preparing": return "bg-purple-100 text-purple-800";
-      case "accepted": return "bg-green-100 text-green-800";
-      case "ready_for_pickup": return "bg-indigo-100 text-indigo-800";
-      default: return "bg-yellow-100 text-yellow-800";
-    }
-  };
-
-  const formatDate = (date: Date) => {
-      return new Intl.DateTimeFormat("en-US", {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-      }).format(date);
-    };
-
-    const formatTime = (date: Date) => {
-      return new Intl.DateTimeFormat("en-US", {
-        hour: "numeric",
-        minute: "numeric",
-      }).format(date);
-    };
-
-  // ✅ Helper function to format address object to string
-  const formatAddress = (address: any) => {
-    if (!address) return "";
-    if (typeof address === 'string') return address;
-    return `${address.street || ""}, ${address.city || ""}, ${address.state || ""} ${address.zip || ""}`;
-  };
 
   /* ==========================================
      BRANDED LOADING SCREEN - WHITE THEME
@@ -228,6 +137,30 @@ export default function OrdersPage() {
     );
   }
 
+  if (error) {
+  return (
+    <main className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+      <div className="text-center">
+        <Package className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+
+        <p className="text-gray-500 text-lg">
+          {error}
+        </p>
+
+        <button
+          type="button"
+          onClick={() =>
+            router.push("/home")
+          }
+          className="mt-4 px-6 py-2 bg-orange-500 text-white rounded-xl font-semibold hover:bg-orange-600 transition"
+        >
+          Return Home
+        </button>
+      </div>
+    </main>
+  );
+}
+
   return (
     <main className="min-h-screen bg-gray-50">
       {/* Header with Back Button and Order Count */}
@@ -307,7 +240,17 @@ export default function OrdersPage() {
           // Orders List
           <div className="space-y-4">
             <AnimatePresence mode="popLayout">
-              {orders.map((order, index) => (
+              {orders.map((order, index) => {
+                const statusConfig =
+                  order.status in ORDER_STATUS_CONFIG
+                    ? ORDER_STATUS_CONFIG[
+                        order.status as keyof typeof ORDER_STATUS_CONFIG
+                      ]
+                    : ORDER_STATUS_CONFIG.pending;
+
+                const StatusIcon = statusConfig.icon;
+
+                return (
                 <motion.div
                   key={order.id}
                   initial={{opacity: 0, y: 20}}
@@ -325,18 +268,21 @@ export default function OrdersPage() {
                       <div className="flex items-center gap-3 mt-1">
                         <div className="flex items-center gap-1 text-sm text-gray-500">
                           <Calendar className="w-3.5 h-3.5" />
-                          <span>{formatDate(order.createdAt)}</span>
+                          <span>{formatOrderDateOnly(order.createdAt)}</span>
                         </div>
                         <div className="flex items-center gap-1 text-sm text-gray-500">
                           <Clock className="w-3.5 h-3.5" />
-                          <span>{formatTime(order.createdAt)}</span>
+                          <span>{formatOrderTime(order.createdAt)}</span>
                         </div>
                       </div>
                     </div>
-                    <div className={`px-3 py-1 rounded-full text-xs font-medium flex items-center gap-1.5 ${getStatusColor(order.status)}`}>
-                      {getStatusIcon(order.status)}
-                      {getStatusText(order.status)}
-                    </div>
+                    <div
+                        className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium ${statusConfig.color}`}
+                      >
+                        <StatusIcon className="h-5 w-5" />
+
+                        {statusConfig.label}
+                      </div>
                   </div>
 
                   {/* Order Details */}
@@ -363,13 +309,14 @@ export default function OrdersPage() {
                       <div className="flex items-center gap-1.5 text-xs text-gray-400 mt-1">
                         <MapPin className="w-3.5 h-3.5 flex-shrink-0" />
                         <span className="truncate">
-                          {formatAddress(order.customer.address)}
+                          {order.customer.address}
                         </span>
                       </div>
                     )}
                   </div>
                 </motion.div>
-              ))}
+               );
+              })}
             </AnimatePresence>
           </div>
         )}

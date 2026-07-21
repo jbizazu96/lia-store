@@ -8,35 +8,35 @@
   ✅ LIA handles: out_for_delivery → completed
 */
 
-
-import { mapFirestoreOrder } from "@/mappers/orderMapper";
+import {
+  formatOrderCurrency,
+  formatOrderDate,
+  getCurrentOrderStep,
+  getStatusTimestamp,
+} from "@/utils/orderDisplay";
+import {
+  ORDER_STATUS_CONFIG,
+  ORDER_STATUS_STEPS,
+} from "@/config/orderStatus";
+import { useStoreOrder } from "@/hooks/useStoreOrder";
+import {
+  use,
+  useState,
+} from "react";
 import type { Order } from "@/types/order";
-import {useState, useEffect, use} from "react";
 import {useRouter} from "next/navigation";
 import {
   ArrowLeft,
   User,
   Phone,
   MapPin,
-  Package,
-  Clock,
-  Truck,
   Receipt,
   Printer,
-  CheckCircle,
-  XCircle,
   AlertCircle,
   Calendar,
   Store,
-  DollarSign,
-  Box,
-  Handshake,
+  XCircle,
 } from "lucide-react";
-import {auth, db} from "@/lib/firebase";
-import {
-  doc,
-  getDoc,
-} from "firebase/firestore";
 import Link from "next/link";
 import { orderService } from "@/services/order/orderService";
 import { BrandedLoader } from "@/components/ui/BrandedLoader";
@@ -47,92 +47,29 @@ interface OrderDetailsPageProps {
   }>;
 }
 
-// ✅ Full status configurations (including delivery statuses for visibility)
-const STATUS_CONFIG: Record<string, {label: string; color: string; icon: any}> = {
-  pending: {label: "Pending", color: "bg-yellow-100 text-yellow-800", icon: Clock},
-  accepted: {label: "Accepted", color: "bg-green-100 text-green-800", icon: CheckCircle},
-  preparing: {label: "Preparing", color: "bg-purple-100 text-purple-800", icon: Package},
-  ready_for_pickup: {label: "Ready for Pickup", color: "bg-indigo-100 text-indigo-800", icon: Box},
-  out_for_delivery: {label: "Out for Delivery", color: "bg-blue-100 text-blue-800", icon: Truck},
-  completed: {label: "Completed", color: "bg-green-100 text-green-800", icon: Handshake},
-  cancelled: {label: "Cancelled", color: "bg-red-100 text-red-800", icon: XCircle},
-};
-
-// ✅ Full timeline with all statuses
-const STATUS_STEPS = [
-  {key: "pending", label: "Pending", icon: Clock},
-  {key: "accepted", label: "Accepted", icon: CheckCircle},
-  {key: "preparing", label: "Preparing", icon: Package},
-  {key: "ready_for_pickup", label: "Ready for Pickup", icon: Box},
-  {key: "out_for_delivery", label: "Out for Delivery", icon: Truck},
-  {key: "completed", label: "Completed", icon: Handshake},
-];
-
 export default function OrderDetailsPage({params}: OrderDetailsPageProps) {
   const {orderId} = use(params);
   const router = useRouter();
-  const [order, setOrder] = useState<Order | null>(null);
-  const [loading, setLoading] = useState(true);
+  const {
+      order,
+      loading,
+      error,
+      isAuthenticated,
+      refreshOrder,
+    } = useStoreOrder({
+      orderId,
+    });
   const [updating, setUpdating] = useState(false);
-  const [error, setError] = useState("");
+  const [showCancellationModal, setShowCancellationModal] = useState(false);
+  const [cancellationReason, setCancellationReason] = useState("");
 
-  // Fetch order
-  useEffect(() => {
-    const fetchOrder = async () => {
-      try {
-        const user = auth.currentUser;
-        if (!user) {
-          router.push("/login");
-          return;
-        }
-
-        const userDoc = await getDoc(doc(db, "users", user.uid));
-        if (!userDoc.exists()) {
-          router.push("/store/create");
-          return;
-        }
-
-        const userData = userDoc.data();
-        const storeId = userData.storeId;
-
-        if (!storeId) {
-          router.push("/store/create");
-          return;
-        }
-        // Ask the service for the order.
-        // The page does not know Firestore anymore.
-        const order = await orderService.getOrder(orderId);
-
-        if (!order) {
-          setError("Order not found");
-          setLoading(false);
-          return;
-        }
-
-        // Verify this order belongs to the logged-in store.
-        if (order.store.id !== storeId) {
-          setError("You don't have permission to view this order.");
-          setLoading(false);
-          return;
-        }
-
-        // Save the order into React state.
-        setOrder(order);
-      } catch (error) {
-        console.error("Error fetching order:", error);
-        setError("Failed to load order");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchOrder();
-  }, [orderId, router]);
 
   // ✅ Handle status update - Store can only update up to ready_for_pickup
-  const handleStatusUpdate = async (newStatus: Order["status"]) => {
+  const handleStatusUpdate = async (
+    newStatus: Order["status"],
+    reason?: string
+  ) => {
 
-    console.log("handleStatusUpdate()", newStatus);
     if (!order) return;
 
     try {
@@ -150,25 +87,12 @@ export default function OrderDetailsPage({params}: OrderDetailsPageProps) {
       // The page doesn't need to know any of that.
       await orderService.updateStatus(
         order.id,
-        newStatus
+        newStatus,
+        reason
       );
 
-      // Use a real Date in the UI state.
-      const now = new Date();
+      await refreshOrder();
       
-      setOrder({
-        ...order, 
-        status: newStatus as Order["status"],
-        updatedAt: now,
-        statusHistory: [
-          ...(order.statusHistory ?? []),
-          {
-            status: newStatus,
-            timestamp: now,
-            note: `Order status changed to ${newStatus}`,
-          }
-        ]
-      });
       
     } catch (error) {
       console.error("Error updating order:", error);
@@ -178,37 +102,38 @@ export default function OrderDetailsPage({params}: OrderDetailsPageProps) {
     }
   };
 
-    const formatDate = (date: Date) => {
-      return new Intl.DateTimeFormat("en-US", {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-        hour: "numeric",
-        minute: "numeric",
-      }).format(date);
-    };
+  const handleCancellationConfirm = async () => {
+    const reason = cancellationReason.trim();
 
-  const formatPrice = (value: number | undefined) => {
-    if (value === undefined || value === null || isNaN(value)) {
-      return "$0.00";
-    }
-    return `$${value.toFixed(2)}`;
+    if (!reason) return;
+
+    await handleStatusUpdate("cancelled", reason);
+    setShowCancellationModal(false);
+    setCancellationReason("");
   };
 
-  const getStatusTimestamp = ( statusKey: string ): Date | null => {
-    if (!order || !order.statusHistory || !Array.isArray(order.statusHistory)) {
-      return null;
+  const getStatusConfig = (
+    status: string
+  ) => {
+    if (
+      status in
+      ORDER_STATUS_CONFIG
+    ) {
+      return ORDER_STATUS_CONFIG[
+        status as keyof typeof ORDER_STATUS_CONFIG
+      ];
     }
-    const entry = order.statusHistory.find(h => h.status === statusKey);
-    return entry?.timestamp ?? null;
-  };
 
-  const getStatusConfig = (status: string) => {
-    return STATUS_CONFIG[status] || STATUS_CONFIG.pending;
+    return ORDER_STATUS_CONFIG.pending;
   };
 
   // ✅ Calculate store total (products + tax only)
   const storeTotal = (order?.pricing.subtotal || 0) + (order?.pricing.tax || 0);
+
+  if (!loading && !isAuthenticated) {
+    router.push("/login");
+    return null;
+  }
 
   if (loading) {
     return <BrandedLoader message="Loading Order Details" />;
@@ -229,7 +154,10 @@ export default function OrderDetailsPage({params}: OrderDetailsPageProps) {
     );
   }
 
-  const currentStepIndex = STATUS_STEPS.findIndex(s => s.key === order.status);
+  const currentStepIndex =
+  getCurrentOrderStep(
+    order.status
+  );
   const statusConfig = getStatusConfig(order.status);
   const StatusIcon = statusConfig.icon;
 
@@ -254,7 +182,9 @@ export default function OrderDetailsPage({params}: OrderDetailsPageProps) {
             </span>
             <span className="text-sm text-gray-400">
               <Calendar className="w-3.5 h-3.5 inline mr-1" />
-              {formatDate(order.createdAt)}
+             {formatOrderDate(
+                order.createdAt
+              )} 
             </span>
             <span className="text-sm text-gray-400">
               <Store className="w-3.5 h-3.5 inline mr-1" />
@@ -271,10 +201,14 @@ export default function OrderDetailsPage({params}: OrderDetailsPageProps) {
       {/* ✅ Full Timeline - Store can see all statuses */}
       <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
         <div className="flex items-center justify-between">
-          {STATUS_STEPS.map((step, index) => {
+          {ORDER_STATUS_STEPS.map((step, index) => {
             const iscompleted = index <= currentStepIndex;
             const Icon = step.icon;
-            const timestamp = getStatusTimestamp(step.key);
+            const timestamp =
+              getStatusTimestamp(
+                order.statusHistory,
+                step.key
+              );
 
             return (
               <div key={step.key} className="flex-1 flex items-center">
@@ -291,11 +225,11 @@ export default function OrderDetailsPage({params}: OrderDetailsPageProps) {
                   </p>
                   {timestamp && (
                     <p className="text-[10px] text-gray-400 mt-0.5">
-                      {formatDate(timestamp)}
+                      {formatOrderDate(timestamp)}
                     </p>
                   )}
                 </div>
-                {index < STATUS_STEPS.length - 1 && (
+                {index < ORDER_STATUS_STEPS.length - 1 && (
                   <div className={`flex-1 h-0.5 ${
                     index < currentStepIndex ? "bg-green-500" : "bg-gray-200"
                   }`} />
@@ -337,7 +271,7 @@ export default function OrderDetailsPage({params}: OrderDetailsPageProps) {
                       </div>
                     </div>
                     <p className="font-bold text-gray-800">
-                      {formatPrice(itemTotal)}
+                      {formatOrderCurrency(itemTotal)}
                     </p>
                   </div>
                 );
@@ -397,10 +331,9 @@ export default function OrderDetailsPage({params}: OrderDetailsPageProps) {
             <div className="space-y-2">
               {order.status === "pending" && (
                 <button
-                  onClick={() => {
-                    console.log("Accept button clicked");
-                    handleStatusUpdate("accepted");
-                  }}
+                  onClick={() =>
+                    handleStatusUpdate("accepted")
+                  }
                   disabled={updating}
                   className="w-full px-4 py-3 bg-green-500 text-white font-semibold rounded-xl hover:bg-green-600 transition disabled:opacity-50"
                 >
@@ -442,17 +375,18 @@ export default function OrderDetailsPage({params}: OrderDetailsPageProps) {
                 </div>
               )}
               {order.status === "cancelled" && (
-                <div className="text-center text-red-500 font-medium py-2">
-                  Order Cancelled
+                <div className="rounded-xl bg-red-50 p-3 text-center text-red-600">
+                  <p className="font-medium">Order Cancelled</p>
+                  {order.cancellationReason && (
+                    <p className="mt-1 text-xs text-red-500">
+                      Reason: {order.cancellationReason}
+                    </p>
+                  )}
                 </div>
               )}
               {!["cancelled", "completed", "out_for_delivery", "ready_for_pickup"].includes(order.status) && (
                 <button
-                  onClick={() => {
-                    if (confirm("Are you sure you want to cancel this order?")) {
-                      handleStatusUpdate("cancelled");
-                    }
-                  }}
+                  onClick={() => setShowCancellationModal(true)}
                   disabled={updating}
                   className="w-full px-4 py-3 border border-red-200 text-red-600 font-semibold rounded-xl hover:bg-red-50 transition disabled:opacity-50"
                 >
@@ -469,6 +403,30 @@ export default function OrderDetailsPage({params}: OrderDetailsPageProps) {
           </div>
         </div>
       </div>
+
+      {showCancellationModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div role="dialog" aria-modal="true" aria-labelledby="cancellation-title" className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+            <h2 id="cancellation-title" className="text-xl font-bold text-gray-800">Cancel order?</h2>
+            <p className="mt-2 text-sm text-gray-500">Tell the customer why this order is being cancelled. This reason will be saved with the order.</p>
+            <label htmlFor="cancellation-reason" className="mt-5 block text-sm font-medium text-gray-700">Cancellation reason</label>
+            <textarea
+              id="cancellation-reason"
+              value={cancellationReason}
+              onChange={(event) => setCancellationReason(event.target.value)}
+              placeholder="For example: An item is unavailable."
+              rows={4}
+              className="mt-2 w-full resize-none rounded-xl border border-gray-200 p-3 text-sm text-gray-800 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+            />
+            <div className="mt-5 flex gap-3">
+              <button type="button" onClick={() => { setShowCancellationModal(false); setCancellationReason(""); }} disabled={updating} className="flex-1 rounded-xl border border-gray-200 px-4 py-3 font-semibold text-gray-600 transition hover:bg-gray-50 disabled:opacity-50">Return</button>
+              <button type="button" onClick={handleCancellationConfirm} disabled={updating || !cancellationReason.trim()} className="flex-1 rounded-xl bg-red-600 px-4 py-3 font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-gray-300">
+                {updating ? "Cancelling..." : "Confirm cancellation"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -11,11 +11,15 @@
 */
 
 import {
+  addDoc,
   collection,
+  deleteDoc,
   doc,
   getDoc,
   getDocs,
   query,
+  serverTimestamp,
+  updateDoc,
   where,
   type DocumentData,
 } from "firebase/firestore";
@@ -67,6 +71,12 @@ function mapProductDocument(
    * Selling price.
    */
   price: data.price ?? 0,
+
+  /**
+   * Use the standard price when legacy products do not yet have a
+   * customer display price.
+   */
+  displayPrice: data.displayPrice ?? data.price ?? 0,
 
   /**
    * Number of units currently available.
@@ -208,6 +218,133 @@ export const productService = {
         )
     );
   },
+
+  /*
+|--------------------------------------------------------------------------
+| Update Product Availability
+|--------------------------------------------------------------------------
+*/
+
+async updateAvailability(
+  productId: string,
+  isAvailable: boolean
+): Promise<void> {
+  if (!productId.trim()) {
+    throw new Error(
+      "A product ID is required."
+    );
+  }
+
+  await updateDoc(
+    doc(
+      db,
+      "products",
+      productId
+    ),
+    {
+      isAvailable,
+      updatedAt:
+        serverTimestamp(),
+    }
+  );
+},
+
+/*
+|--------------------------------------------------------------------------
+| Update Featured Status
+|--------------------------------------------------------------------------
+*/
+
+async updateFeatured(
+  productId: string,
+  featured: boolean
+): Promise<void> {
+  if (!productId.trim()) {
+    throw new Error(
+      "A product ID is required."
+    );
+  }
+
+  await updateDoc(
+    doc(
+      db,
+      "products",
+      productId
+    ),
+    {
+      featured,
+      updatedAt:
+        serverTimestamp(),
+    }
+  );
+},
+
+/*
+|--------------------------------------------------------------------------
+| Delete Product
+|--------------------------------------------------------------------------
+*/
+
+async deleteProduct(
+  productId: string
+): Promise<void> {
+  if (!productId.trim()) {
+    throw new Error(
+      "A product ID is required."
+    );
+  }
+
+  await deleteDoc(
+    doc(
+      db,
+      "products",
+      productId
+    )
+  );
+},
+
+/*
+|--------------------------------------------------------------------------
+| Duplicate Product
+|--------------------------------------------------------------------------
+*/
+
+async duplicateProduct(
+  product: Product
+): Promise<string> {
+  const {
+    id: _id,
+    createdAt: _createdAt,
+    updatedAt: _updatedAt,
+    ...productData
+  } = product;
+
+  const duplicateReference =
+    await addDoc(
+      collection(
+        db,
+        "products"
+      ),
+      {
+        ...productData,
+
+        name:
+          `${product.name} (Copy)`,
+
+        isAvailable: false,
+
+        featured: false,
+
+        createdAt:
+          serverTimestamp(),
+
+        updatedAt:
+          serverTimestamp(),
+      }
+    );
+
+  return duplicateReference.id;
+},
 
   /**
    * Get available products belonging to one store.

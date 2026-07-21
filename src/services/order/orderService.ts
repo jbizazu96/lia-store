@@ -120,7 +120,8 @@ export class OrderService {
    */
   async updateStatus(
     orderId: string,
-    newStatus: OrderStatus
+    newStatus: OrderStatus,
+    cancellationReason?: string
   ): Promise<Date> {
     if (!orderId.trim()) {
       throw new Error(
@@ -130,20 +131,33 @@ export class OrderService {
 
     const changedAt = new Date();
 
+    const normalizedCancellationReason = cancellationReason?.trim();
+
+    if (newStatus === "cancelled" && !normalizedCancellationReason) {
+      throw new Error("A cancellation reason is required.");
+    }
+
+    const statusNote = newStatus === "cancelled"
+      ? `Order cancelled: ${normalizedCancellationReason}`
+      : `Order status changed to ${newStatus}`;
+
+    const updateData: Record<string, unknown> = {
+      status: newStatus,
+      updatedAt: serverTimestamp(),
+      statusHistory: arrayUnion({
+        status: newStatus,
+        timestamp: changedAt,
+        note: statusNote,
+      }),
+    };
+
+    if (normalizedCancellationReason) {
+      updateData.cancellationReason = normalizedCancellationReason;
+    }
+
     await updateDoc(
       doc(db, "orders", orderId),
-      {
-        status: newStatus,
-
-        updatedAt: serverTimestamp(),
-
-        statusHistory: arrayUnion({
-          status: newStatus,
-          timestamp: changedAt,
-          note:
-            `Order status changed to ${newStatus}`,
-        }),
-      }
+      updateData
     );
 
     /**

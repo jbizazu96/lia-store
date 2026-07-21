@@ -8,6 +8,7 @@
 "use client";
 
 import { useNotifications } from "@/context/NotificationContext";
+import { useAuth } from "@/context/AuthContext";
 import { useState, useEffect, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
@@ -51,6 +52,7 @@ export default function StoreLayout({ children }: { children: React.ReactNode })
   const sidebarRef = useRef<HTMLDivElement>(null);
   const [isMobile, setIsMobile] = useState(false);
   const { unreadCount } = useNotifications();
+  const { user } = useAuth();
   
   // ✅ Notification dropdown state
   const [showNotifications, setShowNotifications] = useState(false);
@@ -98,8 +100,17 @@ export default function StoreLayout({ children }: { children: React.ReactNode })
       }
     };
 
+    const handleScroll = () => {
+      setShowNotifications(false);
+    };
+
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    window.addEventListener('scroll', handleScroll, true);
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      window.removeEventListener('scroll', handleScroll, true);
+    };
   }, [showNotifications]);
 
   // ✅ Close sidebar on route change (mobile only)
@@ -118,21 +129,32 @@ export default function StoreLayout({ children }: { children: React.ReactNode })
 
   // ✅ Fetch ONLY unread notifications for dropdown
   useEffect(() => {
-    if (!auth.currentUser) return;
+    if (!user) {
+      setUnreadNotifications([]);
+      setShowNotifications(false);
+      return;
+    }
 
     const unsubscribe = notificationService.listenForNotifications(
-      auth.currentUser.uid,
+      user.uid,
       (notifications) => {
         // ✅ Filter ONLY unread notifications
         const unread = notifications.filter(n => !n.read);
         // Sort by date (newest first) and take the 4 most recent
         const sorted = unread.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-        setUnreadNotifications(sorted.slice(0, 4));
+        const visibleUnread = sorted.slice(0, 4);
+        setUnreadNotifications(visibleUnread);
+
+      },
+      (error) => {
+        console.error("Failed to load store notifications:", error);
+        setUnreadNotifications([]);
+        setShowNotifications(false);
       }
     );
 
     return unsubscribe;
-  }, []);
+  }, [user]);
 
   // ✅ Fetch pending orders count
   useEffect(() => {
@@ -249,7 +271,7 @@ export default function StoreLayout({ children }: { children: React.ReactNode })
 
   // ✅ Toggle notification dropdown
   const toggleNotifications = () => {
-    setShowNotifications(!showNotifications);
+    setShowNotifications((isOpen) => !isOpen);
   };
 
   // ✅ Handle notification click - marks as read and removes from dropdown
@@ -263,8 +285,8 @@ export default function StoreLayout({ children }: { children: React.ReactNode })
       setUnreadNotifications(prev => prev.filter(n => n.id !== notification.id));
     }
     
-    setShowNotifications(false);
     if (notification.deepLink) {
+      setShowNotifications(false);
       router.push(notification.deepLink);
     }
   };
@@ -279,7 +301,6 @@ export default function StoreLayout({ children }: { children: React.ReactNode })
     }
     // ✅ Clear all unread from dropdown
     setUnreadNotifications([]);
-    setShowNotifications(false);
   };
 
   // ✅ Format time
@@ -579,11 +600,11 @@ export default function StoreLayout({ children }: { children: React.ReactNode })
                       <div className="max-h-96 overflow-y-auto">
                         {unreadNotifications.length === 0 ? (
                           <div className="p-8 text-center">
-                            <div className="w-12 h-12 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-3">
-                              <CheckCircle className="w-6 h-6 text-green-500" />
+                            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-green-50">
+                              <CheckCircle className="h-6 w-6 text-green-500" />
                             </div>
                             <p className="text-sm font-medium text-gray-600">All caught up!</p>
-                            <p className="text-xs text-gray-400 mt-1">No unread notifications</p>
+                            <p className="mt-1 text-xs text-gray-400">No unread notifications</p>
                           </div>
                         ) : (
                           <div className="divide-y divide-gray-100">
