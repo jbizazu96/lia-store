@@ -5,6 +5,7 @@
 */
 
 import {Receipt} from "lucide-react";
+import Image from "next/image";
 import {OrderItem} from "@/app/store/(store)/store-orders/types";
 
 interface OrderItemsProps {
@@ -23,6 +24,19 @@ export function OrderItems({items}: OrderItemsProps) {
         {items.map((item, index) => (
           <div key={index} className="py-3 flex items-center justify-between">
             <div className="flex items-center gap-3">
+              <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-gray-100">
+                {item.imageUrl ? (
+                  <Image
+                    src={item.imageUrl}
+                    alt={item.name}
+                    fill
+                    sizes="48px"
+                    className="object-contain p-1"
+                  />
+                ) : (
+                  <Receipt className="absolute inset-0 m-auto h-5 w-5 text-gray-300" />
+                )}
+              </div>
               <span className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center text-sm font-medium text-gray-600">
                 {item.quantity}
               </span>

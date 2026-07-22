@@ -129,11 +129,19 @@ export function ProductCard({
                 </div>
               )}
 
-              {isOnSale && (
-                <span className="absolute left-1.5 top-1.5 rounded-full bg-red-500 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-white shadow-sm">
-                  On sale
-                </span>
-              )}
+              <div className="absolute left-1.5 top-1.5 flex flex-col items-start gap-1">
+                {isInCart && (
+                  <span className="rounded-full bg-green-600 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-white shadow-sm">
+                    Added
+                  </span>
+                )}
+
+                {isOnSale && (
+                  <span className="rounded-full bg-red-500 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-white shadow-sm">
+                    On sale
+                  </span>
+                )}
+              </div>
 
               {isInCart ? (
                 <div className="absolute bottom-2 right-2 flex h-9 items-center rounded-full bg-white p-0.5 shadow-lg">

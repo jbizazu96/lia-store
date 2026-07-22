@@ -484,17 +484,17 @@ export function ProductForm({
       return;
     }
 
-    const confirmed = await confirm({
-      title: initialData ? "Save product changes?" : "Create product?",
-      message: initialData
-        ? "Your product updates will be visible after saving."
-        : "This product will be added to your store.",
-      confirmLabel: initialData ? "Save changes" : "Create product",
-      cancelLabel: "Keep editing",
-    });
+    if (initialData) {
+      const confirmed = await confirm({
+        title: "Save product changes?",
+        message: "Your product updates will be visible after saving.",
+        confirmLabel: "Save changes",
+        cancelLabel: "Keep editing",
+      });
 
-    if (!confirmed) {
-      return;
+      if (!confirmed) {
+        return;
+      }
     }
 
     const normalizedData:

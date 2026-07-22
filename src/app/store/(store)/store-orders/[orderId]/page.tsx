@@ -38,6 +38,7 @@ import {
   XCircle,
 } from "lucide-react";
 import Link from "next/link";
+import Image from "next/image";
 import { orderService } from "@/services/order/orderService";
 import { BrandedLoader } from "@/components/ui/BrandedLoader";
 
@@ -262,6 +263,19 @@ export default function OrderDetailsPage({params}: OrderDetailsPageProps) {
                 return (
                   <div key={index} className="py-3 flex items-center justify-between">
                     <div className="flex items-center gap-3">
+                      <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-gray-100">
+                        {item.imageUrl ? (
+                          <Image
+                            src={item.imageUrl}
+                            alt={item.name || "Ordered product"}
+                            fill
+                            sizes="48px"
+                            className="object-contain p-1"
+                          />
+                        ) : (
+                          <Receipt className="absolute inset-0 m-auto h-5 w-5 text-gray-300" />
+                        )}
+                      </div>
                       <span className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center text-sm font-medium text-gray-600">
                         {item.quantity || 1}
                       </span>
