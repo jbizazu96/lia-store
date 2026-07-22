@@ -162,9 +162,18 @@ export default function SettingsPage() {
           updatedAt: new Date().toISOString(),
         };
 
-        await updateDoc(doc(db, "stores", storeId), {
-          ...updatedStoreData,
-        });
+        const {
+          id: _id,
+          logoUrl: _logoUrl,
+          bannerUrl: _bannerUrl,
+          logoImagePath: _logoImagePath,
+          bannerImagePath: _bannerImagePath,
+          ...storeFields
+        } = updatedStoreData;
+
+        // Image URLs are written by the background resize Function. Do not
+        // overwrite a freshly processed URL with this page's older state.
+        await updateDoc(doc(db, "stores", storeId), storeFields);
 
         setStoreData(updatedStoreData);
         initialStoreData.current = JSON.stringify(updatedStoreData);

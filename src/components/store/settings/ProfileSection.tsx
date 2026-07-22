@@ -18,6 +18,7 @@ import {
   Upload,
   X,
 } from "lucide-react";
+import { storeImageService } from "@/services/store/storeImageService";
 
 interface ProfileSectionProps {
   storeData: any;
@@ -44,27 +45,37 @@ export function ProfileSection({
   }, [storeData?.logoUrl, storeData?.bannerUrl]);
 
   // Handle logo upload
-  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onloadend = () => {
       setLogoPreview(reader.result as string);
-      setStoreData({...storeData, logoUrl: reader.result as string});
     };
     reader.readAsDataURL(file);
+
+    await storeImageService.uploadOriginalImage({
+      storeId: storeData.id,
+      field: "logo",
+      file,
+    });
   };
 
   // Handle banner upload
-  const handleBannerUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleBannerUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onloadend = () => {
       setBannerPreview(reader.result as string);
-      setStoreData({...storeData, bannerUrl: reader.result as string});
     };
     reader.readAsDataURL(file);
+
+    await storeImageService.uploadOriginalImage({
+      storeId: storeData.id,
+      field: "banner",
+      file,
+    });
   };
 
   // If no storeData, show a message

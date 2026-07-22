@@ -10,6 +10,7 @@ import { acceptOrder } from "./orders/acceptOrder";
 import { orderStatusChanged } from "./triggers/orderStatusChanged";
 import { syncShipdayDeliveries } from "./scheduler/syncShipdayDeliveries";
 import { createOrder } from "./orders/createOrder";
+export { processStoreImage } from "./images/processStoreImage";
 
 /*
   Initialize the Firebase Admin SDK once.

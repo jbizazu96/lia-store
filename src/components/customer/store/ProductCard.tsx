@@ -101,16 +101,16 @@ export function ProductCard({
     <>
       <motion.div
         whileHover={{y: -2}}
-        className="w-[124px] flex-shrink-0 font-sans antialiased sm:w-[140px]"
+        className="w-[135px] flex-shrink-0 font-sans antialiased sm:w-[148px]"
       >
             {/* Product Image */}
-            <div className="relative h-[96px] w-full overflow-hidden rounded-2xl bg-gray-100">
+            <div className="relative h-[104px] w-full overflow-hidden rounded-2xl bg-gray-100">
               {product.imageUrl ? (
                 <Image
                   src={product.imageUrl}
                   alt={product.name}
                   fill
-                  sizes="(max-width: 640px) 124px, 140px"
+                  sizes="(max-width: 640px) 135px, 148px"
                   className="object-contain p-2"
                 />
               ) : (

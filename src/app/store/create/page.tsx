@@ -12,7 +12,7 @@ import {AlertCircle} from "lucide-react";
 /*
   Firebase imports.
 */
-import {addDoc, collection, setDoc, doc} from "firebase/firestore";
+import {collection, setDoc, doc} from "firebase/firestore";
 import {auth, db} from "@/lib/firebase";
 import {geocodeAddress} from "@/services/delivery/geocode";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
@@ -21,6 +21,7 @@ import ProtectedRoute from "@/components/auth/ProtectedRoute";
   Firebase Storage
 */
 import {getStorage, ref, uploadBytes, getDownloadURL} from "firebase/storage";
+import { storeImageService } from "@/services/store/storeImageService";
 
 /*
   Components
@@ -206,15 +207,17 @@ export default function CreateStorePage() {
       const now = Date.now();
       const uid = user.uid;
 
-      const [logoUrl, photoIdUrl, storeFrontUrl, storeInsideUrl] = await Promise.all([
-        uploadFile(logoFile!, `stores/${uid}/logo_${now}.jpg`),
+      const storeReference = doc(collection(db, "stores"));
+
+      // Legal documents stay private/original. Customer-facing images are
+      // uploaded after the store document exists so the resize Function can
+      // update its public image URLs.
+      const [photoIdUrl, storeInsideUrl] = await Promise.all([
         uploadFile(photoIdFile!, `stores/${uid}/photo_id_${now}.jpg`),
-        uploadFile(storeFrontFile!, `stores/${uid}/front_${now}.jpg`),
         uploadFile(storeInsideFile!, `stores/${uid}/inside_${now}.jpg`),
       ]);
-      setUploading(false);
 
-      // Create store
+      // Create the store before customer-facing image processing starts.
       const storeData = {
         ownerId: uid,
         name,
@@ -229,14 +232,14 @@ export default function CreateStorePage() {
         longitude: location.longitude,
         placeId: location.placeId,
         formattedAddress: location.formattedAddress || fullAddress,
-        logoUrl,
-        bannerUrl: storeFrontUrl,
+        logoUrl: "",
+        bannerUrl: "",
         businessType,
         registeredName,
         ein: ein || null,
         businessStructure,
         photoIdUrl,
-        storeFrontUrl,
+        storeFrontUrl: "",
         storeInsideUrl,
         stripeEmail,
         stripePhone,
@@ -250,12 +253,26 @@ export default function CreateStorePage() {
         updatedAt: new Date().toISOString(),
       };
 
-      const docRef = await addDoc(collection(db, "stores"), storeData);
+      await setDoc(storeReference, storeData);
+
+      await Promise.all([
+        storeImageService.uploadOriginalImage({
+          storeId: storeReference.id,
+          field: "logo",
+          file: logoFile!,
+        }),
+        storeImageService.uploadOriginalImage({
+          storeId: storeReference.id,
+          field: "banner",
+          file: storeFrontFile!,
+        }),
+      ]);
+      setUploading(false);
 
       // Update user
       await setDoc(doc(db, "users", uid), {
         accountType: "store_owner",
-        storeId: docRef.id,
+        storeId: storeReference.id,
         stripeEmail,
         stripePhone,
       }, {merge: true});
