@@ -227,3 +227,156 @@ export async function markProductImageFailed(
     }
   );
 }
+
+/*
+|--------------------------------------------------------------------------
+| Mark Product Image Enhancing
+|--------------------------------------------------------------------------
+|
+| Stores the Claid task ID and marks the product as being enhanced.
+|
+| The original image path is checked transactionally so an older upload
+| cannot overwrite a newer replacement.
+|
+*/
+
+export async function markProductImageEnhancing(
+  productId: string,
+  originalImagePath: string,
+  claidTaskId: number
+): Promise<boolean> {
+  if (
+    !productId.trim() ||
+    !originalImagePath.trim() ||
+    !Number.isFinite(claidTaskId) ||
+    claidTaskId <= 0
+  ) {
+    return false;
+  }
+
+  const firestore =
+    getFirestore("default");
+
+  const productReference =
+    firestore
+      .collection("products")
+      .doc(productId);
+
+  return firestore.runTransaction(
+    async (transaction) => {
+      const productSnapshot =
+        await transaction.get(
+          productReference
+        );
+
+      if (
+        !productSnapshot.exists ||
+        productSnapshot.data()
+          ?.originalImagePath !==
+          originalImagePath
+      ) {
+        return false;
+      }
+
+      transaction.update(
+        productReference,
+        {
+          imageStatus:
+            "enhancing",
+
+          claidTaskId,
+
+          claidStatus:
+            "accepted",
+
+          claidError:
+            null,
+
+          imageError:
+            null,
+
+          updatedAt:
+            FieldValue.serverTimestamp(),
+        }
+      );
+
+      return true;
+    }
+  );
+}
+
+/*
+|--------------------------------------------------------------------------
+| Mark Claid Enhancement Failed
+|--------------------------------------------------------------------------
+|
+| Records a Claid-specific failure only when the failed task still belongs to
+| the product's current original image.
+|
+*/
+
+export async function markProductImageEnhancementFailed(
+  productId: string,
+  originalImagePath: string,
+  error: unknown
+): Promise<boolean> {
+  if (
+    !productId.trim() ||
+    !originalImagePath.trim()
+  ) {
+    return false;
+  }
+
+  const message =
+    error instanceof Error
+      ? error.message
+      : "Claid enhancement failed.";
+
+  const firestore =
+    getFirestore("default");
+
+  const productReference =
+    firestore
+      .collection("products")
+      .doc(productId);
+
+  return firestore.runTransaction(
+    async (transaction) => {
+      const productSnapshot =
+        await transaction.get(
+          productReference
+        );
+
+      if (
+        !productSnapshot.exists ||
+        productSnapshot.data()
+          ?.originalImagePath !==
+          originalImagePath
+      ) {
+        return false;
+      }
+
+      transaction.update(
+        productReference,
+        {
+          imageStatus:
+            "failed",
+
+          claidStatus:
+            "failed",
+
+          claidError:
+            message,
+
+          imageError:
+            message,
+
+          updatedAt:
+            FieldValue.serverTimestamp(),
+        }
+      );
+
+      return true;
+    }
+  );
+}

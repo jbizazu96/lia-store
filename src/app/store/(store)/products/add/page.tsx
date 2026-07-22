@@ -56,6 +56,7 @@ import {
 
 import {
   productImageService,
+  validateProductImageFile,
 } from "@/services/product/productImageService";
 
 /*
@@ -91,6 +92,16 @@ export default function AddProductPage() {
   ] = useState<string | null>(
     null
   );
+
+  const [
+    formKey,
+    setFormKey,
+  ] = useState(0);
+
+  const [
+    success,
+    setSuccess,
+  ] = useState<string | null>(null);
 
   /*
   |--------------------------------------------------------------------------
@@ -146,6 +157,19 @@ export default function AddProductPage() {
     return unsubscribe;
   }, [router]);
 
+  useEffect(() => {
+    if (!success) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(
+      () => setSuccess(null),
+      5000
+    );
+
+    return () => window.clearTimeout(timeoutId);
+  }, [success]);
+
   /*
   |--------------------------------------------------------------------------
   | Create Product
@@ -168,6 +192,13 @@ export default function AddProductPage() {
     try {
       setSubmitting(true);
       setError(null);
+      setSuccess(null);
+
+      if (imageFile) {
+        validateProductImageFile(
+          imageFile
+        );
+      }
 
       /*
       |--------------------------------------------------------------------------
@@ -258,8 +289,12 @@ export default function AddProductPage() {
           });
       }
 
-      router.push(
-        "/store/products"
+      setFormKey(
+        (currentKey) => currentKey + 1
+      );
+
+      setSuccess(
+        "Product added. You can add another one below."
       );
     } catch (submitError) {
       console.error(
@@ -335,9 +370,11 @@ export default function AddProductPage() {
       {/* Form */}
       <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
         <ProductForm
+          key={formKey}
           onSubmit={handleSubmit}
           loading={submitting}
           submitLabel="Add Product"
+          successMessage={success}
         />
       </div>
     </div>

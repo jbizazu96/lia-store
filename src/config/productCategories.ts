@@ -35,6 +35,11 @@ ProductCategoryOption[] = [
   },
 
   {
+    value: "oil",
+    label: "Oil",
+  },
+
+  {
     value: "seafood",
     label: "Seafood",
   },

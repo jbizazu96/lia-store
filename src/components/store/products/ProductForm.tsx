@@ -89,6 +89,8 @@ interface ProductFormProps {
   loading: boolean;
 
   submitLabel: string;
+
+  successMessage?: string | null;
 }
 
 /*
@@ -135,6 +137,7 @@ export function ProductForm({
   onSubmit,
   loading,
   submitLabel,
+  successMessage,
 }: ProductFormProps) {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
@@ -575,12 +578,13 @@ export function ProductForm({
                 </p>
 
                 <p className="mt-1 text-xs text-gray-400">
-                  PNG or JPG, up to 5MB
+                  JPG, PNG, WebP, or HEIC, up to 10MB
                 </p>
 
                 <input
                   type="file"
-                  accept="image/*"
+                  accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+                  capture="environment"
                   onChange={
                     handleImageUpload
                   }
@@ -887,6 +891,16 @@ export function ProductForm({
             }
           />
           {/* Submit */}
+          {successMessage && (
+            <div
+              role="status"
+              className="mb-3 rounded-xl border border-green-200 bg-green-50 px-3 py-2"
+            >
+              <p className="text-sm font-medium text-green-700">
+                {successMessage}
+              </p>
+            </div>
+          )}
           <div className="flex gap-3 border-t border-gray-200 pt-4">
             <Link
               href="/store/products"

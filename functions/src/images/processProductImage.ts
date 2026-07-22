@@ -5,31 +5,53 @@
 |
 | Runs automatically whenever an original product image is uploaded.
 |
-| Workflow:
+| Primary workflow:
 |
 | 1. Validate the uploaded object.
-| 2. Read product/store/image metadata.
-| 3. Mark the product image as processing.
-| 4. Download the original.
-| 5. Resize and convert it to WebP with Sharp.
-| 6. Upload the optimized image with long-lived caching.
-| 7. Update the product document.
-| 8. Delete the original upload.
-| 9. Record any processing failure.
+| 2. Verify that the upload is still the product's current image.
+| 3. Create a temporary signed URL for Claid.
+| 4. Submit a conservative async enhancement job.
+| 5. Store the Claid job context.
+| 6. Mark the product image as enhancing.
+| 7. Exit without waiting for Claid.
+|
+| Fallback workflow:
+|
+| If Claid submission fails, the Function continues with the existing
+| Sharp-only image pipeline so the product still receives an optimized image.
 |
 */
-
-import {
-  onObjectFinalized,
-} from "firebase-functions/v2/storage";
 
 import {
   logger,
 } from "firebase-functions";
 
 import {
-  PRODUCT_IMAGE_CONFIG,
-} from "./imageTypes";
+  defineSecret,
+} from "firebase-functions/params";
+
+import {
+  onObjectFinalized,
+} from "firebase-functions/v2/storage";
+
+import {
+  claidService,
+} from "../claid/claidService";
+
+import {
+  createClaidJob,
+} from "../claid/claidJobStore";
+
+import {
+  createOriginalImageSignedUrl,
+} from "../claid/claidStorage";
+
+import {
+  markProductImageEnhancing,
+  markProductImageFailed,
+  markProductImageProcessing,
+  markProductImageReady,
+} from "./imageFirestore";
 
 import {
   processProductImage as optimizeProductImage,
@@ -44,15 +66,27 @@ import {
 } from "./imageStorage";
 
 import {
-  markProductImageFailed,
-  markProductImageProcessing,
-  markProductImageReady,
-} from "./imageFirestore";
+  PRODUCT_IMAGE_CONFIG,
+} from "./imageTypes";
 
 import type {
   ProductImageMetadata,
   ProductImageProcessingResult,
 } from "./imageTypes";
+
+/*
+|--------------------------------------------------------------------------
+| Claid Secret
+|--------------------------------------------------------------------------
+|
+| Stored in Google Secret Manager and attached only to Functions that need it.
+|
+*/
+
+const CLAID_API_KEY =
+  defineSecret(
+    "CLAID_API_KEY"
+  );
 
 /*
 |--------------------------------------------------------------------------
@@ -106,16 +140,15 @@ export const processProductImage =
       region:
         PRODUCT_IMAGE_CONFIG.REGION,
 
-      /*
-       * Sharp benefits from additional memory when processing larger
-       * phone-camera images.
-       */
-
       memory:
         "1GiB",
 
       timeoutSeconds:
         120,
+
+      secrets: [
+        CLAID_API_KEY,
+      ],
     },
 
     async (event) => {
@@ -146,8 +179,7 @@ export const processProductImage =
       }
 
       /*
-       * Ignore optimized images so the Function does not trigger itself
-       * repeatedly.
+       * Prevent the optimized WebP from triggering this Function again.
        */
 
       if (
@@ -159,7 +191,7 @@ export const processProductImage =
       }
 
       /*
-       * Only process supported image content types.
+       * Ignore non-image uploads.
        */
 
       if (
@@ -171,6 +203,7 @@ export const processProductImage =
           "Ignoring non-image upload.",
           {
             originalImagePath,
+
             contentType:
               object.contentType,
           }
@@ -185,8 +218,7 @@ export const processProductImage =
         );
 
       /*
-       * Ignore unrelated Storage uploads such as store banners, profile
-       * photos, or files uploaded outside the product image service.
+       * Ignore banners, profile images, and unrelated Storage uploads.
        */
 
       if (!metadata) {
@@ -207,27 +239,32 @@ export const processProductImage =
       } = metadata;
 
       logger.info(
-        "Starting product image processing.",
+        "Starting product image workflow.",
         {
           productId,
           storeId,
           imageId,
           originalImagePath,
+          bucketName,
         }
       );
 
       try {
         /*
         |--------------------------------------------------------------------------
-        | Mark Processing
+        | Confirm Current Upload
         |--------------------------------------------------------------------------
+        |
+        | A store owner may select another image before this trigger begins.
+        | Only the image currently referenced by the product may continue.
+        |
         */
 
         const isCurrentUpload =
           await markProductImageProcessing(
-          productId,
-          originalImagePath
-        );
+            productId,
+            originalImagePath
+          );
 
         if (!isCurrentUpload) {
           logger.info(
@@ -259,8 +296,169 @@ export const processProductImage =
 
         /*
         |--------------------------------------------------------------------------
-        | Download Original
+        | Submit Claid Enhancement
         |--------------------------------------------------------------------------
+        |
+        | Claid performs conservative cleanup only:
+        |
+        | - Remove the existing background
+        | - Place the real product on a transparent square canvas
+        | - Add consistent padding
+        | - Apply mild exposure, contrast, saturation, and sharpness changes
+        |
+        | No generative background or synthetic product content is requested.
+        |
+        | When accepted, the scheduled pollClaidImageJobs Function completes
+        | the workflow later. This trigger exits without waiting.
+        |
+        */
+
+        try {
+          const apiKey =
+            CLAID_API_KEY.value();
+
+          const signedInputUrl =
+            await createOriginalImageSignedUrl(
+              bucketName,
+              originalImagePath
+            );
+
+          const acceptedTask =
+            await claidService
+              .submitProductImage({
+                inputUrl:
+                  signedInputUrl,
+
+                apiKey,
+              });
+
+          /*
+           * Save the task context before changing the product status.
+           */
+
+          await createClaidJob({
+            taskId:
+              acceptedTask.id,
+
+            resultUrl:
+              acceptedTask.result_url,
+
+            productId,
+
+            storeId,
+
+            imageId,
+
+            bucketName,
+
+            originalImagePath,
+          });
+
+          const markedEnhancing =
+            await markProductImageEnhancing(
+              productId,
+              originalImagePath,
+              acceptedTask.id
+            );
+
+          /*
+           * A newer upload may have replaced this image while Claid was
+           * accepting the task.
+           */
+
+          if (!markedEnhancing) {
+            logger.info(
+              "Claid accepted a task for an image that is no longer current.",
+              {
+                taskId:
+                  acceptedTask.id,
+
+                productId,
+
+                originalImagePath,
+              }
+            );
+
+            /*
+             * The scheduled poller will safely discard the eventual result
+             * because the originalImagePath concurrency token no longer
+             * matches the product.
+             */
+
+            return;
+          }
+
+          logger.info(
+            "Product image submitted to Claid successfully.",
+            {
+              taskId:
+                acceptedTask.id,
+
+              productId,
+
+              storeId,
+
+              imageId,
+
+              originalImagePath,
+
+              bucketName,
+            }
+          );
+
+          /*
+           * Claid and pollClaidImageJobs now own the remaining workflow.
+           */
+
+          return;
+        } catch (
+          claidSubmissionError
+        ) {
+          /*
+           * Claid is an enhancement layer, not a hard dependency.
+           *
+           * If Claid cannot accept the task, continue with the original
+           * Sharp-only pipeline.
+           */
+
+          logger.warn(
+            "Claid submission failed. Continuing with Sharp-only fallback.",
+            {
+              productId,
+
+              storeId,
+
+              imageId,
+
+              originalImagePath,
+
+              claidSubmissionError: {
+                name:
+                  claidSubmissionError instanceof Error
+                    ? claidSubmissionError.name
+                    : "UnknownError",
+
+                message:
+                  claidSubmissionError instanceof Error
+                    ? claidSubmissionError.message
+                    : String(claidSubmissionError),
+
+                stack:
+                  claidSubmissionError instanceof Error
+                    ? claidSubmissionError.stack
+                    : undefined,
+              },
+            }
+          );
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | Sharp-Only Fallback
+        |--------------------------------------------------------------------------
+        |
+        | This section is reached only if Claid submission failed.
+        |
         */
 
         const originalBuffer =
@@ -269,22 +467,10 @@ export const processProductImage =
             originalImagePath
           );
 
-        /*
-        |--------------------------------------------------------------------------
-        | Optimize
-        |--------------------------------------------------------------------------
-        */
-
         const optimizedImage =
           await optimizeProductImage(
             originalBuffer
           );
-
-        /*
-        |--------------------------------------------------------------------------
-        | Build Optimized Path
-        |--------------------------------------------------------------------------
-        */
 
         const optimizedImagePath =
           buildOptimizedImagePath(
@@ -292,12 +478,6 @@ export const processProductImage =
             productId,
             imageId
           );
-
-        /*
-        |--------------------------------------------------------------------------
-        | Upload Optimized Image
-        |--------------------------------------------------------------------------
-        */
 
         const {
           optimizedImageUrl,
@@ -316,12 +496,6 @@ export const processProductImage =
 
             imageId,
           });
-
-        /*
-        |--------------------------------------------------------------------------
-        | Update Product
-        |--------------------------------------------------------------------------
-        */
 
         const result:
         ProductImageProcessingResult = {
@@ -353,13 +527,19 @@ export const processProductImage =
         const {
           updated,
           previousOptimizedImagePath,
-        } = await markProductImageReady(
-          result
-        );
+        } =
+          await markProductImageReady(
+            result
+          );
+
+        /*
+         * The store owner may have selected a replacement while Sharp was
+         * processing this fallback image.
+         */
 
         if (!updated) {
           logger.info(
-            "Discarding an image replaced while processing.",
+            "Discarding a fallback image replaced while processing.",
             {
               productId,
               optimizedImagePath,
@@ -371,6 +551,7 @@ export const processProductImage =
               bucketName,
               originalImagePath
             ),
+
             deleteOptimizedImage(
               bucketName,
               optimizedImagePath
@@ -382,15 +563,8 @@ export const processProductImage =
 
         /*
         |--------------------------------------------------------------------------
-        | Delete Original
+        | Fallback Cleanup
         |--------------------------------------------------------------------------
-        |
-        | This happens only after:
-        |
-        | - Sharp succeeds.
-        | - The WebP upload succeeds.
-        | - Firestore is updated successfully.
-        |
         */
 
         try {
@@ -400,7 +574,7 @@ export const processProductImage =
           );
         } catch (cleanupError) {
           logger.warn(
-            "Unable to delete the processed original image.",
+            "Unable to delete the Sharp fallback original image.",
             {
               productId,
               originalImagePath,
@@ -432,27 +606,36 @@ export const processProductImage =
         }
 
         logger.info(
-          "Product image processed successfully.",
+          "Product image completed through Sharp-only fallback.",
           {
             productId,
+
             optimizedImagePath,
+
             width:
               optimizedImage.width,
+
             height:
               optimizedImage.height,
+
             sizeBytes:
               optimizedImage.sizeBytes,
           }
         );
       } catch (processingError) {
         logger.error(
-          "Product image processing failed.",
-          processingError
+          "Product image workflow failed.",
+          {
+            productId,
+            storeId,
+            imageId,
+            originalImagePath,
+            processingError,
+          }
         );
 
         /*
-         * Do not delete the original after failure. Keeping it allows future
-         * retries and makes debugging easier.
+         * Only the current upload may mark the product as failed.
          */
 
         try {
@@ -461,18 +644,19 @@ export const processProductImage =
             originalImagePath,
             processingError
           );
-        } catch (
-          statusError
-        ) {
+        } catch (statusError) {
           logger.error(
             "Failed to record product image failure.",
-            statusError
+            {
+              productId,
+              originalImagePath,
+              statusError,
+            }
           );
         }
 
         /*
-         * Re-throwing tells Cloud Functions that this invocation failed.
-         * Depending on retry configuration, Firebase may retry it.
+         * Keep the original after failure for debugging or a future retry.
          */
 
         throw processingError;

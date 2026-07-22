@@ -208,13 +208,13 @@ export function AddressesModal({userId, onClose}: AddressesModalProps) {
       if (!confirmed) return;
 
       const addressData: Address = {
-        street: formData.street,
-        city: formData.city,
-        state: formData.state,
-        zip: formData.zip,
+        street: formData.street.trim().toUpperCase(),
+        city: formData.city.trim().toUpperCase(),
+        state: formData.state.trim().toUpperCase(),
+        zip: formData.zip.trim().toUpperCase(),
         latitude: location.latitude,
         longitude: location.longitude,
-        formattedAddress: location.formattedAddress,
+        formattedAddress: location.formattedAddress.toUpperCase(),
       };
 
       // Save to both places for redundancy

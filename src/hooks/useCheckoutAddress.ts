@@ -132,16 +132,16 @@ UseCheckoutAddressResult {
       const address: CheckoutAddress =
         {
           street:
-            formData.street,
+            formData.street.trim().toUpperCase(),
 
           city:
-            formData.city,
+            formData.city.trim().toUpperCase(),
 
           state:
-            formData.state,
+            formData.state.trim().toUpperCase(),
 
           zip:
-            formData.zip,
+            formData.zip.trim().toUpperCase(),
 
           latitude:
             result.latitude,
@@ -150,7 +150,7 @@ UseCheckoutAddressResult {
             result.longitude,
 
           formattedAddress:
-            result.formattedAddress,
+            result.formattedAddress.toUpperCase(),
         };
 
       await setDoc(

@@ -47,6 +47,9 @@ import {
 import {
   productService,
 } from "@/services/product/productService";
+import {
+  useConfirmation,
+} from "@/context/ConfirmationContext";
 
 import {
   BrandedLoader,
@@ -67,6 +70,7 @@ import {
 
 export default function ProductsPage() {
   const router = useRouter();
+  const { confirm } = useConfirmation();
 
   const {
     products,
@@ -178,10 +182,14 @@ export default function ProductsPage() {
     async (
       productId: string
     ) => {
-      const confirmed =
-        window.confirm(
-          "Are you sure you want to delete this product? This action cannot be undone."
-        );
+      const confirmed = await confirm({
+        title: "Delete product?",
+        message:
+          "This product and its images will be permanently removed. This action cannot be undone.",
+        confirmLabel: "Delete product",
+        cancelLabel: "Keep product",
+        destructive: true,
+      });
 
       if (!confirmed) {
         return;

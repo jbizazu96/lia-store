@@ -157,6 +157,11 @@ export default function SettingsPage() {
 
         const updatedStoreData = {
           ...storeData,
+          address: storeData.address.trim().toUpperCase(),
+          city: storeData.city.trim().toUpperCase(),
+          state: storeData.state.trim().toUpperCase(),
+          zip: storeData.zip.trim().toUpperCase(),
+          formattedAddress: (location.formattedAddress || fullAddress).toUpperCase(),
           latitude: location.latitude,
           longitude: location.longitude,
           updatedAt: new Date().toISOString(),

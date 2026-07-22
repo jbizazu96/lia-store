@@ -266,13 +266,22 @@ export default function LoginPage() {
       if (!confirmed) return;
 
       const {setDoc, updateDoc} = await import("firebase/firestore");
+      const savedAddress = {
+        ...addressData,
+        street: addressData.street.trim().toUpperCase(),
+        city: addressData.city.trim().toUpperCase(),
+        state: addressData.state.trim().toUpperCase(),
+        zip: addressData.zip.trim().toUpperCase(),
+        country: addressData.country.trim().toUpperCase(),
+        formattedAddress: (location.formattedAddress || fullAddress).toUpperCase(),
+      };
+
       await setDoc(doc(db, "addresses", user.uid), {
         userId: user.uid,
-        ...addressData,
+        ...savedAddress,
         latitude: location.latitude,
         longitude: location.longitude,
         placeId: location.placeId,
-        formattedAddress: location.formattedAddress || fullAddress,
         isDefault: true,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
@@ -280,11 +289,10 @@ export default function LoginPage() {
 
       await updateDoc(doc(db, "users", user.uid), {
         defaultAddress: {
-          ...addressData,
+          ...savedAddress,
           latitude: location.latitude,
           longitude: location.longitude,
           placeId: location.placeId,
-          formattedAddress: location.formattedAddress || fullAddress,
         },
       });
 

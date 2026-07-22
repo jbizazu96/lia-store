@@ -49,7 +49,18 @@ const SUPPORTED_IMAGE_TYPES = [
   "image/jpeg",
   "image/png",
   "image/webp",
+  "image/heic",
+  "image/heif",
 ] as const;
+
+const IMAGE_TYPE_BY_EXTENSION: Record<string, (typeof SUPPORTED_IMAGE_TYPES)[number]> = {
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  png: "image/png",
+  webp: "image/webp",
+  heic: "image/heic",
+  heif: "image/heif",
+};
 
 /*
 |--------------------------------------------------------------------------
@@ -124,17 +135,28 @@ interface UploadProductImageResult {
 |--------------------------------------------------------------------------
 */
 
-function validateImageFile(
+export function validateProductImageFile(
   file: File
-): void {
-  if (
-    !SUPPORTED_IMAGE_TYPES.includes(
+): (typeof SUPPORTED_IMAGE_TYPES)[number] {
+  const extension =
+    file.name
+      .split(".")
+      .pop()
+      ?.toLowerCase();
+
+  const contentType =
+    SUPPORTED_IMAGE_TYPES.includes(
       file.type as
         (typeof SUPPORTED_IMAGE_TYPES)[number]
     )
-  ) {
+      ? file.type as (typeof SUPPORTED_IMAGE_TYPES)[number]
+      : extension
+        ? IMAGE_TYPE_BY_EXTENSION[extension]
+        : undefined;
+
+  if (!contentType) {
     throw new Error(
-      "Please upload a JPG, PNG, or WebP image."
+      "Please upload a JPG, PNG, WebP, or HEIC image."
     );
   }
 
@@ -152,6 +174,8 @@ function validateImageFile(
       "The selected image is empty."
     );
   }
+
+  return contentType;
 }
 
 /*
@@ -221,7 +245,8 @@ export const productImageService = {
       );
     }
 
-    validateImageFile(file);
+    const contentType =
+      validateProductImageFile(file);
 
     const storage =
       getStorage();
@@ -295,7 +320,7 @@ export const productImageService = {
     const metadata:
     UploadMetadata = {
       contentType:
-        file.type,
+        contentType,
 
       cacheControl:
         "private, max-age=0, no-cache",

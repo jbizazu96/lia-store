@@ -26,6 +26,16 @@ interface ProductCardProps {
   quantity: number;
 }
 
+function formatProductName(name: string): string {
+  return name
+    .trim()
+    .toLowerCase()
+    .replace(
+      /\b\p{L}/gu,
+      (letter) => letter.toUpperCase()
+    );
+}
+
 export function ProductCard({
   product,
   onAddToCart,
@@ -108,10 +118,10 @@ export function ProductCard({
               {product.imageUrl ? (
                 <Image
                   src={product.imageUrl}
-                  alt={product.name}
+                  alt={formatProductName(product.name)}
                   fill
                   sizes="(max-width: 640px) 135px, 148px"
-                  className="object-contain p-2"
+                  className="scale-[1.15] object-contain p-1"
                 />
               ) : (
                 <div className="flex h-full w-full items-center justify-center">
@@ -152,7 +162,7 @@ export function ProductCard({
                   type="button"
                   onClick={handleAdd}
                   className="absolute bottom-2 right-2 flex h-9 w-9 items-center justify-center rounded-full bg-white text-gray-900 shadow-lg transition hover:scale-105 hover:bg-orange-500 hover:text-white focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
-                  aria-label={`Add ${product.name} to cart`}
+                  aria-label={`Add ${formatProductName(product.name)} to cart`}
                 >
                   <Plus className="h-5 w-5" strokeWidth={2.5} />
                 </button>
@@ -180,7 +190,7 @@ export function ProductCard({
               </span>
               <span>{salePrice.dollars}</span>
               <span className="relative -top-1 text-[11px] font-bold leading-none">
-                {salePrice.cents}
+                .{salePrice.cents}
               </span>
             </span>
             {isOnSale && (
@@ -199,7 +209,7 @@ export function ProductCard({
 
           {/* Product Name */}
           <h4 className="mt-0.5 line-clamp-2 text-xs font-semibold leading-4 text-gray-900">
-            {product.name}
+            {formatProductName(product.name)}
           </h4>
 
           {/* Stock Status */}

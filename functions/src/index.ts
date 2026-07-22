@@ -353,3 +353,9 @@ export { createOrder };
 export {
   processProductImage,
 } from "./images/processProductImage";
+export {
+  deleteProductImages,
+} from "./images/deleteProductImages";
+export {
+  pollClaidImageJobs,
+} from "./claid/pollClaidImageJobs";
