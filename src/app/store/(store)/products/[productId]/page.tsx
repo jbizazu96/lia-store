@@ -1,26 +1,75 @@
 "use client";
 
 /*
-  Edit product page.
-  Uses React.use() to unwrap params Promise in Next.js 15.
+|--------------------------------------------------------------------------
+| Edit Product Page
+|--------------------------------------------------------------------------
+|
+| Loads one product through productService and saves changes using the
+| shared ProductFormData model.
+|
+| Direct Firestore access does not belong in this page.
+|
 */
 
-import {BrandedLoader} from "@/components/ui/BrandedLoader";
-import {useState, useEffect, use} from "react";
-import {useRouter} from "next/navigation";
-import {motion} from "framer-motion";
-import {ArrowLeft, Save, Trash2} from "lucide-react";
+import {
+  use,
+  useEffect,
+  useState,
+} from "react";
+
+import {
+  useRouter,
+} from "next/navigation";
+
 import Link from "next/link";
 
-// Firebase imports
-import {auth, db} from "@/lib/firebase";
-import {doc, getDoc, updateDoc, serverTimestamp, deleteDoc} from "firebase/firestore";
+import {
+  ArrowLeft,
+  Trash2,
+} from "lucide-react";
 
-// Components
-import {ProductForm} from "@/components/store/products/ProductForm";
+import {
+  onAuthStateChanged,
+} from "firebase/auth";
 
-// Types
-import {Product, ProductFormData} from "../types";
+import {
+  auth,
+} from "@/lib/firebase";
+
+import {
+  productService,
+} from "@/services/product/productService";
+
+import {
+  userService,
+} from "@/services/user/userService";
+
+import {
+  BrandedLoader,
+} from "@/components/ui/BrandedLoader";
+
+import {
+  ProductForm,
+} from "@/components/store/products/ProductForm";
+
+import type {
+  Product,
+} from "@/types/product";
+
+import type {
+  ProductFormSubmission,
+} from "@/types/productFormSubmission";
+
+import {
+  productImageService,
+} from "@/services/product/productImageService";
+
+/*
+|--------------------------------------------------------------------------
+| Props
+|--------------------------------------------------------------------------
+*/
 
 interface EditProductPageProps {
   params: Promise<{
@@ -28,132 +77,365 @@ interface EditProductPageProps {
   }>;
 }
 
-export default function EditProductPage({params}: EditProductPageProps) {
-  // ✅ Unwrap params with React.use() for Next.js 15
-  const {productId} = use(params);
-  const router = useRouter();
-  
-  const [product, setProduct] = useState<Product | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
+/*
+|--------------------------------------------------------------------------
+| Page
+|--------------------------------------------------------------------------
+*/
 
-  // Fetch product on mount
-  useEffect(() => {
-    const fetchProduct = async () => {
-      try {
-        const user = auth.currentUser;
-        if (!user) {
-          router.push("/login");
-          return;
-        }
+export default function EditProductPage({
+  params,
+}: EditProductPageProps) {
+  const {
+    productId,
+  } = use(params);
 
-        const productDoc = await getDoc(doc(db, "products", productId));
+  const router =
+    useRouter();
 
-        if (!productDoc.exists()) {
-          router.push("/store/products");
-          return;
-        }
+  const [
+    product,
+    setProduct,
+  ] = useState<Product | null>(
+    null
+  );
 
-        const data = productDoc.data();
-        setProduct({
-          id: productDoc.id,
-          ...data,
-          createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
-          updatedAt: data.updatedAt?.toDate?.()?.toISOString() || new Date().toISOString(),
-        } as Product);
-      } catch (error) {
-        console.error("Error fetching product:", error);
-        router.push("/store/products");
-      } finally {
-        setLoading(false);
-      }
-    };
+  const [
+    loading,
+    setLoading,
+  ] = useState(true);
 
-    fetchProduct();
-  }, [productId, router]);
+  const [
+    submitting,
+    setSubmitting,
+  ] = useState(false);
+
+  const [
+    deleting,
+    setDeleting,
+  ] = useState(false);
+
+  const [
+    error,
+    setError,
+  ] = useState<string | null>(
+    null
+  );
 
   /*
-    Handle form submission.
+  |--------------------------------------------------------------------------
+  | Load Product
+  |--------------------------------------------------------------------------
   */
-  const handleSubmit = async (data: ProductFormData) => {
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const unsubscribe =
+      onAuthStateChanged(
+        auth,
+        async (user) => {
+          if (!user) {
+            router.replace("/login");
+            return;
+          }
+
+          try {
+            setLoading(true);
+            setError(null);
+
+            const storeId =
+              await userService.getStoreId(
+                user.uid
+              );
+
+            if (!storeId) {
+              router.replace(
+                "/store/create"
+              );
+
+              return;
+            }
+
+            const loadedProduct =
+              await productService.getProduct(
+                productId
+              );
+
+            if (!loadedProduct) {
+              if (isMounted) {
+                setProduct(null);
+
+                setError(
+                  "Product not found."
+                );
+              }
+
+              return;
+            }
+
+            /*
+             * A store owner may only edit products belonging to their store.
+             */
+
+            if (
+              loadedProduct.storeId !==
+              storeId
+            ) {
+              if (isMounted) {
+                setProduct(null);
+
+                setError(
+                  "You do not have permission to edit this product."
+                );
+              }
+
+              return;
+            }
+
+            if (isMounted) {
+              setProduct(
+                loadedProduct
+              );
+            }
+          } catch (loadError) {
+            console.error(
+              "Error loading product:",
+              loadError
+            );
+
+            if (isMounted) {
+              setProduct(null);
+
+              setError(
+                "Failed to load product."
+              );
+            }
+          } finally {
+            if (isMounted) {
+              setLoading(false);
+            }
+          }
+        }
+      );
+
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
+  }, [
+    productId,
+    router,
+  ]);
+
+  /*
+  |--------------------------------------------------------------------------
+  | Save Product
+  |--------------------------------------------------------------------------
+  */
+
+  const handleSubmit =
+  async ({
+    data,
+    imageFile,
+  }: ProductFormSubmission) => {
+    if (!product) {
+      return;
+    }
+
     try {
       setSubmitting(true);
+      setError(null);
 
-      const updateData = {
-        name: data.name,
-        description: data.description || "",
-        category: data.category,
-        price: data.price,
-        displayPrice: data.displayPrice || data.price,
-        taxRate: data.taxRate || 0,
-        imageUrl: data.imageUrl || "",
-        stock: data.stock || 0,
-        size: {
-          value: data.sizeValue || 0,
-          unit: data.sizeUnit || "each",
-        },
-        promotion: data.promotionType
-          ? {
-              type: data.promotionType,
-              description: data.promotionDescription || "",
-              discountAmount: data.promotionDiscount,
-              code: data.promotionCode,
-              expiresAt: data.promotionExpires || null,
-            }
-          : null,
-        isActive: data.isActive !== false,
-        isFeatured: data.isFeatured || false,
-        updatedAt: serverTimestamp(),
-      };
+      /*
+      |--------------------------------------------------------------------------
+      | Update Product Data
+      |--------------------------------------------------------------------------
+      */
 
-      await updateDoc(doc(db, "products", productId), updateData);
-      router.push("/store/products");
+      await productService.updateProduct(
+        product.id,
+        {
+          name:
+            data.name,
 
-    } catch (error) {
-      console.error("Error updating product:", error);
-      alert("Failed to update product. Please try again.");
+          description:
+            data.description,
+
+          category:
+            data.category,
+
+          brand:
+            data.brand,
+
+          price:
+            data.price,
+
+          stock:
+            data.stock,
+
+          sku:
+            data.sku,
+
+          imageUrl:
+            imageFile
+              ? product.imageUrl
+              : data.imageUrl,
+
+          isAvailable:
+            data.isAvailable,
+
+          featured:
+            data.featured,
+
+          size:
+            data.size,
+
+          promotion:
+            data.promotion,
+
+          /*
+           * A new upload will move the status through uploading and
+           * processing inside productImageService.
+           */
+
+          imageStatus:
+            imageFile
+              ? "uploading"
+              : product.imageStatus,
+        }
+      );
+
+      /*
+      |--------------------------------------------------------------------------
+      | Upload New Original Image
+      |--------------------------------------------------------------------------
+      |
+      | The existing image remains visible until the background Function
+      | finishes processing the replacement.
+      |
+      */
+
+      if (imageFile) {
+        await productImageService
+          .uploadOriginalImage({
+            productId:
+              product.id,
+
+            storeId:
+              product.storeId,
+
+            file:
+              imageFile,
+          });
+      }
+
+      router.push(
+        "/store/products"
+      );
+    } catch (submitError) {
+      console.error(
+        "Error updating product:",
+        submitError
+      );
+
+      setError(
+        "Failed to update product. Please try again."
+      );
     } finally {
       setSubmitting(false);
     }
   };
 
   /*
-    Handle delete with confirmation.
+  |--------------------------------------------------------------------------
+  | Delete Product
+  |--------------------------------------------------------------------------
   */
-  const handleDelete = async () => {
-    if (!confirm("Are you sure you want to delete this product? This action cannot be undone.")) {
-      return;
-    }
 
-    try {
-      await deleteDoc(doc(db, "products", productId));
-      router.push("/store/products");
-    } catch (error) {
-      console.error("Error deleting product:", error);
-      alert("Failed to delete product. Please try again.");
-    }
-  };
+  const handleDelete =
+    async () => {
+      if (!product) {
+        return;
+      }
+
+      const confirmed =
+        window.confirm(
+          "Are you sure you want to delete this product? This action cannot be undone."
+        );
+
+      if (!confirmed) {
+        return;
+      }
+
+      try {
+        setDeleting(true);
+        setError(null);
+
+        await productService.deleteProduct(
+          product.id
+        );
+
+        router.push(
+          "/store/products"
+        );
+      } catch (deleteError) {
+        console.error(
+          "Error deleting product:",
+          deleteError
+        );
+
+        setError(
+          "Failed to delete product. Please try again."
+        );
+      } finally {
+        setDeleting(false);
+      }
+    };
+
+  /*
+  |--------------------------------------------------------------------------
+  | Loading
+  |--------------------------------------------------------------------------
+  */
 
   if (loading) {
     return (
-        <BrandedLoader message="Loading Product Details" />
+      <BrandedLoader
+        message="Loading Product Details"
+      />
     );
   }
 
-  // ✅ Handle null product case
+  /*
+  |--------------------------------------------------------------------------
+  | Error / Missing Product
+  |--------------------------------------------------------------------------
+  */
+
   if (!product) {
     return (
-      <div className="text-center py-12">
-        <p className="text-gray-500">Product not found</p>
+      <div className="py-12 text-center">
+        <p className="text-gray-500">
+          {error ??
+            "Product not found."}
+        </p>
+
         <Link
           href="/store/products"
-          className="inline-block mt-4 text-orange-600 hover:text-orange-700"
+          className="mt-4 inline-block text-orange-600 hover:text-orange-700"
         >
           Back to Products
         </Link>
       </div>
     );
   }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Page
+  |--------------------------------------------------------------------------
+  */
 
   return (
     <div className="space-y-6">
@@ -162,32 +444,59 @@ export default function EditProductPage({params}: EditProductPageProps) {
         <div className="flex items-center gap-4">
           <Link
             href="/store/products"
-            className="p-2 hover:bg-gray-100 rounded-xl transition"
+            className="rounded-xl p-2 transition hover:bg-gray-100"
             aria-label="Back to products"
           >
-            <ArrowLeft className="w-5 h-5 text-gray-500" />
+            <ArrowLeft className="h-5 w-5 text-gray-500" />
           </Link>
+
           <div>
-            <h1 className="text-2xl font-bold text-gray-800">Edit Product</h1>
-            <p className="text-gray-500 text-sm">{product.name}</p>
+            <h1 className="text-2xl font-bold text-gray-800">
+              Edit Product
+            </h1>
+
+            <p className="text-sm text-gray-500">
+              {product.name}
+            </p>
           </div>
         </div>
+
         <button
+          type="button"
           onClick={handleDelete}
-          className="px-4 py-2 border border-red-200 text-red-600 rounded-xl font-medium hover:bg-red-50 transition flex items-center gap-2 text-sm"
+          disabled={
+            deleting ||
+            submitting
+          }
+          className="flex items-center gap-2 rounded-xl border border-red-200 px-4 py-2 text-sm font-medium text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
           aria-label="Delete product"
         >
-          <Trash2 className="w-4 h-4" />
-          Delete
+          <Trash2 className="h-4 w-4" />
+
+          {deleting
+            ? "Deleting..."
+            : "Delete"}
         </button>
       </div>
 
+      {/* Error */}
+      {error && (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-3">
+          <p className="text-sm text-red-600">
+            {error}
+          </p>
+        </div>
+      )}
+
       {/* Form */}
-      <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+      <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
         <ProductForm
           initialData={product}
           onSubmit={handleSubmit}
-          loading={submitting}
+          loading={
+            submitting ||
+            deleting
+          }
           submitLabel="Save Changes"
         />
       </div>

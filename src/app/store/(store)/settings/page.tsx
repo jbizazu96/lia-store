@@ -7,7 +7,7 @@
 */
 
 import { BrandedLoader } from "@/components/ui/BrandedLoader";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { auth, db } from "@/lib/firebase";
 import { doc, getDoc, updateDoc, collection, query, where, getDocs } from "firebase/firestore";
+import { geocodeAddress } from "@/services/delivery/geocode";
 
 // Components
 import { ProfileSection } from "@/components/store/settings/ProfileSection";
@@ -35,6 +36,8 @@ import { PaymentSection } from "@/components/store/settings/PaymentSection";
 import { BusinessSection } from "@/components/store/settings/BusinessSection";
 import { DangerSection } from "@/components/store/settings/DangerSection";
 import { StoreSchedule } from "@/components/store/settings/StoreSchedule";
+import { useUnsavedChanges } from "@/hooks/useUnsavedChanges";
+import { useConfirmation } from "@/context/ConfirmationContext";
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -45,6 +48,17 @@ export default function SettingsPage() {
   const [activeSection, setActiveSection] = useState("profile");
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
+  const initialStoreData = useRef<string | null>(null);
+  const initialUserData = useRef<string | null>(null);
+
+  const hasUnsavedChanges =
+    (initialStoreData.current !== null &&
+      JSON.stringify(storeData) !== initialStoreData.current) ||
+    (initialUserData.current !== null &&
+      JSON.stringify(userData) !== initialUserData.current);
+
+  useUnsavedChanges(hasUnsavedChanges);
+  const { confirm } = useConfirmation();
 
   // Fetch store and user data
   useEffect(() => {
@@ -60,7 +74,9 @@ export default function SettingsPage() {
         const userRef = doc(db, "users", user.uid);
         const userDoc = await getDoc(userRef);
         if (userDoc.exists()) {
-          setUserData(userDoc.data());
+          const loadedUserData = userDoc.data();
+          setUserData(loadedUserData);
+          initialUserData.current = JSON.stringify(loadedUserData);
         }
 
         // ✅ Get store data by querying ownerId
@@ -71,7 +87,9 @@ export default function SettingsPage() {
         if (!storeSnapshot.empty) {
           const storeDoc = storeSnapshot.docs[0];
           setStoreId(storeDoc.id);
-          setStoreData({ id: storeDoc.id, ...storeDoc.data() });
+          const loadedStoreData = { id: storeDoc.id, ...storeDoc.data() };
+          setStoreData(loadedStoreData);
+          initialStoreData.current = JSON.stringify(loadedStoreData);
         } else {
           // No store found - redirect to create
           router.push("/store/create");
@@ -97,20 +115,71 @@ export default function SettingsPage() {
       const user = auth.currentUser;
       if (!user) return;
 
-      // ✅ Update store using the correct storeId
+      // Keep the saved coordinates in sync with the store address.
       if (storeData && storeId) {
-        await updateDoc(doc(db, "stores", storeId), {
-          ...storeData,
-          updatedAt: new Date().toISOString(),
+        if (
+          !storeData.address?.trim() ||
+          !storeData.city?.trim() ||
+          !storeData.state?.trim() ||
+          !storeData.zip?.trim()
+        ) {
+          setSaveMessage(
+            "Enter the complete store address (street, city, state, and ZIP code) so we can verify its location."
+          );
+          return;
+        }
+
+        const fullAddress = [
+          storeData.address,
+          storeData.city,
+          storeData.state,
+          storeData.zip,
+        ]
+          .join(", ");
+
+        const location = await geocodeAddress(fullAddress);
+
+        if (!location) {
+          setSaveMessage(
+            "We couldn't verify that store address. Check the street, city, state, and ZIP code, then try again."
+          );
+          return;
+        }
+
+        const confirmed = await confirm({
+          title: "Save store changes?",
+          message: "Your updated store details and location will be saved.",
+          confirmLabel: "Save changes",
+          cancelLabel: "Keep editing",
         });
+
+        if (!confirmed) return;
+
+        const updatedStoreData = {
+          ...storeData,
+          latitude: location.latitude,
+          longitude: location.longitude,
+          updatedAt: new Date().toISOString(),
+        };
+
+        await updateDoc(doc(db, "stores", storeId), {
+          ...updatedStoreData,
+        });
+
+        setStoreData(updatedStoreData);
+        initialStoreData.current = JSON.stringify(updatedStoreData);
       }
 
       // Update user
       if (userData) {
-        await updateDoc(doc(db, "users", user.uid), {
+        const updatedUserData = {
           ...userData,
           updatedAt: new Date().toISOString(),
-        });
+        };
+
+        await updateDoc(doc(db, "users", user.uid), updatedUserData);
+        setUserData(updatedUserData);
+        initialUserData.current = JSON.stringify(updatedUserData);
       }
 
       setSaveMessage("Settings saved successfully! ✅");

@@ -31,6 +31,8 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 import {
   getFirestore,
   FieldValue,
+  type DocumentReference,
+  type DocumentSnapshot,
 } from "firebase-admin/firestore";
 
 import { storeEvents } from "../events/storeEvents";
@@ -62,39 +64,85 @@ export const createOrder = onCall(
     const db =
       getFirestore("default");
 
+    if (!Array.isArray(order.items) || order.items.length === 0) {
+      throw new HttpsError(
+        "invalid-argument",
+        "An order must contain at least one product."
+      );
+    }
+
     const orderNumber =
       `LIA-${Date.now()}`;
 
     const orderRef =
-      await db.collection("orders").add({
+      db.collection("orders").doc();
 
-        ...order,
+    await db.runTransaction(async (transaction) => {
+      const productReferences: DocumentReference[] = order.items.map((item: {id: string}) =>
+        db.collection("products").doc(item.id)
+      );
 
-        orderNumber,
+      const productSnapshots: DocumentSnapshot[] = [];
 
-        status: "pending",
+      for (const productReference of productReferences) {
+        productSnapshots.push(
+          await transaction.get(productReference)
+        );
+      }
 
-        statusHistory: [
+      productSnapshots.forEach((productSnapshot, index) => {
+        const orderedItem = order.items[index];
+        const orderedQuantity = Number(orderedItem.quantity);
 
-          {
+        if (!Number.isInteger(orderedQuantity) || orderedQuantity <= 0) {
+          throw new HttpsError(
+            "invalid-argument",
+            "Each ordered product must have a valid quantity."
+          );
+        }
 
-            status: "pending",
+        if (!productSnapshot.exists) {
+          throw new HttpsError(
+            "not-found",
+            `${orderedItem.name} is no longer available.`
+          );
+        }
 
-            timestamp: new Date(),
+        const product = productSnapshot.data();
+        const availableStock = Number(product?.stock ?? 0);
 
-            note: "Order created.",
+        if (
+          product?.storeId !== order.store?.id ||
+          product?.isAvailable === false ||
+          availableStock < orderedQuantity
+        ) {
+          throw new HttpsError(
+            "failed-precondition",
+            `${orderedItem.name} no longer has enough stock available.`
+          );
+        }
 
-          },
-
-        ],
-
-        createdAt:
-          FieldValue.serverTimestamp(),
-
-        updatedAt:
-          FieldValue.serverTimestamp(),
-
+        transaction.update(productSnapshot.ref, {
+          stock: availableStock - orderedQuantity,
+          updatedAt: FieldValue.serverTimestamp(),
+        });
       });
+
+      transaction.set(orderRef, {
+        ...order,
+        orderNumber,
+        status: "pending",
+        statusHistory: [
+          {
+            status: "pending",
+            timestamp: new Date(),
+            note: "Order created.",
+          },
+        ],
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+    });
 
     console.log("Store object:");
 console.log(order.store);

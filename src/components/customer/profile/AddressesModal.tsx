@@ -12,6 +12,8 @@ import {X, MapPin, Trash2, Edit2, Check, AlertCircle, Plus} from "lucide-react";
 import {doc, getDoc, setDoc, deleteDoc, collection, getDocs} from "firebase/firestore";
 import {db} from "@/lib/firebase";
 import {geocodeAddress} from "@/services/delivery/geocode";
+import { useUnsavedChanges } from "@/hooks/useUnsavedChanges";
+import { useConfirmation } from "@/context/ConfirmationContext";
 
 interface AddressesModalProps {
   userId: string;
@@ -42,6 +44,36 @@ export function AddressesModal({userId, onClose}: AddressesModalProps) {
     state: "",
     zip: "",
   });
+
+  const savedFormData = {
+    street: address?.street || "",
+    city: address?.city || "",
+    state: address?.state || "",
+    zip: address?.zip || "",
+  };
+
+  const hasUnsavedChanges =
+    isEditing &&
+    JSON.stringify(formData) !== JSON.stringify(savedFormData);
+
+  useUnsavedChanges(hasUnsavedChanges);
+  const { confirm } = useConfirmation();
+
+  async function handleClose() {
+    const confirmed = !hasUnsavedChanges || await confirm({
+      title: "Discard address changes?",
+      message: "Your delivery address edits have not been saved.",
+      confirmLabel: "Discard changes",
+      cancelLabel: "Keep editing",
+      destructive: true,
+    });
+
+    if (!confirmed) {
+      return;
+    }
+
+    onClose();
+  }
 
   // Fetch address on mount
   useEffect(() => {
@@ -159,15 +191,30 @@ export function AddressesModal({userId, onClose}: AddressesModalProps) {
       const fullAddress = `${formData.street}, ${formData.city}, ${formData.state} ${formData.zip}`;
       const location = await geocodeAddress(fullAddress);
 
-      // ✅ Fix: Create addressData with proper types (no null)
+      if (!location) {
+        setError(
+          "We couldn't verify this delivery address. Check the street, city, state, and ZIP code, then try again."
+        );
+        return;
+      }
+
+      const confirmed = await confirm({
+        title: address ? "Update delivery address?" : "Save delivery address?",
+        message: "This verified address will be used for future deliveries.",
+        confirmLabel: address ? "Update address" : "Save address",
+        cancelLabel: "Keep editing",
+      });
+
+      if (!confirmed) return;
+
       const addressData: Address = {
         street: formData.street,
         city: formData.city,
         state: formData.state,
         zip: formData.zip,
-        latitude: location?.latitude ?? undefined,
-        longitude: location?.longitude ?? undefined,
-        formattedAddress: location?.formattedAddress || fullAddress,
+        latitude: location.latitude,
+        longitude: location.longitude,
+        formattedAddress: location.formattedAddress,
       };
 
       // Save to both places for redundancy
@@ -201,7 +248,15 @@ export function AddressesModal({userId, onClose}: AddressesModalProps) {
 
   // Delete address
   async function handleDelete() {
-    if (!confirm("Are you sure you want to delete your address?")) return;
+    const confirmed = await confirm({
+      title: "Delete delivery address?",
+      message: "This saved delivery address will be permanently removed.",
+      confirmLabel: "Delete address",
+      cancelLabel: "Keep address",
+      destructive: true,
+    });
+
+    if (!confirmed) return;
     
     try {
       // Remove from user document
@@ -261,7 +316,7 @@ export function AddressesModal({userId, onClose}: AddressesModalProps) {
             </p>
           </div>
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="w-8 h-8 rounded-full hover:bg-gray-100 flex items-center justify-center transition"
             aria-label="Close addresses"
           >

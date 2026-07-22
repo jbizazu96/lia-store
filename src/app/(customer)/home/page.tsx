@@ -18,10 +18,10 @@ import {
   getDeliveryFeeDisplay,
 } from "@/services/delivery/deliveryPricing";
 import {
-  calculateDistance,
   getEstimatedTime,
   getEstimatedTimeNumber,
 } from "@/services/delivery/distance";
+import { getDrivingDistanceMiles } from "@/services/delivery/routing";
 import { TopNavigation } from "@/components/customer/home/TopNavigation";
 import { SearchBar } from "@/components/customer/home/SearchBar";
 import { PromoCarousel } from "@/components/customer/home/PromoCarousel";
@@ -79,14 +79,12 @@ export default function CustomerHomePage() {
         setLoading(true);
         const storesData = await storeService.getStores();
 
-          const storesWithDistance: CustomerStore[] = storesData.map((store) => {
+          const storesWithDistance: CustomerStore[] = await Promise.all(storesData.map(async (store) => {
             const distance = userLocation
-              ? calculateDistance(
-                  userLocation.lat,
-                  userLocation.lng,
-                  store.latitude,
-                  store.longitude
-                )
+              ? await getDrivingDistanceMiles(
+                  { latitude: userLocation.lat, longitude: userLocation.lng },
+                  { latitude: store.latitude, longitude: store.longitude }
+                ) ?? 0
               : 0;
 
             const pricing = calculateDeliveryFee(distance, 0);
@@ -105,7 +103,7 @@ export default function CustomerHomePage() {
               promotions: [],
               isFavorite: false,
             });
-          });
+          }));
         // Sort by distance (closest first)
         storesWithDistance.sort((a, b) => (a.distance || 999) - (b.distance || 999));
         
@@ -172,7 +170,14 @@ export default function CustomerHomePage() {
   const handleContinueToStore = () => {
     if (selectedStore) {
       setShowDistanceWarning(false);
-      router.push(`/store/${selectedStore.id}`);
+      const searchParams = new URLSearchParams({
+        distance: String(selectedStore.distance || 0),
+        deliveryFee: String(selectedStore.deliveryFee || 0),
+        estimatedTime: String(selectedStore.estimatedPrepTime || 0),
+        skipDistanceWarning: "1",
+      });
+
+      router.push(`/store/${selectedStore.id}?${searchParams.toString()}`);
     }
   };
 

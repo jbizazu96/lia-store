@@ -47,7 +47,7 @@ export const ORDER_STATUS_STEPS = [
     label: "Accepted",
     icon: CheckCircle,
     color:
-      "bg-green-100 text-green-800",
+      "bg-cyan-100 text-cyan-800",
   },
 
   {
@@ -100,7 +100,7 @@ export const ORDER_STATUS_CONFIG = {
   accepted: {
     label: "Accepted",
     color:
-      "bg-green-100 text-green-800 border-green-200",
+      "bg-cyan-100 text-cyan-800 border-cyan-200",
     icon: CheckCircle,
   },
 

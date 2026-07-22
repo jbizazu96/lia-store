@@ -8,12 +8,14 @@ import {motion} from "framer-motion";
 import {X, Eye, EyeOff, Lock, Check} from "lucide-react";
 import {updatePassword, reauthenticateWithCredential, EmailAuthProvider} from "firebase/auth";
 import {auth} from "@/lib/firebase";
+import { useConfirmation } from "@/context/ConfirmationContext";
 
 interface SecurityModalProps {
   onClose: () => void;
 }
 
 export function SecurityModal({onClose}: SecurityModalProps) {
+  const { confirm } = useConfirmation();
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
@@ -44,6 +46,16 @@ export function SecurityModal({onClose}: SecurityModalProps) {
       setError("Passwords do not match");
       return;
     }
+
+    const confirmed = await confirm({
+      title: "Update password?",
+      message: "Your current password will be replaced with the new one.",
+      confirmLabel: "Update password",
+      cancelLabel: "Keep editing",
+      destructive: true,
+    });
+
+    if (!confirmed) return;
 
     try {
       setLoading(true);

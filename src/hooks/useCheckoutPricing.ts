@@ -13,13 +13,15 @@
 */
 
 import {
+  useEffect,
   useMemo,
+  useState,
 } from "react";
 
 import {
-  calculateDistance,
   getEstimatedTimeNumber,
 } from "@/services/delivery/distance";
+import { getDrivingDistanceMiles } from "@/services/delivery/routing";
 
 import {
   calculateDeliveryFee,
@@ -63,6 +65,8 @@ interface UseCheckoutPricingParams {
 interface UseCheckoutPricingResult {
   distanceMiles: number;
 
+  isCalculatingDistance: boolean;
+
   estimatedDeliveryMinutes: number;
 
   deliveryFee: number;
@@ -86,19 +90,40 @@ export function useCheckoutPricing({
   store,
   address,
 }: UseCheckoutPricingParams): UseCheckoutPricingResult {
-  return useMemo(() => {
-    const distanceMiles =
-      store &&
-      address?.latitude !== undefined &&
-      address?.longitude !== undefined
-        ? calculateDistance(
-            store.latitude,
-            store.longitude,
-            address.latitude,
-            address.longitude
-          )
-        : 0;
+  const [distanceMiles, setDistanceMiles] = useState(0);
+  const [isCalculatingDistance, setIsCalculatingDistance] = useState(false);
 
+  useEffect(() => {
+    if (!store || address?.latitude === undefined || address?.longitude === undefined) {
+      setDistanceMiles(0);
+      setIsCalculatingDistance(false);
+      return;
+    }
+
+    let isMounted = true;
+    setIsCalculatingDistance(true);
+
+    getDrivingDistanceMiles(
+      { latitude: store.latitude, longitude: store.longitude },
+      { latitude: address.latitude, longitude: address.longitude }
+    )
+      .then((drivingDistance) => {
+        if (isMounted) {
+          setDistanceMiles(drivingDistance ?? 0);
+        }
+      })
+      .finally(() => {
+        if (isMounted) {
+          setIsCalculatingDistance(false);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [store, address?.latitude, address?.longitude]);
+
+  return useMemo(() => {
     const pricing =
       calculateDeliveryFee(
         distanceMiles,
@@ -124,6 +149,8 @@ export function useCheckoutPricing({
     return {
       distanceMiles,
 
+      isCalculatingDistance,
+
       estimatedDeliveryMinutes:
         getEstimatedTimeNumber(
           distanceMiles
@@ -146,7 +173,7 @@ export function useCheckoutPricing({
   }, [
     subtotal,
     tip,
-    store,
-    address,
+    distanceMiles,
+    isCalculatingDistance,
   ]);
 }

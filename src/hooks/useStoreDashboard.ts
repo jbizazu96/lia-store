@@ -2,18 +2,17 @@
 
 /*
 |--------------------------------------------------------------------------
-| useStoreProducts Hook
+| useStoreDashboard Hook
 |--------------------------------------------------------------------------
 |
-| Connects the product service to the store products page.
+| Connects dashboardService to the store dashboard page.
 |
 | Responsibilities:
-| - Wait for authentication.
-| - Resolve the signed-in user's store.
-| - Load the store's products.
-| - Expose loading, error, and refresh state.
 |
-| Product writes remain in productService.
+| - Wait for Firebase Authentication.
+| - Resolve the signed-in user's store.
+| - Load dashboard data.
+| - Expose loading, error, authentication, and refresh state.
 |
 */
 
@@ -32,21 +31,25 @@ import {
 } from "@/lib/firebase";
 
 import {
-  productService,
-} from "@/services/product/productService";
+  dashboardService,
+} from "@/services/dashboard/dashboardService";
 
 import {
   userService,
 } from "@/services/user/userService";
 
 import type {
-  Product,
-} from "@/types/product";
+  DashboardData,
+} from "@/types/dashboard";
 
-interface UseStoreProductsResult {
-  products: Product[];
+/*
+|--------------------------------------------------------------------------
+| Hook Result
+|--------------------------------------------------------------------------
+*/
 
-  storeId: string | null;
+interface UseStoreDashboardResult {
+  data: DashboardData | null;
 
   loading: boolean;
 
@@ -56,20 +59,30 @@ interface UseStoreProductsResult {
 
   needsStoreSetup: boolean;
 
-  refreshProducts: () => Promise<void>;
+  refreshDashboard: () => Promise<void>;
 }
 
-export function useStoreProducts():
-UseStoreProductsResult {
+/*
+|--------------------------------------------------------------------------
+| Hook
+|--------------------------------------------------------------------------
+*/
+
+export function useStoreDashboard():
+UseStoreDashboardResult {
   const [
-    products,
-    setProducts,
-  ] = useState<Product[]>([]);
+    data,
+    setData,
+  ] = useState<DashboardData | null>(
+    null
+  );
 
   const [
     storeId,
     setStoreId,
-  ] = useState<string | null>(null);
+  ] = useState<string | null>(
+    null
+  );
 
   const [
     loading,
@@ -79,7 +92,9 @@ UseStoreProductsResult {
   const [
     error,
     setError,
-  ] = useState<string | null>(null);
+  ] = useState<string | null>(
+    null
+  );
 
   const [
     isAuthenticated,
@@ -91,7 +106,13 @@ UseStoreProductsResult {
     setNeedsStoreSetup,
   ] = useState(false);
 
-  const loadProducts =
+  /*
+  |--------------------------------------------------------------------------
+  | Load Dashboard
+  |--------------------------------------------------------------------------
+  */
+
+  const loadDashboard =
     useCallback(
       async (
         resolvedStoreId: string,
@@ -104,25 +125,35 @@ UseStoreProductsResult {
         try {
           setError(null);
 
-          const loadedProducts =
-            await productService
-              .getStoreProducts(
+          const dashboardData =
+            await dashboardService
+              .getStoreDashboard(
                 resolvedStoreId
               );
 
-          setProducts(
-            loadedProducts
+          if (!dashboardData) {
+            setData(null);
+
+            setError(
+              "Dashboard data could not be loaded."
+            );
+
+            return;
+          }
+
+          setData(
+            dashboardData
           );
         } catch (loadError) {
           console.error(
-            "Error loading store products:",
+            "Error loading store dashboard:",
             loadError
           );
 
-          setProducts([]);
+          setData(null);
 
           setError(
-            "Failed to load products."
+            "Failed to load dashboard."
           );
         } finally {
           if (showLoading) {
@@ -133,18 +164,19 @@ UseStoreProductsResult {
       []
     );
 
-  useEffect(() => {
-    let activeProductListener: (() => void) | null = null;
+  /*
+  |--------------------------------------------------------------------------
+  | Authentication And Store Resolution
+  |--------------------------------------------------------------------------
+  */
 
+  useEffect(() => {
     const unsubscribe =
       onAuthStateChanged(
         auth,
         async (user) => {
-          activeProductListener?.();
-          activeProductListener = null;
-
           if (!user) {
-            setProducts([]);
+            setData(null);
             setStoreId(null);
             setIsAuthenticated(false);
             setNeedsStoreSetup(false);
@@ -168,7 +200,7 @@ UseStoreProductsResult {
               );
 
             if (!resolvedStoreId) {
-              setProducts([]);
+              setData(null);
               setStoreId(null);
               setNeedsStoreSetup(true);
 
@@ -185,34 +217,20 @@ UseStoreProductsResult {
               resolvedStoreId
             );
 
-            const unsubscribeProducts =
-              productService.listenToStoreProducts(
-                resolvedStoreId,
-                (liveProducts) => {
-                  setProducts(liveProducts);
-                  setError(null);
-                  setLoading(false);
-                },
-                () => {
-                  setError(
-                    "Failed to load products."
-                  );
-                  setLoading(false);
-                }
-              );
-
-            activeProductListener = unsubscribeProducts;
+            await loadDashboard(
+              resolvedStoreId
+            );
           } catch (loadError) {
             console.error(
-              "Error preparing store products:",
+              "Error preparing dashboard:",
               loadError
             );
 
-            setProducts([]);
+            setData(null);
             setStoreId(null);
 
             setError(
-              "Failed to load products."
+              "Failed to load dashboard."
             );
 
             setLoading(false);
@@ -220,34 +238,41 @@ UseStoreProductsResult {
         }
       );
 
-    return () => {
-      unsubscribe();
-      activeProductListener?.();
-    };
-  }, [loadProducts]);
+    return unsubscribe;
+  }, [
+    loadDashboard,
+  ]);
 
-  const refreshProducts =
-    useCallback(async (): Promise<void> => {
-      if (!storeId) {
-        return;
-      }
+  /*
+  |--------------------------------------------------------------------------
+  | Manual Refresh
+  |--------------------------------------------------------------------------
+  */
 
-      await loadProducts(
+  const refreshDashboard =
+    useCallback(
+      async (): Promise<void> => {
+        if (!storeId) {
+          return;
+        }
+
+        await loadDashboard(
+          storeId,
+          false
+        );
+      },
+      [
+        loadDashboard,
         storeId,
-        false
-      );
-    }, [
-      loadProducts,
-      storeId,
-    ]);
+      ]
+    );
 
   return {
-    products,
-    storeId,
+    data,
     loading,
     error,
     isAuthenticated,
     needsStoreSetup,
-    refreshProducts,
+    refreshDashboard,
   };
 }

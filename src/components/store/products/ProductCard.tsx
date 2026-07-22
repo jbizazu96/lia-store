@@ -5,7 +5,10 @@
   Shows stock with color indicators and quick action buttons.
 */
 
-import {useState} from "react";
+import {
+  promotionService,
+} from "@/services/promotion/promotionService";
+import {useEffect, useRef, useState} from "react";
 import {motion, AnimatePresence} from "framer-motion";
 import Image from "next/image";
 import Link from "next/link";
@@ -38,6 +41,27 @@ export function ProductCard({
   onDuplicate,
 }: ProductCardProps) {
   const [showMenu, setShowMenu] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!showMenu) return;
+
+    const closeMenu = (event: PointerEvent) => {
+      if (!menuRef.current?.contains(event.target as Node)) {
+        setShowMenu(false);
+      }
+    };
+
+    const closeOnScroll = () => setShowMenu(false);
+
+    document.addEventListener("pointerdown", closeMenu);
+    window.addEventListener("scroll", closeOnScroll, true);
+
+    return () => {
+      document.removeEventListener("pointerdown", closeMenu);
+      window.removeEventListener("scroll", closeOnScroll, true);
+    };
+  }, [showMenu]);
 
   // Format price
   const formatPrice = (price: number) => {
@@ -45,7 +69,12 @@ export function ProductCard({
   };
 
   // Check if product is on sale
-  const isOnSale = product.displayPrice > product.price;
+  const discountedProductPrice = promotionService.getDiscountedPrice(
+    product.price,
+    product.promotion
+  );
+  const isOnSale = discountedProductPrice < product.price;
+  const hasActivePromotion = promotionService.isActive(product.promotion);
 
   // Get stock color based on quantity
   const getStockColor = (stock: number) => {
@@ -90,12 +119,27 @@ export function ProductCard({
           </div>
         )}
 
-        {/* Featured Badge - Top Left */}
-        {product.featured && (
-          <div className="absolute top-1.5 left-1.5 px-1.5 py-0.5 bg-yellow-400 text-white text-[10px] font-bold rounded-full flex items-center gap-0.5">
-            <Star className="w-2.5 h-2.5 fill-white" />
-          </div>
-        )}
+        {/* Product status badges */}
+        <div className="absolute left-1.5 top-1.5 z-10 flex max-w-[70%] flex-wrap gap-1">
+          {product.featured && (
+            <div className="flex items-center gap-0.5 rounded-full bg-yellow-400 px-1.5 py-0.5 text-[10px] font-bold text-white">
+              <Star className="h-2.5 w-2.5 fill-white" />
+              Featured
+            </div>
+          )}
+
+          {isOnSale && (
+            <div className="rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-bold text-white">
+              Sale
+            </div>
+          )}
+
+          {hasActivePromotion && (
+            <div className="max-w-[100px] truncate rounded-full bg-orange-500 px-1.5 py-0.5 text-[10px] font-bold text-white">
+              {promotionService.getLabel(product.promotion)}
+            </div>
+          )}
+        </div>
 
         {/* Stock Badge - Bottom Left with color */}
         <div className={`absolute bottom-1.5 left-1.5 px-1.5 py-0.5 text-[10px] font-medium rounded-full flex items-center gap-1 ${getStockColor(product.stock)}`}>
@@ -106,7 +150,7 @@ export function ProductCard({
         </div>
 
         {/* Three-dot Menu */}
-        <div className="absolute top-1.5 right-1.5">
+        <div ref={menuRef} className="absolute top-1.5 right-1.5">
           <button
             onClick={toggleMenu}
             className="p-1 bg-white/90 backdrop-blur-sm rounded-full hover:bg-white transition shadow-sm"
@@ -175,10 +219,10 @@ export function ProductCard({
             {isOnSale ? (
               <>
                 <span className="text-xs font-bold text-green-600">
-                  {formatPrice(product.price)}
+                  {formatPrice(discountedProductPrice)}
                 </span>
                 <span className="text-[9px] text-gray-400 line-through">
-                  {formatPrice(product.displayPrice)}
+                  {formatPrice(product.price)}
                 </span>
               </>
             ) : (
@@ -224,20 +268,6 @@ export function ProductCard({
             {product.featured ? "Featured" : "Feature"}
           </button>
 
-          {/* Promotion indicator */}
-          {product.promotion && (
-              <span className="max-w-[55px] truncate rounded bg-orange-50 px-1 py-0.5 text-[9px] font-medium text-orange-600">
-                {product.promotion.type === "bogo" &&
-                  "BOGO"}
-
-                {product.promotion.type === "discount" &&
-                  "Discount"}
-
-                {product.promotion.type ===
-                  "free_shipping" &&
-                  "Free Ship"}
-              </span>
-            )}
         </div>
       </div>
     </motion.div>

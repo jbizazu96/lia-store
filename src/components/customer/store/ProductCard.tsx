@@ -4,17 +4,18 @@
   Product card with quantity controls and remove confirmation.
   Shows confirmation modal when removing the last item.
 */
-
+import {
+  promotionService,
+} from "@/services/promotion/promotionService";
 import {useState} from "react";
 import {motion, AnimatePresence} from "framer-motion";
 import Image from "next/image";
 import {
-  Star,
   Plus,
   Minus,
   Package,
-  TrendingUp,
   AlertCircle,
+  LockKeyhole,
 } from "lucide-react";
 import type { Product } from "@/types/product";
 
@@ -40,13 +41,17 @@ export function ProductCard({
     return { dollars, cents: cents.toString().padStart(2, '0') };
   };
 
-  const displayPrice = formatPrice(product.displayPrice);
+  const discountedProductPrice = promotionService.getDiscountedPrice(
+    product.price,
+    product.promotion
+  );
+  const salePrice = formatPrice(discountedProductPrice);
   const originalPrice = formatPrice(product.price);
-  const isOnSale = product.price > product.displayPrice;
+  const isOnSale = discountedProductPrice < product.price;
 
-  // Get stock status
+  // Customer-facing stock label
   const getStockStatus = (stock: number) => {
-    if (stock > 20) return {label: "In stock", color: "text-green-600"};
+    if (stock > 20) return {label: "Many in stock", color: "text-green-600"};
     if (stock > 5) return {label: "Few left", color: "text-yellow-600"};
     if (stock > 0) return {label: "Last chance", color: "text-orange-600"};
     return {label: "Out of stock", color: "text-red-600"};
@@ -59,30 +64,6 @@ export function ProductCard({
     if (count >= 1000) return `${(count / 1000).toFixed(1)}k+`;
     if (count > 0) return `${count}+`;
     return "";
-  };
-
-  // Generate stars
-  const renderStars = (rating: number) => {
-    const fullStars = Math.floor(rating);
-    const hasHalfStar = rating % 1 >= 0.5;
-    const totalStars = 5;
-    
-    return (
-      <div className="flex items-center gap-0.5">
-        {[...Array(fullStars)].map((_, i) => (
-          <Star key={i} className="w-2.5 h-2.5 fill-yellow-400 text-yellow-400" />
-        ))}
-        {hasHalfStar && (
-          <Star className="w-2.5 h-2.5 fill-yellow-400 text-yellow-400" />
-        )}
-        {[...Array(totalStars - fullStars - (hasHalfStar ? 1 : 0))].map((_, i) => (
-          <Star key={i + fullStars + 1} className="w-2.5 h-2.5 text-gray-300" />
-        ))}
-        <span className="text-[10px] font-medium text-gray-600 ml-0.5">
-          {rating.toFixed(1)}
-        </span>
-      </div>
-    );
   };
 
   // ✅ Handle decrease with confirmation
@@ -120,112 +101,119 @@ export function ProductCard({
     <>
       <motion.div
         whileHover={{y: -2}}
-        className="bg-white rounded-xl overflow-hidden shadow-sm hover:shadow-md transition border border-gray-100 w-[140px] flex-shrink-0"
+        className="w-[124px] flex-shrink-0 font-sans antialiased sm:w-[140px]"
       >
-        {/* Product Image */}
-        <div className="relative w-full h-[100px] bg-white">
-          {product.imageUrl ? (
-            <Image
-              src={product.imageUrl}
-              alt={product.name}
-              fill
-              className="object-contain p-1"
-            />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center">
-              <Package className="w-8 h-8 text-gray-300" />
+            {/* Product Image */}
+            <div className="relative h-[96px] w-full overflow-hidden rounded-2xl bg-gray-100">
+              {product.imageUrl ? (
+                <Image
+                  src={product.imageUrl}
+                  alt={product.name}
+                  fill
+                  sizes="(max-width: 640px) 124px, 140px"
+                  className="object-contain p-2"
+                />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center">
+                  <Package className="h-10 w-10 text-gray-300" />
+                </div>
+              )}
+
+              {isOnSale && (
+                <span className="absolute left-1.5 top-1.5 rounded-full bg-red-500 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-white shadow-sm">
+                  On sale
+                </span>
+              )}
+
+              {isInCart ? (
+                <div className="absolute bottom-2 right-2 flex h-9 items-center rounded-full bg-white p-0.5 shadow-lg">
+                  <button
+                    type="button"
+                    onClick={handleDecrease}
+                    className="flex h-8 w-8 items-center justify-center rounded-full text-orange-600 transition hover:bg-orange-50"
+                    aria-label="Decrease quantity"
+                  >
+                    <Minus className="h-3 w-3" />
+                  </button>
+                  <span className="min-w-4 text-center text-xs font-bold text-gray-800">
+                    {quantity}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleIncrease}
+                    className="flex h-8 w-8 items-center justify-center rounded-full text-orange-600 transition hover:bg-orange-50"
+                    aria-label="Increase quantity"
+                  >
+                    <Plus className="h-3 w-3" />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleAdd}
+                  className="absolute bottom-2 right-2 flex h-9 w-9 items-center justify-center rounded-full bg-white text-gray-900 shadow-lg transition hover:scale-105 hover:bg-orange-500 hover:text-white focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
+                  aria-label={`Add ${product.name} to cart`}
+                >
+                  <Plus className="h-5 w-5" strokeWidth={2.5} />
+                </button>
+              )}
             </div>
-          )}
-          {isOnSale && (
-            <span className="absolute left-1.5 top-1.5 rounded-full bg-red-500 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white shadow-sm">
-              On sale
-            </span>
-          )}
-        </div>
 
         {/* Product Info */}
-        <div className="p-2">
-          {/* Product Name */}
-          <h4 className="font-semibold text-gray-800 text-xs truncate">
-            {product.name}
-          </h4>
-
-          {/* Size/Weight */}
-          {product.size && product.size.value > 0 && (
-            <p className="text-[10px] text-gray-400">
-              {product.size.value}{product.size.unit}
-            </p>
+        <div className="pt-2">
+          {promotionService.isActive(
+            product.promotion
+          ) && (
+            <span className="inline-flex max-w-full items-center gap-1 truncate rounded-full bg-orange-50 px-1.5 py-0.5 text-[9px] font-semibold text-orange-700">
+              <LockKeyhole className="h-3 w-3 shrink-0" />
+              {promotionService.getLabel(
+                product.promotion
+              )}
+            </span>
           )}
 
           {/* Product price */}
-          <div className="mt-0.5 flex items-center gap-1.5">
-            <span className={`text-sm font-bold ${isOnSale ? "text-red-600" : "text-gray-800"}`}>
-              ${displayPrice.dollars}
-              <sup className={`text-[8px] font-semibold ${isOnSale ? "text-red-500" : "text-gray-600"}`}>
-                .{displayPrice.cents}
-              </sup>
+          <div className="mt-1 flex items-end gap-1.5">
+            <span className={`inline-flex items-baseline whitespace-nowrap text-base font-black leading-none tracking-tight ${isOnSale ? "text-red-600" : "text-gray-900"}`}>
+              <span className="relative -top-1 mr-px text-[11px] font-bold leading-none">
+                $
+              </span>
+              <span>{salePrice.dollars}</span>
+              <span className="relative -top-1 text-[11px] font-bold leading-none">
+                {salePrice.cents}
+              </span>
             </span>
             {isOnSale && (
-              <span className="text-[10px] text-gray-400 line-through">
+              <span className="pb-0.5 text-[10px] text-gray-400 line-through">
                 ${originalPrice.dollars}.{originalPrice.cents}
               </span>
             )}
           </div>
 
+          {/* Size/Weight */}
+          {product.size && product.size.value > 0 && (
+            <p className="mt-1 text-xs font-medium text-gray-500">
+              {product.size.value} {product.size.unit}
+            </p>
+          )}
+
+          {/* Product Name */}
+          <h4 className="mt-0.5 line-clamp-2 text-xs font-semibold leading-4 text-gray-900">
+            {product.name}
+          </h4>
+
           {/* Stock Status */}
-          <p className={`text-[9px] font-medium ${stockStatus.color}`}>
+          <p className={`mt-1 flex items-center gap-1.5 text-[10px] font-medium ${stockStatus.color}`}>
+            <span className="h-2 w-2 rounded-full bg-current" />
             {stockStatus.label}
           </p>
 
-          {/* Rating & Sold */}
-          {(product.rating ?? 0) > 0 && (
-              <div className="flex items-center gap-0.5">
-                {renderStars(product.rating ?? 0)}
-              </div>
-            )}
-            
-           {(product.soldCount ?? 0) > 0 && (
-            <div className="flex items-center gap-0.5 text-[9px] text-gray-500">
-              <TrendingUp className="w-2.5 h-2.5" />
-              <span>
-                {formatSoldCount(product.soldCount ?? 0)}
-              </span>
-            </div>
+          {(product.soldCount ?? 0) > 0 && (
+            <p className="mt-0.5 text-[10px] font-medium text-gray-500">
+              {formatSoldCount(product.soldCount ?? 0)} recently sold
+            </p>
           )}
-          </div>
-
-          {/* Add/Quantity Button */}
-          {isInCart ? (
-            <div className="flex items-center justify-between mt-1.5 bg-orange-50 rounded-lg p-0.5 border border-orange-200">
-              <button
-                onClick={handleDecrease}
-                className="w-6 h-6 rounded-lg flex items-center justify-center hover:bg-orange-100 transition text-orange-600"
-                aria-label="Decrease quantity"
-              >
-                <Minus className="w-3 h-3" />
-              </button>
-              <span className="text-xs font-semibold text-orange-600 min-w-[20px] text-center">
-                {quantity}
-              </span>
-              <button
-                onClick={handleIncrease}
-                className="w-6 h-6 rounded-lg flex items-center justify-center hover:bg-orange-100 transition text-orange-600"
-                aria-label="Increase quantity"
-              >
-                <Plus className="w-3 h-3" />
-              </button>
-            </div>
-          ) : (
-            <button
-              onClick={handleAdd}
-              className="w-full mt-1.5 py-1.5 bg-orange-500 text-white text-[10px] font-semibold rounded-lg hover:bg-orange-600 transition flex items-center justify-center gap-1"
-              aria-label={`Add ${product.name} to cart`}
-            >
-              <Plus className="w-3 h-3" />
-              Add
-            </button>
-          )}
-     
+        </div>
       </motion.div>
 
       {/* ✅ Remove Confirmation Modal */}

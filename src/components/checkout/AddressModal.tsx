@@ -1,7 +1,10 @@
 "use client";
 
 import {motion} from "framer-motion";
+import { useEffect, useRef } from "react";
 import {ArrowLeft, MapPin, User, Phone} from "lucide-react";
+import { useUnsavedChanges } from "@/hooks/useUnsavedChanges";
+import { useConfirmation } from "@/context/ConfirmationContext";
 
 interface AddressModalProps {
   isOpen: boolean;
@@ -31,7 +34,39 @@ export function AddressModal({
   error,
   title = "Delivery Information",
 }: AddressModalProps) {
+  const initialFormData = useRef("");
+
+  useEffect(() => {
+    if (isOpen) {
+      initialFormData.current = JSON.stringify(formData);
+    }
+  }, [isOpen]);
+
+  const hasUnsavedChanges =
+    isOpen &&
+    initialFormData.current !== "" &&
+    JSON.stringify(formData) !== initialFormData.current;
+
+  useUnsavedChanges(hasUnsavedChanges);
+  const { confirm } = useConfirmation();
+
   if (!isOpen) return null;
+
+  const handleClose = async () => {
+    const confirmed = !hasUnsavedChanges || await confirm({
+      title: "Discard delivery address changes?",
+      message: "Your delivery address edits have not been saved.",
+      confirmLabel: "Discard changes",
+      cancelLabel: "Keep editing",
+      destructive: true,
+    });
+
+    if (!confirmed) {
+      return;
+    }
+
+    onClose();
+  };
 
   // Format phone as user types
   const formatPhone = (value: string) => {
@@ -61,7 +96,7 @@ export function AddressModal({
             <h3 className="text-xl font-bold text-gray-800">{title}</h3>
           </div>
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="p-2 hover:bg-gray-100 rounded-full transition"
             aria-label="Close"
           >

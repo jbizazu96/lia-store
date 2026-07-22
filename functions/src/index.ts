@@ -349,3 +349,6 @@ export { syncStoreOrders };
 export { orderStatusChanged };
 export { syncShipdayDeliveries };
 export { createOrder };
+export {
+  processProductImage,
+} from "./images/processProductImage";

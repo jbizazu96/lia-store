@@ -6,7 +6,7 @@
 
 import {useRef} from "react";
 import {motion} from "framer-motion";
-import {ChevronRight} from "lucide-react";
+import {ArrowRight} from "lucide-react";
 import type { Category } from "@/types/category";
 import type { Product } from "@/types/product";
 import {ProductCard} from "./ProductCard";
@@ -37,31 +37,31 @@ export function ProductSection({
   };
 
   return (
-    <div className="mt-4 px-4">
+    <section className="mt-4 px-4">
       {/* Header */}
-      <div className="flex items-center justify-between mb-2">
+      <div className="mb-2 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className="text-xl">{category.icon}</span>
-          <h3 className="font-bold text-gray-800 text-base">
+          {category.icon && (
+            <span className="text-xl">{category.icon}</span>
+          )}
+          <h3 className="text-lg font-bold text-gray-900">
             {capitalize(category.name)}
           </h3>
-          <span className="text-xs text-gray-400 font-medium">
-            ({products.length})
-          </span>
         </div>
         <button
           type="button"
           onClick={onViewAll}
-          className="text-sm text-orange-600 font-semibold hover:text-orange-700 transition flex items-center gap-0.5"
+          className="flex h-11 w-11 items-center justify-center rounded-full bg-gray-100 text-gray-900 transition hover:bg-orange-500 hover:text-white"
+          aria-label={`View all ${category.name} products`}
         >
-          View All <ChevronRight className="w-4 h-4" />
+          <ArrowRight className="h-6 w-6" strokeWidth={2.5} />
         </button>
       </div>
 
       {/* Products */}
       <div
         ref={scrollRef}
-        className="flex gap-2.5 overflow-x-auto pb-3 scrollbar-hide px-1 snap-x snap-mandatory"
+        className="flex gap-2.5 overflow-x-auto pb-1 scrollbar-hide px-0.5 snap-x snap-mandatory"
         style={{scrollbarWidth: "none", msOverflowStyle: "none"}}
       >
         {products.map((product, index) => (
@@ -81,6 +81,6 @@ export function ProductSection({
           </motion.div>
         ))}
       </div>
-    </div>
+    </section>
   );
 }

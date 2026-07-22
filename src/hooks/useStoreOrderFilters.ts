@@ -124,7 +124,24 @@ UseStoreOrderFiltersResult {
         );
       }
 
-      return result;
+      // Present orders in the same sequence as the fulfillment workflow.
+      // The source listener already provides newest-first ordering, which
+      // remains intact for orders sharing a status.
+      const statusPriority: Record<Order["status"], number> = {
+        pending: 0,
+        accepted: 1,
+        preparing: 2,
+        ready_for_pickup: 3,
+        out_for_delivery: 4,
+        cancelled: 5,
+        completed: 6,
+      };
+
+      return [...result].sort(
+        (firstOrder, secondOrder) =>
+          statusPriority[firstOrder.status] -
+          statusPriority[secondOrder.status]
+      );
     }, [
       orders,
       searchQuery,

@@ -24,6 +24,9 @@ import {
   setDoc,
 } from "firebase/firestore";
 
+import { geocodeAddress } from "@/services/delivery/geocode";
+import { useConfirmation } from "@/context/ConfirmationContext";
+
 import type {
   CheckoutAddress,
 } from "@/app/checkout/types";
@@ -58,6 +61,7 @@ interface UseCheckoutAddressResult {
 
 export function useCheckoutAddress():
 UseCheckoutAddressResult {
+  const { confirm } = useConfirmation();
   const [
     loading,
     setLoading,
@@ -103,46 +107,26 @@ UseCheckoutAddressResult {
 
       const fullAddress = `${formData.street}, ${formData.city}, ${formData.state} ${formData.zip}`;
 
-      let latitude:
-        | number
-        | undefined;
+      const result = await geocodeAddress(
+        fullAddress
+      );
 
-      let longitude:
-        | number
-        | undefined;
-
-      let formattedAddress =
-        fullAddress;
-
-      try {
-        const {
-          geocodeAddress,
-        } = await import(
-          "@/services/delivery/geocode"
+      if (!result) {
+        setError(
+          "We couldn't verify that delivery address. Check the street, city, state, and ZIP code, then try again."
         );
+        return null;
+      }
 
-        const result =
-          await geocodeAddress(
-            fullAddress
-          );
+      const confirmed = await confirm({
+        title: "Save delivery address?",
+        message: "This verified address will be used to calculate delivery.",
+        confirmLabel: "Save address",
+        cancelLabel: "Keep editing",
+      });
 
-        if (result) {
-          latitude =
-            result.latitude;
-
-          longitude =
-            result.longitude;
-
-          formattedAddress =
-            result.formattedAddress;
-        }
-      } catch (
-        geocodeError
-      ) {
-        console.warn(
-          "Geocoding failed:",
-          geocodeError
-        );
+      if (!confirmed) {
+        return null;
       }
 
       const address: CheckoutAddress =
@@ -159,11 +143,14 @@ UseCheckoutAddressResult {
           zip:
             formData.zip,
 
-          latitude,
+          latitude:
+            result.latitude,
 
-          longitude,
+          longitude:
+            result.longitude,
 
-          formattedAddress,
+          formattedAddress:
+            result.formattedAddress,
         };
 
       await setDoc(

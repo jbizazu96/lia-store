@@ -1,104 +1,303 @@
 "use client";
 
 /*
-  Add product page.
+|--------------------------------------------------------------------------
+| Add Product Page
+|--------------------------------------------------------------------------
+|
+| Resolves the signed-in store and creates products through productService.
+|
+| This page contains no direct Firestore access.
+|
 */
 
-import {useState, useEffect} from "react";
-import {useRouter} from "next/navigation";
-import {motion} from "framer-motion";
-import {ArrowLeft, Save, X} from "lucide-react";
+import type {
+  ProductFormSubmission,
+} from "@/types/productFormSubmission";
+
+import {
+  useEffect,
+  useState,
+} from "react";
+
+import {
+  useRouter,
+} from "next/navigation";
+
 import Link from "next/link";
 
-// Firebase imports
-import {auth, db} from "@/lib/firebase";
-import {doc, getDoc, addDoc, collection, serverTimestamp} from "firebase/firestore";
+import {
+  ArrowLeft,
+} from "lucide-react";
 
-// Components
-import {ProductForm} from "@/components/store/products/ProductForm";
+import {
+  onAuthStateChanged,
+} from "firebase/auth";
 
-// Types
-import {ProductFormData} from "../types";
+import {
+  auth,
+} from "@/lib/firebase";
+
+import {
+  productService,
+} from "@/services/product/productService";
+
+import {
+  userService,
+} from "@/services/user/userService";
+
+import {
+  ProductForm,
+} from "@/components/store/products/ProductForm";
+
+import {
+  BrandedLoader,
+} from "@/components/ui/BrandedLoader";
+
+import {
+  productImageService,
+} from "@/services/product/productImageService";
+
+/*
+|--------------------------------------------------------------------------
+| Page
+|--------------------------------------------------------------------------
+*/
 
 export default function AddProductPage() {
-  const router = useRouter();
-  const [storeId, setStoreId] = useState("");
-  const [loading, setLoading] = useState(false);
+  const router =
+    useRouter();
 
-  // Get store ID on mount
+  const [
+    storeId,
+    setStoreId,
+  ] = useState<string | null>(
+    null
+  );
+
+  const [
+    loadingStore,
+    setLoadingStore,
+  ] = useState(true);
+
+  const [
+    submitting,
+    setSubmitting,
+  ] = useState(false);
+
+  const [
+    error,
+    setError,
+  ] = useState<string | null>(
+    null
+  );
+
+  /*
+  |--------------------------------------------------------------------------
+  | Resolve Store
+  |--------------------------------------------------------------------------
+  */
+
   useEffect(() => {
-    const getStoreId = async () => {
-      const user = auth.currentUser;
-      if (!user) {
-        router.push("/login");
-        return;
-      }
+    const unsubscribe =
+      onAuthStateChanged(
+        auth,
+        async (user) => {
+          if (!user) {
+            router.replace("/login");
+            return;
+          }
 
-      const userDoc = await getDoc(doc(db, "users", user.uid));
-      const storeId = userDoc.data()?.storeId;
+          try {
+            setLoadingStore(true);
+            setError(null);
 
-      if (!storeId) {
-        router.push("/store/create");
-        return;
-      }
+            const resolvedStoreId =
+              await userService.getStoreId(
+                user.uid
+              );
 
-      setStoreId(storeId);
-    };
+            if (!resolvedStoreId) {
+              router.replace(
+                "/store/create"
+              );
 
-    getStoreId();
+              return;
+            }
+
+            setStoreId(
+              resolvedStoreId
+            );
+          } catch (loadError) {
+            console.error(
+              "Error resolving store:",
+              loadError
+            );
+
+            setError(
+              "Failed to load your store."
+            );
+          } finally {
+            setLoadingStore(false);
+          }
+        }
+      );
+
+    return unsubscribe;
   }, [router]);
 
   /*
-    Handle form submission.
+  |--------------------------------------------------------------------------
+  | Create Product
+  |--------------------------------------------------------------------------
   */
-  const handleSubmit = async (data: ProductFormData) => {
-    if (!storeId) return;
+
+  const handleSubmit =
+  async ({
+    data,
+    imageFile,
+  }: ProductFormSubmission) => {
+    if (!storeId) {
+      setError(
+        "Store not found."
+      );
+
+      return;
+    }
 
     try {
-      setLoading(true);
+      setSubmitting(true);
+      setError(null);
 
-      // Prepare product data
-      const productData = {
-        storeId,
-        name: data.name,
-        description: data.description || "",
-        category: data.category,
-        price: data.price,
-        displayPrice: data.displayPrice || data.price,
-        taxRate: data.taxRate || 0,
-        imageUrl: data.imageUrl || "",
-        stock: data.stock || 0,
-        size: {
-          value: data.sizeValue || 0,
-          unit: data.sizeUnit || "each",
-        },
-        promotion: data.promotionType
-          ? {
-              type: data.promotionType,
-              description: data.promotionDescription || "",
-              discountAmount: data.promotionDiscount,
-              code: data.promotionCode,
-              expiresAt: data.promotionExpires || null,
-            }
-          : null,
-        isActive: data.isActive !== false,
-        isFeatured: data.isFeatured || false,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      };
+      /*
+      |--------------------------------------------------------------------------
+      | Create Product First
+      |--------------------------------------------------------------------------
+      |
+      | The product document must exist before the image upload begins because
+      | both the browser upload service and the background Function update it.
+      |
+      */
 
-      await addDoc(collection(db, "products"), productData);
+      const productId =
+        await productService.createProduct(
+          {
+            storeId,
 
-      // Redirect to products list
-      router.push("/store/products");
+            name:
+              data.name,
 
-    } catch (error) {
-      console.error("Error adding product:", error);
-      alert("Failed to add product. Please try again.");
+            description:
+              data.description,
+
+            category:
+              data.category,
+
+            brand:
+              data.brand,
+
+            price:
+              data.price,
+
+            stock:
+              data.stock,
+
+            imageUrl:
+              "",
+
+            sku:
+              data.sku,
+
+            isAvailable:
+              data.isAvailable,
+
+            featured:
+              data.featured,
+
+            size:
+              data.size,
+
+            reviewCount:
+              0,
+
+            soldCount:
+              0,
+
+            promotion:
+              data.promotion,
+
+            imageStatus:
+              imageFile
+                ? "uploading"
+                : "none",
+
+            imageError:
+              null,
+          }
+        );
+
+      /*
+      |--------------------------------------------------------------------------
+      | Upload Original Image
+      |--------------------------------------------------------------------------
+      |
+      | The owner waits only for the original file upload.
+      |
+      | After the upload completes, the page redirects and the Cloud Function
+      | continues resizing, WebP conversion, and Firestore updates.
+      |
+      */
+
+      if (imageFile) {
+        await productImageService
+          .uploadOriginalImage({
+            productId,
+            storeId,
+            file:
+              imageFile,
+          });
+      }
+
+      router.push(
+        "/store/products"
+      );
+    } catch (submitError) {
+      console.error(
+        "Error adding product:",
+        submitError
+      );
+
+      setError(
+        "Failed to add product. Please try again."
+      );
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   };
+
+  /*
+  |--------------------------------------------------------------------------
+  | Loading
+  |--------------------------------------------------------------------------
+  */
+
+  if (loadingStore) {
+    return (
+      <BrandedLoader
+        message="Loading Store"
+      />
+    );
+  }
+
+  if (!storeId) {
+    return null;
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Page
+  |--------------------------------------------------------------------------
+  */
 
   return (
     <div className="space-y-6">
@@ -106,22 +305,38 @@ export default function AddProductPage() {
       <div className="flex items-center gap-4">
         <Link
           href="/store/products"
-          className="p-2 hover:bg-gray-100 rounded-xl transition"
+          className="rounded-xl p-2 transition hover:bg-gray-100"
           aria-label="Back to products"
         >
-          <ArrowLeft className="w-5 h-5 text-gray-500" />
+          <ArrowLeft className="h-5 w-5 text-gray-500" />
         </Link>
+
         <div>
-          <h1 className="text-2xl font-bold text-gray-800">Add Product</h1>
-          <p className="text-gray-500 text-sm">Add a new product to your store</p>
+          <h1 className="text-2xl font-bold text-gray-800">
+            Add Product
+          </h1>
+
+          <p className="text-sm text-gray-500">
+            Add a new product to your
+            store
+          </p>
         </div>
       </div>
 
+      {/* Error */}
+      {error && (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-3">
+          <p className="text-sm text-red-600">
+            {error}
+          </p>
+        </div>
+      )}
+
       {/* Form */}
-      <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+      <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
         <ProductForm
           onSubmit={handleSubmit}
-          loading={loading}
+          loading={submitting}
           submitLabel="Add Product"
         />
       </div>

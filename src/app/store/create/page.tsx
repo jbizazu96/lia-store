@@ -30,6 +30,8 @@ import {Step1StoreInfo} from "@/components/store/create/Step1StoreInfo";
 import {Step2LegalPhotos} from "@/components/store/create/Step2LegalPhotos";
 import {Step3Stripe} from "@/components/store/create/Step3Stripe";
 import {NavigationButtons} from "@/components/store/create/NavigationButtons";
+import { useUnsavedChanges } from "@/hooks/useUnsavedChanges";
+import { useConfirmation } from "@/context/ConfirmationContext";
 
 export default function CreateStorePage() {
   const router = useRouter();
@@ -53,6 +55,13 @@ export default function CreateStorePage() {
   const [city, setCity] = useState("");
   const [state, setState] = useState("");
   const [zip, setZip] = useState("");
+
+  const hasUnsavedChanges = Boolean(
+    name || description || phone || email || address || city || state || zip || step > 1
+  );
+
+  useUnsavedChanges(hasUnsavedChanges);
+  const { confirm } = useConfirmation();
 
   // Step 2: Legal & Photos
   const [businessType, setBusinessType] = useState("");
@@ -176,7 +185,21 @@ export default function CreateStorePage() {
       // Geocode address
       const fullAddress = `${address}, ${city}, ${state} ${zip}`;
       const location = await geocodeAddress(fullAddress);
-      if (!location) { setError("Unable to locate address."); return; }
+      if (!location) {
+        setError(
+          "We couldn't verify this store address. Check the street, city, state, and ZIP code, then try again."
+        );
+        return;
+      }
+
+      const confirmed = await confirm({
+        title: "Create your store?",
+        message: "Your store information, verified address, and submitted documents will be saved.",
+        confirmLabel: "Create store",
+        cancelLabel: "Keep editing",
+      });
+
+      if (!confirmed) return;
 
       // Upload images
       setUploading(true);

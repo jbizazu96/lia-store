@@ -9,6 +9,8 @@ import {X, User, Mail, Phone, Save} from "lucide-react";
 import {updateDoc, doc} from "firebase/firestore";
 import {updateProfile} from "firebase/auth";
 import {auth, db} from "@/lib/firebase";
+import { useUnsavedChanges } from "@/hooks/useUnsavedChanges";
+import { useConfirmation } from "@/context/ConfirmationContext";
 
 interface EditProfileModalProps {
   userData: any;
@@ -31,8 +33,41 @@ export function EditProfileModal({userData, onClose, onUpdate}: EditProfileModal
     phone: false,
   });
 
+  const hasUnsavedChanges =
+    formData.displayName !== (userData?.displayName || "") ||
+    formData.email !== (userData?.email || "") ||
+    formData.phone !== (userData?.phone || "");
+
+  useUnsavedChanges(hasUnsavedChanges);
+  const { confirm } = useConfirmation();
+
+  async function handleClose() {
+    const confirmed = !hasUnsavedChanges || await confirm({
+      title: "Discard profile changes?",
+      message: "Your profile edits have not been saved.",
+      confirmLabel: "Discard changes",
+      cancelLabel: "Keep editing",
+      destructive: true,
+    });
+
+    if (!confirmed) {
+      return;
+    }
+
+    onClose();
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+
+    const confirmed = await confirm({
+      title: "Save profile changes?",
+      message: "Your updated profile information will be saved.",
+      confirmLabel: "Save changes",
+      cancelLabel: "Keep editing",
+    });
+
+    if (!confirmed) return;
     
     try {
       setLoading(true);
@@ -91,7 +126,7 @@ export function EditProfileModal({userData, onClose, onUpdate}: EditProfileModal
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <h2 className="text-xl font-bold text-gray-800">Edit Profile</h2>
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="w-8 h-8 rounded-full hover:bg-gray-100 flex items-center justify-center transition"
             aria-label="Close modal"
           >

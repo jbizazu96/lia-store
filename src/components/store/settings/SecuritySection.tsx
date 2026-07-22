@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import {updatePassword, reauthenticateWithCredential, EmailAuthProvider} from "firebase/auth";
 import {auth} from "@/lib/firebase";
+import { useConfirmation } from "@/context/ConfirmationContext";
 
 interface SecuritySectionProps {
   userData: any;
@@ -23,6 +24,7 @@ interface SecuritySectionProps {
 }
 
 export function SecuritySection({userData, setUserData}: SecuritySectionProps) {
+  const { confirm } = useConfirmation();
   const [showPasswordForm, setShowPasswordForm] = useState(false);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
@@ -51,6 +53,16 @@ export function SecuritySection({userData, setUserData}: SecuritySectionProps) {
       setError("Passwords do not match");
       return;
     }
+
+    const confirmed = await confirm({
+      title: "Update password?",
+      message: "Your current password will be replaced with the new one.",
+      confirmLabel: "Update password",
+      cancelLabel: "Keep editing",
+      destructive: true,
+    });
+
+    if (!confirmed) return;
 
     try {
       setLoading(true);

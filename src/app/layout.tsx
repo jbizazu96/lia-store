@@ -4,6 +4,7 @@ import "./globals.css";
 import {AuthProvider} from "@/context/AuthContext";
 import {NotificationProvider} from "@/context/NotificationContext";
 import {CartProvider} from "@/context/CartContext";
+import {ConfirmationProvider} from "@/context/ConfirmationContext";
 
 const inter = Inter({subsets: ["latin"]});
 
@@ -22,13 +23,15 @@ export default function RootLayout({
       <body className={inter.className}>
         <AuthProvider>
           <NotificationProvider>
-            <CartProvider>
-              <div className="min-h-screen flex flex-col">
-                <main className="flex-1">
-                  {children}
-                </main>
-              </div>
-            </CartProvider>
+            <ConfirmationProvider>
+              <CartProvider>
+                <div className="min-h-screen flex flex-col">
+                  <main className="flex-1">
+                    {children}
+                  </main>
+                </div>
+              </CartProvider>
+            </ConfirmationProvider>
           </NotificationProvider>
         </AuthProvider>
       </body>

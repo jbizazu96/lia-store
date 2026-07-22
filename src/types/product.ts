@@ -20,6 +20,8 @@
 
 import type { Promotion } from "./promotion";
 
+
+
 /**
  * Product size or package quantity.
  *
@@ -34,6 +36,25 @@ export interface ProductSize {
 
   unit: string;
 }
+
+
+
+/*
+|--------------------------------------------------------------------------
+| Product Image Status
+|--------------------------------------------------------------------------
+|
+| Tracks the asynchronous image-processing pipeline.
+|
+*/
+
+export type ProductImageStatus =
+  | "none"
+  | "uploading"
+  | "processing"
+  | "ready"
+  | "failed";
+
 
 /**
  * Product domain model.
@@ -66,20 +87,45 @@ export interface Product {
   price: number;
 
   /**
-   * Price currently shown to customers. When lower than `price`,
-   * the product is on sale.
-   */
-  displayPrice: number;
-
-  /**
    * Current inventory quantity.
    */
   stock: number;
 
+  /*
+  |--------------------------------------------------------------------------
+  | Product Image Processing
+  |--------------------------------------------------------------------------
+  */
+
   /**
-   * Product image.
+   * Optimized WebP URL displayed throughout the application.
    */
   imageUrl: string;
+
+  /**
+   * Current state of the asynchronous image-processing pipeline.
+   *
+   * Legacy products may not have this field, so it remains optional.
+   */
+  imageStatus?: ProductImageStatus;
+
+  /**
+   * Storage path of the original uploaded image.
+   *
+   * The background function reads this file and may delete it after
+   * successfully creating the optimized WebP.
+   */
+  originalImagePath?: string;
+
+  /**
+   * Storage path of the optimized WebP image.
+   */
+  optimizedImagePath?: string;
+
+  /**
+   * Human-readable processing error for debugging and UI feedback.
+   */
+  imageError?: string | null;
 
   /**
    * Store-managed inventory identifier.

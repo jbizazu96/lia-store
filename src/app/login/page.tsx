@@ -35,9 +35,11 @@ import {LoginForm} from "@/components/login/LoginForm";
 import {PasswordResetModal} from "@/components/login/PasswordResetModal";
 import {AddressModal} from "@/components/login/AddressModal";
 import {StoreStatusModal} from "@/components/login/StoreStatusModal";
+import { useConfirmation } from "@/context/ConfirmationContext";
 
 export default function LoginPage() {
   const router = useRouter();
+  const { confirm } = useConfirmation();
 
   /*
     Form state.
@@ -247,10 +249,21 @@ export default function LoginPage() {
       const location = await geocodeAddress(fullAddress);
 
       if (!location) {
-        setAddressError("Unable to locate this address. Please check and try again.");
+        setAddressError(
+          "We couldn't verify this delivery address. Check the street, city, state, and ZIP code, then try again."
+        );
         setAddressGeocoding(false);
         return;
       }
+
+      const confirmed = await confirm({
+        title: "Save delivery address?",
+        message: "This verified address will be used for deliveries.",
+        confirmLabel: "Save address",
+        cancelLabel: "Keep editing",
+      });
+
+      if (!confirmed) return;
 
       const {setDoc, updateDoc} = await import("firebase/firestore");
       await setDoc(doc(db, "addresses", user.uid), {

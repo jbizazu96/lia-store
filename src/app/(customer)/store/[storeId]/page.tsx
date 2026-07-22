@@ -33,6 +33,7 @@ import {
 
 import { useCart } from "@/context/CartContext";
 import { useCustomerStore } from "@/hooks/useCustomerStore";
+import { promotionService } from "@/services/promotion/promotionService";
 
 import { BottomBar } from "@/components/customer/store/BottomBar";
 import { CategoryScroll } from "@/components/customer/store/CategoryScroll";
@@ -103,6 +104,9 @@ export default function StorePage({
   const estimatedTimeParam =
     searchParams.get("estimatedTime");
 
+  const skipDistanceWarning =
+    searchParams.get("skipDistanceWarning") === "1";
+
   /*
   |--------------------------------------------------------------------------
   | Store Data Hook
@@ -123,6 +127,7 @@ export default function StorePage({
     distanceParam,
     deliveryFeeParam,
     estimatedTimeParam,
+    skipDistanceWarning,
   });
 
   const {
@@ -186,7 +191,10 @@ export default function StorePage({
     void addItem({
       id: product.id,
       name: product.name,
-      price: product.displayPrice,
+      price: promotionService.getDiscountedPrice(
+        product.price,
+        product.promotion
+      ),
       imageUrl: product.imageUrl,
 
       storeId: store.id,

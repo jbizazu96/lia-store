@@ -18,6 +18,7 @@ import {
   getEstimatedTime,
 } from "@/services/delivery/distance";
 import { PRICING_CONFIG } from "@/config/pricing";
+import { DELIVERY_CONFIG } from "@/config/delivery";
 
 interface ScheduleDay {
   day: string;
@@ -59,6 +60,9 @@ export function StoreInfo({
   // Use the shared formatting functions
   const formattedDistance = formatDistance(distance);
   
+  const isWithinDeliveryRadius =
+    distance <= DELIVERY_CONFIG.MAX_RADIUS_MILES;
+
   // Get delivery fee from the service (uses the same logic as home page)
   const deliveryFeeDisplay = getDeliveryFee(distance);
   
@@ -132,12 +136,18 @@ export function StoreInfo({
         </div>
         <div className="flex items-center gap-1.5 text-sm text-gray-600">
           <Truck className="w-4 h-4 text-gray-400" />
-          <span>Delivery: {deliveryFeeDisplay}</span>
+          <span className={isWithinDeliveryRadius ? undefined : "font-medium text-red-600"}>
+            {isWithinDeliveryRadius
+              ? `Delivery: ${deliveryFeeDisplay}`
+              : "Delivery unavailable"}
+          </span>
         </div>
-        <div className="flex items-center gap-1.5 text-sm text-gray-600">
-          <Clock className="w-4 h-4 text-gray-400" />
-          <span>{formattedTime}</span>
-        </div>
+        {isWithinDeliveryRadius && (
+          <div className="flex items-center gap-1.5 text-sm text-gray-600">
+            <Clock className="w-4 h-4 text-gray-400" />
+            <span>{formattedTime}</span>
+          </div>
+        )}
       </div>
 
       {/* Minimum Order */}

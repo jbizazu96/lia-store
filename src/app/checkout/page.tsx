@@ -26,6 +26,7 @@
 import {
   getStoreStatus,
 } from "@/services/store/storeSchedule";
+import { DELIVERY_CONFIG } from "@/config/delivery";
 
 import {
   useEffect,
@@ -171,6 +172,7 @@ export default function CheckoutPage() {
 
   const {
     distanceMiles,
+    isCalculatingDistance,
     estimatedDeliveryMinutes,
     total,
     totals,
@@ -242,6 +244,10 @@ export default function CheckoutPage() {
 const isStoreClosed =
   storeStatus !== null &&
   !storeStatus.isOpen;
+
+  const isOutsideDeliveryRadius =
+    address !== null &&
+    distanceMiles > DELIVERY_CONFIG.MAX_RADIUS_MILES;
 
   const error =
     orderError ||
@@ -397,6 +403,13 @@ const isStoreClosed =
         return;
       }
 
+      if (isOutsideDeliveryRadius) {
+        setCheckoutError(
+          "This store is outside your delivery radius. Choose a closer store or use a different delivery address."
+        );
+        return;
+      }
+
       await placeOrder();
     };
 
@@ -514,20 +527,34 @@ const isStoreClosed =
           </div>
         )}
 
+        {isOutsideDeliveryRadius && (
+          <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-center">
+            <p className="text-sm font-medium text-red-700">
+              Delivery is unavailable because this store is outside your {DELIVERY_CONFIG.MAX_RADIUS_MILES}-mile delivery radius.
+            </p>
+          </div>
+        )}
+
         {/* Place Order */}
         <button
           type="button"
           onClick={handlePlaceOrder}
           disabled={
             loading ||
-            isStoreClosed
+            isCalculatingDistance ||
+            isStoreClosed ||
+            isOutsideDeliveryRadius
           }
           className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-orange-500 to-orange-600 py-3.5 font-semibold text-white transition hover:from-orange-600 hover:to-orange-700 hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-50"
         >
           {loading ? (
             <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+          ) : isCalculatingDistance ? (
+            "Calculating delivery distance..."
           ) : isStoreClosed ? (
             "Store Closed"
+          ) : isOutsideDeliveryRadius ? (
+            "Delivery Unavailable"
           ) : (
             <>
               <CreditCard className="h-5 w-5" />

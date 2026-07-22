@@ -19,6 +19,7 @@
 import {
   getStoreStatus,
 } from "@/services/store/storeSchedule";
+import { DELIVERY_CONFIG } from "@/config/delivery";
 
 import {
   useState,
@@ -172,6 +173,13 @@ export function usePlaceOrder({
           return false;
         }
 
+      if (distanceMiles > DELIVERY_CONFIG.MAX_RADIUS_MILES) {
+        setError(
+          "This store is outside your delivery radius. Choose a closer store or use a different delivery address."
+        );
+
+        return false;
+      }
 
       if (items.length === 0) {
         setError(

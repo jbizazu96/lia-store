@@ -17,15 +17,48 @@ import {
   doc,
   getDoc,
   getDocs,
+  onSnapshot,
   query,
   serverTimestamp,
   updateDoc,
   where,
   type DocumentData,
+  type Unsubscribe,
 } from "firebase/firestore";
 
 import { db } from "@/lib/firebase";
 import type { Product } from "@/types/product";
+
+/** Firestore does not accept undefined values, including inside nested data. */
+function removeUndefinedFields(
+  data: Record<string, unknown>
+): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(data).flatMap(
+      ([key, value]) => {
+        if (value === undefined) {
+          return [];
+        }
+
+        if (
+          value !== null &&
+          typeof value === "object" &&
+          !Array.isArray(value) &&
+          !(value instanceof Date)
+        ) {
+          return [[
+            key,
+            removeUndefinedFields(
+              value as Record<string, unknown>
+            ),
+          ]];
+        }
+
+        return [[key, value]];
+      }
+    )
+  );
+}
 
 /**
  * Convert raw Firestore data into the shared Product domain model.
@@ -73,20 +106,27 @@ function mapProductDocument(
   price: data.price ?? 0,
 
   /**
-   * Use the standard price when legacy products do not yet have a
-   * customer display price.
-   */
-  displayPrice: data.displayPrice ?? data.price ?? 0,
-
-  /**
    * Number of units currently available.
    */
   stock: data.stock ?? 0,
 
   /**
-   * Product image displayed to customers.
+   * Product image saleed to customers.
    */
   imageUrl: data.imageUrl ?? "",
+
+  /**
+   * Image pipeline fields are updated by the background image function.
+   * Keeping them in the shared mapper lets real-time listeners react when
+   * the optimized image is ready.
+   */
+  imageStatus: data.imageStatus ?? undefined,
+
+  originalImagePath: data.originalImagePath ?? undefined,
+
+  optimizedImagePath: data.optimizedImagePath ?? undefined,
+
+  imageError: data.imageError ?? undefined,
 
   /**
    * Internal inventory SKU.
@@ -219,6 +259,83 @@ export const productService = {
     );
   },
 
+  /**
+   * Subscribe to a store's products. This is used by product listings so a
+   * completed background image conversion updates the UI without a refresh.
+   */
+  listenToStoreProducts(
+    storeId: string,
+    onProducts: (products: Product[]) => void,
+    onError?: (error: Error) => void
+  ): Unsubscribe {
+    if (!storeId.trim()) {
+      onProducts([]);
+      return () => undefined;
+    }
+
+    const productsQuery = query(
+      collection(db, "products"),
+      where("storeId", "==", storeId)
+    );
+
+    return onSnapshot(
+      productsQuery,
+      (snapshot) => {
+        onProducts(
+          snapshot.docs.map((productDocument) =>
+            mapProductDocument(
+              productDocument.id,
+              productDocument.data()
+            )
+          )
+        );
+      },
+      (listenerError) => {
+        console.error(
+          "Error listening to store products:",
+          listenerError
+        );
+        onError?.(listenerError);
+      }
+    );
+  },
+
+  /*
+  |--------------------------------------------------------------------------
+  | Create Product
+  |--------------------------------------------------------------------------
+  */
+
+  async createProduct(
+    product: Omit<
+      Product,
+      "id" |
+      "createdAt" |
+      "updatedAt"
+    >
+  ): Promise<string> {
+    const productData = removeUndefinedFields(product);
+
+    const productReference =
+      await addDoc(
+        collection(
+          db,
+          "products"
+        ),
+        {
+          ...productData,
+
+          createdAt:
+            serverTimestamp(),
+
+          updatedAt:
+            serverTimestamp(),
+        }
+      );
+
+    return productReference.id;
+  },
+
   /*
 |--------------------------------------------------------------------------
 | Update Product Availability
@@ -281,6 +398,45 @@ async updateFeatured(
 
 /*
 |--------------------------------------------------------------------------
+| Update Product
+|--------------------------------------------------------------------------
+*/
+
+async updateProduct(
+  productId: string,
+  updates: Partial<
+    Omit<
+      Product,
+      "id" |
+      "storeId" |
+      "createdAt" |
+      "updatedAt"
+    >
+  >
+): Promise<void> {
+  if (!productId.trim()) {
+    throw new Error(
+      "A product ID is required."
+    );
+  }
+
+  await updateDoc(
+    doc(
+      db,
+      "products",
+      productId
+    ),
+    {
+      ...removeUndefinedFields(updates),
+
+      updatedAt:
+        serverTimestamp(),
+    }
+  );
+},
+
+/*
+|--------------------------------------------------------------------------
 | Delete Product
 |--------------------------------------------------------------------------
 */
@@ -326,7 +482,7 @@ async duplicateProduct(
         "products"
       ),
       {
-        ...productData,
+        ...removeUndefinedFields(productData),
 
         name:
           `${product.name} (Copy)`,

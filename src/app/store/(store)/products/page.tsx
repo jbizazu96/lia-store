@@ -11,9 +11,16 @@
 |
 */
 
+import type {
+  Product,
+} from "@/types/product";
+
+import {
+  useStoreProductFilters,
+} from "@/hooks/useStoreProductFilters";
+
 import {
   useEffect,
-  useState,
 } from "react";
 
 import {
@@ -57,9 +64,6 @@ import {
   ProductStats,
 } from "@/components/store/products/ProductStats";
 
-import type {
-  Product,
-} from "@/types/product";
 
 export default function ProductsPage() {
   const router = useRouter();
@@ -73,25 +77,20 @@ export default function ProductsPage() {
     refreshProducts,
   } = useStoreProducts();
 
-  const [
+  const {
     filteredProducts,
-    setFilteredProducts,
-  ] = useState<Product[]>([]);
-
-  const [
     searchQuery,
-    setSearchQuery,
-  ] = useState("");
-
-  const [
     categoryFilter,
-    setCategoryFilter,
-  ] = useState("all");
-
-  const [
     statusFilter,
+    hasFilters,
+    stats,
+    setSearchQuery,
+    setCategoryFilter,
     setStatusFilter,
-  ] = useState("all");
+    clearFilters,
+  } = useStoreProductFilters({
+    products,
+  });
 
   /*
   |--------------------------------------------------------------------------
@@ -117,77 +116,6 @@ export default function ProductsPage() {
     isAuthenticated,
     needsStoreSetup,
     router,
-  ]);
-
-  /*
-  |--------------------------------------------------------------------------
-  | Product Filtering
-  |--------------------------------------------------------------------------
-  */
-
-  useEffect(() => {
-    let filtered = products;
-
-    const normalizedSearch =
-      searchQuery
-        .trim()
-        .toLowerCase();
-
-    if (normalizedSearch) {
-      filtered = filtered.filter(
-        (product) =>
-          product.name
-            .toLowerCase()
-            .includes(
-              normalizedSearch
-            ) ||
-          product.description
-            .toLowerCase()
-            .includes(
-              normalizedSearch
-            ) ||
-          product.category
-            .toLowerCase()
-            .includes(
-              normalizedSearch
-            )
-      );
-    }
-
-    if (
-      categoryFilter !== "all"
-    ) {
-      filtered = filtered.filter(
-        (product) =>
-          product.category ===
-          categoryFilter
-      );
-    }
-
-    if (
-      statusFilter === "active"
-    ) {
-      filtered = filtered.filter(
-        (product) =>
-          product.isAvailable
-      );
-    }
-
-    if (
-      statusFilter === "inactive"
-    ) {
-      filtered = filtered.filter(
-        (product) =>
-          !product.isAvailable
-      );
-    }
-
-    setFilteredProducts(filtered);
-  }, [
-    products,
-    searchQuery,
-    categoryFilter,
-    statusFilter,
   ]);
 
   /*
@@ -303,46 +231,6 @@ export default function ProductsPage() {
 
   /*
   |--------------------------------------------------------------------------
-  | Statistics
-  |--------------------------------------------------------------------------
-  */
-
-  const stats = {
-    totalProducts:
-      products.length,
-
-    activeProducts:
-      products.filter(
-        (product) =>
-          product.isAvailable
-      ).length,
-
-    featuredProducts:
-      products.filter(
-        (product) =>
-          product.featured
-      ).length,
-
-    totalStock:
-      products.reduce(
-        (sum, product) =>
-          sum +
-          (product.stock || 0),
-        0
-      ),
-
-    totalValue:
-      products.reduce(
-        (sum, product) =>
-          sum +
-          product.price *
-            product.stock,
-        0
-      ),
-  };
-
-  /*
-  |--------------------------------------------------------------------------
   | Loading
   |--------------------------------------------------------------------------
   */
@@ -455,28 +343,15 @@ export default function ProductsPage() {
           </p>
 
           <p className="mt-1 text-sm text-gray-400">
-            {searchQuery ||
-            categoryFilter !==
-              "all" ||
-            statusFilter !== "all"
+            {hasFilters
               ? "Try adjusting your filters"
               : "Start adding products to your store"}
           </p>
 
-          {searchQuery ||
-          categoryFilter !== "all" ||
-          statusFilter !== "all" ? (
+          {hasFilters ? (
             <button
               type="button"
-              onClick={() => {
-                setSearchQuery("");
-                setCategoryFilter(
-                  "all"
-                );
-                setStatusFilter(
-                  "all"
-                );
-              }}
+              onClick={clearFilters}
               className="mt-4 text-sm font-medium text-orange-600 hover:text-orange-700"
             >
               Clear all filters

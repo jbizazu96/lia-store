@@ -4,8 +4,14 @@
   Search and filter bar for products.
 */
 
-import {Search, Filter, Grid3x3, List} from "lucide-react";
-import {CATEGORIES} from "@/app/store/(store)/products/types";
+import {
+  Search,
+  Grid3x3,
+  List,
+} from "lucide-react";
+import {
+  PRODUCT_CATEGORIES,
+} from "@/config/productCategories";
 
 interface ProductFiltersProps {
   searchQuery: string;
@@ -50,12 +56,16 @@ export function ProductFilters({
           className="px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500 text-sm min-w-[140px]"
         >
           <option value="all">All Categories</option>
-          {CATEGORIES.map((cat) => (
-            <option key={cat.value} value={cat.value}>
-              {cat.label}
-            </option>
-          ))}
-        </select>
+          {PRODUCT_CATEGORIES.map(
+             (category) => (
+            <option
+                  key={category.value}
+                  value={category.value}
+                >
+                  {category.label}
+                </option>
+              ))}
+            </select>
 
         {/* Status Filter */}
         <select

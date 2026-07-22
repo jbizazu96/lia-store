@@ -67,7 +67,9 @@ export function CategoryScroll({
                 : "bg-white text-gray-600 hover:bg-orange-500 hover:text-white border border-gray-200"
             }`}
           >
-            <span className="text-base">{category.icon}</span>
+            {category.icon && (
+              <span className="text-base">{category.icon}</span>
+            )}
             {capitalize(category.name)}
           </button>
         ))}

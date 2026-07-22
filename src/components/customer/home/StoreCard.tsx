@@ -140,12 +140,16 @@ export function StoreCard({
             isTooFar ? "text-red-500" : "text-gray-500"
           }`}>
             <Truck className="w-4 h-4" />
-            <span>Delivery: {deliveryFee}</span>
+            <span>
+              {isTooFar ? "Delivery unavailable" : `Delivery: ${deliveryFee}`}
+            </span>
           </div>
-          <div className="flex items-center gap-1.5 text-gray-500">
-            <Clock className="w-4 h-4" />
-            <span>{estimatedTime}</span>
-          </div>
+          {!isTooFar && (
+            <div className="flex items-center gap-1.5 text-gray-500">
+              <Clock className="w-4 h-4" />
+              <span>{estimatedTime}</span>
+            </div>
+          )}
         </div>
 
         {/* Location */}

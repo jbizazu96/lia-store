@@ -27,7 +27,9 @@ import {
 
 import { auth } from "@/lib/firebase";
 
-import { categoryMapper } from "@/mappers/categoryMapper";
+import {
+  categoryService,
+} from "@/services/category/categoryService";
 import { storeMapper } from "@/mappers/storeMapper";
 
 import { DELIVERY_CONFIG } from "@/config/delivery";
@@ -37,10 +39,10 @@ import { storeService } from "@/services/store/storeService";
 import { userService } from "@/services/user/userService";
 
 import {
-  calculateDistance,
   getEstimatedTime,
   getEstimatedTimeNumber,
 } from "@/services/delivery/distance";
+import { getDrivingDistanceMiles } from "@/services/delivery/routing";
 
 import {
   calculateDeliveryFee,
@@ -65,6 +67,8 @@ interface UseCustomerStoreParams {
   deliveryFeeParam?: string | null;
 
   estimatedTimeParam?: string | null;
+
+  skipDistanceWarning?: boolean;
 }
 
 /*
@@ -115,6 +119,22 @@ function parseNumber(
     : 0;
 }
 
+/**
+ * Customers only see image-bearing products once the optimized image is
+ * ready. Legacy and intentionally image-less products remain available.
+ */
+function isCustomerVisibleProduct(
+  product: Product
+): boolean {
+  return (
+    product.isAvailable &&
+    product.stock > 0 &&
+    (product.imageStatus === undefined ||
+      product.imageStatus === "none" ||
+      product.imageStatus === "ready")
+  );
+}
+
 /*
 |--------------------------------------------------------------------------
 | Hook
@@ -126,6 +146,8 @@ export function useCustomerStore({
   distanceParam,
   deliveryFeeParam,
   estimatedTimeParam,
+
+  skipDistanceWarning = false,
 }: UseCustomerStoreParams): UseCustomerStoreResult {
   const [store, setStore] =
     useState<CustomerStore | null>(null);
@@ -152,6 +174,7 @@ export function useCustomerStore({
 
   useEffect(() => {
     let isMounted = true;
+    let unsubscribeProducts: (() => void) | null = null;
 
     /*
     |--------------------------------------------------------------------------
@@ -188,14 +211,25 @@ export function useCustomerStore({
         |--------------------------------------------------------------------------
         */
 
-        const storeProducts =
-          await productService.getStoreProducts(
+        const [
+          storeProducts,
+          categoryDefinitions,
+        ] = await Promise.all([
+          productService.getStoreProducts(
             storeId
+          ),
+          categoryService.getCategories(),
+        ]);
+
+        const customerProducts =
+          storeProducts.filter(
+            isCustomerVisibleProduct
           );
 
         const storeCategories =
-          categoryMapper.fromProducts(
-            storeProducts
+          categoryService.groupCategoriesWithProducts(
+            categoryDefinitions,
+            customerProducts
           );
 
         /*
@@ -248,12 +282,19 @@ export function useCustomerStore({
               hasUserLocation &&
               hasStoreLocation
             ) {
-              distance = calculateDistance(
-                userLocation.lat,
-                userLocation.lng,
-                domainStore.latitude,
-                domainStore.longitude
+              const drivingDistance = await getDrivingDistanceMiles(
+                { latitude: userLocation.lat, longitude: userLocation.lng },
+                {
+                  latitude: domainStore.latitude,
+                  longitude: domainStore.longitude,
+                }
               );
+
+              if (drivingDistance === null) {
+                throw new Error("Unable to calculate the driving distance to this store.");
+              }
+
+              distance = drivingDistance;
 
               const deliveryPricing =
                 calculateDeliveryFee(
@@ -336,7 +377,7 @@ export function useCustomerStore({
         }
 
         setStore(customerStore);
-        setProducts(storeProducts);
+        setProducts(customerProducts);
         setCategories(storeCategories);
 
         const exceedsDeliveryRadius =
@@ -346,8 +387,38 @@ export function useCustomerStore({
         setDistanceValue(distance);
 
         setShowDistanceWarning(
-          exceedsDeliveryRadius
+          exceedsDeliveryRadius &&
+          !skipDistanceWarning
         );
+
+        unsubscribeProducts =
+          productService.listenToStoreProducts(
+            storeId,
+            (liveProducts) => {
+              if (!isMounted) {
+                return;
+              }
+
+              const visibleProducts =
+                liveProducts.filter(
+                  isCustomerVisibleProduct
+                );
+
+              setProducts(visibleProducts);
+              setCategories(
+                categoryService.groupCategoriesWithProducts(
+                  categoryDefinitions,
+                  visibleProducts
+                )
+              );
+            },
+            (listenerError) => {
+              console.error(
+                "Error receiving customer store products:",
+                listenerError
+              );
+            }
+          );
       } catch (loadError) {
         console.error(
           "Error loading customer store:",
@@ -384,12 +455,14 @@ export function useCustomerStore({
 
     return () => {
       isMounted = false;
+      unsubscribeProducts?.();
     };
   }, [
     storeId,
     distanceParam,
     deliveryFeeParam,
     estimatedTimeParam,
+    skipDistanceWarning,
   ]);
 
   /*

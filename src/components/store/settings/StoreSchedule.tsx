@@ -9,6 +9,8 @@ import { useState, useEffect } from "react";
 import { Clock, Save, Edit, AlertCircle, CheckCircle, X } from "lucide-react";
 import { auth, db } from "@/lib/firebase";
 import { doc, setDoc } from "firebase/firestore";
+import { useUnsavedChanges } from "@/hooks/useUnsavedChanges";
+import { useConfirmation } from "@/context/ConfirmationContext";
 
 interface ScheduleDay {
   day: string;
@@ -50,6 +52,13 @@ export function StoreSchedule({ storeData, setStoreData, storeId }: StoreSchedul
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [tempSchedule, setTempSchedule] = useState<ScheduleDay[]>(DEFAULT_SCHEDULE);
+
+  const hasUnsavedChanges =
+    isEditing &&
+    JSON.stringify(tempSchedule) !== JSON.stringify(schedule);
+
+  useUnsavedChanges(hasUnsavedChanges);
+  const { confirm } = useConfirmation();
 
   // Load schedule from storeData
   useEffect(() => {
@@ -98,6 +107,15 @@ export function StoreSchedule({ storeData, setStoreData, storeId }: StoreSchedul
         return;
       }
 
+      const confirmed = await confirm({
+        title: "Save store hours?",
+        message: "Your updated schedule will be visible to customers.",
+        confirmLabel: "Save schedule",
+        cancelLabel: "Keep editing",
+      });
+
+      if (!confirmed) return;
+
       // Save schedule to store document
       const storeRef = doc(db, "stores", storeId);
       await setDoc(storeRef, { schedule: tempSchedule }, { merge: true });
@@ -124,7 +142,19 @@ export function StoreSchedule({ storeData, setStoreData, storeId }: StoreSchedul
   };
 
   // Cancel editing - revert to saved schedule
-  const handleCancel = () => {
+  const handleCancel = async () => {
+    const confirmed = !hasUnsavedChanges || await confirm({
+      title: "Discard schedule changes?",
+      message: "Your updated hours have not been saved.",
+      confirmLabel: "Discard changes",
+      cancelLabel: "Keep editing",
+      destructive: true,
+    });
+
+    if (!confirmed) {
+      return;
+    }
+
     setTempSchedule([...schedule]);
     setIsEditing(false);
     setSaveError(null);
