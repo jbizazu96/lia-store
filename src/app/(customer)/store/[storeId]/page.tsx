@@ -122,6 +122,8 @@ export default function StorePage({
     showDistanceWarning,
     distanceValue,
     closeDistanceWarning,
+    openDistanceWarning,
+    isOutsideDeliveryRadius,
   } = useCustomerStore({
     storeId,
     distanceParam,
@@ -165,6 +167,11 @@ export default function StorePage({
     product: Product
   ) => {
     if (!store) {
+      return;
+    }
+
+    if (isOutsideDeliveryRadius) {
+      openDistanceWarning();
       return;
     }
 
@@ -218,6 +225,15 @@ export default function StorePage({
     productId: string,
     newQuantity: number
   ) => {
+    if (
+      isOutsideDeliveryRadius &&
+      newQuantity >
+      getItemQuantity(productId)
+    ) {
+      openDistanceWarning();
+      return;
+    }
+
     updateQuantity(
       productId,
       Math.max(0, newQuantity)

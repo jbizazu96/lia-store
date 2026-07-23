@@ -20,6 +20,9 @@ import {useRouter} from "next/navigation";
 import { use } from "react";
 import Image from "next/image";
 import {
+  formatProductName,
+} from "@/utils/productDisplay";
+import {
   ArrowLeft,
   MapPin,
   Package,
@@ -259,7 +262,7 @@ export default function OrderDetailPage({params}: OrderPageProps) {
                     {item.imageUrl ? (
                       <Image
                         src={item.imageUrl}
-                        alt={item.name}
+                        alt={formatProductName(item.name)}
                         fill
                         className="object-contain p-1"
                         sizes="56px"
@@ -271,7 +274,9 @@ export default function OrderDetailPage({params}: OrderPageProps) {
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="font-medium text-gray-800 text-sm truncate">{item.name}</p>
+                    <p className="font-medium text-gray-800 text-sm truncate">
+                      {formatProductName(item.name)}
+                    </p>
                     {item.size && item.size.value > 0 && (
                       <p className="text-xs text-gray-400">{item.size.value} {item.size.unit}</p>
                     )}

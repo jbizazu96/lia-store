@@ -33,7 +33,7 @@ export function FloatingSearchBar({value, onChange}: FloatingSearchBarProps) {
             onFocus={() => setIsFocused(true)}
             onBlur={() => setIsFocused(false)}
             placeholder="Search in LIA"
-            className={`flex-1 mx-3 bg-transparent text-gray-800 placeholder-gray-400 focus:outline-none text-sm ${
+            className={`flex-1 mx-3 bg-transparent text-gray-800 placeholder-gray-400 focus:outline-none text-base sm:text-sm ${
               isFocused ? "text-orange-600" : "text-gray-800"
             }`}
           />

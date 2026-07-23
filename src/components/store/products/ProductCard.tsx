@@ -24,6 +24,9 @@ import {
 import type {
   Product,
 } from "@/types/product";
+import {
+  formatProductName,
+} from "@/utils/productDisplay";
 
 interface ProductCardProps {
   product: Product;
@@ -100,14 +103,14 @@ export function ProductCard({
       initial={{opacity: 0, scale: 0.95}}
       animate={{opacity: 1, scale: 1}}
       whileHover={{y: -2}}
-      className="bg-white rounded-xl overflow-hidden shadow-sm hover:shadow-md transition border border-gray-100"
+      className="relative overflow-visible rounded-xl border border-gray-100 bg-white shadow-sm transition hover:shadow-md"
     >
       {/* Image - Fixed ratio with object-cover */}
-      <div className="relative w-full aspect-square bg-white-100 overflow-hidden">
+      <div className="relative w-full aspect-square overflow-visible rounded-t-xl bg-gray-50">
         {product.imageUrl ? (
           <Image
             src={product.imageUrl}
-            alt={product.name}
+            alt={formatProductName(product.name)}
             fill
             className="object-contain p-2"
             sizes="(max-width: 640px) 33vw, (max-width: 1024px) 25vw, 20vw"
@@ -150,13 +153,14 @@ export function ProductCard({
         </div>
 
         {/* Three-dot Menu */}
-        <div ref={menuRef} className="absolute top-1.5 right-1.5">
+        <div ref={menuRef} className="absolute right-1.5 top-1.5 z-30">
           <button
             onClick={toggleMenu}
-            className="p-1 bg-white/90 backdrop-blur-sm rounded-full hover:bg-white transition shadow-sm"
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-white/95 shadow-md backdrop-blur-sm transition hover:bg-white focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-1"
             aria-label="Product actions"
+            aria-expanded={showMenu}
           >
-            <MoreVertical className="w-3.5 h-3.5 text-gray-600" />
+            <MoreVertical className="h-5 w-5 text-gray-700" />
           </button>
 
           <AnimatePresence>
@@ -165,14 +169,14 @@ export function ProductCard({
                 initial={{opacity: 0, scale: 0.95, y: -5}}
                 animate={{opacity: 1, scale: 1, y: 0}}
                 exit={{opacity: 0, scale: 0.95, y: -5}}
-                className="absolute right-0 top-6 w-40 bg-white rounded-xl shadow-lg border border-gray-200 py-1 z-20"
+                className="absolute right-0 top-10 z-50 w-44 rounded-xl border border-gray-200 bg-white py-1.5 shadow-xl"
               >
                 <Link
                   href={`/store/products/${product.id}`}
-                  className="flex items-center gap-2 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50 transition"
+                  className="flex min-h-10 items-center gap-2 px-3 py-2 text-sm text-gray-700 transition hover:bg-gray-50"
                   onClick={() => setShowMenu(false)}
                 >
-                  <Edit2 className="w-3 h-3" />
+                  <Edit2 className="h-4 w-4" />
                   Edit
                 </Link>
                 <button
@@ -180,9 +184,9 @@ export function ProductCard({
                     onDuplicate?.(product);
                     setShowMenu(false);
                   }}
-                  className="flex items-center gap-2 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50 transition w-full"
+                  className="flex min-h-10 w-full items-center gap-2 px-3 py-2 text-sm text-gray-700 transition hover:bg-gray-50"
                 >
-                  <Copy className="w-3 h-3" />
+                  <Copy className="h-4 w-4" />
                   Duplicate
                 </button>
                 <div className="border-t border-gray-100 my-0.5" />
@@ -191,9 +195,9 @@ export function ProductCard({
                     onDelete(product.id);
                     setShowMenu(false);
                   }}
-                  className="flex items-center gap-2 px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 transition w-full"
+                  className="flex min-h-10 w-full items-center gap-2 px-3 py-2 text-sm text-red-600 transition hover:bg-red-50"
                 >
-                  <Trash2 className="w-3 h-3" />
+                  <Trash2 className="h-4 w-4" />
                   Delete
                 </button>
               </motion.div>
@@ -207,7 +211,7 @@ export function ProductCard({
         {/* Name & Category */}
         <div className="mb-1">
           <h3 className="font-semibold text-gray-800 text-xs truncate">
-            {product.name}
+            {formatProductName(product.name)}
           </h3>
           <p className="text-[10px] text-gray-500 truncate">{product.category}</p>
         </div>

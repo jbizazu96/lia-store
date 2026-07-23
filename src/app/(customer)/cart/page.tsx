@@ -29,9 +29,16 @@ import {
   Clock,
   CreditCard,
   X,
+  Trash2,
   AlertCircle,
 } from "lucide-react";
 import { useCart } from "@/context/CartContext";
+import {
+  ProductPrice,
+} from "@/components/ui/ProductPrice";
+import {
+  formatProductName,
+} from "@/utils/productDisplay";
 
 export default function CartPage() {
   const router = useRouter();
@@ -41,13 +48,6 @@ export default function CartPage() {
   const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
   const [itemToRemove, setItemToRemove] = useState<string | null>(null);
   const [itemNameToRemove, setItemNameToRemove] = useState("");
-
-  // Format price
-  const formatPrice = (price: number) => {
-    const dollars = Math.floor(price);
-    const cents = Math.round((price - dollars) * 100);
-    return { dollars, cents: cents.toString().padStart(2, '0') };
-  };
 
   const {
       loading: storeLoading,
@@ -218,7 +218,8 @@ export default function CartPage() {
       <div className="max-w-2xl mx-auto px-4 py-4 pb-65 space-y-4">
         <AnimatePresence mode="popLayout">
           {items.map((item) => {
-            const price = formatPrice(item.price);
+            const productName =
+              formatProductName(item.name);
 
             return (
               <motion.div
@@ -235,7 +236,7 @@ export default function CartPage() {
                     {item.imageUrl ? (
                       <Image
                         src={item.imageUrl}
-                        alt={item.name}
+                        alt={productName}
                         fill
                         className="object-contain p-1"
                       />
@@ -250,8 +251,8 @@ export default function CartPage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
-                        <h4 className="font-semibold text-gray-800 text-sm truncate">
-                          {item.name}
+                        <h4 className="font-sans text-sm font-semibold text-gray-900 truncate">
+                          {productName}
                         </h4>
                         <p className="text-xs text-gray-500 truncate">
                           {item.storeName}
@@ -263,9 +264,9 @@ export default function CartPage() {
                         )}
                       </div>
                       <button
-                        onClick={() => handleRemoveItem(item.id, item.name)}
+                        onClick={() => handleRemoveItem(item.id, productName)}
                         className="p-1 hover:bg-red-50 rounded-lg transition text-red-400 hover:text-red-600 flex-shrink-0"
-                        aria-label={`Remove ${item.name}`}
+                        aria-label={`Remove ${productName}`}
                       >
                         <X className="w-4 h-4" />
                       </button>
@@ -274,12 +275,10 @@ export default function CartPage() {
                     {/* Price & Quantity Controls */}
                     <div className="flex items-center justify-between mt-2">
                       <div>
-                        <span className="text-base font-bold text-gray-800">
-                          ${price.dollars}
-                          <sup className="text-xs font-semibold text-gray-600">
-                            .{price.cents}
-                          </sup>
-                        </span>
+                        <ProductPrice
+                          price={item.price}
+                          className="text-gray-900"
+                        />
                         {item.quantity > 1 && (
                           <span className="text-xs text-gray-400 ml-1">
                             × {item.quantity}
@@ -289,11 +288,19 @@ export default function CartPage() {
 
                       <div className="flex items-center gap-2 bg-gray-100 rounded-full p-1">
                         <button
-                          onClick={() => handleDecreaseQuantity(item.id, item.quantity, item.name)}
+                          onClick={() => handleDecreaseQuantity(item.id, item.quantity, productName)}
                           className="w-7 h-7 rounded-full bg-white shadow-sm flex items-center justify-center hover:bg-gray-50 transition"
-                          aria-label={`Decrease ${item.name} quantity`}
+                          aria-label={
+                            item.quantity === 1
+                              ? `Remove ${productName} from cart`
+                              : `Decrease ${productName} quantity`
+                          }
                         >
-                          <Minus className="w-3.5 h-3.5 text-gray-600" />
+                          {item.quantity === 1 ? (
+                            <Trash2 className="w-3.5 h-3.5 text-red-500" />
+                          ) : (
+                            <Minus className="w-3.5 h-3.5 text-gray-600" />
+                          )}
                         </button>
                         <span className="w-6 text-center text-sm font-medium text-gray-800">
                           {item.quantity}
@@ -301,7 +308,7 @@ export default function CartPage() {
                         <button
                           onClick={() => updateQuantity(item.id, item.quantity + 1)}
                           className="w-7 h-7 rounded-full bg-orange-500 text-white flex items-center justify-center hover:bg-orange-600 transition"
-                          aria-label={`Increase ${item.name} quantity`}
+                          aria-label={`Increase ${productName} quantity`}
                         >
                           <Plus className="w-3.5 h-3.5" />
                         </button>

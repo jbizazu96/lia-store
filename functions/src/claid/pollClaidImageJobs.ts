@@ -36,6 +36,7 @@ import {
 import {
   deleteClaidJob,
   listPendingClaidJobs,
+  scheduleClaidJobRetry,
   updateClaidJob,
 } from "./claidJobStore";
 
@@ -404,8 +405,31 @@ async function processJob(
       }
     );
   } catch (jobError) {
-    logger.error(
-      "Claid image job processing failed.",
+  /*
+  |--------------------------------------------------------------------------
+  | Temporary Processing Failure
+  |--------------------------------------------------------------------------
+  |
+  | Failures such as:
+  |
+  | - Network timeout
+  | - Temporary Claid API issue
+  | - Temporary result download failure
+  | - Temporary Storage failure
+  |
+  | receive up to three attempts.
+  |
+  */
+
+  const retryResult =
+    await scheduleClaidJobRetry(
+      job.taskId,
+      jobError
+    );
+
+  if (retryResult.willRetry) {
+    logger.warn(
+      "Claid image job failed temporarily and was scheduled for retry.",
       {
         taskId:
           job.taskId,
@@ -413,44 +437,80 @@ async function processJob(
         productId:
           job.productId,
 
-        jobError: {
-          name:
-            jobError instanceof Error
-              ? jobError.name
-              : "UnknownError",
+        attemptCount:
+          retryResult.attemptCount,
 
-          message:
-            jobError instanceof Error
-              ? jobError.message
-              : String(jobError),
+        maxAttempts:
+          retryResult.maxAttempts,
 
-          stack:
-            jobError instanceof Error
-              ? jobError.stack
-              : undefined,
-        },
+        nextAttemptAt:
+          retryResult.nextAttemptAt,
+
+        error:
+          jobError instanceof Error
+            ? jobError.message
+            : String(jobError),
       }
     );
 
-    await updateClaidJob({
+    /*
+     * Do not mark the product image as failed yet.
+     *
+     * The original remains available and the scheduled poller will retry.
+     */
+
+    return;
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | Permanent Failure
+  |--------------------------------------------------------------------------
+  |
+  | All retry attempts have been exhausted.
+  |
+  */
+
+  logger.error(
+    "Claid image job permanently failed after all retry attempts.",
+    {
       taskId:
         job.taskId,
 
-      status:
-        "failed",
+      productId:
+        job.productId,
 
-      error:
-        jobError instanceof Error
-          ? jobError.message
-          : "Claid job processing failed.",
-    });
+      attemptCount:
+        retryResult.attemptCount,
 
-    await markProductImageEnhancementFailed(
-      job.productId,
-      job.originalImagePath,
-      jobError
-    );
-  }
+      maxAttempts:
+        retryResult.maxAttempts,
+
+      error: {
+        name:
+          jobError instanceof Error
+            ? jobError.name
+            : "UnknownError",
+
+        message:
+          jobError instanceof Error
+            ? jobError.message
+            : String(jobError),
+
+        stack:
+          jobError instanceof Error
+            ? jobError.stack
+            : undefined,
+      },
+    }
+  );
+
+  await markProductImageEnhancementFailed(
+    job.productId,
+    job.originalImagePath,
+    jobError
+  );
+}
 }
 
 /*

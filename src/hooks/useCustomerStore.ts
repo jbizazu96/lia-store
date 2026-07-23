@@ -92,7 +92,11 @@ interface UseCustomerStoreResult {
 
   distanceValue: number;
 
+  isOutsideDeliveryRadius: boolean;
+
   closeDistanceWarning: () => void;
+
+  openDistanceWarning: () => void;
 }
 
 /*
@@ -128,7 +132,6 @@ function isCustomerVisibleProduct(
 ): boolean {
   return (
     product.isAvailable &&
-    product.stock > 0 &&
     (product.imageStatus === undefined ||
       product.imageStatus === "none" ||
       product.imageStatus === "ready")
@@ -475,6 +478,10 @@ export function useCustomerStore({
     setShowDistanceWarning(false);
   };
 
+  const openDistanceWarning = () => {
+    setShowDistanceWarning(true);
+  };
+
   return {
     store,
     categories,
@@ -483,6 +490,10 @@ export function useCustomerStore({
     error,
     showDistanceWarning,
     distanceValue,
+    isOutsideDeliveryRadius:
+      distanceValue >
+      DELIVERY_CONFIG.MAX_RADIUS_MILES,
     closeDistanceWarning,
+    openDistanceWarning,
   };
 }

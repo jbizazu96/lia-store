@@ -16,24 +16,22 @@ import {
   Package,
   AlertCircle,
   LockKeyhole,
+  Trash2,
 } from "lucide-react";
 import type { Product } from "@/types/product";
+import {
+  ProductPrice,
+} from "@/components/ui/ProductPrice";
+import {
+  formatProductName,
+  formatProductPrice,
+} from "@/utils/productDisplay";
 
 interface ProductCardProps {
   product: Product;
   onAddToCart: (product: Product) => void;
   onQuantityChange: (productId: string, quantity: number) => void;
   quantity: number;
-}
-
-function formatProductName(name: string): string {
-  return name
-    .trim()
-    .toLowerCase()
-    .replace(
-      /\b\p{L}/gu,
-      (letter) => letter.toUpperCase()
-    );
 }
 
 export function ProductCard({
@@ -44,19 +42,12 @@ export function ProductCard({
 }: ProductCardProps) {
   const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
 
-  // Format price with superscript cents
-  const formatPrice = (price: number) => {
-    const dollars = Math.floor(price);
-    const cents = Math.round((price - dollars) * 100);
-    return { dollars, cents: cents.toString().padStart(2, '0') };
-  };
-
   const discountedProductPrice = promotionService.getDiscountedPrice(
     product.price,
     product.promotion
   );
-  const salePrice = formatPrice(discountedProductPrice);
-  const originalPrice = formatPrice(product.price);
+  const originalPrice =
+    formatProductPrice(product.price);
   const isOnSale = discountedProductPrice < product.price;
 
   // Customer-facing stock label
@@ -64,7 +55,7 @@ export function ProductCard({
     if (stock > 20) return {label: "Many in stock", color: "text-green-600"};
     if (stock > 5) return {label: "Few left", color: "text-yellow-600"};
     if (stock > 0) return {label: "Last chance", color: "text-orange-600"};
-    return {label: "Out of stock", color: "text-red-600"};
+    return {label: "Not available", color: "text-gray-500"};
   };
 
   const stockStatus = getStockStatus(product.stock);
@@ -106,12 +97,15 @@ export function ProductCard({
   };
 
   const isInCart = quantity > 0;
+  const isOutOfStock = product.stock <= 0;
 
   return (
     <>
       <motion.div
-        whileHover={{y: -2}}
-        className="w-[135px] flex-shrink-0 font-sans antialiased sm:w-[148px]"
+        whileHover={isOutOfStock ? undefined : {y: -2}}
+        className={`w-[135px] flex-shrink-0 font-sans antialiased sm:w-[148px] ${
+          isOutOfStock ? "opacity-60" : ""
+        }`}
       >
             {/* Product Image */}
             <div className="relative h-[104px] w-full overflow-hidden rounded-2xl bg-gray-100">
@@ -121,7 +115,9 @@ export function ProductCard({
                   alt={formatProductName(product.name)}
                   fill
                   sizes="(max-width: 640px) 135px, 148px"
-                  className="scale-[1.15] object-contain p-1"
+                  className={`scale-[1.15] object-contain p-2 ${
+                    isOutOfStock ? "grayscale" : ""
+                  }`}
                 />
               ) : (
                 <div className="flex h-full w-full items-center justify-center">
@@ -130,7 +126,7 @@ export function ProductCard({
               )}
 
               <div className="absolute left-1.5 top-1.5 flex flex-col items-start gap-1">
-                {isInCart && (
+                {isInCart && !isOutOfStock && (
                   <span className="rounded-full bg-green-600 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-white shadow-sm">
                     Added
                   </span>
@@ -143,15 +139,27 @@ export function ProductCard({
                 )}
               </div>
 
-              {isInCart ? (
+              {isOutOfStock ? (
+                <span className="absolute bottom-2 right-2 rounded-full bg-gray-700 px-2 py-1 text-[8px] font-bold uppercase tracking-wide text-white shadow-sm">
+                  Unavailable
+                </span>
+              ) : isInCart ? (
                 <div className="absolute bottom-2 right-2 flex h-9 items-center rounded-full bg-white p-0.5 shadow-lg">
                   <button
                     type="button"
                     onClick={handleDecrease}
                     className="flex h-8 w-8 items-center justify-center rounded-full text-orange-600 transition hover:bg-orange-50"
-                    aria-label="Decrease quantity"
+                    aria-label={
+                      quantity === 1
+                        ? "Remove from cart"
+                        : "Decrease quantity"
+                    }
                   >
-                    <Minus className="h-3 w-3" />
+                    {quantity === 1 ? (
+                      <Trash2 className="h-3.5 w-3.5" />
+                    ) : (
+                      <Minus className="h-3 w-3" />
+                    )}
                   </button>
                   <span className="min-w-4 text-center text-xs font-bold text-gray-800">
                     {quantity}
@@ -192,15 +200,14 @@ export function ProductCard({
 
           {/* Product price */}
           <div className="mt-1 flex items-end gap-1.5">
-            <span className={`inline-flex items-baseline whitespace-nowrap text-base font-black leading-none tracking-tight ${isOnSale ? "text-red-600" : "text-gray-900"}`}>
-              <span className="relative -top-1 mr-px text-[11px] font-bold leading-none">
-                $
-              </span>
-              <span>{salePrice.dollars}</span>
-              <span className="relative -top-1 text-[11px] font-bold leading-none">
-                .{salePrice.cents}
-              </span>
-            </span>
+            <ProductPrice
+              price={discountedProductPrice}
+              className={
+                isOnSale
+                  ? "text-red-600"
+                  : "text-gray-900"
+              }
+            />
             {isOnSale && (
               <span className="pb-0.5 text-[10px] text-gray-400 line-through">
                 ${originalPrice.dollars}.{originalPrice.cents}

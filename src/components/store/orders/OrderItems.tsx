@@ -7,6 +7,9 @@
 import {Receipt} from "lucide-react";
 import Image from "next/image";
 import {OrderItem} from "@/app/store/(store)/store-orders/types";
+import {
+  formatProductName,
+} from "@/utils/productDisplay";
 
 interface OrderItemsProps {
   items: OrderItem[];
@@ -28,7 +31,7 @@ export function OrderItems({items}: OrderItemsProps) {
                 {item.imageUrl ? (
                   <Image
                     src={item.imageUrl}
-                    alt={item.name}
+                    alt={formatProductName(item.name)}
                     fill
                     sizes="48px"
                     className="object-contain p-1"
@@ -41,7 +44,9 @@ export function OrderItems({items}: OrderItemsProps) {
                 {item.quantity}
               </span>
               <div>
-                <p className="font-medium text-gray-800">{item.name}</p>
+                <p className="font-medium text-gray-800">
+                  {formatProductName(item.name)}
+                </p>
                 <p className="text-sm text-gray-500">${item.price.toFixed(2)} each</p>
               </div>
             </div>

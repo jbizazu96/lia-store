@@ -36,7 +36,7 @@ export function BottomBar({
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
             placeholder="Search this store..."
-            className="w-full pl-9 pr-4 py-3 bg-white/90 backdrop-blur-sm border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-orange-400 focus:border-transparent text-sm placeholder-gray-400 shadow-lg"
+            className="w-full pl-9 pr-4 py-3 bg-white/90 backdrop-blur-sm border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-orange-400 focus:border-transparent text-base placeholder-gray-400 shadow-lg sm:text-sm"
           />
         </div>
 

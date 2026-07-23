@@ -2,6 +2,12 @@
 
 import Image from "next/image";
 import {Store} from "lucide-react";
+import {
+  ProductPrice,
+} from "@/components/ui/ProductPrice";
+import {
+  formatProductName,
+} from "@/utils/productDisplay";
 import type {
   CheckoutItem,
   CheckoutTotals,
@@ -20,12 +26,6 @@ export function OrderSummary({
   storeName,
   storeAddress,
 }: OrderSummaryProps) {
-  const formatPrice = (price: number) => {
-    const dollars = Math.floor(price);
-    const cents = Math.round((price - dollars) * 100);
-    return { dollars, cents: cents.toString().padStart(2, '0') };
-  };
-
   // Format delivery fee - always show, "Free" if 0
   const getDeliveryFeeDisplay = (fee: number) => {
     if (fee === 0) return "Free";
@@ -52,14 +52,15 @@ export function OrderSummary({
       {/* Items */}
       <div className="space-y-3 max-h-60 overflow-y-auto">
         {items.map((item) => {
-          const totalPrice = formatPrice(item.price * item.quantity);
+          const productName =
+            formatProductName(item.name);
           return (
             <div key={item.id} className="flex items-center gap-3 py-2 border-b border-gray-100 last:border-0">
               <div className="relative w-12 h-12 rounded-lg overflow-hidden flex-shrink-0 bg-white border border-gray-100">
                 {item.imageUrl ? (
                   <Image
                     src={item.imageUrl}
-                    alt={item.name}
+                    alt={productName}
                     fill
                     className="object-contain p-1"
                   />
@@ -71,15 +72,17 @@ export function OrderSummary({
               </div>
               
               <div className="flex-1 min-w-0">
-                <p className="font-medium text-gray-800 text-sm truncate">{item.name}</p>
+                <p className="font-sans text-sm font-semibold text-gray-900 truncate">
+                  {productName}
+                </p>
                 <p className="text-xs text-gray-500">Qty: {item.quantity}</p>
               </div>
               
               <div className="text-right">
-                <p className="font-bold text-gray-800 text-sm">
-                  ${totalPrice.dollars}
-                  <sup className="text-[10px] font-semibold text-gray-600">.{totalPrice.cents}</sup>
-                </p>
+                <ProductPrice
+                  price={item.price * item.quantity}
+                  className="text-gray-900"
+                />
               </div>
             </div>
           );

@@ -64,6 +64,42 @@ await notificationStore.createNotification({
 
   }
 
+  /**
+   * Product stock crossed a low-inventory alert threshold after an order.
+   */
+  async lowStock(
+    productId: string,
+    productName: string,
+    remainingStock: number,
+    storeOwnerUid: string
+  ): Promise<void> {
+    const title =
+      remainingStock === 0
+        ? "Product out of stock"
+        : "Low stock alert";
+
+    const body =
+      remainingStock === 0
+        ? `${productName} is now out of stock.`
+        : `${productName} has ${remainingStock} left in stock.`;
+
+    await notificationStore.createNotification({
+      uid: storeOwnerUid,
+      title,
+      body,
+      type: "inventory",
+      icon: "package",
+      color: remainingStock === 0 ? "red" : "orange",
+      navigationPath: `/store/products/${productId}`,
+    });
+
+    await notificationService.sendToUser(
+      storeOwnerUid,
+      title,
+      body
+    );
+  }
+
 }
 
 export const storeEvents =

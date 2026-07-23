@@ -10,7 +10,8 @@
 | - Sharp image conversion
 | - Storage helpers
 | - Firestore image-status updates
-| - Product image trigger
+| - Product image triggers
+| - Multi-size customer image delivery
 |
 */
 
@@ -44,8 +45,54 @@ export interface ProductImageMetadata {
 
 /*
 |--------------------------------------------------------------------------
+| Product Image Variant Names
+|--------------------------------------------------------------------------
+|
+| Each variant serves a different customer interface.
+|
+| thumbnail:
+| Very small lists, compact suggestions, and admin previews.
+|
+| small:
+| Mobile product cards and search results.
+|
+| medium:
+| Larger cards, tablets, and featured products.
+|
+| large:
+| Product details and larger desktop displays.
+|
+*/
+
+export type ProductImageVariantName =
+  | "thumbnail"
+  | "small"
+  | "medium"
+  | "large";
+
+/*
+|--------------------------------------------------------------------------
+| Product Image Variant Configuration
+|--------------------------------------------------------------------------
+*/
+
+export interface ProductImageVariantConfig {
+  name: ProductImageVariantName;
+
+  width: number;
+
+  height: number;
+
+  quality: number;
+}
+
+/*
+|--------------------------------------------------------------------------
 | Processed Image Result
 |--------------------------------------------------------------------------
+|
+| Represents one image produced by Sharp.
+|
 */
 
 export interface ProcessedImageResult {
@@ -62,22 +109,34 @@ export interface ProcessedImageResult {
 
 /*
 |--------------------------------------------------------------------------
-| Product Image Processing Result
+| Processed Image Variant
 |--------------------------------------------------------------------------
+|
+| Represents one named Sharp output before it is uploaded to Storage.
+|
 */
 
-export interface ProductImageProcessingResult {
-  productId: string;
+export interface ProcessedImageVariant
+  extends ProcessedImageResult {
+  name: ProductImageVariantName;
+}
 
-  storeId: string;
+/*
+|--------------------------------------------------------------------------
+| Stored Image Variant
+|--------------------------------------------------------------------------
+|
+| Represents one completed customer-facing image after it has been uploaded
+| to Firebase Storage.
+|
+*/
 
-  imageId: string;
+export interface ProductImageVariantResult {
+  name: ProductImageVariantName;
 
-  originalImagePath: string;
+  path: string;
 
-  optimizedImagePath: string;
-
-  optimizedImageUrl: string;
+  url: string;
 
   width: number;
 
@@ -90,41 +149,196 @@ export interface ProductImageProcessingResult {
 
 /*
 |--------------------------------------------------------------------------
+| Product Image Variant Map
+|--------------------------------------------------------------------------
+|
+| Stored in Firestore so the frontend can choose the correct image size.
+|
+*/
+
+export type ProductImageVariantMap =
+  Partial<
+    Record<
+      ProductImageVariantName,
+      ProductImageVariantResult
+    >
+  >;
+
+/*
+|--------------------------------------------------------------------------
+| Product Image Processing Result
+|--------------------------------------------------------------------------
+|
+| The legacy optimized-image fields remain temporarily so the current working
+| pipeline keeps compiling while we migrate it one file at a time.
+|
+| imageVariants will become the primary multi-size result.
+|
+*/
+
+export interface ProductImageProcessingResult {
+  productId: string;
+
+  storeId: string;
+
+  imageId: string;
+
+  originalImagePath: string;
+
+  /*
+   * Current single-image fields.
+   *
+   * These remain during the migration.
+   */
+  optimizedImagePath: string;
+
+  optimizedImageUrl: string;
+
+  width: number;
+
+  height: number;
+
+  sizeBytes: number;
+
+  format: "webp";
+
+  /*
+   * New multi-size outputs.
+   *
+   * Optional during migration so existing functions continue building.
+   */
+  imageVariants?: ProductImageVariantMap;
+}
+
+/*
+|--------------------------------------------------------------------------
 | Image Processing Configuration
 |--------------------------------------------------------------------------
 */
 
 export const PRODUCT_IMAGE_CONFIG = {
   /*
-   * Maximum optimized dimensions.
-   */
-  MAX_WIDTH: 800,
+  |--------------------------------------------------------------------------
+  | Image Variants
+  |--------------------------------------------------------------------------
+  |
+  | Sharp will generate every size from the same Claid-enhanced image.
+  |
+  | `fit: inside` will be used later so the complete product remains visible
+  | without cropping or distortion.
+  |
+  */
 
-  MAX_HEIGHT: 800,
+  VARIANTS: [
+    {
+      name:
+        "thumbnail",
+
+      width:
+        200,
+
+      height:
+        200,
+
+      quality:
+        72,
+    },
+
+    {
+      name:
+        "small",
+
+      width:
+        400,
+
+      height:
+        400,
+
+      quality:
+        76,
+    },
+
+    {
+      name:
+        "medium",
+
+      width:
+        600,
+
+      height:
+        600,
+
+      quality:
+        80,
+    },
+
+    {
+      name:
+        "large",
+
+      width:
+        900,
+
+      height:
+        900,
+
+      quality:
+        82,
+    },
+  ] satisfies readonly ProductImageVariantConfig[],
 
   /*
-   * WebP quality from 1 through 100.
+   * The medium variant will eventually remain the default `imageUrl`.
+   *
+   * This preserves compatibility with components that currently expect one
+   * image URL while new components begin using imageVariants.
    */
-  WEBP_QUALITY: 80,
+  DEFAULT_VARIANT:
+    "medium" as ProductImageVariantName,
 
   /*
-   * Long-lived caching is safe because every optimized upload uses a
-   * unique image ID.
-   */
+  |--------------------------------------------------------------------------
+  | Legacy Single-Image Settings
+  |--------------------------------------------------------------------------
+  |
+  | Keep these during migration because the existing Sharp processor still
+  | reads them.
+  |
+  | We will remove them after the processor and Storage pipeline are fully
+  | converted to variants.
+  |
+  */
+
+  MAX_WIDTH:
+    800,
+
+  MAX_HEIGHT:
+    800,
+
+  WEBP_QUALITY:
+    80,
+
+  /*
+  |--------------------------------------------------------------------------
+  | Caching
+  |--------------------------------------------------------------------------
+  |
+  | Every upload uses a unique image ID, so browsers may safely cache each
+  | immutable variant for one year.
+  |
+  */
+
   CACHE_CONTROL:
     "public, max-age=31536000, immutable",
 
   /*
-   * Metadata value used to identify original product uploads.
+   * Metadata value identifying original product uploads.
    */
   PROCESSING_TYPE:
     "product-image-original",
 
   /*
    * Function region.
-   *
-   * Keep this aligned with your Storage bucket and other Functions when
-   * possible.
    */
   REGION:
     "us-central1",

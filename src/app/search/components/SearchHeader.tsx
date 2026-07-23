@@ -40,7 +40,7 @@ export function SearchHeader({
               }
             }}
             placeholder="Search products, stores..."
-            className="w-full pl-9 pr-10 py-2.5 bg-gray-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-400 text-sm"
+            className="w-full pl-9 pr-10 py-2.5 bg-gray-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-400 text-base sm:text-sm"
             autoFocus
           />
           {value && (

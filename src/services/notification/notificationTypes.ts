@@ -23,6 +23,7 @@
 export type NotificationType =
   | "order"
   | "delivery"
+  | "inventory"
   | "promotion"
   | "system";
 

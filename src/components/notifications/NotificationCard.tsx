@@ -65,6 +65,8 @@ const getColorForType = (type: string): keyof typeof COLORS => {
       return "blue";
     case "order_cancelled":
       return "red";
+    case "inventory":
+      return "orange";
     default:
       return "gray";
   }
@@ -85,6 +87,8 @@ const getIconForType = (type: string): keyof typeof ICONS => {
       return "check-circle";
     case "order_cancelled":
       return "x-circle";
+    case "inventory":
+      return "package";
     default:
       return "bell";
   }

@@ -7,11 +7,10 @@
 |
 | Responsibilities:
 |
-| - Read image metadata.
-| - Rotate according to EXIF orientation.
-| - Resize within the configured maximum dimensions.
-| - Convert to WebP.
-| - Return the optimized image buffer and metadata.
+| - Rotate images according to EXIF orientation.
+| - Resize images without cropping the product.
+| - Convert images to WebP.
+| - Generate one legacy image or multiple customer-facing variants.
 |
 | This file contains no Firebase Storage or Firestore logic.
 |
@@ -25,12 +24,19 @@ import {
 
 import type {
   ProcessedImageResult,
+  ProcessedImageVariant,
 } from "./imageTypes";
 
 /*
 |--------------------------------------------------------------------------
 | Process Product Image
 |--------------------------------------------------------------------------
+|
+| Legacy single-image processor.
+|
+| Keep this temporarily while the Storage and Firestore layers are migrated
+| to multi-size variants.
+|
 */
 
 export async function processProductImage(
@@ -45,25 +51,6 @@ export async function processProductImage(
     );
   }
 
-  /*
-  |--------------------------------------------------------------------------
-  | Build Sharp Pipeline
-  |--------------------------------------------------------------------------
-  |
-  | rotate():
-  | Applies EXIF orientation so mobile photos are not displayed sideways.
-  |
-  | resize():
-  | Keeps the entire product visible inside 800 × 800.
-  |
-  | withoutEnlargement:
-  | Prevents smaller images from being enlarged and losing quality.
-  |
-  | webp():
-  | Produces a significantly smaller customer-facing image.
-  |
-  */
-
   const optimizedImage =
     sharp(originalImageBuffer)
       .rotate()
@@ -76,7 +63,8 @@ export async function processProductImage(
           PRODUCT_IMAGE_CONFIG
             .MAX_HEIGHT,
 
-        fit: "inside",
+        fit:
+          "inside",
 
         withoutEnlargement:
           true,
@@ -86,21 +74,17 @@ export async function processProductImage(
           PRODUCT_IMAGE_CONFIG
             .WEBP_QUALITY,
 
-        effort: 4,
+        effort:
+          4,
       });
-
-  /*
-  |--------------------------------------------------------------------------
-  | Generate Buffer And Metadata
-  |--------------------------------------------------------------------------
-  */
 
   const {
     data,
     info,
   } =
     await optimizedImage.toBuffer({
-      resolveWithObject: true,
+      resolveWithObject:
+        true,
     });
 
   if (
@@ -113,7 +97,8 @@ export async function processProductImage(
   }
 
   return {
-    buffer: data,
+    buffer:
+      data,
 
     width:
       info.width,
@@ -127,4 +112,104 @@ export async function processProductImage(
     format:
       "webp",
   };
+}
+
+/*
+|--------------------------------------------------------------------------
+| Process Product Image Variants
+|--------------------------------------------------------------------------
+|
+| Generates every configured customer-facing WebP size in parallel.
+|
+| The original enhanced image buffer is reused for all variants.
+|
+*/
+
+export async function processProductImageVariants(
+  originalImageBuffer: Buffer
+): Promise<ProcessedImageVariant[]> {
+  if (
+    !originalImageBuffer ||
+    originalImageBuffer.length === 0
+  ) {
+    throw new Error(
+      "The original image buffer is empty."
+    );
+  }
+
+  /*
+   * Each variant receives its own Sharp pipeline.
+   *
+   * Promise.all allows the configured sizes to process concurrently.
+   */
+
+  return Promise.all(
+    PRODUCT_IMAGE_CONFIG.VARIANTS.map(
+      async (
+        variant
+      ): Promise<ProcessedImageVariant> => {
+        const {
+          data,
+          info,
+        } =
+          await sharp(
+            originalImageBuffer
+          )
+            .rotate()
+            .resize({
+              width:
+                variant.width,
+
+              height:
+                variant.height,
+
+              fit:
+                "inside",
+
+              withoutEnlargement:
+                true,
+            })
+            .webp({
+              quality:
+                variant.quality,
+
+              effort:
+                4,
+            })
+            .toBuffer({
+              resolveWithObject:
+                true,
+            });
+
+        if (
+          !info.width ||
+          !info.height
+        ) {
+          throw new Error(
+            `The ${variant.name} image dimensions could not be determined.`
+          );
+        }
+
+        return {
+          name:
+            variant.name,
+
+          buffer:
+            data,
+
+          width:
+            info.width,
+
+          height:
+            info.height,
+
+          sizeBytes:
+            data.length,
+
+          format:
+            "webp",
+        };
+      }
+    )
+  );
 }

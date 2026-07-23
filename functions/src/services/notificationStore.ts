@@ -26,6 +26,7 @@ interface CreateNotificationInput {
     | "order"
     | "delivery"
     | "promotion"
+    | "inventory"
     | "system";
 
   icon: string;
@@ -73,9 +74,11 @@ export class NotificationStore {
         color: input.color,
 
         deepLink:
-  input.navigationPath && input.orderId
-    ? `${input.navigationPath}/${input.orderId}`
-    : undefined,
+          input.navigationPath
+            ? input.orderId
+              ? `${input.navigationPath}/${input.orderId}`
+              : input.navigationPath
+            : undefined,
 
         orderId: input.orderId,
 

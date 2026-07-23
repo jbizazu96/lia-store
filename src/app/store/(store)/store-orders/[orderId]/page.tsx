@@ -41,6 +41,9 @@ import Link from "next/link";
 import Image from "next/image";
 import { orderService } from "@/services/order/orderService";
 import { BrandedLoader } from "@/components/ui/BrandedLoader";
+import {
+  formatProductName,
+} from "@/utils/productDisplay";
 
 interface OrderDetailsPageProps {
   params: Promise<{
@@ -267,7 +270,11 @@ export default function OrderDetailsPage({params}: OrderDetailsPageProps) {
                         {item.imageUrl ? (
                           <Image
                             src={item.imageUrl}
-                            alt={item.name || "Ordered product"}
+                            alt={
+                              formatProductName(
+                                item.name || "Ordered product"
+                              )
+                            }
                             fill
                             sizes="48px"
                             className="object-contain p-1"
@@ -280,7 +287,11 @@ export default function OrderDetailsPage({params}: OrderDetailsPageProps) {
                         {item.quantity || 1}
                       </span>
                       <div>
-                        <p className="font-medium text-gray-800">{item.name || "Unnamed Item"}</p>
+                        <p className="font-medium text-gray-800">
+                          {formatProductName(
+                            item.name || "Unnamed Item"
+                          )}
+                        </p>
                         <p className="text-sm text-gray-500">${(item.price || 0).toFixed(2)} each</p>
                       </div>
                     </div>

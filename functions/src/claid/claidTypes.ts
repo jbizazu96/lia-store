@@ -371,6 +371,34 @@ export interface ClaidProductImageJob {
 
   status: ClaidImageStatus;
 
+    /*
+  |--------------------------------------------------------------------------
+  | Retry State
+  |--------------------------------------------------------------------------
+  */
+
+  /**
+   * Number of failed processing attempts already made.
+   */
+  attemptCount: number;
+
+  /**
+   * Maximum attempts allowed before the job becomes permanently failed.
+   */
+  maxAttempts: number;
+
+  /**
+   * ISO date when the next retry may run.
+   *
+   * Null means the job may run immediately.
+   */
+  nextAttemptAt?: string | null;
+
+  /**
+   * ISO date of the most recent processing attempt.
+   */
+  lastAttemptAt?: string | null;
+
   resultUrl?: string | null;
 
   error?: string | null;

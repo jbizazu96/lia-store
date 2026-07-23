@@ -18,6 +18,7 @@
 
 import {
   FieldValue,
+  Timestamp,
   getFirestore,
 } from "firebase-admin/firestore";
 
@@ -34,6 +35,33 @@ import type {
 
 const CLAID_JOB_COLLECTION =
   "claidImageJobs";
+
+  /*
+|--------------------------------------------------------------------------
+| Retry Configuration
+|--------------------------------------------------------------------------
+*/
+
+const DEFAULT_MAX_ATTEMPTS =
+  3;
+
+  /*
+|--------------------------------------------------------------------------
+| Retry Delays
+|--------------------------------------------------------------------------
+|
+| attemptCount represents attempts that have already started.
+|
+| After attempt 1 fails: wait 30 seconds.
+| After attempt 2 fails: wait 2 minutes.
+| Attempt 3 is the final attempt.
+|
+*/
+
+const RETRY_DELAY_MS = [
+  30 * 1000,
+  2 * 60 * 1000,
+] as const;
 
 /*
 |--------------------------------------------------------------------------
@@ -130,6 +158,18 @@ export async function createClaidJob({
       status:
         "accepted",
 
+      attemptCount:
+        0,
+
+      maxAttempts:
+        DEFAULT_MAX_ATTEMPTS,
+
+      nextAttemptAt:
+        null,
+
+      lastAttemptAt:
+        null,
+
       resultUrl,
 
       error:
@@ -205,6 +245,30 @@ export async function getClaidJob(
 
     status:
       data.status,
+
+      attemptCount:
+    typeof data.attemptCount ===
+      "number"
+      ? data.attemptCount
+      : 0,
+
+    maxAttempts:
+      typeof data.maxAttempts ===
+        "number"
+        ? data.maxAttempts
+        : DEFAULT_MAX_ATTEMPTS,
+
+    nextAttemptAt:
+      data.nextAttemptAt
+        ?.toDate?.()
+        ?.toISOString?.() ??
+      null,
+
+    lastAttemptAt:
+      data.lastAttemptAt
+        ?.toDate?.()
+        ?.toISOString?.() ??
+      null,
 
     resultUrl:
       data.resultUrl ?? null,
@@ -388,6 +452,30 @@ Promise<ClaidProductImageJob[]> {
                   data.status as
                     ClaidImageStatus,
 
+                attemptCount:
+                  typeof data.attemptCount ===
+                    "number"
+                    ? data.attemptCount
+                    : 0,
+
+                maxAttempts:
+                  typeof data.maxAttempts ===
+                    "number"
+                    ? data.maxAttempts
+                    : DEFAULT_MAX_ATTEMPTS,
+
+                nextAttemptAt:
+                  data.nextAttemptAt
+                    ?.toDate?.()
+                    ?.toISOString?.() ??
+                  null,
+
+                lastAttemptAt:
+                  data.lastAttemptAt
+                    ?.toDate?.()
+                    ?.toISOString?.() ??
+                  null,
+
                 resultUrl:
                   typeof data.resultUrl ===
                     "string"
@@ -413,12 +501,348 @@ Promise<ClaidProductImageJob[]> {
 
               return job;
     })
-    .filter(
-        (
-          job
-        ): job is ClaidProductImageJob =>
-          job !== null
+      .filter(
+          (
+            job
+          ): job is ClaidProductImageJob =>
+            job !== null
+        )
+        .filter(
+          (job) => {
+            if (!job.nextAttemptAt) {
+              return true;
+            }
+
+            const retryTime =
+              new Date(
+                job.nextAttemptAt
+              ).getTime();
+
+            return (
+              Number.isFinite(
+                retryTime
+              ) &&
+              retryTime <= Date.now()
+            );
+          }
+        );
+        }
+
+/*
+|--------------------------------------------------------------------------
+| Claim Claid Job Attempt
+|--------------------------------------------------------------------------
+|
+| Transactionally claims one processing attempt.
+|
+| This prevents overlapping scheduler invocations from processing the same
+| Claid task at the same time.
+|
+*/
+
+export async function claimClaidJobAttempt(
+  taskId: number
+): Promise<boolean> {
+  if (
+    !Number.isFinite(taskId) ||
+    taskId <= 0
+  ) {
+    return false;
+  }
+
+  const firestore =
+    getFirestore("default");
+
+  const jobReference =
+    firestore
+      .collection(
+        CLAID_JOB_COLLECTION
+      )
+      .doc(
+        taskId.toString()
       );
+
+  return firestore.runTransaction(
+    async (transaction) => {
+      const jobSnapshot =
+        await transaction.get(
+          jobReference
+        );
+
+      if (!jobSnapshot.exists) {
+        return false;
+      }
+
+      const data =
+        jobSnapshot.data();
+
+      if (!data) {
+        return false;
+      }
+
+      /*
+       * Only unfinished jobs may be claimed.
+       */
+
+      if (
+        data.status !== "accepted" &&
+        data.status !== "processing"
+      ) {
+        return false;
+      }
+
+      const attemptCount =
+        typeof data.attemptCount ===
+          "number"
+          ? data.attemptCount
+          : 0;
+
+      const maxAttempts =
+        typeof data.maxAttempts ===
+          "number"
+          ? data.maxAttempts
+          : DEFAULT_MAX_ATTEMPTS;
+
+      if (
+        attemptCount >=
+        maxAttempts
+      ) {
+        return false;
+      }
+
+      /*
+       * Respect the scheduled retry time.
+       */
+
+      const nextAttemptAt =
+        data.nextAttemptAt;
+
+      if (
+        nextAttemptAt instanceof
+          Timestamp &&
+        nextAttemptAt.toMillis() >
+          Date.now()
+      ) {
+        return false;
+      }
+
+      transaction.update(
+        jobReference,
+        {
+          attemptCount:
+            attemptCount + 1,
+
+          lastAttemptAt:
+            FieldValue.serverTimestamp(),
+
+          nextAttemptAt:
+            null,
+
+          error:
+            null,
+
+          updatedAt:
+            FieldValue.serverTimestamp(),
+        }
+      );
+
+      return true;
+    }
+  );
+}
+
+/*
+|--------------------------------------------------------------------------
+| Schedule Claid Job Retry
+|--------------------------------------------------------------------------
+|
+| Records a temporary failure and schedules the next processing attempt.
+|
+| Once maxAttempts is reached, the job becomes permanently failed.
+|
+*/
+
+export interface ScheduleClaidJobRetryResult {
+  willRetry: boolean;
+
+  attemptCount: number;
+
+  maxAttempts: number;
+
+  nextAttemptAt: string | null;
+}
+
+export async function scheduleClaidJobRetry(
+  taskId: number,
+  error: unknown
+): Promise<ScheduleClaidJobRetryResult> {
+  const fallbackResult:
+  ScheduleClaidJobRetryResult = {
+    willRetry: false,
+    attemptCount: 0,
+    maxAttempts:
+      DEFAULT_MAX_ATTEMPTS,
+    nextAttemptAt: null,
+  };
+
+  if (
+    !Number.isFinite(taskId) ||
+    taskId <= 0
+  ) {
+    return fallbackResult;
+  }
+
+  const message =
+    error instanceof Error
+      ? error.message
+      : "Claid job processing failed.";
+
+  const firestore =
+    getFirestore("default");
+
+  const jobReference =
+    firestore
+      .collection(
+        CLAID_JOB_COLLECTION
+      )
+      .doc(taskId.toString());
+
+  return firestore.runTransaction(
+    async (transaction) => {
+      const jobSnapshot =
+        await transaction.get(
+          jobReference
+        );
+
+      if (!jobSnapshot.exists) {
+        return fallbackResult;
+      }
+
+      const data =
+        jobSnapshot.data();
+
+      if (!data) {
+        return fallbackResult;
+      }
+
+      /*
+       * Increment only after a real failure.
+       *
+       * Merely polling a task that is still processing does not count
+       * as an attempt.
+       */
+
+      const previousAttemptCount =
+        typeof data.attemptCount ===
+          "number"
+          ? data.attemptCount
+          : 0;
+
+      const attemptCount =
+        previousAttemptCount + 1;
+
+      const maxAttempts =
+        typeof data.maxAttempts ===
+          "number"
+          ? data.maxAttempts
+          : DEFAULT_MAX_ATTEMPTS;
+
+      const attemptsExhausted =
+        attemptCount >=
+        maxAttempts;
+
+      if (attemptsExhausted) {
+        transaction.update(
+          jobReference,
+          {
+            status:
+              "failed",
+
+            attemptCount,
+
+            lastAttemptAt:
+              FieldValue.serverTimestamp(),
+
+            nextAttemptAt:
+              null,
+
+            error:
+              message,
+
+            updatedAt:
+              FieldValue.serverTimestamp(),
+          }
+        );
+
+        return {
+          willRetry:
+            false,
+
+          attemptCount,
+
+          maxAttempts,
+
+          nextAttemptAt:
+            null,
+        };
+      }
+
+      /*
+       * Attempt 1 failure: wait 30 seconds.
+       * Attempt 2 failure: wait 2 minutes.
+       */
+
+      const delayIndex =
+        Math.min(
+          attemptCount - 1,
+          RETRY_DELAY_MS.length - 1
+        );
+
+      const nextAttemptDate =
+        new Date(
+          Date.now() +
+          RETRY_DELAY_MS[
+            delayIndex
+          ]
+        );
+
+      transaction.update(
+        jobReference,
+        {
+          status:
+            "processing",
+
+          attemptCount,
+
+          lastAttemptAt:
+            FieldValue.serverTimestamp(),
+
+          nextAttemptAt:
+            Timestamp.fromDate(
+              nextAttemptDate
+            ),
+
+          error:
+            message,
+
+          updatedAt:
+            FieldValue.serverTimestamp(),
+        }
+      );
+
+      return {
+        willRetry:
+          true,
+
+        attemptCount,
+
+        maxAttempts,
+
+        nextAttemptAt:
+          nextAttemptDate.toISOString(),
+      };
+    }
+  );
 }
 
 /*

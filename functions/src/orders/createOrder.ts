@@ -37,6 +37,20 @@ import {
 
 import { storeEvents } from "../events/storeEvents";
 
+const LOW_STOCK_THRESHOLDS = [
+  20,
+  15,
+  10,
+  5,
+  0,
+] as const;
+
+interface LowStockAlert {
+  productId: string;
+  productName: string;
+  remainingStock: number;
+}
+
 export const createOrder = onCall(
   {
     region: "us-central1",
@@ -77,7 +91,16 @@ export const createOrder = onCall(
     const orderRef =
       db.collection("orders").doc();
 
+    let storeOwnerUid = "";
+    let lowStockAlerts: LowStockAlert[] = [];
+
     await db.runTransaction(async (transaction) => {
+      /*
+       * Transactions can retry, so rebuild these values each attempt and
+       * dispatch notifications only after the transaction commits.
+       */
+      lowStockAlerts = [];
+
       const productReferences: DocumentReference[] = order.items.map((item: {id: string}) =>
         db.collection("products").doc(item.id)
       );
@@ -89,6 +112,15 @@ export const createOrder = onCall(
           await transaction.get(productReference)
         );
       }
+
+      const storeSnapshot = await transaction.get(
+        db.collection("stores").doc(order.store?.id)
+      );
+
+      storeOwnerUid =
+        typeof storeSnapshot.data()?.ownerId === "string"
+          ? storeSnapshot.data()?.ownerId
+          : "";
 
       productSnapshots.forEach((productSnapshot, index) => {
         const orderedItem = order.items[index];
@@ -110,6 +142,8 @@ export const createOrder = onCall(
 
         const product = productSnapshot.data();
         const availableStock = Number(product?.stock ?? 0);
+        const remainingStock =
+          availableStock - orderedQuantity;
 
         if (
           product?.storeId !== order.store?.id ||
@@ -123,9 +157,28 @@ export const createOrder = onCall(
         }
 
         transaction.update(productSnapshot.ref, {
-          stock: availableStock - orderedQuantity,
+          stock: remainingStock,
           updatedAt: FieldValue.serverTimestamp(),
         });
+
+        const crossedThreshold =
+          LOW_STOCK_THRESHOLDS.some(
+            (threshold) =>
+              availableStock > threshold &&
+              remainingStock <= threshold
+          );
+
+        if (crossedThreshold) {
+          lowStockAlerts.push({
+            productId: productSnapshot.id,
+            productName:
+              typeof product?.name === "string" &&
+              product.name.trim()
+                ? product.name
+                : orderedItem.name,
+            remainingStock,
+          });
+        }
       });
 
       transaction.set(orderRef, {
@@ -161,7 +214,7 @@ console.log(order.store?.ownerId);
 //
 // Push notifications are best-effort.
 //
-if (order.store?.ownerId) {
+if (storeOwnerUid) {
 
   console.log("Sending store notification...");
 
@@ -169,7 +222,7 @@ if (order.store?.ownerId) {
 
     await storeEvents.newOrder(
       orderRef.id,
-      order.store.ownerId
+      storeOwnerUid
     );
 
     console.log(
@@ -195,6 +248,22 @@ if (order.store?.ownerId) {
   );
 
 }
+
+    for (const alert of lowStockAlerts) {
+      try {
+        await storeEvents.lowStock(
+          alert.productId,
+          alert.productName,
+          alert.remainingStock,
+          storeOwnerUid
+        );
+      } catch (error) {
+        console.error(
+          "Low-stock notification failed:",
+          error
+        );
+      }
+    }
 
     return {
 
