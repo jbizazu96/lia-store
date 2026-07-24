@@ -107,6 +107,17 @@ export default function ProfilePage() {
     return <BrandedLoader message="Loading Profile" />;
   }
 
+  const profileData = {
+    ...userData,
+    displayName:
+      userData?.displayName ||
+      user?.displayName ||
+      user?.email?.split("@")[0] ||
+      "User",
+    email: userData?.email || user?.email || "",
+    phone: userData?.phone || user?.phoneNumber || "",
+  };
+
   return (
     <main className="min-h-screen bg-gray-50">
       {/* Header with Back Button */}
@@ -126,8 +137,8 @@ export default function ProfilePage() {
       {/* Profile Content */}
       <div className="max-w-lg mx-auto">
         <ProfileHeader 
-          displayName={userData?.displayName || user?.email?.split("@")[0] || "User"}
-          email={user?.email || ""}
+          displayName={profileData.displayName}
+          email={profileData.email}
         />
 
         {/* Menu Items */}
@@ -169,7 +180,7 @@ export default function ProfilePage() {
       <AnimatePresence>
         {showEditProfile && (
           <EditProfileModal
-            userData={userData}
+            userData={profileData}
             onClose={() => setShowEditProfile(false)}
             onUpdate={(data) => setUserData({...userData, ...data})}
           />
@@ -188,7 +199,7 @@ export default function ProfilePage() {
       <AnimatePresence>
         {showLanguage && (
           <LanguageModal
-            currentLanguage={userData?.language || "English"}
+            currentLanguage={profileData.language || "English"}
             onClose={() => setShowLanguage(false)}
             onSelect={(lang) => {
               setUserData({...userData, language: lang});

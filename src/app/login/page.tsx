@@ -26,7 +26,16 @@ import {auth, db} from "@/lib/firebase";
 /*
   Firestore functions.
 */
-import {doc, getDoc, collection, query, where, getDocs} from "firebase/firestore";
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  limit,
+  query,
+  setDoc,
+  where,
+} from "firebase/firestore";
 
 /*
   Components.
@@ -90,12 +99,55 @@ export default function LoginPage() {
       Get user data from Firestore.
     */
     const userRef = doc(db, "users", uid);
-    const userDoc = await getDoc(userRef);
+    let userDoc = await getDoc(userRef);
 
     if (!userDoc.exists()) {
-      setError("User profile not found. Please contact support.");
-      await signOut(auth);
-      return;
+      /*
+       * Authentication accounts can outlive their profile document (for
+       * example, after an incomplete migration or an accidental profile
+       * deletion). Restore only the authenticated user's own profile.
+       *
+       * Existing stores are publicly readable, so they can safely determine
+       * whether this UID must be restored as a store owner. No other user
+       * profile is read or modified here.
+       */
+      const ownedStoreSnapshot = await getDocs(
+        query(
+          collection(db, "stores"),
+          where("ownerId", "==", uid),
+          limit(1)
+        )
+      );
+
+      const currentUser = auth.currentUser;
+      const accountType = ownedStoreSnapshot.empty
+        ? "customer"
+        : "store_owner";
+
+      await setDoc(userRef, {
+        uid,
+        displayName:
+          currentUser?.displayName ||
+          currentUser?.email?.split("@")[0] ||
+          "Customer",
+        email: currentUser?.email || "",
+        phone: currentUser?.phoneNumber || "",
+        accountType,
+        role: "customer",
+        isActive: true,
+        emailVerified: true,
+        emailVerifiedAt: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
+        profileRecoveredAt: new Date().toISOString(),
+      });
+
+      userDoc = await getDoc(userRef);
+
+      if (!userDoc.exists()) {
+        setError("We could not restore your user profile. Please try again.");
+        await signOut(auth);
+        return;
+      }
     }
 
     const userData = userDoc.data();
@@ -118,7 +170,7 @@ export default function LoginPage() {
 
         if (storeStatus === "active") {
           // ✅ Redirect to the premium dashboard - use /store/dashboard NOT /(store)/dashboard
-          router.push("/store/dashboard");
+          router.replace("/store/dashboard");
           return;
         } else {
           // Store is pending - show review message
@@ -148,7 +200,7 @@ export default function LoginPage() {
 
     if (addressDoc.exists() && addressDoc.data().street) {
       // Address exists - go to home
-      router.push("/home");
+      router.replace("/home");
     } else {
       // No address - show modal
       setShowAddressModal(true);
@@ -297,7 +349,7 @@ export default function LoginPage() {
       });
 
       setShowAddressModal(false);
-      router.push("/home");
+      router.replace("/home");
     } catch (error) {
       console.error("Error saving address:", error);
       setAddressError("Failed to save address. Please try again.");

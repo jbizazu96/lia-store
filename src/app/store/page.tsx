@@ -12,8 +12,11 @@ import {useRouter} from "next/navigation";
 import {auth, db} from "@/lib/firebase";
 import {collection, query, where, getDocs} from "firebase/firestore";
 import { BrandedLoader } from "@/components/ui/BrandedLoader";
+import {
+  RoleGuard,
+} from "@/components/auth/RoleGuard";
 
-export default function StorePage() {
+function StorePageContent() {
   const router = useRouter();
 
   useEffect(() => {
@@ -58,5 +61,17 @@ export default function StorePage() {
 
   return (
     <BrandedLoader message="Loading Store" />
+  );
+}
+
+export default function StorePage() {
+  return (
+    <RoleGuard
+      allowedAccountTypes={[
+        "store_owner",
+      ]}
+    >
+      <StorePageContent />
+    </RoleGuard>
   );
 }

@@ -1,33 +1,39 @@
 /*
 |--------------------------------------------------------------------------
-| Poll Claid Image Jobs
+| Poll Claid Gallery Image Jobs
 |--------------------------------------------------------------------------
 |
-| Periodically checks asynchronous Claid image-editing jobs.
+| Periodically checks asynchronous Claid image-enhancement jobs.
+|
+| Every job represents exactly one product gallery image:
+|
+| - Front image
+| - Back image
 |
 | Workflow:
 |
-| - Load a limited batch of accepted/processing jobs.
-| - Ask Claid for the current task result.
-| - Keep unfinished jobs pending.
-| - Download completed enhanced images.
-| - Run the existing Sharp/WebP pipeline.
-| - Update Firestore only if the upload is still current.
-| - Clean up the original, replaced optimized image, and completed job.
+| 1. Load pending Claid jobs.
+| 2. Check each task's current Claid status.
+| 3. Keep unfinished jobs pending.
+| 4. Download completed Claid output.
+| 5. Generate four responsive WebP variants with Sharp.
+| 6. Update the correct gallery-image document.
+| 7. Mirror the front image onto the parent product document.
+| 8. Remove temporary and replaced files.
 |
 */
 
 import {
-  onSchedule,
-} from "firebase-functions/v2/scheduler";
+  logger,
+} from "firebase-functions";
 
 import {
   defineSecret,
 } from "firebase-functions/params";
 
 import {
-  logger,
-} from "firebase-functions";
+  onSchedule,
+} from "firebase-functions/v2/scheduler";
 
 import {
   claidService,
@@ -41,20 +47,19 @@ import {
 } from "./claidJobStore";
 
 import {
-  processProductImage,
+  markGalleryImageFailed,
+  markGalleryImageReady,
+} from "../images/galleryImageFirestore";
+
+import {
+  processProductImageVariants,
 } from "../images/imageProcessor";
 
 import {
-  buildOptimizedImagePath,
   deleteOptimizedImage,
   deleteOriginalImage,
-  uploadOptimizedImage,
+  uploadOptimizedImageVariants,
 } from "../images/imageStorage";
-
-import {
-  markProductImageEnhancementFailed,
-  markProductImageReady,
-} from "../images/imageFirestore";
 
 import {
   PRODUCT_IMAGE_CONFIG,
@@ -67,7 +72,7 @@ import type {
 } from "./claidTypes";
 
 import type {
-  ProductImageProcessingResult,
+  ProductImageVariantMap,
 } from "../images/imageTypes";
 
 /*
@@ -123,7 +128,9 @@ async function downloadClaidResult(
   resultUrl: string
 ): Promise<Buffer> {
   const response =
-    await fetch(resultUrl);
+    await fetch(
+      resultUrl
+    );
 
   if (!response.ok) {
     throw new Error(
@@ -150,7 +157,31 @@ async function downloadClaidResult(
 
 /*
 |--------------------------------------------------------------------------
-| Process One Job
+| Mark Permanent Gallery Failure
+|--------------------------------------------------------------------------
+*/
+
+async function markPermanentFailure(
+  job: ClaidProductImageJob,
+  error: unknown
+): Promise<void> {
+  await markGalleryImageFailed({
+    productId:
+      job.productId,
+
+    galleryImageId:
+      job.galleryImageId,
+
+    originalImagePath:
+      job.originalImagePath,
+
+    error,
+  });
+}
+
+/*
+|--------------------------------------------------------------------------
+| Process One Claid Job
 |--------------------------------------------------------------------------
 */
 
@@ -158,7 +189,18 @@ async function processJob(
   job: ClaidProductImageJob,
   apiKey: string
 ): Promise<void> {
+  /*
+  |--------------------------------------------------------------------------
+  | Missing Result URL
+  |--------------------------------------------------------------------------
+  */
+
   if (!job.resultUrl) {
+    const missingUrlError =
+      new Error(
+        "Claid result URL is missing."
+      );
+
     await updateClaidJob({
       taskId:
         job.taskId,
@@ -167,15 +209,12 @@ async function processJob(
         "failed",
 
       error:
-        "Claid result URL is missing.",
+        missingUrlError.message,
     });
 
-    await markProductImageEnhancementFailed(
-      job.productId,
-      job.originalImagePath,
-      new Error(
-        "Claid result URL is missing."
-      )
+    await markPermanentFailure(
+      job,
+      missingUrlError
     );
 
     return;
@@ -212,6 +251,9 @@ async function processJob(
             "ACCEPTED"
             ? "accepted"
             : "processing",
+
+        error:
+          null,
       });
 
       return;
@@ -219,7 +261,7 @@ async function processJob(
 
     /*
     |--------------------------------------------------------------------------
-    | Claid Failure
+    | Claid Reported Failure
     |--------------------------------------------------------------------------
     */
 
@@ -227,9 +269,11 @@ async function processJob(
       task.status ===
       "ERROR"
     ) {
-      const message =
-        task.error?.message ??
-        "Claid enhancement failed.";
+      const taskError =
+        new Error(
+          task.error?.message ??
+          "Claid enhancement failed."
+        );
 
       await updateClaidJob({
         taskId:
@@ -239,13 +283,12 @@ async function processJob(
           "failed",
 
         error:
-          message,
+          taskError.message,
       });
 
-      await markProductImageEnhancementFailed(
-        job.productId,
-        job.originalImagePath,
-        new Error(message)
+      await markPermanentFailure(
+        job,
+        taskError
       );
 
       return;
@@ -253,7 +296,7 @@ async function processJob(
 
     /*
     |--------------------------------------------------------------------------
-    | Completed Result
+    | Resolve Completed Image
     |--------------------------------------------------------------------------
     */
 
@@ -274,41 +317,44 @@ async function processJob(
       );
 
     /*
-     * Sharp remains LIA's final authority for dimensions, WebP conversion,
-     * compression, and output consistency.
-     */
+    |--------------------------------------------------------------------------
+    | Generate Responsive Variants
+    |--------------------------------------------------------------------------
+    |
+    | Claid enhances one source image.
+    |
+    | Firebase Functions and Sharp create:
+    |
+    | - thumbnail
+    | - small
+    | - medium
+    | - large
+    |
+    */
 
-    const optimizedImage =
-      await processProductImage(
+    const processedVariants =
+      await processProductImageVariants(
         enhancedBuffer
       );
 
-    const optimizedImagePath =
-      buildOptimizedImagePath(
-        job.storeId,
-        job.productId,
-        job.imageId
-      );
-
     const bucketName =
-        job.bucketName;
+      job.bucketName;
 
-        if (!bucketName) {
-        throw new Error(
-            "The Claid job is missing its Storage bucket."
-        );
-        }
+    if (!bucketName) {
+      throw new Error(
+        "The Claid job is missing its Storage bucket."
+      );
+    }
 
-    const {
-      optimizedImageUrl,
-    } =
-      await uploadOptimizedImage({
+    /*
+    |--------------------------------------------------------------------------
+    | Upload Responsive Variants
+    |--------------------------------------------------------------------------
+    */
+
+    const uploadedVariants =
+      await uploadOptimizedImageVariants({
         bucketName,
-
-        optimizedImagePath,
-
-        buffer:
-          optimizedImage.buffer,
 
         productId:
           job.productId,
@@ -318,51 +364,87 @@ async function processJob(
 
         imageId:
           job.imageId,
+
+        variants:
+          processedVariants,
       });
 
-    const result:
-    ProductImageProcessingResult = {
-      productId:
-        job.productId,
+    /*
+    |--------------------------------------------------------------------------
+    | Build Firestore Variant Map
+    |--------------------------------------------------------------------------
+    */
 
-      storeId:
-        job.storeId,
+    const imageVariants:
+    ProductImageVariantMap = {};
 
-      imageId:
-        job.imageId,
+    for (
+      const variant of
+      uploadedVariants
+    ) {
+      imageVariants[
+        variant.name
+      ] = variant;
+    }
 
-      originalImagePath:
-        job.originalImagePath,
-
-      optimizedImagePath,
-
-      optimizedImageUrl,
-
-      width:
-        optimizedImage.width,
-
-      height:
-        optimizedImage.height,
-
-      sizeBytes:
-        optimizedImage.sizeBytes,
-
-      format:
-        optimizedImage.format,
-    };
+    /*
+    |--------------------------------------------------------------------------
+    | Make Gallery Image Ready
+    |--------------------------------------------------------------------------
+    |
+    | Front:
+    |
+    | - Updates its gallery document.
+    | - Mirrors imageUrl and imageVariants onto the parent product.
+    |
+    | Back:
+    |
+    | - Updates only its gallery document.
+    |
+    */
 
     const {
       updated,
-      previousOptimizedImagePath,
+      previousVariantPaths,
     } =
-      await markProductImageReady(
-        result
-      );
+      await markGalleryImageReady({
+        productId:
+          job.productId,
+
+        galleryImageId:
+          job.galleryImageId,
+
+        originalImagePath:
+          job.originalImagePath,
+
+        role:
+          job.role,
+
+        imageVariants,
+
+        defaultVariant:
+          PRODUCT_IMAGE_CONFIG
+            .DEFAULT_VARIANT,
+      });
+
+    /*
+    |--------------------------------------------------------------------------
+    | Discard Stale Results
+    |--------------------------------------------------------------------------
+    |
+    | The store owner may have replaced the image while Claid was working.
+    |
+    */
 
     if (!updated) {
-      await deleteOptimizedImage(
-        bucketName,
-        optimizedImagePath
+      await Promise.allSettled(
+        uploadedVariants.map(
+          (variant) =>
+            deleteOptimizedImage(
+              bucketName,
+              variant.path
+            )
+        )
       );
 
       await deleteClaidJob(
@@ -372,20 +454,40 @@ async function processJob(
       return;
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | Cleanup
+    |--------------------------------------------------------------------------
+    */
+
+    const newVariantPaths =
+      new Set(
+        uploadedVariants.map(
+          (variant) =>
+            variant.path
+        )
+      );
+
     await Promise.allSettled([
       deleteOriginalImage(
         bucketName,
         job.originalImagePath
       ),
 
-      previousOptimizedImagePath &&
-      previousOptimizedImagePath !==
-        optimizedImagePath
-        ? deleteOptimizedImage(
-            bucketName,
-            previousOptimizedImagePath
-          )
-        : Promise.resolve(),
+      ...previousVariantPaths
+        .filter(
+          (path) =>
+            !newVariantPaths.has(
+              path
+            )
+        )
+        .map(
+          (path) =>
+            deleteOptimizedImage(
+              bucketName,
+              path
+            )
+        ),
     ]);
 
     await deleteClaidJob(
@@ -393,7 +495,7 @@ async function processJob(
     );
 
     logger.info(
-      "Claid product image completed successfully.",
+      "Claid gallery image variants completed successfully.",
       {
         taskId:
           job.taskId,
@@ -401,41 +503,112 @@ async function processJob(
         productId:
           job.productId,
 
-        optimizedImagePath,
+        galleryImageId:
+          job.galleryImageId,
+
+        role:
+          job.role,
+
+        defaultVariant:
+          PRODUCT_IMAGE_CONFIG
+            .DEFAULT_VARIANT,
+
+        variantCount:
+          uploadedVariants.length,
+
+        variants:
+          uploadedVariants.map(
+            (variant) => ({
+              name:
+                variant.name,
+
+              width:
+                variant.width,
+
+              height:
+                variant.height,
+
+              sizeBytes:
+                variant.sizeBytes,
+
+              path:
+                variant.path,
+            })
+          ),
       }
     );
   } catch (jobError) {
-  /*
-  |--------------------------------------------------------------------------
-  | Temporary Processing Failure
-  |--------------------------------------------------------------------------
-  |
-  | Failures such as:
-  |
-  | - Network timeout
-  | - Temporary Claid API issue
-  | - Temporary result download failure
-  | - Temporary Storage failure
-  |
-  | receive up to three attempts.
-  |
-  */
+    /*
+    |--------------------------------------------------------------------------
+    | Retry Temporary Failure
+    |--------------------------------------------------------------------------
+    */
 
-  const retryResult =
-    await scheduleClaidJobRetry(
-      job.taskId,
-      jobError
-    );
+    const retryResult =
+      await scheduleClaidJobRetry(
+        job.taskId,
+        jobError
+      );
 
-  if (retryResult.willRetry) {
-    logger.warn(
-      "Claid image job failed temporarily and was scheduled for retry.",
+    if (
+      retryResult.willRetry
+    ) {
+      logger.warn(
+        "Claid gallery image job failed temporarily and was scheduled for retry.",
+        {
+          taskId:
+            job.taskId,
+
+          productId:
+            job.productId,
+
+          galleryImageId:
+            job.galleryImageId,
+
+          role:
+            job.role,
+
+          attemptCount:
+            retryResult.attemptCount,
+
+          maxAttempts:
+            retryResult.maxAttempts,
+
+          nextAttemptAt:
+            retryResult.nextAttemptAt,
+
+          error:
+            jobError instanceof Error
+              ? jobError.message
+              : String(
+                  jobError
+                ),
+        }
+      );
+
+      return;
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Permanent Failure
+    |--------------------------------------------------------------------------
+    */
+
+    logger.error(
+      "Claid gallery image job permanently failed.",
       {
         taskId:
           job.taskId,
 
         productId:
           job.productId,
+
+        galleryImageId:
+          job.galleryImageId,
+
+        role:
+          job.role,
 
         attemptCount:
           retryResult.attemptCount,
@@ -443,74 +616,32 @@ async function processJob(
         maxAttempts:
           retryResult.maxAttempts,
 
-        nextAttemptAt:
-          retryResult.nextAttemptAt,
+        error: {
+          name:
+            jobError instanceof Error
+              ? jobError.name
+              : "UnknownError",
 
-        error:
-          jobError instanceof Error
-            ? jobError.message
-            : String(jobError),
+          message:
+            jobError instanceof Error
+              ? jobError.message
+              : String(
+                  jobError
+                ),
+
+          stack:
+            jobError instanceof Error
+              ? jobError.stack
+              : undefined,
+        },
       }
     );
 
-    /*
-     * Do not mark the product image as failed yet.
-     *
-     * The original remains available and the scheduled poller will retry.
-     */
-
-    return;
+    await markPermanentFailure(
+      job,
+      jobError
+    );
   }
-
-  /*
-  |--------------------------------------------------------------------------
-  | Permanent Failure
-  |--------------------------------------------------------------------------
-  |
-  | All retry attempts have been exhausted.
-  |
-  */
-
-  logger.error(
-    "Claid image job permanently failed after all retry attempts.",
-    {
-      taskId:
-        job.taskId,
-
-      productId:
-        job.productId,
-
-      attemptCount:
-        retryResult.attemptCount,
-
-      maxAttempts:
-        retryResult.maxAttempts,
-
-      error: {
-        name:
-          jobError instanceof Error
-            ? jobError.name
-            : "UnknownError",
-
-        message:
-          jobError instanceof Error
-            ? jobError.message
-            : String(jobError),
-
-        stack:
-          jobError instanceof Error
-            ? jobError.stack
-            : undefined,
-      },
-    }
-  );
-
-  await markProductImageEnhancementFailed(
-    job.productId,
-    job.originalImagePath,
-    jobError
-  );
-}
 }
 
 /*
@@ -526,7 +657,8 @@ export const pollClaidImageJobs =
         "every 1 minutes",
 
       region:
-        PRODUCT_IMAGE_CONFIG.REGION,
+        PRODUCT_IMAGE_CONFIG
+          .REGION,
 
       timeZone:
         "America/Chicago",
@@ -551,7 +683,8 @@ export const pollClaidImageJobs =
 
       const jobs =
         await listPendingClaidJobs({
-          limit: 20,
+          limit:
+            20,
         });
 
       if (
@@ -561,7 +694,7 @@ export const pollClaidImageJobs =
       }
 
       logger.info(
-        "Polling Claid image jobs.",
+        "Polling Claid gallery image jobs.",
         {
           count:
             jobs.length,

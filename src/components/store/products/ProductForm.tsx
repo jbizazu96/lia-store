@@ -10,24 +10,16 @@
 | - Add Product
 | - Edit Product
 |
-| This component uses:
+| Responsibilities:
 |
-| - Shared ProductFormData type
-| - Centralized product categories
-| - Centralized size-unit options
-| - Centralized promotion options
+| - Collect product details
+| - Manage front and back image selection
+| - Validate form values
+| - Normalize data before submission
 |
-| It contains no Firestore logic.
+| This component contains no Firestore or Storage logic.
 |
 */
-
-import type {
-  ProductFormSubmission,
-} from "@/types/productFormSubmission";
-
-import {
-  ProductPromotionSection,
-} from "@/components/store/products/ProductPromotionSection";
 
 import {
   useEffect,
@@ -35,15 +27,9 @@ import {
 } from "react";
 
 import type {
-  ChangeEvent,
   FormEvent,
 } from "react";
 
-import {
-  motion,
-} from "framer-motion";
-
-import Image from "next/image";
 import Link from "next/link";
 
 import {
@@ -52,9 +38,15 @@ import {
   Ruler,
   Save,
   Star,
-  Upload,
-  X,
 } from "lucide-react";
+
+import {
+  ProductImageGalleryField,
+} from "@/components/store/products/ProductImageGalleryField";
+
+import {
+  ProductPromotionSection,
+} from "@/components/store/products/ProductPromotionSection";
 
 import {
   PRODUCT_CATEGORIES,
@@ -64,12 +56,22 @@ import {
   PRODUCT_SIZE_UNITS,
 } from "@/config/productFormOptions";
 
+import {
+  useConfirmation,
+} from "@/context/ConfirmationContext";
+
+import {
+  useUnsavedChanges,
+} from "@/hooks/useUnsavedChanges";
+
 import type {
   ProductFormData,
+  ProductGalleryImageSelection,
 } from "@/types/productForm";
 
-import { useUnsavedChanges } from "@/hooks/useUnsavedChanges";
-import { useConfirmation } from "@/context/ConfirmationContext";
+import type {
+  ProductFormSubmission,
+} from "@/types/productFormSubmission";
 
 /*
 |--------------------------------------------------------------------------
@@ -81,6 +83,9 @@ interface ProductFormProps {
   initialData?:
     | Partial<ProductFormData>
     | null;
+
+  initialImages?:
+    ProductGalleryImageSelection[];
 
   onSubmit: (
     submission: ProductFormSubmission
@@ -115,6 +120,11 @@ ProductFormData = {
 
   sku: "",
 
+  /*
+   * Legacy primary image URL.
+   *
+   * Existing products may still use this field.
+   */
   imageUrl: "",
 
   isAvailable: true,
@@ -134,19 +144,28 @@ ProductFormData = {
 
 export function ProductForm({
   initialData,
+  initialImages = [],
   onSubmit,
   loading,
   submitLabel,
   successMessage,
 }: ProductFormProps) {
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const {
+    confirm,
+  } = useConfirmation();
 
-  useUnsavedChanges(hasUnsavedChanges);
-  const { confirm } = useConfirmation();
+  const [
+    hasUnsavedChanges,
+    setHasUnsavedChanges,
+  ] = useState(false);
+
+  useUnsavedChanges(
+    hasUnsavedChanges
+  );
 
   /*
   |--------------------------------------------------------------------------
-  | Form State
+  | Product Form State
   |--------------------------------------------------------------------------
   */
 
@@ -158,7 +177,7 @@ export function ProductForm({
   );
 
   /*
-   * String values allow number inputs to temporarily be empty while the
+   * String states allow numeric inputs to become temporarily empty while the
    * store owner is typing.
    */
 
@@ -182,21 +201,31 @@ export function ProductForm({
     setSizeUnit,
   ] = useState("each");
 
-  const [
-    imagePreview,
-    setImagePreview,
-  ] = useState("");
+  /*
+  |--------------------------------------------------------------------------
+  | New Gallery Images
+  |--------------------------------------------------------------------------
+  |
+  | Front image:
+  | - Required for new products
+  | - Always primary
+  |
+  | Back image:
+  | - Optional
+  | - Used on the product-details page
+  |
+  */
 
   const [
-      imageFile,
-      setImageFile,
-    ] = useState<File | null>(
-      null
-    );
+    imageFiles,
+    setImageFiles,
+  ] = useState<
+    ProductGalleryImageSelection[]
+  >([]);
 
   /*
   |--------------------------------------------------------------------------
-  | Load Initial Data
+  | Load Initial Product Data
   |--------------------------------------------------------------------------
   */
 
@@ -242,17 +271,28 @@ export function ProductForm({
     );
 
     setSizeValueInput(
-      size && size.value > 0
+      size &&
+      size.value > 0
         ? size.value.toString()
         : ""
     );
 
     setSizeUnit(
-      size?.unit ?? "each"
+      size?.unit ??
+      "each"
     );
 
-    setImagePreview(
-      initialData.imageUrl ?? ""
+    /*
+    |--------------------------------------------------------------------------
+    | Load Existing Gallery Images
+    |--------------------------------------------------------------------------
+    |
+    | Used by the Edit Product page.
+    |
+    */
+
+    setImageFiles(
+      initialImages
     );
 
   }, [initialData]);
@@ -269,60 +309,36 @@ export function ProductForm({
     field: Key,
     value: ProductFormData[Key]
   ) => {
-    setHasUnsavedChanges(true);
+    setHasUnsavedChanges(
+      true
+    );
 
     setFormData(
       (current) => ({
         ...current,
-        [field]: value,
+
+        [field]:
+          value,
       })
     );
   };
 
   /*
   |--------------------------------------------------------------------------
-  | Image
+  | Gallery Update
   |--------------------------------------------------------------------------
   */
 
-  const handleImageUpload = (
-      event: ChangeEvent<HTMLInputElement>
-    ) => {
-      const file =
-        event.target.files?.[0];
+  const handleGalleryChange = (
+    nextImages:
+      ProductGalleryImageSelection[]
+  ) => {
+    setImageFiles(
+      nextImages
+    );
 
-      if (!file) {
-        return;
-      }
-
-      setImageFile(file);
-
-      const previewUrl =
-        URL.createObjectURL(file);
-
-      setImagePreview(
-        previewUrl
-      );
-    };
-
-  const removeImage = async () => {
-    const confirmed = await confirm({
-      title: "Remove product image?",
-      message: "This image will be removed when you save the product.",
-      confirmLabel: "Remove image",
-      cancelLabel: "Keep image",
-      destructive: true,
-    });
-
-    if (!confirmed) {
-      return;
-    }
-    setImageFile(null);
-    setImagePreview("");
-
-    updateField(
-      "imageUrl",
-      ""
+    setHasUnsavedChanges(
+      true
     );
   };
 
@@ -330,23 +346,25 @@ export function ProductForm({
   |--------------------------------------------------------------------------
   | Pricing
   |--------------------------------------------------------------------------
-  |
-  | price:
-  | Regular/original product price.
-  |
   */
 
   const handlePriceChange = (
     value: string
   ) => {
-    setPriceInput(value);
+    setPriceInput(
+      value
+    );
 
     const parsedPrice =
-      Number.parseFloat(value);
+      Number.parseFloat(
+        value
+      );
 
     updateField(
       "price",
-      Number.isFinite(parsedPrice)
+      Number.isFinite(
+        parsedPrice
+      )
         ? parsedPrice
         : 0
     );
@@ -361,7 +379,9 @@ export function ProductForm({
   const handleStockChange = (
     value: string
   ) => {
-    setStockInput(value);
+    setStockInput(
+      value
+    );
 
     const parsedStock =
       Number.parseInt(
@@ -371,7 +391,9 @@ export function ProductForm({
 
     updateField(
       "stock",
-      Number.isFinite(parsedStock)
+      Number.isFinite(
+        parsedStock
+      )
         ? parsedStock
         : 0
     );
@@ -386,10 +408,14 @@ export function ProductForm({
   const handleSizeValueChange = (
     value: string
   ) => {
-    setSizeValueInput(value);
+    setSizeValueInput(
+      value
+    );
 
     const parsedValue =
-      Number.parseFloat(value);
+      Number.parseFloat(
+        value
+      );
 
     if (
       !Number.isFinite(
@@ -408,8 +434,11 @@ export function ProductForm({
     updateField(
       "size",
       {
-        value: parsedValue,
-        unit: sizeUnit,
+        value:
+          parsedValue,
+
+        unit:
+          sizeUnit,
       }
     );
   };
@@ -417,7 +446,9 @@ export function ProductForm({
   const handleSizeUnitChange = (
     value: string
   ) => {
-    setSizeUnit(value);
+    setSizeUnit(
+      value
+    );
 
     const parsedValue =
       Number.parseFloat(
@@ -433,13 +464,15 @@ export function ProductForm({
       updateField(
         "size",
         {
-          value: parsedValue,
-          unit: value,
+          value:
+            parsedValue,
+
+          unit:
+            value,
         }
       );
     }
   };
-
 
   /*
   |--------------------------------------------------------------------------
@@ -448,11 +481,20 @@ export function ProductForm({
   */
 
   const handleSubmit = async (
-    event: FormEvent<HTMLFormElement>
+    event:
+      FormEvent<HTMLFormElement>
   ) => {
     event.preventDefault();
 
-    if (!formData.name.trim()) {
+    /*
+    |--------------------------------------------------------------------------
+    | Product Validation
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+      !formData.name.trim()
+    ) {
       alert(
         "Product name is required."
       );
@@ -460,7 +502,9 @@ export function ProductForm({
       return;
     }
 
-    if (!formData.category) {
+    if (
+      !formData.category
+    ) {
       alert(
         "Please select a category."
       );
@@ -468,7 +512,9 @@ export function ProductForm({
       return;
     }
 
-    if (formData.price <= 0) {
+    if (
+      formData.price <= 0
+    ) {
       alert(
         "Regular price must be greater than zero."
       );
@@ -476,7 +522,9 @@ export function ProductForm({
       return;
     }
 
-    if (formData.stock < 0) {
+    if (
+      formData.stock < 0
+    ) {
       alert(
         "Stock cannot be negative."
       );
@@ -484,18 +532,63 @@ export function ProductForm({
       return;
     }
 
+    const frontImage =
+      imageFiles.find(
+        (image) =>
+          image.role ===
+          "front"
+      );
+
+    /*
+     * New products require a front image.
+     *
+     * Existing products may keep their current image when no new front image
+     * is selected.
+     */
+
+    if (
+      !initialData &&
+      !frontImage
+    ) {
+      alert(
+        "Please upload the front product image."
+      );
+
+      return;
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Edit Confirmation
+    |--------------------------------------------------------------------------
+    */
+
     if (initialData) {
-      const confirmed = await confirm({
-        title: "Save product changes?",
-        message: "Your product updates will be visible after saving.",
-        confirmLabel: "Save changes",
-        cancelLabel: "Keep editing",
-      });
+      const confirmed =
+        await confirm({
+          title:
+            "Save product changes?",
+
+          message:
+            "Your product updates will be visible after saving.",
+
+          confirmLabel:
+            "Save changes",
+
+          cancelLabel:
+            "Keep editing",
+        });
 
       if (!confirmed) {
         return;
       }
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Normalize Product Data
+    |--------------------------------------------------------------------------
+    */
 
     const normalizedData:
     ProductFormData = {
@@ -523,11 +616,81 @@ export function ProductForm({
         formData.promotion,
     };
 
-    setHasUnsavedChanges(false);
-    
+    /*
+    |--------------------------------------------------------------------------
+    | Normalize Gallery Submission
+    |--------------------------------------------------------------------------
+    |
+    | Front:
+    | - Position 0
+    | - Primary
+    |
+    | Back:
+    | - Position 1
+    | - Secondary
+    |
+    */
+
+    const gallerySubmission =
+      imageFiles
+        .map(
+          (image) => ({
+            id:
+              crypto.randomUUID(),
+
+            file:
+              image.file,
+
+            altText:
+              image.role ===
+              "front"
+                ? "Front view of product"
+                : "Back label of product",
+
+            position:
+              image.role ===
+              "front"
+                ? 0
+                : 1,
+
+            isPrimary:
+              image.role ===
+              "front",
+          })
+        )
+        .sort(
+          (
+            firstImage,
+            secondImage
+          ) =>
+            firstImage.position -
+            secondImage.position
+        );
+
+    /*
+     * Clear the navigation warning immediately before submission.
+     */
+
+    setHasUnsavedChanges(
+      false
+    );
+
     await onSubmit({
-      data: normalizedData,
-      imageFile,
+      data:
+        normalizedData,
+
+      imageFiles:
+        gallerySubmission,
+
+      /*
+       * Temporary compatibility field.
+       *
+       * Existing add/edit pages still use imageFile while they are migrated
+       * to upload the complete gallery.
+       */
+      imageFile:
+        frontImage?.file ??
+        null,
     });
   };
 
@@ -539,392 +702,445 @@ export function ProductForm({
 
   return (
     <form
-      onSubmit={handleSubmit}
+      onSubmit={
+        handleSubmit
+      }
       className="space-y-6"
     >
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        {/* Image */}
-        <div className="lg:col-span-1">
-          <label className="mb-2 block text-sm font-medium text-gray-700">
-            Product Image
-          </label>
+      <div className="grid gap-6 lg:grid-cols-[14rem_minmax(0,1fr)] lg:items-start">
+      {/*
+      |--------------------------------------------------------------------------
+      | Product Images
+      |--------------------------------------------------------------------------
+      */}
 
-          <div className="relative">
-            {imagePreview ? (
-              <div className="relative aspect-square overflow-hidden rounded-xl bg-white">
-                <Image
-                  src={imagePreview}
-                  alt="Product preview"
-                  fill
-                  className="object-contain"
-                />
+      <aside className="lg:sticky lg:top-6">
+        <ProductImageGalleryField
+          images={
+            imageFiles
+          }
+          onChange={
+            handleGalleryChange
+          }
+          disabled={
+            loading
+          }
+        />
+      </aside>
 
-                <button
-                  type="button"
-                  onClick={removeImage}
-                  className="absolute right-2 top-2 rounded-full bg-red-500 p-1.5 text-white transition hover:bg-red-600"
-                  aria-label="Remove image"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-            ) : (
-              <label className="flex aspect-square cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-300 bg-gray-50 transition hover:border-orange-400">
-                <Upload className="mb-2 h-10 w-10 text-gray-400" />
+      <div className="space-y-6">
 
-                <p className="px-4 text-center text-sm text-gray-500">
-                  Click to upload product
-                  image
-                </p>
+      {/*
+      |--------------------------------------------------------------------------
+      | Product Fields
+      |--------------------------------------------------------------------------
+      */}
 
-                <p className="mt-1 text-xs text-gray-400">
-                  JPG, PNG, WebP, or HEIC, up to 10MB
-                </p>
-
-                <input
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
-                  capture="environment"
-                  onChange={
-                    handleImageUpload
-                  }
-                  className="hidden"
-                />
-              </label>
-            )}
-          </div>
-        </div>
-
-        {/* Fields */}
-        <div className="space-y-4 lg:col-span-2">
-          {/* Name and Category */}
-          <div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">
-                Product Name *
-              </label>
-
-              <input
-                type="text"
-                value={formData.name}
-                onChange={(event) =>
-                  updateField(
-                    "name",
-                    event.target.value
-                  )
-                }
-                className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 focus:border-transparent focus:ring-2 focus:ring-orange-500"
-                placeholder="e.g., Jollof Rice Mix"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">
-                Category *
-              </label>
-
-              <select
-                value={
-                  formData.category
-                }
-                onChange={(event) =>
-                  updateField(
-                    "category",
-                    event.target.value
-                  )
-                }
-                className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 focus:ring-2 focus:ring-orange-500"
-                required
-              >
-                <option value="">
-                  Select category
-                </option>
-
-                {PRODUCT_CATEGORIES.map(
-                  (category) => (
-                    <option
-                      key={
-                        category.value
-                      }
-                      value={
-                        category.value
-                      }
-                    >
-                      {category.label}
-                    </option>
-                  )
-                )}
-              </select>
-            </div>
-          </div>
-
-          {/* Brand and SKU */}
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">
-                Brand
-              </label>
-
-              <input
-                type="text"
-                value={formData.brand}
-                onChange={(event) =>
-                  updateField(
-                    "brand",
-                    event.target.value
-                  )
-                }
-                className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 focus:ring-2 focus:ring-orange-500"
-                placeholder="e.g., Maggi"
-              />
-            </div>
-
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">
-                SKU
-              </label>
-
-              <input
-                type="text"
-                value={formData.sku}
-                onChange={(event) =>
-                  updateField(
-                    "sku",
-                    event.target.value
-                  )
-                }
-                className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 uppercase focus:ring-2 focus:ring-orange-500"
-                placeholder="e.g., MAG-JOL-001"
-              />
-            </div>
-          </div>
-
-          {/* Description */}
+      <div className="space-y-5 rounded-2xl border border-gray-100 bg-white p-5">
+        {/* Name and Category */}
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <div>
             <label className="mb-1 block text-sm font-medium text-gray-700">
-              Description
+              Product Name *
             </label>
 
-            <textarea
+            <input
+              type="text"
               value={
-                formData.description
+                formData.name
               }
-              onChange={(event) =>
+              onChange={(
+                event
+              ) =>
                 updateField(
-                  "description",
+                  "name",
                   event.target.value
                 )
               }
-              rows={3}
-              className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 focus:border-transparent focus:ring-2 focus:ring-orange-500"
-              placeholder="Describe the product..."
+              disabled={
+                loading
+              }
+              className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 focus:border-transparent focus:ring-2 focus:ring-orange-500 disabled:cursor-not-allowed disabled:opacity-60"
+              placeholder="e.g., Jollof Rice Mix"
+              required
             />
           </div>
 
-          {/* Pricing */}
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">
-                Regular Price ($) *
-              </label>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">
+              Category *
+            </label>
 
-              <div className="relative">
-                <DollarSign className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+            <select
+              value={
+                formData.category
+              }
+              onChange={(
+                event
+              ) =>
+                updateField(
+                  "category",
+                  event.target.value
+                )
+              }
+              disabled={
+                loading
+              }
+              className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 focus:ring-2 focus:ring-orange-500 disabled:cursor-not-allowed disabled:opacity-60"
+              required
+            >
+              <option value="">
+                Select category
+              </option>
 
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={priceInput}
-                  onChange={(event) =>
-                    handlePriceChange(
-                      event.target.value
-                    )
-                  }
-                  className="w-full rounded-xl border border-gray-200 bg-gray-50 py-2.5 pl-10 pr-4 focus:ring-2 focus:ring-orange-500"
-                  placeholder="e.g., 14.99"
-                  required
-                />
-              </div>
+              {PRODUCT_CATEGORIES.map(
+                (category) => (
+                  <option
+                    key={
+                      category.value
+                    }
+                    value={
+                      category.value
+                    }
+                  >
+                    {category.label}
+                  </option>
+                )
+              )}
+            </select>
+          </div>
+        </div>
 
-              <p className="mt-1 text-xs text-gray-400">
-                Regular product price. Add a discount promotion below to show a sale price to customers.
-              </p>
-            </div>
+        {/* Brand and SKU */}
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">
+              Brand
+            </label>
+
+            <input
+              type="text"
+              value={
+                formData.brand
+              }
+              onChange={(
+                event
+              ) =>
+                updateField(
+                  "brand",
+                  event.target.value
+                )
+              }
+              disabled={
+                loading
+              }
+              className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 focus:ring-2 focus:ring-orange-500 disabled:cursor-not-allowed disabled:opacity-60"
+              placeholder="e.g., Maggi"
+            />
           </div>
 
-          {/* Stock and Size */}
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">
-                Stock Quantity *
-              </label>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">
+              SKU
+            </label>
 
-              <div className="relative">
-                <Package className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+            <input
+              type="text"
+              value={
+                formData.sku
+              }
+              onChange={(
+                event
+              ) =>
+                updateField(
+                  "sku",
+                  event.target.value
+                )
+              }
+              disabled={
+                loading
+              }
+              className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 uppercase focus:ring-2 focus:ring-orange-500 disabled:cursor-not-allowed disabled:opacity-60"
+              placeholder="e.g., MAG-JOL-001"
+            />
+          </div>
+        </div>
 
-                <input
-                  type="number"
-                  min="0"
-                  step="1"
-                  value={stockInput}
-                  onChange={(event) =>
-                    handleStockChange(
-                      event.target.value
-                    )
-                  }
-                  className="w-full rounded-xl border border-gray-200 bg-gray-50 py-2.5 pl-10 pr-4 focus:ring-2 focus:ring-orange-500"
-                  placeholder="e.g., 50"
-                  required
-                />
-              </div>
-            </div>
+        {/* Description */}
+        <div>
+          <label className="mb-1 block text-sm font-medium text-gray-700">
+            Description
+          </label>
 
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">
-                Size Value
-              </label>
+          <textarea
+            value={
+              formData.description
+            }
+            onChange={(
+              event
+            ) =>
+              updateField(
+                "description",
+                event.target.value
+              )
+            }
+            disabled={
+              loading
+            }
+            rows={3}
+            className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 focus:border-transparent focus:ring-2 focus:ring-orange-500 disabled:cursor-not-allowed disabled:opacity-60"
+            placeholder="Describe the product..."
+          />
+        </div>
 
-              <div className="relative">
-                <Ruler className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+        {/* Price */}
+        <div className="max-w-md">
+          <label className="mb-1 block text-sm font-medium text-gray-700">
+            Regular Price ($) *
+          </label>
 
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={
-                    sizeValueInput
-                  }
-                  onChange={(event) =>
-                    handleSizeValueChange(
-                      event.target.value
-                    )
-                  }
-                  className="w-full rounded-xl border border-gray-200 bg-gray-50 py-2.5 pl-10 pr-4 focus:ring-2 focus:ring-orange-500"
-                  placeholder="e.g., 2"
-                />
-              </div>
-            </div>
+          <div className="relative">
+            <DollarSign className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
 
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">
-                Size Unit
-              </label>
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              value={
+                priceInput
+              }
+              onChange={(
+                event
+              ) =>
+                handlePriceChange(
+                  event.target.value
+                )
+              }
+              disabled={
+                loading
+              }
+              className="w-full rounded-xl border border-gray-200 bg-gray-50 py-2.5 pl-10 pr-4 focus:ring-2 focus:ring-orange-500 disabled:cursor-not-allowed disabled:opacity-60"
+              placeholder="e.g., 14.99"
+              required
+            />
+          </div>
 
-              <select
-                value={sizeUnit}
-                onChange={(event) =>
-                  handleSizeUnitChange(
+          <p className="mt-1 text-xs text-gray-400">
+            Add a discount promotion below to show a sale price.
+          </p>
+        </div>
+
+        {/* Stock and Size */}
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">
+              Stock Quantity *
+            </label>
+
+            <div className="relative">
+              <Package className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+
+              <input
+                type="number"
+                min="0"
+                step="1"
+                value={
+                  stockInput
+                }
+                onChange={(
+                  event
+                ) =>
+                  handleStockChange(
                     event.target.value
                   )
                 }
-                className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 focus:ring-2 focus:ring-orange-500"
-              >
-                {PRODUCT_SIZE_UNITS.map(
-                  (unit) => (
-                    <option
-                      key={unit.value}
-                      value={unit.value}
-                    >
-                      {unit.label}
-                    </option>
+                disabled={
+                  loading
+                }
+                className="w-full rounded-xl border border-gray-200 bg-gray-50 py-2.5 pl-10 pr-4 focus:ring-2 focus:ring-orange-500 disabled:cursor-not-allowed disabled:opacity-60"
+                placeholder="e.g., 50"
+                required
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">
+              Size Value
+            </label>
+
+            <div className="relative">
+              <Ruler className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={
+                  sizeValueInput
+                }
+                onChange={(
+                  event
+                ) =>
+                  handleSizeValueChange(
+                    event.target.value
                   )
-                )}
-              </select>
+                }
+                disabled={
+                  loading
+                }
+                className="w-full rounded-xl border border-gray-200 bg-gray-50 py-2.5 pl-10 pr-4 focus:ring-2 focus:ring-orange-500 disabled:cursor-not-allowed disabled:opacity-60"
+                placeholder="e.g., 2"
+              />
             </div>
           </div>
 
-          {/* Product Settings */}
-          <div className="flex flex-col gap-4 border-t border-gray-200 pt-4 sm:flex-row sm:items-center sm:justify-end">
-            <div className="flex items-center gap-4">
-              <label className="flex cursor-pointer items-center gap-2 text-sm text-gray-600">
-                <input
-                  type="checkbox"
-                  checked={
-                    formData.featured
-                  }
-                  onChange={(event) =>
-                    updateField(
-                      "featured",
-                      event.target.checked
-                    )
-                  }
-                  className="h-4 w-4 rounded text-orange-500 focus:ring-orange-500"
-                />
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">
+              Size Unit
+            </label>
 
-                <Star className="h-4 w-4 text-yellow-500" />
-
-                Featured
-              </label>
-
-              <label className="flex cursor-pointer items-center gap-2 text-sm text-gray-600">
-                <input
-                  type="checkbox"
-                  checked={
-                    formData.isAvailable
-                  }
-                  onChange={(event) =>
-                    updateField(
-                      "isAvailable",
-                      event.target.checked
-                    )
-                  }
-                  className="h-4 w-4 rounded text-green-500 focus:ring-green-500"
-                />
-
-                Available
-              </label>
-            </div>
-          </div>
-
-          {/* Promotion */}
-          <ProductPromotionSection
-            promotion={
-              formData.promotion
-            }
-            onChange={(promotion) =>
-              updateField(
-                "promotion",
-                promotion
-              )
-            }
-          />
-          {/* Submit */}
-          {successMessage && (
-            <div
-              role="status"
-              className="mb-3 rounded-xl border border-green-200 bg-green-50 px-3 py-2"
+            <select
+              value={
+                sizeUnit
+              }
+              onChange={(
+                event
+              ) =>
+                handleSizeUnitChange(
+                  event.target.value
+                )
+              }
+              disabled={
+                loading
+              }
+              className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 focus:ring-2 focus:ring-orange-500 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              <p className="text-sm font-medium text-green-700">
-                {successMessage}
-              </p>
-            </div>
-          )}
-          <div className="flex gap-3 border-t border-gray-200 pt-4">
-            <Link
-              href="/store/products"
-              className="flex-1 rounded-xl border border-gray-200 py-3 text-center font-medium text-gray-600 transition hover:bg-gray-50"
-            >
-              Cancel
-            </Link>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-orange-500 to-orange-600 py-3 font-semibold text-white transition hover:from-orange-600 hover:to-orange-700 hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {loading ? (
-                <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" />
-              ) : (
-                <>
-                  <Save className="h-4 w-4" />
-                  {submitLabel}
-                </>
+              {PRODUCT_SIZE_UNITS.map(
+                (unit) => (
+                  <option
+                    key={
+                      unit.value
+                    }
+                    value={
+                      unit.value
+                    }
+                  >
+                    {unit.label}
+                  </option>
+                )
               )}
-            </button>
+            </select>
           </div>
         </div>
+
+        {/* Product Settings */}
+        <div className="flex flex-col gap-4 border-t border-gray-200 pt-4 sm:flex-row sm:items-center sm:justify-end">
+          <label className="flex cursor-pointer items-center gap-2 text-sm text-gray-600">
+            <input
+              type="checkbox"
+              checked={
+                formData.featured
+              }
+              onChange={(
+                event
+              ) =>
+                updateField(
+                  "featured",
+                  event.target.checked
+                )
+              }
+              disabled={
+                loading
+              }
+              className="h-4 w-4 rounded text-orange-500 focus:ring-orange-500"
+            />
+
+            <Star className="h-4 w-4 text-yellow-500" />
+
+            Featured
+          </label>
+
+          <label className="flex cursor-pointer items-center gap-2 text-sm text-gray-600">
+            <input
+              type="checkbox"
+              checked={
+                formData.isAvailable
+              }
+              onChange={(
+                event
+              ) =>
+                updateField(
+                  "isAvailable",
+                  event.target.checked
+                )
+              }
+              disabled={
+                loading
+              }
+              className="h-4 w-4 rounded text-green-500 focus:ring-green-500"
+            />
+
+            Available
+          </label>
+        </div>
+
+        {/* Promotion */}
+        <ProductPromotionSection
+          promotion={
+            formData.promotion
+          }
+          onChange={(
+            promotion
+          ) =>
+            updateField(
+              "promotion",
+              promotion
+            )
+          }
+        />
+      </div>
+
+      {/* Success */}
+      {successMessage && (
+        <div
+          role="status"
+          className="rounded-xl border border-green-200 bg-green-50 px-3 py-2"
+        >
+          <p className="text-sm font-medium text-green-700">
+            {successMessage}
+          </p>
+        </div>
+      )}
+
+      {/* Submit */}
+      <div className="flex gap-3 border-t border-gray-200 pt-4">
+        <Link
+          href="/store/products"
+          className="flex-1 rounded-xl border border-gray-200 py-3 text-center font-medium text-gray-600 transition hover:bg-gray-50"
+        >
+          Cancel
+        </Link>
+
+        <button
+          type="submit"
+          disabled={
+            loading
+          }
+          className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-orange-500 to-orange-600 py-3 font-semibold text-white transition hover:from-orange-600 hover:to-orange-700 hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {loading ? (
+            <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+          ) : (
+            <>
+              <Save className="h-4 w-4" />
+
+              {submitLabel}
+            </>
+          )}
+        </button>
+      </div>
+      </div>
       </div>
     </form>
   );

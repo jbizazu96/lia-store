@@ -31,12 +31,56 @@ import type {
 import {
   NotificationCard,
 } from "@/components/notifications/NotificationCard";
+import { useConfirmation } from "@/context/ConfirmationContext";
+import { useSuccessToast } from "@/context/SuccessToastContext";
 
 export default function StoreNotificationsPage() {
   const { user } = useAuth();
   const router = useRouter();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
+  const [clearing, setClearing] = useState(false);
+  const { confirm } = useConfirmation();
+  const { showSuccess } = useSuccessToast();
+
+  const deleteNotification = async (notification: Notification) => {
+    if (!user) return;
+
+    const confirmed = await confirm({
+      title: "Delete notification?",
+      message: "This notification will be permanently removed.",
+      confirmLabel: "Delete",
+      cancelLabel: "Keep notification",
+      destructive: true,
+    });
+
+    if (!confirmed) return;
+
+    await notificationService.deleteNotification(user.uid, notification.id);
+    showSuccess("Notification deleted.");
+  };
+
+  const clearAllNotifications = async () => {
+    if (!user || notifications.length === 0) return;
+
+    const confirmed = await confirm({
+      title: "Clear all notifications?",
+      message: "All store notifications will be permanently removed.",
+      confirmLabel: "Clear all",
+      cancelLabel: "Keep notifications",
+      destructive: true,
+    });
+
+    if (!confirmed) return;
+
+    try {
+      setClearing(true);
+      await notificationService.clearAllNotifications(user.uid);
+      showSuccess("All notifications cleared.");
+    } finally {
+      setClearing(false);
+    }
+  };
 
   useEffect(() => {
     if (!user) {
@@ -177,20 +221,30 @@ export default function StoreNotificationsPage() {
             <div className="p-4 border-b border-gray-100">
               <div className="flex items-center justify-between">
                 <h2 className="text-sm font-semibold text-gray-700">All Notifications</h2>
-                {unreadNotifications.length > 0 && (
+                <div className="flex items-center gap-3">
+                  {unreadNotifications.length > 0 && (
+                    <button
+                      onClick={async () => {
+                        if (!user) return;
+                        for (const notification of unreadNotifications) {
+                          await notificationService.markAsRead(user.uid, notification.id);
+                        }
+                        showSuccess("All notifications marked as read.");
+                      }}
+                      className="text-xs text-orange-600 font-medium hover:text-orange-700 transition"
+                    >
+                      Mark all as read
+                    </button>
+                  )}
                   <button
-                    onClick={async () => {
-                      if (!user) return;
-                      // Mark all as read
-                      for (const notification of unreadNotifications) {
-                        await notificationService.markAsRead(user.uid, notification.id);
-                      }
-                    }}
-                    className="text-xs text-orange-600 font-medium hover:text-orange-700 transition"
+                    type="button"
+                    onClick={clearAllNotifications}
+                    disabled={clearing}
+                    className="text-xs font-semibold text-red-600 transition hover:text-red-700 disabled:opacity-50"
                   >
-                    Mark all as read
+                    {clearing ? "Clearing..." : "Clear all"}
                   </button>
-                )}
+                </div>
               </div>
             </div>
             
@@ -251,6 +305,7 @@ export default function StoreNotificationsPage() {
                     >
                       <NotificationCard
                         notification={notification}
+                        onDelete={() => deleteNotification(notification)}
                         onClick={async () => {
                           if (!user) return;
                           await notificationService.markAsRead(

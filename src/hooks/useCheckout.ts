@@ -141,6 +141,38 @@ CheckoutAddressFormData = {
   phone: "",
 };
 
+function toCheckoutAddress(
+  value: Record<string, unknown>
+): CheckoutAddress | null {
+  if (
+    typeof value.street !== "string" ||
+    typeof value.city !== "string" ||
+    typeof value.state !== "string" ||
+    typeof value.zip !== "string"
+  ) {
+    return null;
+  }
+
+  return {
+    street: value.street,
+    city: value.city,
+    state: value.state,
+    zip: value.zip,
+    latitude:
+      typeof value.latitude === "number"
+        ? value.latitude
+        : undefined,
+    longitude:
+      typeof value.longitude === "number"
+        ? value.longitude
+        : undefined,
+    formattedAddress:
+      typeof value.formattedAddress === "string"
+        ? value.formattedAddress
+        : "",
+  };
+}
+
 /*
 |--------------------------------------------------------------------------
 | Hook
@@ -280,36 +312,52 @@ export function useCheckout({
                   userData.phone;
               }
 
-              if (userData.defaultAddress) {
-                defaultAddress = {
-                  street:
-                    userData.defaultAddress
-                      .street ?? "",
+              if (
+                userData.defaultAddress &&
+                typeof userData.defaultAddress === "object"
+              ) {
+                defaultAddress = toCheckoutAddress(
+                  userData.defaultAddress as Record<string, unknown>
+                );
+              }
+            }
 
-                  city:
-                    userData.defaultAddress
-                      .city ?? "",
+            /*
+             * Addresses have historically been saved in three locations.
+             * Prefer the profile address, then use either legacy location so
+             * existing customers do not have to re-enter a valid address.
+             */
+            if (!defaultAddress) {
+              const [subcollectionAddress, legacyAddress] =
+                await Promise.all([
+                  getDoc(
+                    doc(
+                      db,
+                      "users",
+                      user.uid,
+                      "addresses",
+                      "default"
+                    )
+                  ),
+                  getDoc(
+                    doc(
+                      db,
+                      "addresses",
+                      user.uid
+                    )
+                  ),
+                ]);
 
-                  state:
-                    userData.defaultAddress
-                      .state ?? "",
+              if (subcollectionAddress.exists()) {
+                defaultAddress = toCheckoutAddress(
+                  subcollectionAddress.data()
+                );
+              }
 
-                  zip:
-                    userData.defaultAddress
-                      .zip ?? "",
-
-                  latitude:
-                    userData.defaultAddress
-                      .latitude,
-
-                  longitude:
-                    userData.defaultAddress
-                      .longitude,
-
-                  formattedAddress:
-                    userData.defaultAddress
-                      .formattedAddress ?? "",
-                };
+              if (!defaultAddress && legacyAddress.exists()) {
+                defaultAddress = toCheckoutAddress(
+                  legacyAddress.data()
+                );
               }
             }
 

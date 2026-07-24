@@ -36,6 +36,7 @@ import {
 import {
   orderService,
 } from "@/services/order/orderService";
+import { useSuccessToast } from "@/context/SuccessToastContext";
 
 import type {
   Store,
@@ -67,6 +68,8 @@ interface UsePlaceOrderParams {
   deliveryInstructions: string;
 
   distanceMiles: number;
+
+  isDistanceAvailable: boolean;
 
   estimatedDeliveryMinutes: number;
 
@@ -109,10 +112,12 @@ export function usePlaceOrder({
   userPhone,
   deliveryInstructions,
   distanceMiles,
+  isDistanceAvailable,
   estimatedDeliveryMinutes,
   totals,
   clearCart,
 }: UsePlaceOrderParams): UsePlaceOrderResult {
+  const { showSuccess } = useSuccessToast();
   const [
     loading,
     setLoading,
@@ -158,6 +163,14 @@ export function usePlaceOrder({
 
           return false;
         }
+
+      if (!isDistanceAvailable) {
+        setError(
+          "We could not calculate a driving route for this order. Please verify your delivery address and try again."
+        );
+
+        return false;
+      }
 
         const storeStatus =
           getStoreStatus(
@@ -333,6 +346,7 @@ export function usePlaceOrder({
         clearCart();
 
         setOrderPlaced(true);
+        showSuccess("Order placed successfully.");
 
         return true;
       } catch (placeOrderError) {

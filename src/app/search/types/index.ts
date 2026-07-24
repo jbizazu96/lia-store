@@ -2,12 +2,17 @@
   Search page types.
 */
 
+import type {
+  ProductImageVariants,
+} from "@/types/product";
+
 export interface SearchResult {
   id: string;
   name: string;
   description: string;
   price: number;
   imageUrl: string;
+  imageVariants?: ProductImageVariants;
   category: string;
   stock: number;
   storeId: string;

@@ -6,6 +6,9 @@
 */
 
 import {
+  productImageSelector,
+} from "@/services/product/productImageSelector";
+import {
   promotionService,
 } from "@/services/promotion/promotionService";
 import {useEffect, useRef, useState} from "react";
@@ -109,7 +112,10 @@ export function ProductCard({
       <div className="relative w-full aspect-square overflow-visible rounded-t-xl bg-gray-50">
         {product.imageUrl ? (
           <Image
-            src={product.imageUrl}
+            src={productImageSelector.getUrl(
+              product,
+              "card"
+            )}
             alt={formatProductName(product.name)}
             fill
             className="object-contain p-2"

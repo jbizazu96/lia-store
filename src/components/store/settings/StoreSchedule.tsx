@@ -11,6 +11,7 @@ import { auth, db } from "@/lib/firebase";
 import { doc, setDoc } from "firebase/firestore";
 import { useUnsavedChanges } from "@/hooks/useUnsavedChanges";
 import { useConfirmation } from "@/context/ConfirmationContext";
+import { useSuccessToast } from "@/context/SuccessToastContext";
 
 interface ScheduleDay {
   day: string;
@@ -46,6 +47,7 @@ const DEFAULT_SCHEDULE: ScheduleDay[] = [
 ];
 
 export function StoreSchedule({ storeData, setStoreData, storeId }: StoreScheduleProps) {
+  const { showSuccess } = useSuccessToast();
   const [schedule, setSchedule] = useState<ScheduleDay[]>(DEFAULT_SCHEDULE);
   const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -129,6 +131,7 @@ export function StoreSchedule({ storeData, setStoreData, storeId }: StoreSchedul
       }
 
       setSaveSuccess(true);
+      showSuccess("Store hours updated.");
       setIsEditing(false);
       
       // Hide success message after 3 seconds

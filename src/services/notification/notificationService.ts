@@ -14,6 +14,7 @@
 
 import {
   collection,
+  deleteDoc,
   doc,
   addDoc,
   getDocs,
@@ -23,6 +24,7 @@ import {
   where,
   onSnapshot,
   serverTimestamp,
+  writeBatch,
 } from "firebase/firestore";
 
 import { db } from "@/lib/firebase";
@@ -168,6 +170,49 @@ export class NotificationService {
 
     );
 
+  }
+
+  /** Deletes one notification owned by the current user. */
+  async deleteNotification(
+    uid: string,
+    notificationId: string
+  ): Promise<void> {
+    await deleteDoc(
+      doc(
+        db,
+        "users",
+        uid,
+        "notifications",
+        notificationId
+      )
+    );
+  }
+
+  /** Removes every notification for one user in Firestore-safe batches. */
+  async clearAllNotifications(
+    uid: string
+  ): Promise<void> {
+    const notificationsReference = collection(
+      db,
+      "users",
+      uid,
+      "notifications"
+    );
+
+    const snapshot = await getDocs(notificationsReference);
+    const notificationDocuments = snapshot.docs;
+
+    for (let start = 0; start < notificationDocuments.length; start += 450) {
+      const batch = writeBatch(db);
+
+      notificationDocuments
+        .slice(start, start + 450)
+        .forEach((notificationDocument) => {
+          batch.delete(notificationDocument.ref);
+        });
+
+      await batch.commit();
+    }
   }
 
   /**

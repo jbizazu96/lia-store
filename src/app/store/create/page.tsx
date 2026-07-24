@@ -15,7 +15,11 @@ import {AlertCircle} from "lucide-react";
 import {collection, setDoc, doc} from "firebase/firestore";
 import {auth, db} from "@/lib/firebase";
 import {geocodeAddress} from "@/services/delivery/geocode";
+import {formatPhoneNumber} from "@/utils/phone";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
+import {
+  RoleGuard,
+} from "@/components/auth/RoleGuard";
 
 /*
   Firebase Storage
@@ -33,8 +37,10 @@ import {Step3Stripe} from "@/components/store/create/Step3Stripe";
 import {NavigationButtons} from "@/components/store/create/NavigationButtons";
 import { useUnsavedChanges } from "@/hooks/useUnsavedChanges";
 import { useConfirmation } from "@/context/ConfirmationContext";
+import { useSuccessToast } from "@/context/SuccessToastContext";
 
 export default function CreateStorePage() {
+  const { showSuccess } = useSuccessToast();
   const router = useRouter();
   const storage = getStorage();
 
@@ -87,12 +93,7 @@ export default function CreateStorePage() {
   /*
     Format phone number
   */
-  const formatPhone = useCallback((value: string) => {
-    const digits = value.replace(/\D/g, "");
-    if (digits.length <= 3) return digits;
-    if (digits.length <= 6) return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
-    return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)} - ${digits.slice(6, 10)}`;
-  }, []);
+  const formatPhone = formatPhoneNumber;
 
   /*
     Handle file uploads
@@ -277,6 +278,8 @@ export default function CreateStorePage() {
         stripePhone,
       }, {merge: true});
 
+      showSuccess("Store created successfully.");
+
       router.push("/store/dashboard");
 
     } catch (error: any) {
@@ -292,8 +295,13 @@ export default function CreateStorePage() {
       uploadFile, validateStep3, router]);
 
   return (
-    <ProtectedRoute>
-      <main className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-orange-50 to-green-50">
+    <RoleGuard
+      allowedAccountTypes={[
+        "store_owner",
+      ]}
+    >
+      <ProtectedRoute>
+        <main className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-orange-50 to-green-50">
         <motion.div
           initial={{opacity: 0, y: 20}}
           animate={{opacity: 1, y: 0}}
@@ -403,7 +411,8 @@ export default function CreateStorePage() {
             </div>
           )}
         </motion.div>
-      </main>
-    </ProtectedRoute>
+        </main>
+      </ProtectedRoute>
+    </RoleGuard>
   );
 }

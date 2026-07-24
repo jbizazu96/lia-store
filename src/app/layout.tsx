@@ -5,6 +5,7 @@ import {AuthProvider} from "@/context/AuthContext";
 import {NotificationProvider} from "@/context/NotificationContext";
 import {CartProvider} from "@/context/CartContext";
 import {ConfirmationProvider} from "@/context/ConfirmationContext";
+import {SuccessToastProvider} from "@/context/SuccessToastContext";
 
 const inter = Inter({subsets: ["latin"]});
 
@@ -24,13 +25,15 @@ export default function RootLayout({
         <AuthProvider>
           <NotificationProvider>
             <ConfirmationProvider>
-              <CartProvider>
-                <div className="min-h-screen flex flex-col">
-                  <main className="flex-1">
-                    {children}
-                  </main>
-                </div>
-              </CartProvider>
+              <SuccessToastProvider>
+                <CartProvider>
+                  <div className="min-h-screen flex flex-col">
+                    <main className="flex-1">
+                      {children}
+                    </main>
+                  </div>
+                </CartProvider>
+              </SuccessToastProvider>
             </ConfirmationProvider>
           </NotificationProvider>
         </AuthProvider>

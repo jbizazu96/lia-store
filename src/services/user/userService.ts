@@ -10,7 +10,9 @@
 */
 
 import {
+  collection,
   doc,
+  getDocs,
   getDoc,
 } from "firebase/firestore";
 
@@ -28,6 +30,35 @@ import { db } from "@/lib/firebase";
 export interface UserLocation {
   lat: number;
   lng: number;
+}
+
+function toUserLocation(
+  address: unknown
+): UserLocation | null {
+  if (!address || typeof address !== "object") {
+    return null;
+  }
+
+  const { latitude, longitude } = address as {
+    latitude?: unknown;
+    longitude?: unknown;
+  };
+
+  if (
+    typeof latitude !== "number" ||
+    typeof longitude !== "number" ||
+    !Number.isFinite(latitude) ||
+    !Number.isFinite(longitude) ||
+    latitude < -90 ||
+    latitude > 90 ||
+    longitude < -180 ||
+    longitude > 180 ||
+    (latitude === 0 && longitude === 0)
+  ) {
+    return null;
+  }
+
+  return { lat: latitude, lng: longitude };
 }
 
 /*
@@ -64,31 +95,40 @@ export const userService = {
     const userSnapshot =
       await getDoc(userReference);
 
-    if (!userSnapshot.exists()) {
-      return null;
+    const userLocation = userSnapshot.exists()
+      ? toUserLocation(userSnapshot.data().defaultAddress)
+      : null;
+
+    if (userLocation) {
+      return userLocation;
     }
 
-    const userData = userSnapshot.data();
+    // Older customer accounts may store their default address only in this
+    // subcollection. Checkout already supports it; customer home must too.
+    const addressSnapshots = await getDocs(
+      collection(db, "users", userId, "addresses")
+    );
 
-    const latitude =
-      userData.defaultAddress?.latitude;
+    const defaultAddress = addressSnapshots.docs.find(
+      (address) => address.data().isDefault === true
+    ) ?? addressSnapshots.docs[0];
 
-    const longitude =
-      userData.defaultAddress?.longitude;
+    const subcollectionLocation = toUserLocation(
+      defaultAddress?.data()
+    );
 
-    if (
-      typeof latitude !== "number" ||
-      typeof longitude !== "number" ||
-      !Number.isFinite(latitude) ||
-      !Number.isFinite(longitude)
-    ) {
-      return null;
+    if (subcollectionLocation) {
+      return subcollectionLocation;
     }
 
-    return {
-      lat: latitude,
-      lng: longitude,
-    };
+    // Preserve compatibility with the original login-address document.
+    const legacyAddressSnapshot = await getDoc(
+      doc(db, "addresses", userId)
+    );
+
+    return legacyAddressSnapshot.exists()
+      ? toUserLocation(legacyAddressSnapshot.data())
+      : null;
   },
 
   

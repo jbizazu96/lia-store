@@ -6,11 +6,13 @@
 import {useState} from "react";
 import {motion} from "framer-motion";
 import {X, User, Mail, Phone, Save} from "lucide-react";
-import {updateDoc, doc} from "firebase/firestore";
+import {setDoc, doc} from "firebase/firestore";
 import {updateProfile} from "firebase/auth";
 import {auth, db} from "@/lib/firebase";
 import { useUnsavedChanges } from "@/hooks/useUnsavedChanges";
 import { useConfirmation } from "@/context/ConfirmationContext";
+import {formatPhoneNumber} from "@/utils/phone";
+import {useSuccessToast} from "@/context/SuccessToastContext";
 
 interface EditProfileModalProps {
   userData: any;
@@ -19,6 +21,7 @@ interface EditProfileModalProps {
 }
 
 export function EditProfileModal({userData, onClose, onUpdate}: EditProfileModalProps) {
+  const {showSuccess} = useSuccessToast();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [formData, setFormData] = useState({
@@ -76,27 +79,42 @@ export function EditProfileModal({userData, onClose, onUpdate}: EditProfileModal
       const user = auth.currentUser;
       if (!user) throw new Error("No user logged in");
 
+      const displayName = formData.displayName.trim();
+      const phone = formatPhoneNumber(formData.phone);
+
       // Update Firebase Auth profile
-      if (formData.displayName !== userData?.displayName) {
+      if (displayName !== userData?.displayName) {
         await updateProfile(user, {
-          displayName: formData.displayName,
+          displayName,
         });
       }
 
       // Update Firestore
-      const updateData: any = {};
-      if (formData.displayName !== userData?.displayName) {
-        updateData.displayName = formData.displayName;
+      const updateData: any = {
+        // Migrates legacy profiles that were created without a UID field.
+        uid: user.uid,
+      };
+      if (displayName !== userData?.displayName) {
+        updateData.displayName = displayName;
       }
-      if (formData.phone !== userData?.phone) {
-        updateData.phone = formData.phone;
+      if (phone !== userData?.phone) {
+        updateData.phone = phone;
       }
 
       if (Object.keys(updateData).length > 0) {
-        await updateDoc(doc(db, "users", user.uid), updateData);
+        await setDoc(
+          doc(db, "users", user.uid),
+          updateData,
+          {merge: true}
+        );
       }
 
-      onUpdate(formData);
+      onUpdate({
+        ...formData,
+        displayName,
+        phone,
+      });
+      showSuccess("Profile updated successfully.");
       onClose();
 
     } catch (error: any) {
@@ -209,7 +227,7 @@ export function EditProfileModal({userData, onClose, onUpdate}: EditProfileModal
                 <input
                   type="tel"
                   value={formData.phone}
-                  onChange={(e) => setFormData({...formData, phone: e.target.value})}
+                  onChange={(e) => setFormData({...formData, phone: formatPhoneNumber(e.target.value)})}
                   className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500"
                   placeholder="(123) 456 - 7890"
                   disabled={!isEditing.phone}

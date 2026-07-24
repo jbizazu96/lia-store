@@ -13,6 +13,14 @@
 */
 
 import {
+  productGalleryService,
+} from "@/services/product/productGalleryService";
+
+import type {
+  ProductGalleryImageSelection,
+} from "@/types/productForm";
+
+import {
   use,
   useEffect,
   useState,
@@ -62,8 +70,9 @@ import type {
 } from "@/types/productFormSubmission";
 
 import {
-  productImageService,
-} from "@/services/product/productImageService";
+  productGalleryImageService,
+} from "@/services/product/productGalleryImageService";
+import {useSuccessToast} from "@/context/SuccessToastContext";
 
 /*
 |--------------------------------------------------------------------------
@@ -86,6 +95,7 @@ interface EditProductPageProps {
 export default function EditProductPage({
   params,
 }: EditProductPageProps) {
+  const {showSuccess} = useSuccessToast();
   const {
     productId,
   } = use(params);
@@ -99,6 +109,13 @@ export default function EditProductPage({
   ] = useState<Product | null>(
     null
   );
+
+  const [
+    galleryImages,
+    setGalleryImages,
+  ] = useState<
+    ProductGalleryImageSelection[]
+  >([]);
 
   const [
     loading,
@@ -162,6 +179,11 @@ export default function EditProductPage({
                 productId
               );
 
+            const loadedGalleryImages =
+              await productGalleryService.getAllProductImages(
+                productId
+              );
+
             if (!loadedProduct) {
               if (isMounted) {
                 setProduct(null);
@@ -196,6 +218,28 @@ export default function EditProductPage({
             if (isMounted) {
               setProduct(
                 loadedProduct
+              );
+
+              setGalleryImages(
+                loadedGalleryImages.map(
+                  (image) => ({
+                    role:
+                      image.isPrimary
+                        ? "front"
+                        : "back",
+
+                    existingImageId:
+                      image.id,
+
+                    file: null,
+
+                    previewUrl:
+                      image.imageUrl,
+
+                    markedForRemoval:
+                      false,
+                  })
+                )
               );
             }
           } catch (loadError) {
@@ -234,118 +278,304 @@ export default function EditProductPage({
   |--------------------------------------------------------------------------
   */
 
-  const handleSubmit =
-  async ({
-    data,
-    imageFile,
-  }: ProductFormSubmission) => {
-    if (!product) {
-      return;
-    }
+  /*
+|--------------------------------------------------------------------------
+| Save Product
+|--------------------------------------------------------------------------
+*/
 
-    try {
-      setSubmitting(true);
-      setError(null);
+const handleSubmit =
+async ({
+  data,
+  imageFiles,
+}: ProductFormSubmission) => {
+  if (!product) {
+    return;
+  }
 
-      /*
-      |--------------------------------------------------------------------------
-      | Update Product Data
-      |--------------------------------------------------------------------------
-      */
+  /*
+  |--------------------------------------------------------------------------
+  | Resolve Front Image State
+  |--------------------------------------------------------------------------
+  */
 
-      await productService.updateProduct(
-        product.id,
-        {
-          name:
-            data.name,
+  const frontImage =
+    imageFiles.find(
+      (image) =>
+        image.isPrimary
+    );
 
-          description:
-            data.description,
+  const frontWillRemain =
+    Boolean(
+      frontImage &&
+      (
+        frontImage.file ||
+        frontImage.id
+      )
+    );
 
-          category:
-            data.category,
+  if (!frontWillRemain) {
+    setError(
+      "A front product image is required."
+    );
 
-          brand:
-            data.brand,
+    return;
+  }
 
-          price:
-            data.price,
+  try {
+    setSubmitting(
+      true
+    );
 
-          stock:
-            data.stock,
+    setError(
+      null
+    );
 
-          sku:
-            data.sku,
+    /*
+    |--------------------------------------------------------------------------
+    | Update Product Data
+    |--------------------------------------------------------------------------
+    |
+    | Image fields are not written here.
+    |
+    | The gallery upload Function will update the parent product when the new
+    | front image finishes processing.
+    |
+    */
 
-          imageUrl:
-            imageFile
-              ? product.imageUrl
-              : data.imageUrl,
+    await productService.updateProduct(
+      product.id,
+      {
+        name:
+          data.name,
 
-          isAvailable:
-            data.isAvailable,
+        description:
+          data.description,
 
-          featured:
-            data.featured,
+        category:
+          data.category,
 
-          size:
-            data.size,
+        brand:
+          data.brand,
 
-          promotion:
-            data.promotion,
+        price:
+          data.price,
 
-          /*
-           * A new upload will move the status through uploading and
-           * processing inside productImageService.
-           */
+        stock:
+          data.stock,
 
-          imageStatus:
-            imageFile
-              ? "uploading"
-              : product.imageStatus,
-        }
-      );
+        sku:
+          data.sku,
 
-      /*
-      |--------------------------------------------------------------------------
-      | Upload New Original Image
-      |--------------------------------------------------------------------------
-      |
-      | The existing image remains visible until the background Function
-      | finishes processing the replacement.
-      |
-      */
+        isAvailable:
+          data.isAvailable,
 
-      if (imageFile) {
-        await productImageService
-          .uploadOriginalImage({
-            productId:
-              product.id,
+        featured:
+          data.featured,
 
-            storeId:
-              product.storeId,
+        size:
+          data.size,
 
-            file:
-              imageFile,
-          });
+        promotion:
+          data.promotion,
       }
+    );
 
-      router.push(
-        "/store/products"
-      );
-    } catch (submitError) {
-      console.error(
-        "Error updating product:",
-        submitError
+    /*
+    |--------------------------------------------------------------------------
+    | Load Current Form Image State
+    |--------------------------------------------------------------------------
+    */
+
+    const frontSelection =
+      imageFiles.find(
+        (image) =>
+          image.isPrimary
       );
 
-      setError(
-        "Failed to update product. Please try again."
+    const backSelection =
+      imageFiles.find(
+        (image) =>
+          !image.isPrimary
       );
-    } finally {
-      setSubmitting(false);
-    }
-  };
+
+    const selectedImages = [
+      frontSelection
+        ? {
+            ...frontSelection,
+
+            role:
+              "front" as const,
+
+            position:
+              0,
+          }
+        : null,
+
+      backSelection
+        ? {
+            ...backSelection,
+
+            role:
+              "back" as const,
+
+            position:
+              1,
+          }
+        : null,
+    ].filter(
+      (
+        image
+      ): image is NonNullable<
+        typeof image
+      > =>
+        image !== null
+    );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Delete Removed Existing Images
+    |--------------------------------------------------------------------------
+    |
+    | A gallery submission whose file is null represents an unchanged image.
+    |
+    | Removed images are not present in imageFiles, so compare the original
+    | loaded gallery state with the submitted state.
+    |
+    */
+
+    const submittedExistingIds =
+      new Set(
+        imageFiles
+          .filter(
+            (image) =>
+              image.file ===
+                null
+          )
+          .map(
+            (image) =>
+              image.id
+          )
+      );
+
+    const removedExistingImages =
+      galleryImages.filter(
+        (existingImage) =>
+          existingImage
+            .existingImageId &&
+          !submittedExistingIds.has(
+            existingImage
+              .existingImageId
+          )
+      );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Upload New Or Replacement Images
+    |--------------------------------------------------------------------------
+    |
+    | Each newly selected file receives a new gallery-image document ID.
+    |
+    | Existing unchanged images are skipped.
+    |
+    */
+
+    const uploadTasks =
+      selectedImages
+        .filter(
+          (
+            image
+          ): image is
+            typeof image & {
+              file: File;
+            } =>
+            image.file instanceof
+              File
+        )
+        .map(
+          (image) =>
+            productGalleryImageService
+              .uploadGalleryImage({
+                productId:
+                  product.id,
+
+                storeId:
+                  product.storeId,
+
+                imageId:
+                  image.id,
+
+                role:
+                  image.role,
+
+                file:
+                  image.file,
+
+                altText:
+                  image.altText,
+
+                position:
+                  image.position,
+              })
+        );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Execute Image Changes
+    |--------------------------------------------------------------------------
+    |
+    | New uploads happen first.
+    |
+    | This prevents a front-image replacement from temporarily leaving the
+    | product with no valid front image.
+    |
+    */
+
+    await Promise.all(
+      uploadTasks
+    );
+
+    const deleteTasks =
+      removedExistingImages.map(
+        (image) =>
+          productGalleryImageService
+            .deleteGalleryImage({
+              productId:
+                product.id,
+
+              galleryImageId:
+                image.existingImageId!,
+            })
+      );
+
+    await Promise.all(
+      deleteTasks
+    );
+
+    showSuccess(
+      "Product updated successfully."
+    );
+
+    router.push(
+      "/store/products"
+    );
+  } catch (submitError) {
+    console.error(
+      "Error updating product:",
+      submitError
+    );
+
+    setError(
+      submitError instanceof Error
+        ? submitError.message
+        : "Failed to update product. Please try again."
+    );
+  } finally {
+    setSubmitting(
+      false
+    );
+  }
+};
 
   /*
   |--------------------------------------------------------------------------
@@ -375,6 +605,8 @@ export default function EditProductPage({
         await productService.deleteProduct(
           product.id
         );
+
+        showSuccess("Product deleted successfully.");
 
         router.push(
           "/store/products"
@@ -492,6 +724,9 @@ export default function EditProductPage({
       <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
         <ProductForm
           initialData={product}
+          initialImages={
+            galleryImages
+          }
           onSubmit={handleSubmit}
           loading={
             submitting ||

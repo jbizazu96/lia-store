@@ -152,6 +152,7 @@ export async function performSearch(
           description: product.description || "",
           price: product.price || 0,
           imageUrl: product.imageUrl || "",
+          imageVariants: product.imageVariants,
           category: product.category || "Uncategorized",
           stock: product.stock || 0,
           storeId: storeId,
@@ -250,11 +251,14 @@ export async function searchStoresByName(
           storeName: data.name || "Store",
           storeRating: data.rating || 4.5,
           storeDistance: distance,
-          deliveryFee: data.deliveryFee || getDeliveryFeeNumber(distance),
-          estimatedTime: data.estimatedPrepTime || getEstimatedTimeNumber(distance),
-          storeLogo: data.logoUrl || "",
-          //promotion: null,
-          //size: null,
+          deliveryFee:
+            data.deliveryFee ||
+            getDeliveryFeeNumber(distance),
+          estimatedTime:
+            data.estimatedPrepTime ||
+            getEstimatedTimeNumber(distance),
+          storeLogo:
+            data.logoUrl || "",
         });
       }
     }

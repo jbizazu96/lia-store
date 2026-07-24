@@ -17,7 +17,7 @@ import {
 /*
   Firestore functions.
 */
-import { doc, updateDoc, collection, query, where, getDocs } from "firebase/firestore";
+import { doc, updateDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 
 // Inner component that uses useSearchParams
@@ -46,7 +46,9 @@ function VerifyEmailContent() {
         // Step 2: Apply the verification (this updates Firebase Auth)
         await applyActionCode(auth, oobCode);
 
-        // Step 3: Find and update the user in Firestore by email
+        // Step 3: Update only the currently authenticated user's profile.
+        // Never query the users collection by email from the browser: users
+        // must not be able to discover or update someone else's profile.
         const currentUser = auth.currentUser;
         if (currentUser) {
           // Update using current user's UID
@@ -56,23 +58,9 @@ function VerifyEmailContent() {
           });
           console.log("✅ Firestore updated for current user");
         } else {
-          console.log("⚠️ No user logged in, trying alternative approach");
-          
-          // Use the email to find the user document
-          const usersRef = collection(db, "users");
-          const q = query(usersRef, where("email", "==", email));
-          const querySnapshot = await getDocs(q);
-          
-          if (!querySnapshot.empty) {
-            const userDoc = querySnapshot.docs[0];
-            await updateDoc(userDoc.ref, {
-              emailVerified: true,
-              emailVerifiedAt: new Date().toISOString(),
-            });
-            console.log("✅ Firestore updated by email query");
-          } else {
-            console.warn("⚠️ User not found in Firestore");
-          }
+          console.log(
+            "Email verified in Firebase Auth. The profile will sync after sign-in."
+          );
         }
 
         setSuccess(true);

@@ -26,6 +26,7 @@ import {
 
 import { geocodeAddress } from "@/services/delivery/geocode";
 import { useConfirmation } from "@/context/ConfirmationContext";
+import { useSuccessToast } from "@/context/SuccessToastContext";
 
 import type {
   CheckoutAddress,
@@ -62,6 +63,7 @@ interface UseCheckoutAddressResult {
 export function useCheckoutAddress():
 UseCheckoutAddressResult {
   const { confirm } = useConfirmation();
+  const { showSuccess } = useSuccessToast();
   const [
     loading,
     setLoading,
@@ -173,6 +175,8 @@ UseCheckoutAddressResult {
           merge: true,
         }
       );
+
+      showSuccess("Delivery address saved.");
 
       return address;
     } catch (saveError) {

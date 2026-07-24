@@ -19,6 +19,7 @@ import {
   XCircle,
   Clock,
   ChevronRight,
+  Trash2,
 } from "lucide-react";
 
 import type {
@@ -28,6 +29,7 @@ import type {
 interface NotificationCardProps {
   notification: Notification;
   onClick?: () => void;
+  onDelete?: () => void;
 }
 
 const ICONS = {
@@ -97,6 +99,7 @@ const getIconForType = (type: string): keyof typeof ICONS => {
 export function NotificationCard({
   notification,
   onClick,
+  onDelete,
 }: NotificationCardProps) {
   // ✅ Determine icon and color based on notification type
   const iconKey = getIconForType(notification.type);
@@ -109,8 +112,7 @@ export function NotificationCard({
   const isRead = notification.read ?? false;
 
   return (
-    <button
-      onClick={onClick}
+    <div
       className={`w-full text-left p-4 rounded-2xl border transition-all hover:shadow-md ${
         isRead
           ? "bg-white border-gray-100 hover:bg-gray-50"
@@ -126,7 +128,11 @@ export function NotificationCard({
         </div>
 
         {/* Content */}
-        <div className="flex-1 min-w-0">
+        <button
+          type="button"
+          onClick={onClick}
+          className="min-w-0 flex-1 text-left"
+        >
           <div className="flex items-start justify-between gap-2">
             <h3 className={`font-semibold text-sm ${
               isRead ? "text-gray-700" : "text-gray-900"
@@ -151,8 +157,19 @@ export function NotificationCard({
             <span className="text-xs text-gray-300">•</span>
             <ChevronRight className="w-3.5 h-3.5 text-gray-300" />
           </div>
-        </div>
+        </button>
+
+        {isRead && onDelete && (
+          <button
+            type="button"
+            onClick={onDelete}
+            className="self-start rounded-lg p-2 text-gray-400 transition hover:bg-red-50 hover:text-red-600"
+            aria-label={`Delete ${notification.title} notification`}
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        )}
       </div>
-    </button>
+    </div>
   );
 }

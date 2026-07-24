@@ -5,6 +5,7 @@ import { useEffect, useRef } from "react";
 import {ArrowLeft, MapPin, User, Phone} from "lucide-react";
 import { useUnsavedChanges } from "@/hooks/useUnsavedChanges";
 import { useConfirmation } from "@/context/ConfirmationContext";
+import {formatPhoneNumber} from "@/utils/phone";
 
 interface AddressModalProps {
   isOpen: boolean;
@@ -68,17 +69,8 @@ export function AddressModal({
     onClose();
   };
 
-  // Format phone as user types
-  const formatPhone = (value: string) => {
-    const digits = value.replace(/\D/g, "");
-    if (digits.length <= 3) return digits;
-    if (digits.length <= 6) return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
-    if (digits.length <= 10) return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)} - ${digits.slice(6)}`;
-    return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)} - ${digits.slice(6, 10)}`;
-  };
-
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const formatted = formatPhone(e.target.value);
+    const formatted = formatPhoneNumber(e.target.value);
     setFormData({...formData, phone: formatted});
   };
 

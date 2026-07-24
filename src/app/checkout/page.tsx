@@ -173,6 +173,7 @@ export default function CheckoutPage() {
   const {
     distanceMiles,
     isCalculatingDistance,
+    distanceError,
     estimatedDeliveryMinutes,
     total,
     totals,
@@ -217,6 +218,7 @@ export default function CheckoutPage() {
     userPhone,
     deliveryInstructions,
     distanceMiles,
+    isDistanceAvailable: distanceError === null,
     estimatedDeliveryMinutes,
     totals,
     clearCart,
@@ -248,6 +250,10 @@ const isStoreClosed =
   const isOutsideDeliveryRadius =
     address !== null &&
     distanceMiles > DELIVERY_CONFIG.MAX_RADIUS_MILES;
+
+  const isDeliveryDistanceUnavailable =
+    address !== null &&
+    distanceError !== null;
 
   const error =
     orderError ||
@@ -535,6 +541,14 @@ const isStoreClosed =
           </div>
         )}
 
+        {isDeliveryDistanceUnavailable && (
+          <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-center">
+            <p className="text-sm font-medium text-red-700">
+              {distanceError}
+            </p>
+          </div>
+        )}
+
         {/* Place Order */}
         <button
           type="button"
@@ -543,7 +557,8 @@ const isStoreClosed =
             loading ||
             isCalculatingDistance ||
             isStoreClosed ||
-            isOutsideDeliveryRadius
+            isOutsideDeliveryRadius ||
+            isDeliveryDistanceUnavailable
           }
           className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-orange-500 to-orange-600 py-3.5 font-semibold text-white transition hover:from-orange-600 hover:to-orange-700 hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-50"
         >
@@ -555,6 +570,8 @@ const isStoreClosed =
             "Store Closed"
           ) : isOutsideDeliveryRadius ? (
             "Delivery Unavailable"
+          ) : isDeliveryDistanceUnavailable ? (
+            "Delivery Distance Unavailable"
           ) : (
             <>
               <CreditCard className="h-5 w-5" />

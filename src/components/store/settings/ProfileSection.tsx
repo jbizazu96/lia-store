@@ -19,6 +19,7 @@ import {
   X,
 } from "lucide-react";
 import { storeImageService } from "@/services/store/storeImageService";
+import {formatPhoneNumber} from "@/utils/phone";
 
 interface ProfileSectionProps {
   storeData: any;
@@ -199,7 +200,7 @@ export function ProfileSection({
                 <input
                   type="tel"
                   value={storeData?.phone || ""}
-                  onChange={(e) => setStoreData({...storeData, phone: e.target.value})}
+                  onChange={(e) => setStoreData({...storeData, phone: formatPhoneNumber(e.target.value)})}
                   className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500"
                   placeholder="(123) 456 - 7890"
                 />

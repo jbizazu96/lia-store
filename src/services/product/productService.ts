@@ -27,7 +27,11 @@ import {
 } from "firebase/firestore";
 
 import { db } from "@/lib/firebase";
-import type { Product } from "@/types/product";
+import type {
+  Product,
+  ProductGalleryImage,
+  ProductImageVariants,
+} from "@/types/product";
 
 /** Firestore does not accept undefined values, including inside nested data. */
 function removeUndefinedFields(
@@ -58,6 +62,186 @@ function removeUndefinedFields(
       }
     )
   );
+}
+
+/*
+|--------------------------------------------------------------------------
+| Map Product Image Variants
+|--------------------------------------------------------------------------
+|
+| Converts Firestore imageVariants into the shared Product domain model.
+|
+| Legacy products may not have this field.
+|
+*/
+
+function mapImageVariants(
+  imageVariants: unknown
+): ProductImageVariants | undefined {
+  if (
+    !imageVariants ||
+    typeof imageVariants !==
+      "object"
+  ) {
+    return undefined;
+  }
+
+  return imageVariants as ProductImageVariants;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Map Product Gallery Images
+|--------------------------------------------------------------------------
+|
+| Converts Firestore gallery data into the shared Product domain model.
+|
+| Legacy products may not have an images array.
+|
+*/
+
+function mapProductGalleryImages(
+  images: unknown
+): ProductGalleryImage[] | undefined {
+  if (!Array.isArray(images)) {
+    return undefined;
+  }
+
+  return images
+    .map(
+      (
+        image
+      ): ProductGalleryImage | null => {
+        if (
+          !image ||
+          typeof image !==
+            "object"
+        ) {
+          return null;
+        }
+
+        const data =
+          image as Record<
+            string,
+            unknown
+          >;
+
+        if (
+          typeof data.id !==
+            "string" ||
+          !data.id.trim()
+        ) {
+          return null;
+        }
+
+        return {
+          id:
+            data.id,
+
+          altText:
+            typeof data.altText ===
+              "string"
+              ? data.altText
+              : "",
+
+          position:
+            typeof data.position ===
+              "number"
+              ? data.position
+              : 0,
+
+          isPrimary:
+            data.isPrimary ===
+              true,
+
+          status:
+            typeof data.status ===
+              "string"
+              ? data.status as
+                  ProductGalleryImage[
+                    "status"
+                  ]
+              : "none",
+
+          imageUrl:
+            typeof data.imageUrl ===
+              "string"
+              ? data.imageUrl
+              : "",
+
+          imageVariants:
+            mapImageVariants(
+              data.imageVariants
+            ),
+
+          originalImagePath:
+            typeof data.originalImagePath ===
+              "string"
+              ? data.originalImagePath
+              : null,
+
+          optimizedImagePath:
+            typeof data.optimizedImagePath ===
+              "string"
+              ? data.optimizedImagePath
+              : null,
+
+          imageError:
+            typeof data.imageError ===
+              "string"
+              ? data.imageError
+              : null,
+
+          createdAt:
+            data.createdAt &&
+            typeof data.createdAt ===
+              "object" &&
+            "toDate" in data.createdAt
+              ? (
+                  data.createdAt as {
+                    toDate: () => Date;
+                  }
+                )
+                  .toDate()
+                  .toISOString()
+              : typeof data.createdAt ===
+                  "string"
+              ? data.createdAt
+              : undefined,
+
+          updatedAt:
+            data.updatedAt &&
+            typeof data.updatedAt ===
+              "object" &&
+            "toDate" in data.updatedAt
+              ? (
+                  data.updatedAt as {
+                    toDate: () => Date;
+                  }
+                )
+                  .toDate()
+                  .toISOString()
+              : typeof data.updatedAt ===
+                  "string"
+              ? data.updatedAt
+              : undefined,
+        };
+      }
+    )
+    .filter(
+      (
+        image
+      ): image is ProductGalleryImage =>
+        image !== null
+    )
+    .sort(
+      (
+        firstImage,
+        secondImage
+      ) =>
+        firstImage.position -
+        secondImage.position
+    );
 }
 
 /**
@@ -115,6 +299,22 @@ function mapProductDocument(
    */
   imageUrl: data.imageUrl ?? "",
 
+  imageVariants:
+  mapImageVariants(
+    data.imageVariants
+  ),
+  
+  images:
+  mapProductGalleryImages(
+    data.images
+  ),
+
+primaryImageId:
+  typeof data.primaryImageId ===
+    "string"
+    ? data.primaryImageId
+    : null,
+    
   /**
    * Image pipeline fields are updated by the background image function.
    * Keeping them in the shared mapper lets real-time listeners react when

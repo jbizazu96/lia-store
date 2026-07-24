@@ -29,6 +29,12 @@ import {
   PRODUCT_IMAGE_CONFIG,
 } from "./imageTypes";
 
+import type {
+  ProcessedImageVariant,
+  ProductImageVariantName,
+  ProductImageVariantResult,
+} from "./imageTypes";
+
 /*
 |--------------------------------------------------------------------------
 | Download Original Image
@@ -112,6 +118,43 @@ export function buildOptimizedImagePath(
     `stores/${storeId}` +
     `/products/${productId}` +
     `/optimized/${imageId}.webp`
+  );
+}
+
+/*
+|--------------------------------------------------------------------------
+| Build Optimized Variant Path
+|--------------------------------------------------------------------------
+|
+| Every variant receives a unique immutable path.
+|
+| Example:
+|
+| stores/store123/products/product456/optimized/image789/medium.webp
+|
+*/
+
+export function buildOptimizedVariantPath(
+  storeId: string,
+  productId: string,
+  imageId: string,
+  variantName: ProductImageVariantName
+): string {
+  if (
+    !storeId.trim() ||
+    !productId.trim() ||
+    !imageId.trim()
+  ) {
+    throw new Error(
+      "Store ID, product ID, and image ID are required."
+    );
+  }
+
+  return (
+    `stores/${storeId}` +
+    `/products/${productId}` +
+    `/optimized/${imageId}` +
+    `/${variantName}.webp`
   );
 }
 
@@ -242,6 +285,173 @@ Promise<UploadOptimizedImageResult> {
     optimizedImageUrl,
     downloadToken,
   };
+}
+
+/*
+|--------------------------------------------------------------------------
+| Upload Optimized Image Variants
+|--------------------------------------------------------------------------
+|
+| Uploads every Sharp-generated variant in parallel.
+|
+| Each image receives:
+|
+| - A unique Storage path
+| - WebP content type
+| - Long-lived immutable caching
+| - A Firebase download token
+| - Product and variant metadata
+|
+*/
+
+interface UploadOptimizedImageVariantsParams {
+  bucketName: string;
+
+  productId: string;
+
+  storeId: string;
+
+  imageId: string;
+
+  variants: ProcessedImageVariant[];
+}
+
+export async function uploadOptimizedImageVariants({
+  bucketName,
+  productId,
+  storeId,
+  imageId,
+  variants,
+}: UploadOptimizedImageVariantsParams):
+Promise<ProductImageVariantResult[]> {
+  if (!bucketName.trim()) {
+    throw new Error(
+      "A Storage bucket name is required."
+    );
+  }
+
+  if (
+    !productId.trim() ||
+    !storeId.trim() ||
+    !imageId.trim()
+  ) {
+    throw new Error(
+      "Complete product image context is required."
+    );
+  }
+
+  if (variants.length === 0) {
+    throw new Error(
+      "At least one image variant is required."
+    );
+  }
+
+  const bucket =
+    getStorage().bucket(
+      bucketName
+    );
+
+  return Promise.all(
+    variants.map(
+      async (
+        variant
+      ): Promise<ProductImageVariantResult> => {
+        if (
+          !variant.buffer ||
+          variant.buffer.length === 0
+        ) {
+          throw new Error(
+            `The ${variant.name} image buffer is empty.`
+          );
+        }
+
+        const variantPath =
+          buildOptimizedVariantPath(
+            storeId,
+            productId,
+            imageId,
+            variant.name
+          );
+
+        const variantFile =
+          bucket.file(
+            variantPath
+          );
+
+        const downloadToken =
+          randomUUID();
+
+        await variantFile.save(
+          variant.buffer,
+          {
+            resumable:
+              false,
+
+            validation:
+              "crc32c",
+
+            metadata: {
+              contentType:
+                "image/webp",
+
+              cacheControl:
+                PRODUCT_IMAGE_CONFIG
+                  .CACHE_CONTROL,
+
+              metadata: {
+                firebaseStorageDownloadTokens:
+                  downloadToken,
+
+                productId,
+
+                storeId,
+
+                imageId,
+
+                variant:
+                  variant.name,
+
+                processingType:
+                  "product-image-variant",
+              },
+            },
+          }
+        );
+
+        const encodedPath =
+          encodeURIComponent(
+            variantPath
+          );
+
+        const url =
+          `https://firebasestorage.googleapis.com/v0/b/` +
+          `${bucketName}/o/${encodedPath}` +
+          `?alt=media&token=${downloadToken}`;
+
+        return {
+          name:
+            variant.name,
+
+          path:
+            variantPath,
+
+          url,
+
+          width:
+            variant.width,
+
+          height:
+            variant.height,
+
+          sizeBytes:
+            variant.sizeBytes,
+
+          format:
+            variant.format,
+        };
+      }
+    )
+  );
 }
 
 /*

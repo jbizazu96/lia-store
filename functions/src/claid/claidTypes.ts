@@ -347,6 +347,42 @@ export interface ClaidProductImageJob {
 
   imageId: string;
 
+    /*
+|--------------------------------------------------------------------------
+| Gallery Image Context
+|--------------------------------------------------------------------------
+|
+| Every Claid job processes exactly one gallery image.
+|
+| Front images become the marketplace image after processing.
+|
+| Back images are displayed only on the Product Details page.
+|
+*/
+
+galleryImageId: string;
+
+/**
+ * Front or back image.
+ */
+role:
+  | "front"
+  | "back";
+
+/**
+ * Display order.
+ *
+ * Front = 0
+ * Back = 1
+ */
+position:
+  | 0
+  | 1;
+
+/**
+ * Accessibility description.
+ */
+altText: string;
   /*
   * Exact Firebase Storage bucket containing the original image.
   *

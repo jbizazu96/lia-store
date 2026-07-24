@@ -14,6 +14,7 @@ import {db} from "@/lib/firebase";
 import {geocodeAddress} from "@/services/delivery/geocode";
 import { useUnsavedChanges } from "@/hooks/useUnsavedChanges";
 import { useConfirmation } from "@/context/ConfirmationContext";
+import { useSuccessToast } from "@/context/SuccessToastContext";
 
 interface AddressesModalProps {
   userId: string;
@@ -31,6 +32,7 @@ interface Address {
 }
 
 export function AddressesModal({userId, onClose}: AddressesModalProps) {
+  const {showSuccess} = useSuccessToast();
   const [address, setAddress] = useState<Address | null>(null);
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
@@ -161,8 +163,37 @@ export function AddressesModal({userId, onClose}: AddressesModalProps) {
           });
         }
       } else {
-        console.log("❌ No address found");
-        setAddress(null);
+        /*
+         * The login address flow stores its address at addresses/{uid}.
+         * Keep this legacy fallback so the profile shows the customer's
+         * saved address before offering the add-address form.
+         */
+        const legacyAddressSnapshot = await getDoc(
+          doc(db, "addresses", userId)
+        );
+
+        if (legacyAddressSnapshot.exists()) {
+          const legacyAddress = legacyAddressSnapshot.data();
+
+          setAddress({
+            street: legacyAddress.street || "",
+            city: legacyAddress.city || "",
+            state: legacyAddress.state || "",
+            zip: legacyAddress.zip || "",
+            latitude: legacyAddress.latitude,
+            longitude: legacyAddress.longitude,
+            formattedAddress: legacyAddress.formattedAddress,
+          });
+          setFormData({
+            street: legacyAddress.street || "",
+            city: legacyAddress.city || "",
+            state: legacyAddress.state || "",
+            zip: legacyAddress.zip || "",
+          });
+        } else {
+          console.log("❌ No address found");
+          setAddress(null);
+        }
       }
     } catch (error) {
       console.error("Error fetching address:", error);
@@ -233,6 +264,7 @@ export function AddressesModal({userId, onClose}: AddressesModalProps) {
 
       setAddress(addressData);
       setSuccess(address ? "Address updated successfully!" : "Address added successfully!");
+      showSuccess(address ? "Delivery address updated." : "Delivery address added.");
       setIsEditing(false);
       
       // Clear success message after 3 seconds
@@ -269,6 +301,7 @@ export function AddressesModal({userId, onClose}: AddressesModalProps) {
       
       setAddress(null);
       setSuccess("Address deleted successfully!");
+      showSuccess("Delivery address deleted.");
       
       setTimeout(() => setSuccess(""), 3000);
     } catch (error) {

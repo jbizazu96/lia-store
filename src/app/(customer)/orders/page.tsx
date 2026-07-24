@@ -257,7 +257,17 @@ export default function OrdersPage() {
                   animate={{opacity: 1, y: 0}}
                   exit={{opacity: 0, x: -20}}
                   transition={{delay: index * 0.05}}
-                  className="bg-white rounded-2xl p-5 shadow-sm hover:shadow-md transition border border-gray-100"
+                  role="link"
+                  tabIndex={0}
+                  aria-label={`View details for order ${order.orderNumber || order.id}`}
+                  onClick={() => router.push(`/orders/${order.id}`)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      router.push(`/orders/${order.id}`);
+                    }
+                  }}
+                  className="bg-white rounded-2xl p-5 shadow-sm hover:shadow-md transition border border-gray-100 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2"
                 >
                   {/* Order Header */}
                   <div className="flex items-start justify-between mb-3">
@@ -297,6 +307,7 @@ export default function OrdersPage() {
                         </span>
                         <Link
                           href={`/orders/${order.id}`}
+                          onClick={(event) => event.stopPropagation()}
                           className="px-3 py-1.5 text-xs bg-orange-50 text-orange-600 font-medium hover:bg-orange-100 rounded-lg transition"
                         >
                           View Details

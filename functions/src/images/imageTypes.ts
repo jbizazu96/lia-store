@@ -28,11 +28,43 @@ export type ImageProcessingStatus =
 
 /*
 |--------------------------------------------------------------------------
-| Product Image Metadata
+| Product Image Roles
+|--------------------------------------------------------------------------
+|
+| Front:
+| - Primary marketplace image
+| - Used on cards, search, cart, checkout, and orders
+|
+| Back:
+| - Secondary image
+| - Used on the customer product-details page
+|
+*/
+
+export type ProductImageRole =
+  | "front"
+  | "back";
+
+/*
+|--------------------------------------------------------------------------
+| Product Image Processing Types
 |--------------------------------------------------------------------------
 */
 
-export interface ProductImageMetadata {
+export type ProductImageProcessingType =
+  | "product-image-original"
+  | "product-gallery-image-original";
+
+/*
+|--------------------------------------------------------------------------
+| Legacy Product Image Metadata
+|--------------------------------------------------------------------------
+|
+| Used by the existing single-primary-image upload flow.
+|
+*/
+
+export interface LegacyProductImageMetadata {
   productId: string;
 
   storeId: string;
@@ -40,8 +72,53 @@ export interface ProductImageMetadata {
   imageId: string;
 
   processingType:
-    | "product-image-original";
+    "product-image-original";
 }
+
+/*
+|--------------------------------------------------------------------------
+| Product Gallery Image Metadata
+|--------------------------------------------------------------------------
+|
+| Used by independently processed front and back gallery images.
+|
+*/
+
+export interface ProductGalleryImageMetadata {
+  productId: string;
+
+  storeId: string;
+
+  imageId: string;
+
+  galleryImageId: string;
+
+  role:
+    ProductImageRole;
+
+  position:
+    0 | 1;
+
+  altText: string;
+
+  processingType:
+    "product-gallery-image-original";
+}
+
+/*
+|--------------------------------------------------------------------------
+| Product Image Metadata
+|--------------------------------------------------------------------------
+|
+| Discriminated union used by Storage-triggered image processing.
+|
+| Code can safely inspect processingType to determine which workflow applies.
+|
+*/
+
+export type ProductImageMetadata =
+  | LegacyProductImageMetadata
+  | ProductGalleryImageMetadata;
 
 /*
 |--------------------------------------------------------------------------
@@ -331,11 +408,17 @@ export const PRODUCT_IMAGE_CONFIG = {
   CACHE_CONTROL:
     "public, max-age=31536000, immutable",
 
-  /*
-   * Metadata value identifying original product uploads.
-   */
-  PROCESSING_TYPE:
-    "product-image-original",
+/*
+ * Legacy single-image upload identifier.
+ */
+PROCESSING_TYPE:
+  "product-image-original",
+
+/*
+ * Front/back gallery upload identifier.
+ */
+GALLERY_PROCESSING_TYPE:
+  "product-gallery-image-original",
 
   /*
    * Function region.

@@ -21,7 +21,11 @@ import {
   getEstimatedTime,
   getEstimatedTimeNumber,
 } from "@/services/delivery/distance";
-import { getDrivingDistanceMiles } from "@/services/delivery/routing";
+import {
+  getDrivingDistanceMiles,
+  hasValidRouteCoordinates,
+} from "@/services/delivery/routing";
+import { userService } from "@/services/user/userService";
 import { TopNavigation } from "@/components/customer/home/TopNavigation";
 import { SearchBar } from "@/components/customer/home/SearchBar";
 import { PromoCarousel } from "@/components/customer/home/PromoCarousel";
@@ -36,6 +40,8 @@ export default function CustomerHomePage() {
   const { itemCount, totalPrice } = useCart();
   const [userName, setUserName] = useState("Guest");
   const [userLocation, setUserLocation] = useState<{lat: number; lng: number} | null>(null);
+  const [locationReady, setLocationReady] = useState(false);
+  const [distanceError, setDistanceError] = useState<string | null>(null);
   const [nearbyStores, setNearbyStores] = useState<CustomerStore[]>([]);
   const [farStores, setFarStores] = useState<CustomerStore[]>([]);
   const [filteredNearby, setFilteredNearby] = useState<CustomerStore[]>([]);
@@ -51,21 +57,35 @@ export default function CustomerHomePage() {
   // Get current user
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (user) {
+      if (!user) {
+        router.push("/login");
+        return;
+      }
+
+      try {
         const userDoc = await getDoc(doc(db, "users", user.uid));
+
         if (userDoc.exists()) {
           const data = userDoc.data();
           setUserName(data.displayName || user.email?.split("@")[0] || "Customer");
-          
-          if (data.defaultAddress) {
-            setUserLocation({
-              lat: data.defaultAddress.latitude,
-              lng: data.defaultAddress.longitude,
-            });
-          }
         }
-      } else {
-        router.push("/login");
+
+        const location = await userService.getDefaultLocation(user.uid);
+
+        if (location) {
+          setUserLocation(location);
+        } else {
+          setDistanceError(
+            "Add a verified delivery address to see driving distances and available delivery."
+          );
+        }
+      } catch (error) {
+        console.error("Unable to load the customer delivery location:", error);
+        setDistanceError(
+          "We could not load your delivery address. Please try again."
+        );
+      } finally {
+        setLocationReady(true);
       }
     });
 
@@ -75,17 +95,42 @@ export default function CustomerHomePage() {
   // Fetch stores
   useEffect(() => {
     const fetchStores = async () => {
+      if (!locationReady) {
+        return;
+      }
+
+      if (!userLocation) {
+        setNearbyStores([]);
+        setFarStores([]);
+        setFilteredNearby([]);
+        setLoading(false);
+        return;
+      }
+
       try {
         setLoading(true);
+        setDistanceError(null);
         const storesData = await storeService.getStores();
 
-          const storesWithDistance: CustomerStore[] = await Promise.all(storesData.map(async (store) => {
-            const distance = userLocation
-              ? await getDrivingDistanceMiles(
-                  { latitude: userLocation.lat, longitude: userLocation.lng },
-                  { latitude: store.latitude, longitude: store.longitude }
-                ) ?? 0
-              : 0;
+          const calculatedStores = await Promise.all(storesData.map(async (store) => {
+            if (!hasValidRouteCoordinates({
+              latitude: store.latitude,
+              longitude: store.longitude,
+            })) {
+              console.error(
+                `Store ${store.id} has no valid saved coordinates and cannot be shown for delivery.`
+              );
+              return null;
+            }
+
+            const distance = await getDrivingDistanceMiles(
+              { latitude: userLocation.lat, longitude: userLocation.lng },
+              { latitude: store.latitude, longitude: store.longitude }
+            );
+
+            if (distance === null) {
+              return null;
+            }
 
             const pricing = calculateDeliveryFee(distance, 0);
 
@@ -104,8 +149,19 @@ export default function CustomerHomePage() {
               isFavorite: false,
             });
           }));
+
+        const storesWithDistance = calculatedStores.filter(
+          (store): store is CustomerStore => store !== null
+        );
+
+        if (storesWithDistance.length !== storesData.length) {
+          setDistanceError(
+            "Some stores could not be shown because their delivery distance could not be calculated."
+          );
+        }
+
         // Sort by distance (closest first)
-        storesWithDistance.sort((a, b) => (a.distance || 999) - (b.distance || 999));
+        storesWithDistance.sort((a, b) => a.distance - b.distance);
         
         // Filter only active stores
         const activeStores = storesWithDistance.filter(store => 
@@ -134,7 +190,7 @@ export default function CustomerHomePage() {
     };
 
     fetchStores();
-  }, [userLocation]);
+  }, [locationReady, userLocation]);
 
   // Handle search
   useEffect(() => {
@@ -154,7 +210,7 @@ export default function CustomerHomePage() {
 
   // Handle store click
   const handleStoreClick = (store: CustomerStore) => {
-    const distance = store.distance || 0;
+    const distance = store.distance;
     const maxRadius = DELIVERY_CONFIG.MAX_RADIUS_MILES;
     
     if (distance > maxRadius) {
@@ -171,9 +227,9 @@ export default function CustomerHomePage() {
     if (selectedStore) {
       setShowDistanceWarning(false);
       const searchParams = new URLSearchParams({
-        distance: String(selectedStore.distance || 0),
-        deliveryFee: String(selectedStore.deliveryFee || 0),
-        estimatedTime: String(selectedStore.estimatedPrepTime || 0),
+        distance: String(selectedStore.distance),
+        deliveryFee: String(selectedStore.deliveryFee),
+        estimatedTime: String(selectedStore.estimatedPrepTime),
         skipDistanceWarning: "1",
       });
 
@@ -214,6 +270,12 @@ export default function CustomerHomePage() {
       <div className="px-4 mt-4">
         <PromoCarousel />
       </div>
+
+      {distanceError && (
+        <div className="mx-4 mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          {distanceError}
+        </div>
+      )}
 
       {/* Store List */}
       <section className="px-4 mt-6">

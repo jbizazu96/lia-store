@@ -42,7 +42,10 @@ import {
   getEstimatedTime,
   getEstimatedTimeNumber,
 } from "@/services/delivery/distance";
-import { getDrivingDistanceMiles } from "@/services/delivery/routing";
+import {
+  getDrivingDistanceMiles,
+  hasValidRouteCoordinates,
+} from "@/services/delivery/routing";
 
 import {
   calculateDeliveryFee,
@@ -271,20 +274,31 @@ export function useCustomerStore({
               );
 
             const hasUserLocation =
-              userLocation !== null;
+              userLocation !== null &&
+              hasValidRouteCoordinates({
+                latitude: userLocation.lat,
+                longitude: userLocation.lng,
+              });
 
             const hasStoreLocation =
-              Number.isFinite(
-                domainStore.latitude
-              ) &&
-              Number.isFinite(
-                domainStore.longitude
-              );
+              hasValidRouteCoordinates({
+                latitude: domainStore.latitude,
+                longitude: domainStore.longitude,
+              });
 
-            if (
-              hasUserLocation &&
-              hasStoreLocation
-            ) {
+            if (!hasUserLocation) {
+              throw new Error(
+                "Your delivery address needs valid map coordinates. Please update and verify your address."
+              );
+            }
+
+            if (!hasStoreLocation) {
+              throw new Error(
+                "This store address needs valid map coordinates before delivery can be calculated."
+              );
+            }
+
+            {
               const drivingDistance = await getDrivingDistanceMiles(
                 { latitude: userLocation.lat, longitude: userLocation.lng },
                 {

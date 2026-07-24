@@ -31,6 +31,8 @@ import type {
 import {
   NotificationCard,
 } from "@/components/notifications/NotificationCard";
+import { useConfirmation } from "@/context/ConfirmationContext";
+import { useSuccessToast } from "@/context/SuccessToastContext";
 
 export default function NotificationsPage() {
   const { user } = useAuth();
@@ -38,6 +40,48 @@ export default function NotificationsPage() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [listenerError, setListenerError] = useState<string | null>(null);
+  const [clearing, setClearing] = useState(false);
+  const { confirm } = useConfirmation();
+  const { showSuccess } = useSuccessToast();
+
+  const deleteNotification = async (notification: Notification) => {
+    if (!user) return;
+
+    const confirmed = await confirm({
+      title: "Delete notification?",
+      message: "This notification will be permanently removed.",
+      confirmLabel: "Delete",
+      cancelLabel: "Keep notification",
+      destructive: true,
+    });
+
+    if (!confirmed) return;
+
+    await notificationService.deleteNotification(user.uid, notification.id);
+    showSuccess("Notification deleted.");
+  };
+
+  const clearAllNotifications = async () => {
+    if (!user || notifications.length === 0) return;
+
+    const confirmed = await confirm({
+      title: "Clear all notifications?",
+      message: "All of your notifications will be permanently removed.",
+      confirmLabel: "Clear all",
+      cancelLabel: "Keep notifications",
+      destructive: true,
+    });
+
+    if (!confirmed) return;
+
+    try {
+      setClearing(true);
+      await notificationService.clearAllNotifications(user.uid);
+      showSuccess("All notifications cleared.");
+    } finally {
+      setClearing(false);
+    }
+  };
 
 
   useEffect(() => {
@@ -114,7 +158,17 @@ export default function NotificationsPage() {
             <ArrowLeft className="w-5 h-5 text-gray-700" />
           </button>
           <h1 className="text-xl font-bold text-gray-800">Notifications</h1>
-          <span className="text-xs text-gray-400 ml-auto">
+          {notifications.length > 0 && (
+            <button
+              type="button"
+              onClick={clearAllNotifications}
+              disabled={clearing}
+              className="ml-auto text-xs font-semibold text-red-600 transition hover:text-red-700 disabled:opacity-50"
+            >
+              {clearing ? "Clearing..." : "Clear all"}
+            </button>
+          )}
+          <span className="text-xs text-gray-400">
             {notifications.length} notification{notifications.length !== 1 ? 's' : ''}
           </span>
         </div>
@@ -212,6 +266,7 @@ export default function NotificationsPage() {
                 >
                   <NotificationCard
                     notification={notification}
+                    onDelete={() => deleteNotification(notification)}
                     onClick={async () => {
                       if (!user) return;
                       await notificationService.markAsRead(

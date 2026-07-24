@@ -1,9 +1,244 @@
 rules_version = '2';
 
+/*
+|--------------------------------------------------------------------------
+| Firestore Access Rules
+|--------------------------------------------------------------------------
+|
+| Public marketplace data is readable so customers can discover stores and
+| products. Account-specific data is restricted to its authenticated owner.
+| Store owners can manage only the store, products, and orders assigned to
+| their own store.
+|
+| Cloud Functions use the Admin SDK and are not constrained by these rules.
+|
+*/
+
 service cloud.firestore {
   match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isSelf(userId) {
+      return signedIn() && request.auth.uid == userId;
+    }
+
+    function userAccountType(userId) {
+      return get(
+        /databases/$(database)/documents/users/$(userId)
+      ).data.accountType;
+    }
+
+    function isAdmin() {
+      return signedIn() &&
+        userAccountType(request.auth.uid) == "admin";
+    }
+
+    function isStoreOwnerAccount() {
+      return signedIn() &&
+        userAccountType(request.auth.uid) == "store_owner";
+    }
+
+    function ownsStore(storeId) {
+      return isStoreOwnerAccount() &&
+        get(
+          /databases/$(database)/documents/stores/$(storeId)
+        ).data.ownerId == request.auth.uid;
+    }
+
+    function ownsOrder(orderData) {
+      return ownsStore(orderData.store.id);
+    }
+
+    /*
+     * New orders store the customer at customer.uid. Some older order
+     * documents use customerId, so keep that ownership check while the
+     * legacy orders remain in the database.
+     */
+    function isOrderCustomer(orderData) {
+      return (
+        orderData.keys().hasAll(["customer"]) &&
+        orderData.customer.keys().hasAll(["uid"]) &&
+        orderData.customer.uid == request.auth.uid
+      ) || (
+        orderData.keys().hasAll(["customerId"]) &&
+        orderData.customerId == request.auth.uid
+      );
+    }
+
+    /*
+    |----------------------------------------------------------------------
+    | User Account Data
+    |----------------------------------------------------------------------
+    */
+
+    match /users/{userId} {
+      allow get: if isSelf(userId) || isAdmin();
+      allow list: if isAdmin();
+
+      /*
+       * A new user can choose customer or store-owner registration, but no
+       * browser client can create an admin profile.
+       */
+      allow create: if isSelf(userId) &&
+        request.resource.data.uid == request.auth.uid &&
+        request.resource.data.accountType in [
+          "customer",
+          "store_owner",
+        ];
+
+      /*
+       * Account type and UID are immutable from the client. This prevents a
+       * customer from changing their own profile into another account type.
+       */
+      allow update: if isSelf(userId) &&
+        request.resource.data.uid == request.auth.uid &&
+        (
+          !resource.data.keys().hasAll(["uid"]) ||
+          request.resource.data.uid == resource.data.uid
+        ) &&
+        request.resource.data.accountType == resource.data.accountType;
+
+      allow delete: if isSelf(userId) || isAdmin();
+
+      match /addresses/{addressId} {
+        allow read, write: if isSelf(userId) || isAdmin();
+      }
+
+      match /notifications/{notificationId} {
+        allow read, update, delete: if isSelf(userId) || isAdmin();
+        allow create: if isAdmin();
+      }
+    }
+
+    /*
+    |----------------------------------------------------------------------
+    | Customer-Owned Documents
+    |----------------------------------------------------------------------
+    */
+
+    match /addresses/{userId} {
+      allow read, delete: if isSelf(userId) || isAdmin();
+      allow create, update: if isSelf(userId) &&
+        request.resource.data.userId == request.auth.uid;
+    }
+
+    match /carts/{userId} {
+      allow read, delete: if isSelf(userId) || isAdmin();
+      allow create, update: if isSelf(userId) &&
+        request.resource.data.userId == request.auth.uid;
+    }
+
+    match /notificationDevices/{deviceId} {
+      allow get, list, delete: if signedIn() &&
+        (
+          resource.data.uid == request.auth.uid ||
+          isAdmin()
+        );
+
+      allow create: if signedIn() &&
+        request.resource.data.uid == request.auth.uid;
+
+      allow update: if signedIn() &&
+        resource.data.uid == request.auth.uid &&
+        request.resource.data.uid == request.auth.uid;
+    }
+
+    /*
+    |----------------------------------------------------------------------
+    | Marketplace Catalog
+    |----------------------------------------------------------------------
+    */
+
+    match /stores/{storeId} {
+      allow read: if true;
+
+      allow create: if isStoreOwnerAccount() &&
+        request.resource.data.ownerId == request.auth.uid;
+
+      allow update, delete: if ownsStore(storeId) || isAdmin();
+    }
+
+          match /products/{productId} {
+            allow read: if true;
+
+            allow create: if isStoreOwnerAccount() &&
+              ownsStore(request.resource.data.storeId);
+
+            allow update, delete: if (
+              ownsStore(resource.data.storeId) &&
+              request.resource.data.storeId == resource.data.storeId
+            ) || isAdmin();
+
+            /*
+            * Product gallery image documents.
+            *
+            * Path:
+            * products/{productId}/images/{imageId}
+            */
+            match /images/{imageId} {
+              allow read: if true;
+
+              /*
+              * Only the store that owns the parent product, or an admin,
+              * may manage its gallery images.
+              */
+              allow create, update, delete: if (
+                ownsStore(
+                  get(
+                    /databases/$(database)/documents/products/$(productId)
+                  ).data.storeId
+                )
+              ) || isAdmin();
+            }
+          }
+
+    match /categories/{categoryId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    /*
+    |----------------------------------------------------------------------
+    | Orders
+    |----------------------------------------------------------------------
+    */
+
+    match /orders/{orderId} {
+      allow read: if signedIn() && (
+        isOrderCustomer(resource.data) ||
+        ownsOrder(resource.data) ||
+        isAdmin()
+      );
+
+      /*
+       * Customer checkout creates orders through the createOrder Callable
+       * Function, which rechecks inventory and price server-side.
+       */
+      allow create, delete: if isAdmin();
+
+      /*
+       * Store owners may update only fulfillment/timeline fields for their
+       * own orders; totals, customer data, store data, and items are fixed.
+       */
+      allow update: if ownsOrder(resource.data) &&
+        request.resource.data.diff(resource.data)
+          .affectedKeys()
+          .hasOnly([
+            "status",
+            "statusHistory",
+            "cancellationReason",
+            "updatedAt",
+          ]);
+    }
+
+    /*
+     * No browser access is granted to undeclared collections. Add a
+     * collection-specific rule when a new feature needs one.
+     */
     match /{document=**} {
-      allow read, write: if true;
+      allow read, write: if isAdmin();
     }
   }
 }

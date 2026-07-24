@@ -22,6 +22,8 @@ import {
 
 import type {
   ProductImageProcessingResult,
+  ProductImageVariantMap,
+  ProductImageVariantName,
 } from "./imageTypes";
 
 /*
@@ -73,6 +75,7 @@ export async function markProductImageProcessing(
     }
   );
 }
+
 
 /*
 |--------------------------------------------------------------------------
@@ -157,6 +160,210 @@ export async function markProductImageReady(
       return {
         updated: true,
         previousOptimizedImagePath,
+      };
+    }
+  );
+}
+
+/*
+|--------------------------------------------------------------------------
+| Mark Product Image Variants Ready
+|--------------------------------------------------------------------------
+|
+| Saves all customer-facing image variants to the product document.
+|
+| The configured default variant remains available through imageUrl so older
+| components continue working during the frontend migration.
+|
+*/
+
+interface MarkProductImageVariantsReadyParams {
+  productId: string;
+
+  originalImagePath: string;
+
+  imageVariants: ProductImageVariantMap;
+
+  defaultVariant:
+    ProductImageVariantName;
+}
+
+interface MarkProductImageVariantsReadyResult {
+  updated: boolean;
+
+  previousVariantPaths: string[];
+}
+
+export async function markProductImageVariantsReady({
+  productId,
+  originalImagePath,
+  imageVariants,
+  defaultVariant,
+}: MarkProductImageVariantsReadyParams):
+Promise<MarkProductImageVariantsReadyResult> {
+  if (
+    !productId.trim() ||
+    !originalImagePath.trim()
+  ) {
+    return {
+      updated:
+        false,
+
+      previousVariantPaths:
+        [],
+    };
+  }
+
+  const defaultImage =
+    imageVariants[
+      defaultVariant
+    ];
+
+  if (!defaultImage) {
+    throw new Error(
+      `The default image variant "${defaultVariant}" is missing.`
+    );
+  }
+
+  const firestore =
+    getFirestore("default");
+
+  const productReference =
+    firestore
+      .collection("products")
+      .doc(productId);
+
+  return firestore.runTransaction(
+    async (transaction) => {
+      const productSnapshot =
+        await transaction.get(
+          productReference
+        );
+
+      const product =
+        productSnapshot.data();
+
+      /*
+       * Only the image currently referenced by the product may become ready.
+       *
+       * This prevents a slow older upload from replacing a newer image.
+       */
+
+      if (
+        !productSnapshot.exists ||
+        product?.originalImagePath !==
+          originalImagePath
+      ) {
+        return {
+          updated:
+            false,
+
+          previousVariantPaths:
+            [],
+        };
+      }
+
+      /*
+       * Collect old variant paths so Storage cleanup can happen only after
+       * Firestore safely references the new image set.
+       */
+
+      const previousImageVariants =
+        product.imageVariants;
+
+      const previousVariantPaths:
+      string[] = [];
+
+      if (
+        previousImageVariants &&
+        typeof previousImageVariants ===
+          "object"
+      ) {
+        for (
+          const variant of
+          Object.values(
+            previousImageVariants
+          )
+        ) {
+          if (
+            variant &&
+            typeof variant ===
+              "object" &&
+            "path" in variant &&
+            typeof variant.path ===
+              "string"
+          ) {
+            previousVariantPaths.push(
+              variant.path
+            );
+          }
+        }
+      }
+
+      transaction.update(
+        productReference,
+        {
+          /*
+           * Backward-compatible default image.
+           */
+          imageUrl:
+            defaultImage.url,
+
+          imageStatus:
+            "ready",
+
+          originalImagePath:
+            null,
+
+          /*
+           * Retain this legacy field temporarily for existing cleanup and
+           * debugging logic.
+           */
+          optimizedImagePath:
+            defaultImage.path,
+
+          /*
+           * New responsive image map.
+           */
+          imageVariants,
+
+          imageError:
+            null,
+
+          claidStatus:
+            "done",
+
+          claidError:
+            null,
+
+          imageProcessedAt:
+            FieldValue.serverTimestamp(),
+
+          /*
+           * Legacy image metadata now describes the default variant.
+           */
+          imageWidth:
+            defaultImage.width,
+
+          imageHeight:
+            defaultImage.height,
+
+          imageSizeBytes:
+            defaultImage.sizeBytes,
+
+          imageFormat:
+            defaultImage.format,
+
+          updatedAt:
+            FieldValue.serverTimestamp(),
+        }
+      );
+
+      return {
+        updated:
+          true,
+
+        previousVariantPaths,
       };
     }
   );

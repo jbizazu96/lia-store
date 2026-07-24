@@ -4,6 +4,9 @@ import Image from "next/image";
 import {Star, MapPin, Clock as ClockIcon, Package} from "lucide-react";
 import {StoreGroup} from "../types";
 import {SearchResult} from "../types";
+import {
+  productImageSelector,
+} from "@/services/product/productImageSelector";
 
 interface StoreResultProps {
   group: StoreGroup;
@@ -104,7 +107,10 @@ export function StoreResult({group, onStoreClick, onProductClick}: StoreResultPr
               <div className="relative h-28 bg-gray-100">
                 {product.imageUrl ? (
                   <Image
-                    src={product.imageUrl}
+                    src={productImageSelector.getUrl(
+                      product,
+                      "card"
+                    )}
                     alt={product.name}
                     fill
                     className="object-cover"

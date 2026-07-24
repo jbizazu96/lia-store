@@ -12,6 +12,9 @@ import Image from "next/image";
 import {motion} from "framer-motion";
 import {Heart, Star, MapPin, Truck, Clock, AlertCircle} from "lucide-react";
 import { formatDistance } from "@/services/delivery/distance";
+import {
+  formatProductName,
+} from "@/utils/productDisplay";
 
 interface StoreCardProps {
   store: CustomerStore;
@@ -30,6 +33,8 @@ export function StoreCard({
   const formattedDistance = formatDistance(distance);
   const deliveryFee = store.deliveryFeeDisplay;
   const estimatedTime = store.estimatedDeliveryTime;
+  const displayName =
+    formatProductName(store.name);
 
   const storeStatus = getStoreStatus(
   store.schedule ?? [],
@@ -49,26 +54,26 @@ export function StoreCard({
         {store.bannerUrl || store.logoUrl ? (
           <Image
             src={store.bannerUrl || store.logoUrl || "/placeholder-store.jpg"}
-            alt={store.name}
+            alt={displayName}
             fill
             className="object-cover"
           />
         ) : (
           <div className="w-full h-full bg-gradient-to-br from-orange-100 to-green-100 flex items-center justify-center">
             <span className="text-4xl font-bold text-gray-400">
-              {store.name.charAt(0)}
+              {displayName.charAt(0)}
             </span>
           </div>
         )}
 
         {/* Store Name Overlay */}
-        <div className="pointer-events-none absolute inset-0 flex items-center justify-center p-4">
+        {/*<div className="pointer-events-none absolute inset-0 flex items-center justify-center p-4">
           <div className="max-w-[80%] rounded-xl bg-white/95 px-4 py-2 text-center shadow-md backdrop-blur-sm">
-            <h3 className="text-lg font-bold tracking-wide text-gray-800">
-              {store.name.toUpperCase()}
+            <h3 className="font-sans text-lg font-extrabold leading-tight tracking-tight text-gray-900">
+              {displayName}
             </h3>
           </div>
-        </div>
+        </div>*/}
 
         {/* Favorite Button */}
         <button
@@ -105,7 +110,7 @@ export function StoreCard({
         </div>
         </div>
       {/* Store Info - With more padding */}
-      <div className="p-4 space-y-3">
+      <div className="space-y-2 p-4">
         {/* Store Name & Rating */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -113,13 +118,15 @@ export function StoreCard({
               <div className="relative w-8 h-8 rounded-full overflow-hidden flex-shrink-0 border border-gray-200">
                 <Image
                   src={store.logoUrl}
-                  alt={store.name}
+                  alt={displayName}
                   fill
                   className="object-cover"
                 />
               </div>
             )}
-            <h4 className="font-semibold text-gray-800 text-base">{store.name}</h4>
+            <h4 className="font-sans text-base font-bold leading-tight tracking-tight text-gray-900">
+              {displayName}
+            </h4>
           </div>
           
           <div className="flex items-center gap-1">

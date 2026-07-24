@@ -21,7 +21,10 @@ import {
 import {
   getEstimatedTimeNumber,
 } from "@/services/delivery/distance";
-import { getDrivingDistanceMiles } from "@/services/delivery/routing";
+import {
+  getDrivingDistanceMiles,
+  hasValidRouteCoordinates,
+} from "@/services/delivery/routing";
 
 import {
   calculateDeliveryFee,
@@ -67,6 +70,8 @@ interface UseCheckoutPricingResult {
 
   isCalculatingDistance: boolean;
 
+  distanceError: string | null;
+
   estimatedDeliveryMinutes: number;
 
   deliveryFee: number;
@@ -92,16 +97,47 @@ export function useCheckoutPricing({
 }: UseCheckoutPricingParams): UseCheckoutPricingResult {
   const [distanceMiles, setDistanceMiles] = useState(0);
   const [isCalculatingDistance, setIsCalculatingDistance] = useState(false);
+  const [distanceError, setDistanceError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!store || address?.latitude === undefined || address?.longitude === undefined) {
       setDistanceMiles(0);
       setIsCalculatingDistance(false);
+      setDistanceError(
+        address
+          ? "Your delivery address needs valid map coordinates. Please update it before checkout."
+          : null
+      );
+      return;
+    }
+
+    if (!hasValidRouteCoordinates({
+      latitude: store.latitude,
+      longitude: store.longitude,
+    })) {
+      setDistanceMiles(0);
+      setIsCalculatingDistance(false);
+      setDistanceError(
+        "This store address is not ready for delivery calculations."
+      );
+      return;
+    }
+
+    if (!hasValidRouteCoordinates({
+      latitude: address.latitude,
+      longitude: address.longitude,
+    })) {
+      setDistanceMiles(0);
+      setIsCalculatingDistance(false);
+      setDistanceError(
+        "Your delivery address needs valid map coordinates. Please update it before checkout."
+      );
       return;
     }
 
     let isMounted = true;
     setIsCalculatingDistance(true);
+    setDistanceError(null);
 
     getDrivingDistanceMiles(
       { latitude: store.latitude, longitude: store.longitude },
@@ -109,7 +145,23 @@ export function useCheckoutPricing({
     )
       .then((drivingDistance) => {
         if (isMounted) {
-          setDistanceMiles(drivingDistance ?? 0);
+          if (drivingDistance === null) {
+            setDistanceMiles(0);
+            setDistanceError(
+              "We could not calculate a driving route for this delivery address. Please try again shortly."
+            );
+            return;
+          }
+
+          setDistanceMiles(drivingDistance);
+        }
+      })
+      .catch(() => {
+        if (isMounted) {
+          setDistanceMiles(0);
+          setDistanceError(
+            "We could not calculate a driving route for this delivery address. Please try again shortly."
+          );
         }
       })
       .finally(() => {
@@ -151,6 +203,8 @@ export function useCheckoutPricing({
 
       isCalculatingDistance,
 
+      distanceError,
+
       estimatedDeliveryMinutes:
         getEstimatedTimeNumber(
           distanceMiles
@@ -175,5 +229,6 @@ export function useCheckoutPricing({
     tip,
     distanceMiles,
     isCalculatingDistance,
+    distanceError,
   ]);
 }

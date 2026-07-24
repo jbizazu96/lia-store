@@ -35,6 +35,9 @@ import Image from "next/image";
 import Link from "next/link";
 import { notificationService } from "@/services/notification/notificationService";
 import type { Notification } from "@/services/notification/notificationTypes";
+import {
+  RoleGuard,
+} from "@/components/auth/RoleGuard";
 
 interface StoreData {
   id: string;
@@ -43,7 +46,7 @@ interface StoreData {
   status: string;
 }
 
-export default function StoreLayout({ children }: { children: React.ReactNode }) {
+function StoreLayoutContent({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -661,5 +664,23 @@ export default function StoreLayout({ children }: { children: React.ReactNode })
         </div>
       </div>
     </div>
+  );
+}
+
+export default function StoreLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <RoleGuard
+      allowedAccountTypes={[
+        "store_owner",
+      ]}
+    >
+      <StoreLayoutContent>
+        {children}
+      </StoreLayoutContent>
+    </RoleGuard>
   );
 }

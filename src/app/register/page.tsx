@@ -9,6 +9,7 @@ import {useState} from "react";
   Next.js navigation.
 */
 import {useRouter} from "next/navigation";
+import {formatPhoneNumber} from "@/utils/phone";
 import Image from "next/image";
 import {motion} from "framer-motion";
 import {
@@ -76,20 +77,6 @@ export default function RegisterPage() {
   const [success, setSuccess] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-
-  /*
-    Format phone number as (xxx) xxx - xxxx
-  */
-  function formatPhoneNumber(value: string) {
-    const digits = value.replace(/\D/g, "");
-    if (digits.length <= 3) {
-      return digits;
-    } else if (digits.length <= 6) {
-      return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
-    } else {
-      return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)} - ${digits.slice(6, 10)}`;
-    }
-  }
 
   function handlePhoneChange(e: React.ChangeEvent<HTMLInputElement>) {
     const formatted = formatPhoneNumber(e.target.value);

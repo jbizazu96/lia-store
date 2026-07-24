@@ -38,8 +38,10 @@ import { DangerSection } from "@/components/store/settings/DangerSection";
 import { StoreSchedule } from "@/components/store/settings/StoreSchedule";
 import { useUnsavedChanges } from "@/hooks/useUnsavedChanges";
 import { useConfirmation } from "@/context/ConfirmationContext";
+import { useSuccessToast } from "@/context/SuccessToastContext";
 
 export default function SettingsPage() {
+  const { showSuccess } = useSuccessToast();
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [storeData, setStoreData] = useState<any>(null);
@@ -197,6 +199,7 @@ export default function SettingsPage() {
       }
 
       setSaveMessage("Settings saved successfully! ✅");
+      showSuccess("Store settings saved successfully.");
       setTimeout(() => setSaveMessage(""), 3000);
 
     } catch (error) {

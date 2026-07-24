@@ -9,12 +9,14 @@ import {X, Eye, EyeOff, Lock, Check} from "lucide-react";
 import {updatePassword, reauthenticateWithCredential, EmailAuthProvider} from "firebase/auth";
 import {auth} from "@/lib/firebase";
 import { useConfirmation } from "@/context/ConfirmationContext";
+import { useSuccessToast } from "@/context/SuccessToastContext";
 
 interface SecurityModalProps {
   onClose: () => void;
 }
 
 export function SecurityModal({onClose}: SecurityModalProps) {
+  const {showSuccess} = useSuccessToast();
   const { confirm } = useConfirmation();
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -76,6 +78,7 @@ export function SecurityModal({onClose}: SecurityModalProps) {
       await updatePassword(user, formData.newPassword);
 
       setSuccess(true);
+      showSuccess("Password updated successfully.");
       setFormData({
         currentPassword: "",
         newPassword: "",

@@ -54,11 +54,15 @@ import {
   BrandedLoader,
 } from "@/components/ui/BrandedLoader";
 
+import {useSuccessToast} from "@/context/SuccessToastContext";
+
 import {
-  productImageService,
+  productGalleryImageService,
+} from "@/services/product/productGalleryImageService";
+
+import {
   validateProductImageFile,
 } from "@/services/product/productImageService";
-
 /*
 |--------------------------------------------------------------------------
 | Page
@@ -66,6 +70,7 @@ import {
 */
 
 export default function AddProductPage() {
+  const {showSuccess} = useSuccessToast();
   const router =
     useRouter();
 
@@ -170,145 +175,280 @@ export default function AddProductPage() {
     return () => window.clearTimeout(timeoutId);
   }, [success]);
 
-  /*
-  |--------------------------------------------------------------------------
-  | Create Product
-  |--------------------------------------------------------------------------
-  */
+ /*
+|--------------------------------------------------------------------------
+| Create Product
+|--------------------------------------------------------------------------
+*/
 
-  const handleSubmit =
-  async ({
-    data,
-    imageFile,
-  }: ProductFormSubmission) => {
-    if (!storeId) {
-      setError(
-        "Store not found."
+const handleSubmit =
+async ({
+  data,
+  imageFiles,
+}: ProductFormSubmission) => {
+  if (!storeId) {
+    setError(
+      "Store not found."
+    );
+
+    return;
+  }
+
+  const frontImage =
+    imageFiles.find(
+      (image) =>
+        image.isPrimary
+    );
+
+  const backImage =
+    imageFiles.find(
+      (image) =>
+        !image.isPrimary
+    );
+
+  const backImageFile =
+    backImage?.file;
+
+  if (!frontImage?.file) {
+    setError(
+      "A front product image is required."
+    );
+
+    return;
+  }
+
+  if (backImage && !backImageFile) {
+    setError(
+      "Please choose a valid back product image or remove it."
+    );
+
+    return;
+  }
+
+  try {
+    setSubmitting(
+      true
+    );
+
+    setError(
+      null
+    );
+
+    setSuccess(
+      null
+    );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Validate Selected Images
+    |--------------------------------------------------------------------------
+    */
+
+    validateProductImageFile(
+      frontImage.file
+    );
+
+    if (backImage && backImageFile) {
+      validateProductImageFile(
+        backImageFile
       );
-
-      return;
     }
 
-    try {
-      setSubmitting(true);
-      setError(null);
-      setSuccess(null);
+    /*
+    |--------------------------------------------------------------------------
+    | Create Parent Product
+    |--------------------------------------------------------------------------
+    |
+    | The parent product keeps the primary front-image fields used by:
+    |
+    | - Store cards
+    | - Search
+    | - Cart
+    | - Checkout
+    | - Orders
+    |
+    | The background Function fills those fields after the front image is
+    | processed.
+    |
+    */
 
-      if (imageFile) {
-        validateProductImageFile(
-          imageFile
-        );
-      }
+    const productId =
+      await productService.createProduct(
+        {
+          storeId,
 
-      /*
-      |--------------------------------------------------------------------------
-      | Create Product First
-      |--------------------------------------------------------------------------
-      |
-      | The product document must exist before the image upload begins because
-      | both the browser upload service and the background Function update it.
-      |
-      */
+          name:
+            data.name,
 
-      const productId =
-        await productService.createProduct(
-          {
-            storeId,
+          description:
+            data.description,
 
-            name:
-              data.name,
+          category:
+            data.category,
 
-            description:
-              data.description,
+          brand:
+            data.brand,
 
-            category:
-              data.category,
+          price:
+            data.price,
 
-            brand:
-              data.brand,
+          stock:
+            data.stock,
 
-            price:
-              data.price,
+          imageUrl:
+            "",
 
-            stock:
-              data.stock,
+          imageVariants:
+            undefined,
 
-            imageUrl:
-              "",
+          images:
+            undefined,
 
-            sku:
-              data.sku,
+          primaryImageId:
+            frontImage.id,
 
-            isAvailable:
-              data.isAvailable,
+          sku:
+            data.sku,
 
-            featured:
-              data.featured,
+          isAvailable:
+            data.isAvailable,
 
-            size:
-              data.size,
+          featured:
+            data.featured,
 
-            reviewCount:
-              0,
+          size:
+            data.size,
 
-            soldCount:
-              0,
+          reviewCount:
+            0,
 
-            promotion:
-              data.promotion,
+          soldCount:
+            0,
 
-            imageStatus:
-              imageFile
-                ? "uploading"
-                : "none",
+          promotion:
+            data.promotion,
 
-            imageError:
-              null,
-          }
-        );
+          imageStatus:
+            "uploading",
 
-      /*
-      |--------------------------------------------------------------------------
-      | Upload Original Image
-      |--------------------------------------------------------------------------
-      |
-      | The owner waits only for the original file upload.
-      |
-      | After the upload completes, the page redirects and the Cloud Function
-      | continues resizing, WebP conversion, and Firestore updates.
-      |
-      */
+          originalImagePath:
+            undefined,
 
-      if (imageFile) {
-        await productImageService
-          .uploadOriginalImage({
+          optimizedImagePath:
+            undefined,
+
+          imageError:
+            null,
+        }
+      );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Upload Front And Back Images
+    |--------------------------------------------------------------------------
+    |
+    | Both original files upload concurrently.
+    |
+    | Front:
+    | - Required
+    | - Primary
+    | - Mirrored onto the parent product when processing finishes
+    |
+    | Back:
+    | - Optional
+    | - Stored only in the gallery subcollection
+    |
+    */
+
+    const uploadTasks = [
+      productGalleryImageService
+        .uploadGalleryImage({
+          productId,
+
+          storeId,
+
+          imageId:
+            frontImage.id,
+
+          role:
+            "front",
+
+          file:
+            frontImage.file,
+
+          altText:
+            frontImage.altText,
+
+          position:
+            0,
+        }),
+    ];
+
+    if (backImage && backImageFile) {
+      uploadTasks.push(
+        productGalleryImageService
+          .uploadGalleryImage({
             productId,
+
             storeId,
+
+            imageId:
+              backImage.id,
+
+            role:
+              "back",
+
             file:
-              imageFile,
-          });
-      }
+            backImageFile,
 
-      setFormKey(
-        (currentKey) => currentKey + 1
-      );
+            altText:
+              backImage.altText,
 
-      setSuccess(
-        "Product added. You can add another one below."
+            position:
+              1,
+          })
       );
-    } catch (submitError) {
-      console.error(
-        "Error adding product:",
-        submitError
-      );
-
-      setError(
-        "Failed to add product. Please try again."
-      );
-    } finally {
-      setSubmitting(false);
     }
-  };
+
+    await Promise.all(
+      uploadTasks
+    );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Reset Form
+    |--------------------------------------------------------------------------
+    */
+
+    setFormKey(
+      (currentKey) =>
+        currentKey + 1
+    );
+
+    setSuccess(
+      "Product added. Image processing will continue in the background."
+    );
+
+    showSuccess(
+      "Product added successfully."
+    );
+  } catch (submitError) {
+    console.error(
+      "Error adding product:",
+      submitError
+    );
+
+    setError(
+      submitError instanceof Error
+        ? submitError.message
+        : "Failed to add product. Please try again."
+    );
+  } finally {
+    setSubmitting(
+      false
+    );
+  }
+};
 
   /*
   |--------------------------------------------------------------------------

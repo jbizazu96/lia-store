@@ -80,6 +80,14 @@ interface CreateClaidJobParams {
 
   imageId: string;
 
+  galleryImageId: string;
+
+  role: "front" | "back";
+
+  position: 0 | 1;
+
+  altText: string;
+
   bucketName: string;
 
   originalImagePath: string;
@@ -97,6 +105,10 @@ export async function createClaidJob({
   productId,
   storeId,
   imageId,
+  galleryImageId,
+  role,
+  position,
+  altText,
   bucketName,
   originalImagePath,
 }: CreateClaidJobParams): Promise<void> {
@@ -120,12 +132,32 @@ export async function createClaidJob({
     !storeId.trim() ||
     !imageId.trim() ||
     !bucketName.trim() ||
+    !galleryImageId.trim() ||
+    !altText.trim() ||
     !originalImagePath.trim()
   ) {
     throw new Error(
       "Complete product image context is required."
     );
   }
+
+    if (
+      role !== "front" &&
+      role !== "back"
+    ) {
+      throw new Error(
+        "A valid image role is required."
+      );
+    }
+
+    if (
+      position !== 0 &&
+      position !== 1
+    ) {
+      throw new Error(
+        "A valid image position is required."
+      );
+    }
 
   await getFirestore("default")
     .collection(
@@ -144,6 +176,14 @@ export async function createClaidJob({
       bucketName,
 
       originalImagePath,
+
+      galleryImageId,
+
+      role,
+
+      position,
+
+      altText,
 
       /*
        * This path acts as the concurrency token.
@@ -230,6 +270,18 @@ export async function getClaidJob(
 
     imageId:
       data.imageId,
+
+    galleryImageId:
+      data.galleryImageId,
+
+    role:
+      data.role,
+
+    position:
+      data.position,
+
+    altText:
+      data.altText,
 
     bucketName:
       typeof data.bucketName ===
@@ -354,15 +406,16 @@ export async function updateClaidJob({
     );
 }
 
+
 /*
 |--------------------------------------------------------------------------
 | List Pending Claid Jobs
 |--------------------------------------------------------------------------
 |
-| Returns a limited batch of jobs that still require status checks.
+| Returns a limited batch of gallery-image jobs that still require status
+| checks.
 |
-| The limit prevents one scheduler invocation from processing an unlimited
-| number of documents.
+| Invalid or incomplete Firestore documents are ignored safely.
 |
 */
 
@@ -402,131 +455,174 @@ Promise<ClaidProductImageJob[]> {
       .get();
 
   return snapshot.docs
-    .map((document) => {
-      const data =
-        document.data();
+    .map(
+      (
+        document
+      ): ClaidProductImageJob | null => {
+        const data =
+          document.data();
 
-      if (
-        typeof data.bucketName !==
-           "string" ||
-        typeof data.taskId !==
-          "number" ||
-        typeof data.productId !==
-          "string" ||
-        typeof data.storeId !==
-          "string" ||
-        typeof data.imageId !==
-          "string" ||
-        typeof data.originalImagePath !==
-          "string" ||
-        typeof data.expectedOriginalImagePath !==
-          "string"
-      ) {
-        return null;
-      }
+        /*
+        |--------------------------------------------------------------------------
+        | Validate Required Job Context
+        |--------------------------------------------------------------------------
+        */
 
-            const job:
-              ClaidProductImageJob = {
-                taskId:
-                  data.taskId,
-
-                productId:
-                  data.productId,
-
-                storeId:
-                  data.storeId,
-
-                imageId:
-                  data.imageId,
-
-                bucketName:
-                  data.bucketName,
-                  
-                originalImagePath:
-                  data.originalImagePath,
-
-                expectedOriginalImagePath:
-                  data.expectedOriginalImagePath,
-
-                status:
-                  data.status as
-                    ClaidImageStatus,
-
-                attemptCount:
-                  typeof data.attemptCount ===
-                    "number"
-                    ? data.attemptCount
-                    : 0,
-
-                maxAttempts:
-                  typeof data.maxAttempts ===
-                    "number"
-                    ? data.maxAttempts
-                    : DEFAULT_MAX_ATTEMPTS,
-
-                nextAttemptAt:
-                  data.nextAttemptAt
-                    ?.toDate?.()
-                    ?.toISOString?.() ??
-                  null,
-
-                lastAttemptAt:
-                  data.lastAttemptAt
-                    ?.toDate?.()
-                    ?.toISOString?.() ??
-                  null,
-
-                resultUrl:
-                  typeof data.resultUrl ===
-                    "string"
-                    ? data.resultUrl
-                    : null,
-
-                error:
-                  typeof data.error ===
-                    "string"
-                    ? data.error
-                    : null,
-
-                createdAt:
-                  data.createdAt
-                    ?.toDate?.()
-                    ?.toISOString?.(),
-
-                updatedAt:
-                  data.updatedAt
-                    ?.toDate?.()
-                    ?.toISOString?.(),
-              };
-
-              return job;
-    })
-      .filter(
+        if (
+          typeof data.taskId !==
+            "number" ||
+          typeof data.productId !==
+            "string" ||
+          typeof data.storeId !==
+            "string" ||
+          typeof data.imageId !==
+            "string" ||
+          typeof data.galleryImageId !==
+            "string" ||
           (
-            job
-          ): job is ClaidProductImageJob =>
-            job !== null
-        )
-        .filter(
-          (job) => {
-            if (!job.nextAttemptAt) {
-              return true;
-            }
-
-            const retryTime =
-              new Date(
-                job.nextAttemptAt
-              ).getTime();
-
-            return (
-              Number.isFinite(
-                retryTime
-              ) &&
-              retryTime <= Date.now()
-            );
-          }
-        );
+            data.role !== "front" &&
+            data.role !== "back"
+          ) ||
+          (
+            data.position !== 0 &&
+            data.position !== 1
+          ) ||
+          typeof data.altText !==
+            "string" ||
+          typeof data.bucketName !==
+            "string" ||
+          typeof data.originalImagePath !==
+            "string" ||
+          typeof data.expectedOriginalImagePath !==
+            "string" ||
+          (
+            data.status !== "accepted" &&
+            data.status !== "processing"
+          )
+        ) {
+          return null;
         }
+
+        /*
+        |--------------------------------------------------------------------------
+        | Map Job
+        |--------------------------------------------------------------------------
+        */
+
+        const job:
+        ClaidProductImageJob = {
+          taskId:
+            data.taskId,
+
+          productId:
+            data.productId,
+
+          storeId:
+            data.storeId,
+
+          imageId:
+            data.imageId,
+
+          galleryImageId:
+            data.galleryImageId,
+
+          role:
+            data.role,
+
+          position:
+            data.position,
+
+          altText:
+            data.altText,
+
+          bucketName:
+            data.bucketName,
+
+          originalImagePath:
+            data.originalImagePath,
+
+          expectedOriginalImagePath:
+            data.expectedOriginalImagePath,
+
+          status:
+            data.status,
+
+          attemptCount:
+            typeof data.attemptCount ===
+              "number"
+              ? data.attemptCount
+              : 0,
+
+          maxAttempts:
+            typeof data.maxAttempts ===
+              "number"
+              ? data.maxAttempts
+              : DEFAULT_MAX_ATTEMPTS,
+
+          nextAttemptAt:
+            data.nextAttemptAt
+              ?.toDate?.()
+              ?.toISOString?.() ??
+            null,
+
+          lastAttemptAt:
+            data.lastAttemptAt
+              ?.toDate?.()
+              ?.toISOString?.() ??
+            null,
+
+          resultUrl:
+            typeof data.resultUrl ===
+              "string"
+              ? data.resultUrl
+              : null,
+
+          error:
+            typeof data.error ===
+              "string"
+              ? data.error
+              : null,
+
+          createdAt:
+            data.createdAt
+              ?.toDate?.()
+              ?.toISOString?.(),
+
+          updatedAt:
+            data.updatedAt
+              ?.toDate?.()
+              ?.toISOString?.(),
+        };
+
+        return job;
+      }
+    )
+    .filter(
+      (
+        job
+      ): job is ClaidProductImageJob =>
+        job !== null
+    )
+    .filter(
+      (job) => {
+        if (!job.nextAttemptAt) {
+          return true;
+        }
+
+        const retryTime =
+          new Date(
+            job.nextAttemptAt
+          ).getTime();
+
+        return (
+          Number.isFinite(
+            retryTime
+          ) &&
+          retryTime <= Date.now()
+        );
+      }
+    );
+}
 
 /*
 |--------------------------------------------------------------------------

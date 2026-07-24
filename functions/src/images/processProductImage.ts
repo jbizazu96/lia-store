@@ -1,24 +1,21 @@
 /*
 |--------------------------------------------------------------------------
-| Process Product Image Trigger
+| Process Product Gallery Image Trigger
 |--------------------------------------------------------------------------
 |
-| Runs automatically whenever an original product image is uploaded.
+| Runs when a front or back product image is uploaded.
 |
-| Primary workflow:
+| Workflow:
 |
-| 1. Validate the uploaded object.
-| 2. Verify that the upload is still the product's current image.
-| 3. Create a temporary signed URL for Claid.
-| 4. Submit a conservative async enhancement job.
-| 5. Store the Claid job context.
-| 6. Mark the product image as enhancing.
-| 7. Exit without waiting for Claid.
+| 1. Validate gallery-image metadata.
+| 2. Confirm the gallery upload is still current.
+| 3. Submit the original to Claid.
+| 4. Save the complete gallery job context.
+| 5. Mark the gallery image as enhancing.
+| 6. Allow the scheduled Claid poller to finish processing.
 |
-| Fallback workflow:
-|
-| If Claid submission fails, the Function continues with the existing
-| Sharp-only image pipeline so the product still receives an optimized image.
+| If Claid submission fails, Sharp creates all responsive variants directly
+| from the original upload.
 |
 */
 
@@ -47,22 +44,21 @@ import {
 } from "../claid/claidStorage";
 
 import {
-  markProductImageEnhancing,
-  markProductImageFailed,
-  markProductImageProcessing,
-  markProductImageReady,
-} from "./imageFirestore";
+  markGalleryImageEnhancing,
+  markGalleryImageFailed,
+  markGalleryImageProcessing,
+  markGalleryImageReady,
+} from "./galleryImageFirestore";
 
 import {
-  processProductImage as optimizeProductImage,
+  processProductImageVariants,
 } from "./imageProcessor";
 
 import {
-  buildOptimizedImagePath,
   deleteOptimizedImage,
   deleteOriginalImage,
   downloadOriginalImage,
-  uploadOptimizedImage,
+  uploadOptimizedImageVariants,
 } from "./imageStorage";
 
 import {
@@ -70,17 +66,14 @@ import {
 } from "./imageTypes";
 
 import type {
-  ProductImageMetadata,
-  ProductImageProcessingResult,
+  ProductGalleryImageMetadata,
+  ProductImageVariantMap,
 } from "./imageTypes";
 
 /*
 |--------------------------------------------------------------------------
 | Claid Secret
 |--------------------------------------------------------------------------
-|
-| Stored in Google Secret Manager and attached only to Functions that need it.
-|
 */
 
 const CLAID_API_KEY =
@@ -92,13 +85,16 @@ const CLAID_API_KEY =
 |--------------------------------------------------------------------------
 | Metadata Validation
 |--------------------------------------------------------------------------
+|
+| Only the final front/back gallery workflow is accepted.
+|
 */
 
 function getProductImageMetadata(
   metadata:
     | Record<string, string>
     | undefined
-): ProductImageMetadata | null {
+): ProductGalleryImageMetadata | null {
   if (!metadata) {
     return null;
   }
@@ -107,24 +103,59 @@ function getProductImageMetadata(
     productId,
     storeId,
     imageId,
+    galleryImageId,
+    role,
+    position,
+    altText,
     processingType,
   } = metadata;
 
   if (
-    !productId ||
-    !storeId ||
-    !imageId ||
     processingType !==
-      PRODUCT_IMAGE_CONFIG.PROCESSING_TYPE
+      PRODUCT_IMAGE_CONFIG
+        .GALLERY_PROCESSING_TYPE ||
+    !productId?.trim() ||
+    !storeId?.trim() ||
+    !imageId?.trim() ||
+    !galleryImageId?.trim() ||
+    (
+      role !== "front" &&
+      role !== "back"
+    ) ||
+    (
+      position !== "0" &&
+      position !== "1"
+    )
   ) {
     return null;
   }
 
   return {
     productId,
+
     storeId,
+
     imageId,
-    processingType,
+
+    galleryImageId,
+
+    role,
+
+    position:
+      position === "0"
+        ? 0
+        : 1,
+
+    altText:
+      altText?.trim() ||
+      (
+        role === "front"
+          ? "Front view of product"
+          : "Back label of product"
+      ),
+
+    processingType:
+      "product-gallery-image-original",
   };
 }
 
@@ -138,7 +169,8 @@ export const processProductImage =
   onObjectFinalized(
     {
       region:
-        PRODUCT_IMAGE_CONFIG.REGION,
+        PRODUCT_IMAGE_CONFIG
+          .REGION,
 
       memory:
         "1GiB",
@@ -172,14 +204,14 @@ export const processProductImage =
         !originalImagePath
       ) {
         logger.warn(
-          "Ignoring Storage event without bucket or object path."
+          "Ignoring Storage event without a bucket or object path."
         );
 
         return;
       }
 
       /*
-       * Prevent the optimized WebP from triggering this Function again.
+       * Prevent generated variants from retriggering this Function.
        */
 
       if (
@@ -189,10 +221,6 @@ export const processProductImage =
       ) {
         return;
       }
-
-      /*
-       * Ignore non-image uploads.
-       */
 
       if (
         !object.contentType?.startsWith(
@@ -217,13 +245,9 @@ export const processProductImage =
           object.metadata
         );
 
-      /*
-       * Ignore banners, profile images, and unrelated Storage uploads.
-       */
-
       if (!metadata) {
         logger.info(
-          "Ignoring Storage object without valid product-image metadata.",
+          "Ignoring Storage object without valid gallery-image metadata.",
           {
             originalImagePath,
           }
@@ -236,14 +260,21 @@ export const processProductImage =
         productId,
         storeId,
         imageId,
+        galleryImageId,
+        role,
+        position,
+        altText,
       } = metadata;
 
       logger.info(
-        "Starting product image workflow.",
+        "Starting product gallery image workflow.",
         {
           productId,
           storeId,
           imageId,
+          galleryImageId,
+          role,
+          position,
           originalImagePath,
           bucketName,
         }
@@ -252,44 +283,37 @@ export const processProductImage =
       try {
         /*
         |--------------------------------------------------------------------------
-        | Confirm Current Upload
+        | Confirm Current Gallery Upload
         |--------------------------------------------------------------------------
-        |
-        | A store owner may select another image before this trigger begins.
-        | Only the image currently referenced by the product may continue.
-        |
         */
 
         const isCurrentUpload =
-          await markProductImageProcessing(
+          await markGalleryImageProcessing({
             productId,
-            originalImagePath
-          );
+
+            galleryImageId,
+
+            originalImagePath,
+          });
 
         if (!isCurrentUpload) {
           logger.info(
-            "Skipping an image replaced by a newer upload.",
+            "Skipping a gallery image replaced by a newer upload.",
             {
               productId,
+
+              galleryImageId,
+
               originalImagePath,
             }
           );
 
-          try {
-            await deleteOriginalImage(
+          await Promise.allSettled([
+            deleteOriginalImage(
               bucketName,
               originalImagePath
-            );
-          } catch (cleanupError) {
-            logger.warn(
-              "Unable to delete a replaced original image.",
-              {
-                productId,
-                originalImagePath,
-                cleanupError,
-              }
-            );
-          }
+            ),
+          ]);
 
           return;
         }
@@ -298,19 +322,6 @@ export const processProductImage =
         |--------------------------------------------------------------------------
         | Submit Claid Enhancement
         |--------------------------------------------------------------------------
-        |
-        | Claid performs conservative cleanup only:
-        |
-        | - Remove the existing background
-        | - Place the real product on a transparent square canvas
-        | - Add consistent padding
-        | - Apply mild exposure, contrast, saturation, and sharpness changes
-        |
-        | No generative background or synthetic product content is requested.
-        |
-        | When accepted, the scheduled pollClaidImageJobs Function completes
-        | the workflow later. This trigger exits without waiting.
-        |
         */
 
         try {
@@ -333,7 +344,8 @@ export const processProductImage =
               });
 
           /*
-           * Save the task context before changing the product status.
+           * Save complete gallery context so the asynchronous poller can
+           * update the correct front or back gallery document.
            */
 
           await createClaidJob({
@@ -349,86 +361,82 @@ export const processProductImage =
 
             imageId,
 
+            galleryImageId,
+
+            role,
+
+            position,
+
+            altText,
+
             bucketName,
 
             originalImagePath,
           });
 
           const markedEnhancing =
-            await markProductImageEnhancing(
+            await markGalleryImageEnhancing({
               productId,
-              originalImagePath,
-              acceptedTask.id
-            );
 
-          /*
-           * A newer upload may have replaced this image while Claid was
-           * accepting the task.
-           */
+              galleryImageId,
+
+              originalImagePath,
+
+              claidTaskId:
+                acceptedTask.id,
+            });
 
           if (!markedEnhancing) {
             logger.info(
-              "Claid accepted a task for an image that is no longer current.",
+              "Claid accepted a task for a gallery image that is no longer current.",
               {
                 taskId:
                   acceptedTask.id,
 
                 productId,
 
+                galleryImageId,
+
                 originalImagePath,
               }
             );
-
-            /*
-             * The scheduled poller will safely discard the eventual result
-             * because the originalImagePath concurrency token no longer
-             * matches the product.
-             */
 
             return;
           }
 
           logger.info(
-            "Product image submitted to Claid successfully.",
+            "Product gallery image submitted to Claid.",
             {
               taskId:
                 acceptedTask.id,
 
               productId,
 
-              storeId,
+              galleryImageId,
 
-              imageId,
+              role,
 
               originalImagePath,
-
-              bucketName,
             }
           );
 
           /*
-           * Claid and pollClaidImageJobs now own the remaining workflow.
+           * pollClaidImageJobs now owns the remainder of the successful Claid
+           * workflow.
            */
 
           return;
         } catch (
           claidSubmissionError
         ) {
-          /*
-           * Claid is an enhancement layer, not a hard dependency.
-           *
-           * If Claid cannot accept the task, continue with the original
-           * Sharp-only pipeline.
-           */
-
           logger.warn(
             "Claid submission failed. Continuing with Sharp-only fallback.",
             {
               productId,
 
-              storeId,
+              galleryImageId,
 
-              imageId,
+              role,
 
               originalImagePath,
 
@@ -441,7 +449,9 @@ export const processProductImage =
                 message:
                   claidSubmissionError instanceof Error
                     ? claidSubmissionError.message
-                    : String(claidSubmissionError),
+                    : String(
+                        claidSubmissionError
+                      ),
 
                 stack:
                   claidSubmissionError instanceof Error
@@ -456,9 +466,6 @@ export const processProductImage =
         |--------------------------------------------------------------------------
         | Sharp-Only Fallback
         |--------------------------------------------------------------------------
-        |
-        | This section is reached only if Claid submission failed.
-        |
         */
 
         const originalBuffer =
@@ -467,94 +474,76 @@ export const processProductImage =
             originalImagePath
           );
 
-        const optimizedImage =
-          await optimizeProductImage(
+        const processedVariants =
+          await processProductImageVariants(
             originalBuffer
           );
 
-        const optimizedImagePath =
-          buildOptimizedImagePath(
-            storeId,
-            productId,
-            imageId
-          );
-
-        const {
-          optimizedImageUrl,
-        } =
-          await uploadOptimizedImage({
+        const uploadedVariants =
+          await uploadOptimizedImageVariants({
             bucketName,
-
-            optimizedImagePath,
-
-            buffer:
-              optimizedImage.buffer,
 
             productId,
 
             storeId,
 
             imageId,
+
+            variants:
+              processedVariants,
           });
 
-        const result:
-        ProductImageProcessingResult = {
-          productId,
+        const imageVariants:
+        ProductImageVariantMap = {};
 
-          storeId,
-
-          imageId,
-
-          originalImagePath,
-
-          optimizedImagePath,
-
-          optimizedImageUrl,
-
-          width:
-            optimizedImage.width,
-
-          height:
-            optimizedImage.height,
-
-          sizeBytes:
-            optimizedImage.sizeBytes,
-
-          format:
-            optimizedImage.format,
-        };
+        for (
+          const variant of
+          uploadedVariants
+        ) {
+          imageVariants[
+            variant.name
+          ] = variant;
+        }
 
         const {
           updated,
-          previousOptimizedImagePath,
+          previousVariantPaths,
         } =
-          await markProductImageReady(
-            result
-          );
+          await markGalleryImageReady({
+            productId,
+
+            galleryImageId,
+
+            originalImagePath,
+
+            role,
+
+            imageVariants,
+
+            defaultVariant:
+              PRODUCT_IMAGE_CONFIG
+                .DEFAULT_VARIANT,
+          });
 
         /*
-         * The store owner may have selected a replacement while Sharp was
-         * processing this fallback image.
-         */
+        |--------------------------------------------------------------------------
+        | Discard Stale Results
+        |--------------------------------------------------------------------------
+        */
 
         if (!updated) {
-          logger.info(
-            "Discarding a fallback image replaced while processing.",
-            {
-              productId,
-              optimizedImagePath,
-            }
-          );
-
           await Promise.allSettled([
             deleteOriginalImage(
               bucketName,
               originalImagePath
             ),
 
-            deleteOptimizedImage(
-              bucketName,
-              optimizedImagePath
+            ...uploadedVariants.map(
+              (variant) =>
+                deleteOptimizedImage(
+                  bucketName,
+                  variant.path
+                )
             ),
           ]);
 
@@ -563,100 +552,105 @@ export const processProductImage =
 
         /*
         |--------------------------------------------------------------------------
-        | Fallback Cleanup
+        | Cleanup
         |--------------------------------------------------------------------------
         */
 
-        try {
-          await deleteOriginalImage(
+        const newVariantPaths =
+          new Set(
+            uploadedVariants.map(
+              (variant) =>
+                variant.path
+            )
+          );
+
+        await Promise.allSettled([
+          deleteOriginalImage(
             bucketName,
             originalImagePath
-          );
-        } catch (cleanupError) {
-          logger.warn(
-            "Unable to delete the Sharp fallback original image.",
-            {
-              productId,
-              originalImagePath,
-              cleanupError,
-            }
-          );
-        }
+          ),
 
-        if (
-          previousOptimizedImagePath &&
-          previousOptimizedImagePath !==
-            optimizedImagePath
-        ) {
-          try {
-            await deleteOptimizedImage(
-              bucketName,
-              previousOptimizedImagePath
-            );
-          } catch (cleanupError) {
-            logger.warn(
-              "Unable to delete the replaced optimized image.",
-              {
-                productId,
-                previousOptimizedImagePath,
-                cleanupError,
-              }
-            );
-          }
-        }
+          ...previousVariantPaths
+            .filter(
+              (path) =>
+                !newVariantPaths.has(
+                  path
+                )
+            )
+            .map(
+              (path) =>
+                deleteOptimizedImage(
+                  bucketName,
+                  path
+                )
+            ),
+        ]);
 
         logger.info(
-          "Product image completed through Sharp-only fallback.",
+          "Gallery image variants completed through Sharp-only fallback.",
           {
             productId,
 
-            optimizedImagePath,
+            galleryImageId,
 
-            width:
-              optimizedImage.width,
+            role,
 
-            height:
-              optimizedImage.height,
+            defaultVariant:
+              PRODUCT_IMAGE_CONFIG
+                .DEFAULT_VARIANT,
 
-            sizeBytes:
-              optimizedImage.sizeBytes,
+            variantCount:
+              uploadedVariants.length,
           }
         );
       } catch (processingError) {
         logger.error(
-          "Product image workflow failed.",
+          "Product gallery image workflow failed.",
           {
             productId,
+
             storeId,
+
             imageId,
+
+            galleryImageId,
+
+            role,
+
             originalImagePath,
+
             processingError,
           }
         );
 
-        /*
-         * Only the current upload may mark the product as failed.
-         */
-
         try {
-          await markProductImageFailed(
+          await markGalleryImageFailed({
             productId,
+
+            galleryImageId,
+
             originalImagePath,
-            processingError
-          );
+
+            error:
+              processingError,
+          });
         } catch (statusError) {
           logger.error(
-            "Failed to record product image failure.",
+            "Failed to record gallery image failure.",
             {
               productId,
+
+              galleryImageId,
+
               originalImagePath,
+
               statusError,
             }
           );
         }
 
         /*
-         * Keep the original after failure for debugging or a future retry.
+         * Keep the original after failure for investigation or retry.
          */
 
         throw processingError;
