@@ -65,6 +65,49 @@ await notificationStore.createNotification({
   }
 
   /**
+   * Reminds a store owner when an order has remained in a staff-controlled
+   * status for too long. The scheduler supplies the count so each reminder
+   * remains understandable in the in-app notification list.
+   */
+  async orderStatusReminder(
+    orderId: string,
+    storeOwnerUid: string,
+    status: "pending" | "accepted" | "preparing",
+    reminderCount: number,
+    orderNumber?: string
+  ): Promise<void> {
+    const statusLabel = {
+      pending: "pending",
+      accepted: "accepted",
+      preparing: "being prepared",
+    }[status];
+
+    const orderLabel = orderNumber?.trim()
+      ? `Order ${orderNumber}`
+      : "A customer order";
+
+    const title = "Order action reminder";
+    const body = `${orderLabel} is still ${statusLabel}. Please update it when you are ready. (Reminder ${reminderCount})`;
+
+    await notificationStore.createNotification({
+      uid: storeOwnerUid,
+      title,
+      body,
+      type: "order",
+      icon: "clock",
+      color: "orange",
+      orderId,
+      navigationPath: "/store/store-orders",
+    });
+
+    await notificationService.sendToUser(
+      storeOwnerUid,
+      title,
+      body
+    );
+  }
+
+  /**
    * Product stock crossed a low-inventory alert threshold after an order.
    */
   async lowStock(

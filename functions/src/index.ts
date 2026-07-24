@@ -349,6 +349,7 @@ export { syncCustomerOrders };
 export { syncStoreOrders };
 export { orderStatusChanged };
 export { syncShipdayDeliveries };
+export { remindStoreOrders } from "./scheduler/remindStoreOrders";
 export { createOrder };
 export {
   processProductImage,

@@ -444,30 +444,15 @@ async ({
     |
     */
 
-    const submittedExistingIds =
-      new Set(
-        imageFiles
-          .filter(
+        const removedExistingImages =
+          imageFiles.filter(
             (image) =>
-              image.file ===
-                null
-          )
-          .map(
-            (image) =>
-              image.id
-          )
-      );
-
-    const removedExistingImages =
-      galleryImages.filter(
-        (existingImage) =>
-          existingImage
-            .existingImageId &&
-          !submittedExistingIds.has(
-            existingImage
-              .existingImageId
-          )
-      );
+              image.existingImageId &&
+              (
+                image.markedForRemoval ||
+                image.file instanceof File
+              )
+          );
 
     /*
     |--------------------------------------------------------------------------
@@ -536,17 +521,17 @@ async ({
     );
 
     const deleteTasks =
-      removedExistingImages.map(
-        (image) =>
-          productGalleryImageService
-            .deleteGalleryImage({
-              productId:
-                product.id,
+  removedExistingImages.map(
+    (image) =>
+      productGalleryImageService
+        .deleteGalleryImage({
+          productId:
+            product.id,
 
-              galleryImageId:
-                image.existingImageId!,
-            })
-      );
+          galleryImageId:
+            image.existingImageId!,
+        })
+  );
 
     await Promise.all(
       deleteTasks

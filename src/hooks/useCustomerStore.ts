@@ -35,6 +35,7 @@ import { storeMapper } from "@/mappers/storeMapper";
 import { DELIVERY_CONFIG } from "@/config/delivery";
 
 import { productService } from "@/services/product/productService";
+import { promotionService } from "@/services/promotion/promotionService";
 import { storeService } from "@/services/store/storeService";
 import { userService } from "@/services/user/userService";
 
@@ -55,6 +56,7 @@ import {
 import type { Category } from "@/types/category";
 import type { Product } from "@/types/product";
 import type { CustomerStore } from "@/types/view-models/customerStore";
+import type { Promotion } from "@/types/promotion";
 
 /*
 |--------------------------------------------------------------------------
@@ -139,6 +141,35 @@ function isCustomerVisibleProduct(
       product.imageStatus === "none" ||
       product.imageStatus === "ready")
   );
+}
+
+/**
+ * Product promotions are the store promotions customers can currently use.
+ * Keep every active product offer as its own carousel item so a store can
+ * advertise multiple discounts, BOGO offers, or delivery offers at once.
+ */
+function getActiveStorePromotions(
+  products: Product[]
+): Promotion[] {
+  return products.flatMap((product) => {
+    const promotion = product.promotion;
+
+    if (!promotion || !promotionService.isActive(promotion)) {
+      return [];
+    }
+
+    const label = promotionService.getLabel(promotion);
+    const title = promotion?.title?.trim();
+    const description = promotion?.description?.trim();
+
+    return [{
+      ...promotion,
+      id: `${product.id}-${promotion?.id || "promotion"}`,
+      title: title || label || "Store special",
+      description: description || `${label || "Special offer"} on ${product.name}.`,
+      imageUrl: promotion?.imageUrl || "",
+    }];
+  });
 }
 
 /*
@@ -362,22 +393,10 @@ export function useCustomerStore({
               categories:
                 storeCategories,
 
-              promotions: [
-                {
-                  id: "promo1",
-
-                  title:
-                    "Free Delivery",
-
-                  description:
-                    "Free delivery on qualifying orders",
-
-                  imageUrl: "",
-
-                  type:
-                    "free_shipping",
-                },
-              ],
+              promotions:
+                getActiveStorePromotions(
+                  customerProducts
+                ),
 
               isFavorite: false,
             }
@@ -422,6 +441,17 @@ export function useCustomerStore({
                 );
 
               setProducts(visibleProducts);
+              setStore((currentStore) =>
+                currentStore
+                  ? {
+                    ...currentStore,
+                    promotions:
+                      getActiveStorePromotions(
+                        visibleProducts
+                      ),
+                  }
+                  : currentStore
+              );
               setCategories(
                 categoryService.groupCategoriesWithProducts(
                   categoryDefinitions,

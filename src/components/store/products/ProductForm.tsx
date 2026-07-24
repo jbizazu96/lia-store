@@ -632,32 +632,50 @@ export function ProductForm({
     */
 
     const gallerySubmission =
-      imageFiles
-        .map(
-          (image) => ({
-            id:
-              crypto.randomUUID(),
+  imageFiles
+    .map(
+      (image) => {
+        const position: 0 | 1 =
+          image.role === "front"
+            ? 0
+            : 1;
 
-            file:
-              image.file,
+        return {
+         
+          /*
+          * Unchanged existing images keep their document ID.
+          *
+          * Replacement files receive a new document ID so the old image and its
+          * Storage variants remain available until the replacement upload succeeds.
+          */
+          id:
+            image.file
+              ? crypto.randomUUID()
+              : image.existingImageId ??
+                crypto.randomUUID(),
+          
 
-            altText:
-              image.role ===
-              "front"
-                ? "Front view of product"
-                : "Back label of product",
+          existingImageId:
+            image.existingImageId,
 
-            position:
-              image.role ===
-              "front"
-                ? 0
-                : 1,
+          file:
+            image.file,
 
-            isPrimary:
-              image.role ===
-              "front",
-          })
-        )
+          altText:
+            image.role === "front"
+              ? "Front view of product"
+              : "Back label of product",
+
+          position,
+
+          isPrimary:
+            image.role === "front",
+
+          markedForRemoval:
+            image.markedForRemoval === true,
+        };
+      }
+    )
         .sort(
           (
             firstImage,

@@ -49,6 +49,9 @@ interface UseStoreOrderFiltersResult {
   stats: {
     total: number;
     pending: number;
+    accepted: number;
+    preparing: number;
+    readyForPickup: number;
     completed: number;
     cancelled: number;
   };
@@ -164,6 +167,27 @@ UseStoreOrderFiltersResult {
             (order) =>
               order.status ===
               "pending"
+          ).length,
+
+        accepted:
+          orders.filter(
+            (order) =>
+              order.status ===
+              "accepted"
+          ).length,
+
+        preparing:
+          orders.filter(
+            (order) =>
+              order.status ===
+              "preparing"
+          ).length,
+
+        readyForPickup:
+          orders.filter(
+            (order) =>
+              order.status ===
+              "ready_for_pickup"
           ).length,
 
         completed:

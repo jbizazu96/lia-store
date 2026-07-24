@@ -25,36 +25,50 @@ import type {
 
 export interface ProductGalleryImageSubmission {
   /**
-   * Temporary client-side ID used to track this image before upload.
+   * Stable gallery image ID used for uploads.
+   *
+   * Existing images reuse their Firestore document ID.
+   * New images receive a newly generated ID.
    */
   id: string;
 
   /**
-   * Browser-only source file.
+   * Existing Firestore gallery image document ID.
+   *
+   * Null means this is a brand-new image.
    */
- file: File | null; 
+  existingImageId: string | null;
+
+  /**
+   * Browser-only source file.
+   *
+   * Null means the existing image should remain unchanged,
+   * unless markedForRemoval is true.
+   */
+  file: File | null;
 
   /**
    * Description used for accessibility and gallery context.
-   *
-   * Examples:
-   *
-   * - Front package
-   * - Back label
-   * - Nutrition facts
-   * - Ingredients
    */
   altText: string;
 
   /**
    * Customer gallery position.
+   *
+   * Front = 0
+   * Back = 1
    */
-  position: number;
+  position: 0 | 1;
 
   /**
-   * Whether this image should become the primary product image.
+   * Whether this image is the primary front image.
    */
   isPrimary: boolean;
+
+  /**
+   * True when an existing image should be deleted.
+   */
+  markedForRemoval: boolean;
 }
 
 /*
