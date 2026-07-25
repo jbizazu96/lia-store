@@ -12,7 +12,15 @@ import {AlertCircle} from "lucide-react";
 /*
   Firebase imports.
 */
-import {collection, setDoc, doc} from "firebase/firestore";
+import {
+  collection,
+  doc,
+  getDocs,
+  limit,
+  query,
+  setDoc,
+  where,
+} from "firebase/firestore";
 import {auth, db} from "@/lib/firebase";
 import {geocodeAddress} from "@/services/delivery/geocode";
 import {formatPhoneNumber} from "@/utils/phone";
@@ -26,6 +34,7 @@ import {
 */
 import {getStorage, ref, uploadBytes, getDownloadURL} from "firebase/storage";
 import { storeImageService } from "@/services/store/storeImageService";
+import { PRICING_CONFIG } from "@/config/pricing";
 
 /*
   Components
@@ -38,6 +47,13 @@ import {NavigationButtons} from "@/components/store/create/NavigationButtons";
 import { useUnsavedChanges } from "@/hooks/useUnsavedChanges";
 import { useConfirmation } from "@/context/ConfirmationContext";
 import { useSuccessToast } from "@/context/SuccessToastContext";
+
+const MAX_STORE_IMAGE_SIZE_BYTES = 10 * 1024 * 1024;
+
+function getImageExtension(file: File): string {
+  const extension = file.name.split(".").pop()?.toLowerCase();
+  return extension && /^[a-z0-9]+$/.test(extension) ? extension : "image";
+}
 
 export default function CreateStorePage() {
   const { showSuccess } = useSuccessToast();
@@ -108,6 +124,18 @@ export default function CreateStorePage() {
       setPreview("");
       return;
     }
+
+    if (!file.type.startsWith("image/")) {
+      setError("Please choose an image file.");
+      return;
+    }
+
+    if (file.size <= 0 || file.size > MAX_STORE_IMAGE_SIZE_BYTES) {
+      setError("Each image must be between 1 byte and 10 MB.");
+      return;
+    }
+
+    setError("");
     const reader = new FileReader();
     reader.onloadend = () => setPreview(reader.result as string);
     reader.readAsDataURL(file);
@@ -118,8 +146,16 @@ export default function CreateStorePage() {
     Upload file to Firebase Storage
   */
   const uploadFile = useCallback(async (file: File, path: string): Promise<string> => {
+    if (!file.type.startsWith("image/")) {
+      throw new Error("Please choose an image file.");
+    }
+
+    if (file.size <= 0 || file.size > MAX_STORE_IMAGE_SIZE_BYTES) {
+      throw new Error("Each image must be between 1 byte and 10 MB.");
+    }
+
     const storageRef = ref(storage, path);
-    await uploadBytes(storageRef, file);
+    await uploadBytes(storageRef, file, {contentType: file.type});
     return await getDownloadURL(storageRef);
   }, [storage]);
 
@@ -128,6 +164,7 @@ export default function CreateStorePage() {
   */
   const validateStep1 = useCallback(() => {
     if (!name.trim()) { setError("Store name is required"); return false; }
+    if (!description.trim()) { setError("Store description is required"); return false; }
     if (!phone.trim()) { setError("Phone number is required"); return false; }
     if (phone.replace(/\D/g, "").length < 10) { setError("Valid phone number required"); return false; }
     if (!address.trim()) { setError("Street address is required"); return false; }
@@ -184,6 +221,25 @@ export default function CreateStorePage() {
       const user = auth.currentUser;
       if (!user) { setError("Please login first."); return; }
 
+      /*
+       * A failed upload must not create a second store on retry. Reuse a
+       * pending setup for this owner, while an already active store remains
+       * protected from accidental overwrite.
+       */
+      const existingStoreSnapshot = await getDocs(
+        query(
+          collection(db, "stores"),
+          where("ownerId", "==", user.uid),
+          limit(1)
+        )
+      );
+      const existingStore = existingStoreSnapshot.docs[0] ?? null;
+
+      if (existingStore?.data().status === "active") {
+        setError("You already have an active store. Update it from Store Settings.");
+        return;
+      }
+
       // Geocode address
       const fullAddress = `${address}, ${city}, ${state} ${zip}`;
       const location = await geocodeAddress(fullAddress);
@@ -205,17 +261,22 @@ export default function CreateStorePage() {
 
       // Upload images
       setUploading(true);
-      const now = Date.now();
       const uid = user.uid;
 
-      const storeReference = doc(collection(db, "stores"));
+      const storeReference = existingStore?.ref ?? doc(collection(db, "stores"));
 
       // Legal documents stay private/original. Customer-facing images are
       // uploaded after the store document exists so the resize Function can
       // update its public image URLs.
       const [photoIdUrl, storeInsideUrl] = await Promise.all([
-        uploadFile(photoIdFile!, `stores/${uid}/photo_id_${now}.jpg`),
-        uploadFile(storeInsideFile!, `stores/${uid}/inside_${now}.jpg`),
+        uploadFile(
+          photoIdFile!,
+          `stores/${uid}/verification/photo_id.${getImageExtension(photoIdFile!)}`
+        ),
+        uploadFile(
+          storeInsideFile!,
+          `stores/${uid}/verification/inside.${getImageExtension(storeInsideFile!)}`
+        ),
       ]);
 
       // Create the store before customer-facing image processing starts.
@@ -247,10 +308,11 @@ export default function CreateStorePage() {
         stripeBusinessType,
         stripeAccountType,
         stripeAccountId: null,
-        minimumOrder: 20,
-        status: "pending",
-        isOpen: true,
-        createdAt: new Date().toISOString(),
+        minimumOrder: PRICING_CONFIG.DEFAULT_MINIMUM_ORDER,
+        status: existingStore?.data().status ?? "pending",
+        // Stores stay closed until their schedule is configured in Settings.
+        isOpen: false,
+        createdAt: existingStore?.data().createdAt ?? new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
 
@@ -287,12 +349,13 @@ export default function CreateStorePage() {
       setError(error.message || "Failed to create store.");
     } finally {
       setLoading(false);
+      setUploading(false);
     }
   }, [name, description, phone, email, address, city, state, zip,
       businessType, registeredName, ein, businessStructure,
       logoFile, photoIdFile, storeFrontFile, storeInsideFile,
       stripeEmail, stripePhone, stripeBusinessType, stripeAccountType,
-      uploadFile, validateStep3, router]);
+      uploadFile, validateStep3, router, confirm, showSuccess]);
 
   return (
     <RoleGuard

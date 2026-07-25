@@ -115,6 +115,9 @@ ImageRoleDefinition[] = [
   },
 ];
 
+const ACCEPTED_IMAGE_TYPES =
+  "image/jpeg,image/png,image/webp,image/heic,image/heif";
+
 /*
 |--------------------------------------------------------------------------
 | Component
@@ -382,6 +385,10 @@ export function ProductImageGalleryField({
                   true
             );
 
+          const hasPreview = Boolean(
+            image?.previewUrl
+          );
+
           return (
             <div
               key={
@@ -415,7 +422,7 @@ export function ProductImageGalleryField({
                 }
               </p>
 
-              {image ? (
+              {image && hasPreview ? (
                 /*
                 |--------------------------------------------------------------------------
                 | Selected Or Existing Image
@@ -462,18 +469,10 @@ export function ProductImageGalleryField({
                       <input
                         hidden
                         type="file"
-                        accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
-                        capture="environment"
-                        disabled={
-                          disabled
-                        }
-                        onChange={(
-                          event
-                        ) =>
-                          uploadImage(
-                            imageDefinition.role,
-                            event
-                          )
+                        accept={ACCEPTED_IMAGE_TYPES}
+                        disabled={disabled}
+                        onChange={(event) =>
+                          uploadImage(imageDefinition.role, event)
                         }
                       />
                     </label>
@@ -543,31 +542,20 @@ export function ProductImageGalleryField({
                   <Upload className="mb-1.5 h-7 w-7 text-gray-400" />
 
                   <p className="text-xs font-medium text-gray-600">
-                    Upload{" "}
-                    {
-                      imageDefinition.title
-                    }
+                    Add {imageDefinition.title}
                   </p>
 
                   <p className="mt-1 px-2 text-center text-[10px] text-gray-400">
-                    JPG, PNG, WebP, or HEIC
+                    Take a photo or choose one from your device.
                   </p>
 
                   <input
                     hidden
                     type="file"
-                    accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
-                    capture="environment"
-                    disabled={
-                      disabled
-                    }
-                    onChange={(
-                      event
-                    ) =>
-                      uploadImage(
-                        imageDefinition.role,
-                        event
-                      )
+                    accept={ACCEPTED_IMAGE_TYPES}
+                    disabled={disabled}
+                    onChange={(event) =>
+                      uploadImage(imageDefinition.role, event)
                     }
                   />
                 </label>

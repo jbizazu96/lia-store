@@ -24,6 +24,8 @@ import type {
 } from "react";
 
 import {
+  CalendarDays,
+  Clock3,
   Gift,
 } from "lucide-react";
 
@@ -47,6 +49,35 @@ interface ProductPromotionSectionProps {
   onChange: (
     promotion: Promotion | null
   ) => void;
+}
+
+type PromotionDateField =
+  | "startsAt"
+  | "endsAt";
+
+function getLocalDateTimeParts(
+  value: string | null | undefined
+): {
+  date: string;
+  time: string;
+} {
+  if (!value) {
+    return { date: "", time: "" };
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return { date: "", time: "" };
+  }
+
+  const pad = (number: number) =>
+    String(number).padStart(2, "0");
+
+  return {
+    date: `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`,
+    time: `${pad(date.getHours())}:${pad(date.getMinutes())}`,
+  };
 }
 
 /*
@@ -76,6 +107,28 @@ export function ProductPromotionSection({
       ...promotion,
       ...updates,
     });
+  };
+
+  const updatePromotionDate = (
+    field: PromotionDateField,
+    nextDate?: string,
+    nextTime?: string
+  ) => {
+    if (!promotion) {
+      return;
+    }
+
+    const current = getLocalDateTimeParts(
+      promotion[field]
+    );
+    const date = nextDate ?? current.date;
+    const time = nextTime ?? current.time ?? "00:00";
+
+    updatePromotion({
+      [field]: date
+        ? new Date(`${date}T${time || "00:00"}`).toISOString()
+        : null,
+    } as Pick<Promotion, PromotionDateField>);
   };
 
   const handleTypeChange = (
@@ -412,64 +465,76 @@ export function ProductPromotionSection({
       )}
 
       {/* Dates */}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <div>
-          <label className="mb-1 block text-sm font-medium text-gray-700">
-            Starts At
-          </label>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        {([
+          {
+            field: "startsAt" as const,
+            label: "Start",
+            helper: "When the offer begins",
+          },
+          {
+            field: "endsAt" as const,
+            label: "End",
+            helper: "Leave blank for no end date",
+          },
+        ]).map((dateField) => {
+          const value = getLocalDateTimeParts(
+            promotion[dateField.field]
+          );
 
-          <input
-            type="datetime-local"
-            value={
-              promotion.startsAt
-                ? promotion.startsAt.slice(
-                    0,
-                    16
-                  )
-                : ""
-            }
-            onChange={(event) =>
-              updatePromotion({
-                startsAt:
-                  event.target.value
-                    ? new Date(
+          return (
+            <div
+              key={dateField.field}
+              className="rounded-xl border border-gray-200 bg-white p-3"
+            >
+              <div className="mb-2 flex items-center gap-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-orange-50 text-orange-600">
+                  <CalendarDays className="h-4 w-4" />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-800">
+                    {dateField.label} date & time
+                  </label>
+                  <p className="text-[11px] text-gray-500">
+                    {dateField.helper}
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-[minmax(0,1fr)_7rem] gap-2">
+                <input
+                  type="date"
+                  value={value.date}
+                  onChange={(event) =>
+                    updatePromotionDate(
+                      dateField.field,
+                      event.target.value
+                    )
+                  }
+                  className="min-h-12 min-w-0 rounded-lg border border-gray-200 bg-white px-2 text-base text-gray-800 outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100"
+                  aria-label={`${dateField.label} date`}
+                />
+
+                <label className="relative">
+                  <Clock3 className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="time"
+                    value={value.time}
+                    onChange={(event) =>
+                      updatePromotionDate(
+                        dateField.field,
+                        undefined,
                         event.target.value
-                      ).toISOString()
-                    : null,
-              })
-            }
-            className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 focus:ring-2 focus:ring-orange-500"
-          />
-        </div>
-
-        <div>
-          <label className="mb-1 block text-sm font-medium text-gray-700">
-            Ends At
-          </label>
-
-          <input
-            type="datetime-local"
-            value={
-              promotion.endsAt
-                ? promotion.endsAt.slice(
-                    0,
-                    16
-                  )
-                : ""
-            }
-            onChange={(event) =>
-              updatePromotion({
-                endsAt:
-                  event.target.value
-                    ? new Date(
-                        event.target.value
-                      ).toISOString()
-                    : null,
-              })
-            }
-            className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 focus:ring-2 focus:ring-orange-500"
-          />
-        </div>
+                      )
+                    }
+                    className="min-h-12 w-full rounded-lg border border-gray-200 bg-white pl-6 pr-1 text-base text-gray-800 outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100"
+                    aria-label={`${dateField.label} time`}
+                  />
+                </label>
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );

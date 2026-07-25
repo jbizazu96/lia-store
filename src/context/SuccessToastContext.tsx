@@ -35,7 +35,7 @@ export function SuccessToastProvider({
     setMessage(null);
   }, []);
 
-  const showSuccess = useCallback((nextMessage: string, duration = 5000) => {
+  const showSuccess = useCallback((nextMessage: string, duration = 3000) => {
     if (timeoutRef.current !== null) {
       window.clearTimeout(timeoutRef.current);
     }

@@ -138,7 +138,7 @@ export const Step2LegalPhotos = memo(({
             <div className="py-8">
               <Upload className="w-10 h-10 text-gray-400 mx-auto mb-2" />
               <p className="text-gray-500">Click to upload logo</p>
-              <p className="text-gray-400 text-sm">PNG, JPG up to 5MB</p>
+              <p className="text-gray-400 text-sm">Image files up to 10MB</p>
             </div>
           )}
           <input
@@ -169,7 +169,7 @@ export const Step2LegalPhotos = memo(({
             <div className="py-8">
               <User className="w-10 h-10 text-gray-400 mx-auto mb-2" />
               <p className="text-gray-500">Click to upload photo ID</p>
-              <p className="text-gray-400 text-sm">PNG, JPG up to 5MB</p>
+              <p className="text-gray-400 text-sm">Image files up to 10MB</p>
             </div>
           )}
           <input
@@ -200,7 +200,7 @@ export const Step2LegalPhotos = memo(({
             <div className="py-8">
               <Camera className="w-10 h-10 text-gray-400 mx-auto mb-2" />
               <p className="text-gray-500">Click to upload store front</p>
-              <p className="text-gray-400 text-sm">Show the exterior of your store</p>
+              <p className="text-gray-400 text-sm">Show the exterior of your store · up to 10MB</p>
             </div>
           )}
           <input
@@ -231,7 +231,7 @@ export const Step2LegalPhotos = memo(({
             <div className="py-8">
               <StoreIcon className="w-10 h-10 text-gray-400 mx-auto mb-2" />
               <p className="text-gray-500">Click to upload inside store</p>
-              <p className="text-gray-400 text-sm">Show the interior of your store</p>
+              <p className="text-gray-400 text-sm">Show the interior of your store · up to 10MB</p>
             </div>
           )}
           <input

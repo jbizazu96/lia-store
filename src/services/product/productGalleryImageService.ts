@@ -55,7 +55,7 @@ import type {
 
 import {
   validateProductImageFile,
-} from "@/services/product/productImageService";
+} from "@/services/product/productImageValidation";
 
 /*
 |--------------------------------------------------------------------------

@@ -90,13 +90,5 @@ export interface ProductFormSubmission {
    */
   imageFiles: ProductGalleryImageSubmission[];
 
-  /**
-   * Legacy single-image field.
-   *
-   * Keep this temporarily while ProductForm and the add/edit pages migrate
-   * to imageFiles.
-   *
-   * New code should use imageFiles.
-   */
-  imageFile: File | null;
+
 }

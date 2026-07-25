@@ -11,16 +11,20 @@ import { useRouter } from "next/navigation";
 import {
   ChevronLeft,
   ChevronRight,
+  CalendarDays,
+  CircleCheckBig,
+  Gift,
   Heart,
   Package,
+  Percent,
   Plus,
   ShoppingBag,
   Trash2,
+  Truck,
   X,
 } from "lucide-react";
 
 import { useCart } from "@/context/CartContext";
-import { useConfirmation } from "@/context/ConfirmationContext";
 import { useSuccessToast } from "@/context/SuccessToastContext";
 import { ProductCard } from "@/components/customer/store/ProductCard";
 import { ProductPrice } from "@/components/ui/ProductPrice";
@@ -65,11 +69,52 @@ function stockLabel(product: Product): string {
   return "Many in stock";
 }
 
+function formatPromotionWindow(
+  startsAt: string | null | undefined,
+  endsAt: string | null | undefined
+): string | null {
+  const formatDate = (value: string | null | undefined) => {
+    if (!value) return null;
+
+    const date = new Date(value);
+
+    return Number.isNaN(date.getTime())
+      ? null
+      : new Intl.DateTimeFormat("en-US", {
+        month: "short",
+        day: "numeric",
+      }).format(date);
+  };
+
+  const start = formatDate(startsAt);
+  const end = formatDate(endsAt);
+
+  if (start && end) return `${start} – ${end}`;
+  if (end) return `Ends ${end}`;
+  if (start) return `Started ${start}`;
+
+  return null;
+}
+
+function qualifiesForFreshnessGuarantee(
+  category: string | undefined
+): boolean {
+  if (!category) return false;
+
+  return [
+    "produce",
+    "meat",
+    "seafood",
+    "dairy",
+    "bakery",
+    "frozen",
+  ].includes(category.trim().toLowerCase());
+}
+
 export default function ProductPage({ params }: ProductPageProps) {
   const { productId } = use(params);
   const router = useRouter();
   const { addItem, getItemQuantity, updateQuantity } = useCart();
-  const { confirm } = useConfirmation();
   const { showSuccess } = useSuccessToast();
 
   const [product, setProduct] = useState<Product | null>(null);
@@ -77,6 +122,7 @@ export default function ProductPage({ params }: ProductPageProps) {
   const [galleryImages, setGalleryImages] = useState<ProductGalleryImage[]>([]);
   const [relatedProducts, setRelatedProducts] = useState<Product[]>([]);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
+  const [selectedQuantity, setSelectedQuantity] = useState(1);
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -110,6 +156,7 @@ export default function ProductPage({ params }: ProductPageProps) {
         setStore(storeData);
         setGalleryImages(imageData);
         setSelectedImageIndex(0);
+        setSelectedQuantity(1);
         setRelatedProducts(
           storeProducts
             .filter(
@@ -138,10 +185,13 @@ export default function ProductPage({ params }: ProductPageProps) {
   const selectedImageUrl =
     getGalleryImageUrl(selectedImage) ||
     (product ? productImageSelector.getUrl(product, "details") : "");
-  const quantity = product ? getItemQuantity(product.id) : 0;
   const discountedPrice = product
     ? promotionService.getDiscountedPrice(product.price, product.promotion)
     : 0;
+  const activePromotion =
+    product?.promotion && promotionService.isActive(product.promotion)
+      ? product.promotion
+      : null;
   const productSize = product ? formatSize(product) : null;
   const canPurchase = Boolean(
     product &&
@@ -149,6 +199,22 @@ export default function ProductPage({ params }: ProductPageProps) {
       product.stock > 0 &&
       product.imageStatus === "ready"
   );
+  const promotionWindow = activePromotion
+    ? formatPromotionWindow(
+      activePromotion.startsAt,
+      activePromotion.endsAt
+    )
+    : null;
+  const PromotionIcon = activePromotion?.type === "bogo"
+    ? Gift
+    : activePromotion?.type === "free_shipping"
+      ? Truck
+      : Percent;
+  const promotionColors = activePromotion?.type === "bogo"
+    ? "border-violet-200 bg-violet-50 text-violet-800"
+    : activePromotion?.type === "free_shipping"
+      ? "border-blue-200 bg-blue-50 text-blue-800"
+      : "border-rose-200 bg-rose-50 text-rose-800";
 
   const changeImage = (direction: -1 | 1) => {
     if (galleryImages.length < 2) return;
@@ -175,40 +241,67 @@ export default function ProductPage({ params }: ProductPageProps) {
     });
   };
 
-  const addCurrentProduct = async () => {
+      const addCurrentProduct =
+          async () => {
+            if (
+              !product ||
+              !canPurchase
+            ) {
+              return;
+            }
+
+            const currentQuantity =
+              getItemQuantity(
+                product.id
+              );
+
+            /*
+            * Add the product once when it is not already in the cart.
+            */
+            if (currentQuantity === 0) {
+              await addProductToCart(
+                product
+              );
+            }
+
+            /*
+            * Set the final requested quantity directly.
+            *
+            * This avoids repeatedly calling addItem() while React cart state is still
+            * updating.
+            */
+            const finalQuantity =
+              Math.min(
+                currentQuantity +
+                  selectedQuantity,
+                product.stock
+              );
+
+            updateQuantity(
+              product.id,
+              finalQuantity
+            );
+
+            showSuccess(
+              `${
+                selectedQuantity > 1
+                  ? `${selectedQuantity} × `
+                  : ""
+              }${formatProductName(
+                product.name
+              )} added to cart.`
+            );
+
+            router.back();
+          };
+
+  const increaseSelectedQuantity = () => {
     if (!product || !canPurchase) return;
-    await addProductToCart(product);
-    showSuccess(`${formatProductName(product.name)} added to cart.`);
+    setSelectedQuantity((current) => Math.min(current + 1, product.stock));
   };
 
-  const increaseQuantity = async () => {
-    if (!product || !canPurchase || quantity >= product.stock) return;
-    if (quantity === 0) {
-      await addCurrentProduct();
-      return;
-    }
-    updateQuantity(product.id, quantity + 1);
-  };
-
-  const decreaseQuantity = async () => {
-    if (!product || quantity <= 0) return;
-
-    if (quantity === 1) {
-      const confirmed = await confirm({
-        title: "Remove from cart?",
-        message: `${formatProductName(product.name)} will be removed from your cart.`,
-        confirmLabel: "Remove",
-        cancelLabel: "Keep item",
-        destructive: true,
-      });
-
-      if (!confirmed) return;
-      updateQuantity(product.id, 0);
-      showSuccess("Item removed from cart.");
-      return;
-    }
-
-    updateQuantity(product.id, quantity - 1);
+  const decreaseSelectedQuantity = () => {
+    setSelectedQuantity((current) => Math.max(1, current - 1));
   };
 
   const relatedQuantityChange = (relatedProductId: string, nextQuantity: number) => {
@@ -322,6 +415,13 @@ export default function ProductPage({ params }: ProductPageProps) {
         </section>
 
         <section className="px-4 pb-5 pt-5 sm:px-6">
+          {qualifiesForFreshnessGuarantee(product.category) && (
+            <div className="mb-4 flex items-center gap-2 rounded-xl bg-emerald-50 px-3 py-2.5 text-sm font-semibold text-emerald-800">
+              <CircleCheckBig className="h-5 w-5 shrink-0 text-emerald-600" />
+              <span>Freshness guaranteed or your money back</span>
+            </div>
+          )}
+
           <button
             type="button"
             onClick={() => store && router.push(`/store/${store.id}`)}
@@ -363,6 +463,32 @@ export default function ProductPage({ params }: ProductPageProps) {
             )}
           </div>
 
+          {activePromotion && (
+            <div className={`mt-3 rounded-xl border p-3 ${promotionColors}`}>
+              <div className="flex items-start gap-2.5">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/70">
+                  <PromotionIcon className="h-4 w-4" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-extrabold">
+                    {promotionService.getLabel(activePromotion) || activePromotion.title}
+                  </p>
+                  {activePromotion.description && (
+                    <p className="mt-0.5 text-xs leading-5 opacity-80">
+                      {activePromotion.description}
+                    </p>
+                  )}
+                  {promotionWindow && (
+                    <p className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-white/70 px-2 py-0.5 text-[11px] font-semibold">
+                      <CalendarDays className="h-3 w-3" />
+                      {promotionWindow}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           {product.description && (
             <p className="mt-4 max-w-2xl text-sm leading-5 text-gray-600">{product.description}</p>
           )}
@@ -400,41 +526,40 @@ export default function ProductPage({ params }: ProductPageProps) {
 
       <div className="fixed inset-x-0 bottom-0 z-30 border-t border-gray-200 bg-white/95 p-3 backdrop-blur">
         <div className="mx-auto flex max-w-5xl items-center gap-2.5">
-          {quantity > 0 && (
-            <div className="flex h-12 min-w-[8.5rem] items-center justify-between rounded-full bg-gray-100 px-1.5">
-              <button
-                type="button"
-                onClick={() => void decreaseQuantity()}
-                className="flex h-9 w-9 items-center justify-center rounded-full text-gray-700 transition hover:bg-white"
-                aria-label={quantity === 1 ? "Remove from cart" : "Decrease quantity"}
-              >
-                {quantity === 1 ? <Trash2 className="h-5 w-5" /> : <span className="text-2xl font-medium">−</span>}
-              </button>
-              <span className="text-base font-black tabular-nums">{quantity}</span>
-              <button
-                type="button"
-                onClick={() => void increaseQuantity()}
-                disabled={!canPurchase || quantity >= product.stock}
-                className="flex h-9 w-9 items-center justify-center rounded-full text-gray-900 transition hover:bg-white disabled:opacity-35"
-                aria-label="Increase quantity"
-              >
-                <Plus className="h-6 w-6" />
-              </button>
-            </div>
-          )}
+          <div className="flex h-12 min-w-[8.5rem] items-center justify-between rounded-full bg-gray-100 px-1.5">
+            <button
+              type="button"
+              onClick={decreaseSelectedQuantity}
+              disabled={selectedQuantity === 1 || !canPurchase}
+              className="flex h-9 w-9 items-center justify-center rounded-full text-gray-700 transition hover:bg-white disabled:cursor-not-allowed disabled:text-gray-300 disabled:hover:bg-transparent"
+              aria-label={selectedQuantity === 1 ? "Minimum quantity" : "Decrease quantity"}
+            >
+              {selectedQuantity === 1 ? (
+                <Trash2 className="h-5 w-5" />
+              ) : (
+                <span className="text-2xl font-medium leading-none">−</span>
+              )}
+            </button>
+            <span className="text-base font-black tabular-nums">{selectedQuantity}</span>
+            <button
+              type="button"
+              onClick={increaseSelectedQuantity}
+              disabled={!canPurchase || selectedQuantity >= product.stock}
+              className="flex h-9 w-9 items-center justify-center rounded-full text-gray-900 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-35"
+              aria-label="Increase quantity"
+            >
+              <Plus className="h-6 w-6" />
+            </button>
+          </div>
 
           <button
             type="button"
-            onClick={() => void increaseQuantity()}
-            disabled={!canPurchase || quantity >= product.stock}
+            onClick={() => void addCurrentProduct()}
+            disabled={!canPurchase}
             className="flex h-12 flex-1 items-center justify-center gap-2 rounded-full bg-gradient-to-r from-orange-500 to-red-500 px-4 text-base font-black text-white shadow-lg shadow-orange-200 transition hover:from-orange-600 hover:to-red-600 disabled:cursor-not-allowed disabled:from-gray-300 disabled:to-gray-300 disabled:shadow-none"
           >
             <ShoppingBag className="h-5 w-5" />
-            {quantity > 0
-              ? quantity >= product.stock
-                ? "Maximum in cart"
-                : "Add another"
-              : canPurchase
+            {canPurchase
               ? "Add to cart"
               : product.stock <= 0
               ? "Out of stock"

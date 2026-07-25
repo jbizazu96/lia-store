@@ -348,6 +348,9 @@ export { shipdayWebhook };
 export { syncCustomerOrders };
 export { syncStoreOrders };
 export { orderStatusChanged };
+export {
+  productCustomerNotifications,
+} from "./triggers/productCustomerNotifications";
 export { syncShipdayDeliveries };
 export { remindStoreOrders } from "./scheduler/remindStoreOrders";
 export { createOrder };
@@ -357,6 +360,9 @@ export {
 export {
   deleteProductImages,
 } from "./images/deleteProductImages";
+export {
+  deleteProductGalleryImage,
+} from "./images/deleteProductGalleryImage";
 export {
   pollClaidImageJobs,
 } from "./claid/pollClaidImageJobs";

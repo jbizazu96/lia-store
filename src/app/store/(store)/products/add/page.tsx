@@ -60,9 +60,6 @@ import {
   productGalleryImageService,
 } from "@/services/product/productGalleryImageService";
 
-import {
-  validateProductImageFile,
-} from "@/services/product/productImageService";
 /*
 |--------------------------------------------------------------------------
 | Page
@@ -238,21 +235,6 @@ async ({
       null
     );
 
-    /*
-    |--------------------------------------------------------------------------
-    | Validate Selected Images
-    |--------------------------------------------------------------------------
-    */
-
-    validateProductImageFile(
-      frontImage.file
-    );
-
-    if (backImage && backImageFile) {
-      validateProductImageFile(
-        backImageFile
-      );
-    }
 
     /*
     |--------------------------------------------------------------------------

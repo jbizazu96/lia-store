@@ -699,16 +699,6 @@ export function ProductForm({
 
       imageFiles:
         gallerySubmission,
-
-      /*
-       * Temporary compatibility field.
-       *
-       * Existing add/edit pages still use imageFile while they are migrated
-       * to upload the complete gallery.
-       */
-      imageFile:
-        frontImage?.file ??
-        null,
     });
   };
 
