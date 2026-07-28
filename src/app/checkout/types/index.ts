@@ -60,18 +60,52 @@ export interface CheckoutItem {
   } | null;
 }
 
-/**
- * Calculated totals displayed during checkout.
- */
 export interface CheckoutTotals {
+  /*
+    Merchandise total before delivery, platform fees, tax, and tip.
+  */
   subtotal: number;
 
+  /*
+    Distance-based delivery charge.
+
+    This can become zero when the order qualifies for free delivery.
+  */
   deliveryFee: number;
 
+  /*
+    Customer-facing platform fee retained by LIA.
+
+    The current MVP default is:
+
+    - 5% of the merchandise subtotal
+    - Minimum $1.99
+    - Maximum $9.99
+
+    These defaults will later be replaced by pricing settings managed
+    through the admin panel.
+  */
+  serviceFee: number;
+
+  /*
+    Current estimated sales tax.
+  */
   tax: number;
 
+  /*
+    Customer-selected driver tip.
+  */
   tip: number;
 
+  /*
+    Final customer-facing total.
+
+    subtotal
+    + deliveryFee
+    + serviceFee
+    + tax
+    + tip
+  */
   total: number;
 }
 

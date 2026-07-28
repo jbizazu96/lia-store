@@ -45,6 +45,7 @@ function mapStoreDocument(
     city: data.city ?? "",
     state: data.state ?? "",
     zip: data.zip ?? "",
+    country: data.country ?? undefined,
 
     latitude: data.latitude ?? 0,
     longitude: data.longitude ?? 0,
@@ -70,6 +71,8 @@ function mapStoreDocument(
     updatedAt: data.updatedAt ?? "",
 
     stripeAccountId: data.stripeAccountId ?? undefined,
+    stripeConnectApiVersion:
+      data.stripeConnectApiVersion === "v2" ? "v2" : undefined,
 
     businessType: data.businessType ?? undefined,
     registeredName: data.registeredName ?? undefined,

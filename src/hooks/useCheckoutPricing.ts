@@ -76,6 +76,11 @@ interface UseCheckoutPricingResult {
 
   deliveryFee: number;
 
+  /*
+    Customer-facing platform fee retained by LIA.
+  */
+  serviceFee: number;
+
   tax: number;
 
   total: number;
@@ -184,6 +189,25 @@ export function useCheckoutPricing({
 
     const deliveryFee =
       pricing.deliveryFee;
+    
+    /*
+    |--------------------------------------------------------------------------
+    | Service Fee
+    |--------------------------------------------------------------------------
+    |
+    | calculateDeliveryFee() applies the centralized:
+    |
+    | - 5% percentage
+    | - $1.99 minimum
+    | - $9.99 maximum
+    |
+    | These are MVP fallback values. The future admin panel will manage the
+    | active pricing rules.
+    |
+    */
+
+    const serviceFee =
+      pricing.serviceFee;
 
     const tax =
       Math.round(
@@ -195,6 +219,7 @@ export function useCheckoutPricing({
     const total =
       subtotal +
       deliveryFee +
+      serviceFee +
       tax +
       tip;
 
@@ -212,6 +237,8 @@ export function useCheckoutPricing({
 
       deliveryFee,
 
+      serviceFee,
+      
       tax,
 
       total,
@@ -219,6 +246,7 @@ export function useCheckoutPricing({
       totals: {
         subtotal,
         deliveryFee,
+        serviceFee,
         tax,
         tip,
         total,

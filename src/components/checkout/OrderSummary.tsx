@@ -96,11 +96,36 @@ export function OrderSummary({
           <span className="text-gray-800">${totals.subtotal.toFixed(2)}</span>
         </div>
         
-        {/* ✅ Delivery Fee - ALWAYS visible, shows "Free" if 0 */}
+        {/* Delivery fee is always visible and shows "Free" when waived. */}
         <div className="flex justify-between text-sm">
-          <span className="text-gray-500">Delivery Fee</span>
-          <span className="text-gray-800">{getDeliveryFeeDisplay(totals.deliveryFee)}</span>
+          <span className="text-gray-500">
+            Delivery Fee
+          </span>
+
+          <span className="text-gray-800">
+            {getDeliveryFeeDisplay(
+              totals.deliveryFee
+            )}
+          </span>
         </div>
+
+        {/* Customer-facing platform fee retained by LIA. */}
+        <div className="flex justify-between gap-4 text-sm">
+          <div>
+            <span className="text-gray-500">
+              Service Fee
+            </span>
+
+            <p className="text-[11px] text-gray-400">
+              Helps support LIA operations
+            </p>
+          </div>
+
+          <span className="text-gray-800">
+            ${totals.serviceFee.toFixed(2)}
+          </span>
+        </div>
+        
         
         {/* ✅ Tip - ONLY visible if greater than 0 */}
        {totals.tip > 0 && (

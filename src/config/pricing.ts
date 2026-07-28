@@ -37,24 +37,49 @@ export const PRICING_CONFIG = {
   DEFAULT_COMMISSION_RATE: 0.15,
 
   /**
-   * Service fee charged to the customer.
-   *
-   * Example:
-   * 0.10 = 10%
-   */
-  SERVICE_FEE_PERCENTAGE: 0.10,
+ * Service fee charged to the customer for using the LIA marketplace.
+ *
+ * This helps cover platform operations such as:
+ *
+ * • Payment processing
+ * • Customer support
+ * • Refund and dispute operations
+ * • Marketplace infrastructure
+ * • Fraud and operational risk
+ *
+ * Example:
+ * 0.05 = 5%
+ *
+ * Important:
+ * These values are MVP defaults only.
+ *
+ * The future admin panel will manage the active pricing configuration
+ * in Firestore. The backend will then use the Firestore configuration
+ * as the trusted source of truth.
+ */
+SERVICE_FEE_PERCENTAGE: 0.05,
 
-  /**
-   * Lowest service fee allowed,
-   * regardless of order size.
-   */
-  MIN_SERVICE_FEE: 5.99,
+/**
+ * Lowest service fee charged to the customer.
+ *
+ * This prevents very small orders from producing a service fee that
+ * does not reasonably cover platform operating costs.
+ *
+ * MVP fallback value:
+ * $1.99
+ */
+MIN_SERVICE_FEE: 1.99,
 
-  /**
-   * Maximum service fee charged,
-   * even for very large orders.
-   */
-  MAX_SERVICE_FEE: 15.99,
+/**
+ * Maximum service fee charged to the customer.
+ *
+ * This prevents the percentage-based fee from becoming excessive on
+ * large grocery orders.
+ *
+ * MVP fallback value:
+ * $9.99
+ */
+MAX_SERVICE_FEE: 9.99,
 
   /**
    * Sales tax percentage.

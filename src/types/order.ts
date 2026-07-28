@@ -103,18 +103,52 @@ export interface OrderItem {
    PRICING
    ========================================================================== */
 
-/**
- * Financial breakdown of the order.
- */
 export interface OrderPricing {
+  /*
+    Merchandise total before delivery, platform fees, tax, and tip.
+  */
   subtotal: number;
 
+  /*
+    Distance-based delivery charge.
+
+    This can be zero when the order qualifies for free delivery.
+  */
   deliveryFee: number;
 
+  /*
+    Customer-facing platform fee retained by LIA.
+
+    Current MVP defaults:
+
+    - 5% of the merchandise subtotal
+    - Minimum $1.99
+    - Maximum $9.99
+
+    These defaults will later be replaced by pricing settings managed
+    through the admin portal.
+  */
+  serviceFee: number;
+
+  /*
+    Estimated sales tax charged to the customer.
+  */
   tax: number;
 
+  /*
+    Customer-selected driver tip.
+  */
   tip: number;
 
+  /*
+    Final amount charged to the customer.
+
+    subtotal
+    + deliveryFee
+    + serviceFee
+    + tax
+    + tip
+  */
   total: number;
 }
 

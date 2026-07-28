@@ -16,6 +16,7 @@ export interface Store {
   city: string;
   state: string;
   zip: string;
+  country?: string;
   latitude: number;
   longitude: number;
   placeId: string;
@@ -34,6 +35,7 @@ export interface Store {
   updatedAt: string;
   // Stripe
   stripeAccountId?: string;
+  stripeConnectApiVersion?: "v2";
   // Legal
   businessType?: string;
   registeredName?: string;

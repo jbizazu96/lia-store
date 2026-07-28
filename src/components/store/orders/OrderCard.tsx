@@ -33,13 +33,18 @@ export function OrderCard({order, index}: OrderCardProps) {
       order.pricing.tax;
 
   return (
-    <motion.div
-      initial={{opacity: 0, y: 20}}
-      animate={{opacity: 1, y: 0}}
-      transition={{delay: index * 0.03}}
-      className="bg-white rounded-2xl p-5 shadow-sm hover:shadow-md transition border border-gray-100"
+    <Link
+      href={`/store/store-orders/${order.id}`}
+      className="block rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2"
+      aria-label={`View details for order ${order.orderNumber || order.id}`}
     >
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+      <motion.div
+        initial={{opacity: 0, y: 20}}
+        animate={{opacity: 1, y: 0}}
+        transition={{delay: index * 0.03}}
+        className="cursor-pointer rounded-2xl border border-gray-100 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+      >
+        <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
         {/* Order Info */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-3 mb-2 flex-wrap">
@@ -75,15 +80,15 @@ export function OrderCard({order, index}: OrderCardProps) {
 
         {/* Actions */}
         <div className="flex items-center gap-3">
-          <Link
-            href={`/store/store-orders/${order.id}`}
+          <span
             className="px-4 py-2 bg-orange-50 text-orange-600 text-sm font-medium rounded-xl hover:bg-orange-100 transition flex items-center gap-2"
           >
             <Eye className="w-4 h-4" />
             View Details
-          </Link>
+          </span>
         </div>
       </div>
-    </motion.div>
+      </motion.div>
+    </Link>
   );
 }

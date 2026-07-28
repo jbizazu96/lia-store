@@ -290,6 +290,8 @@ export default function CreateStorePage() {
         city: city.trim().toUpperCase(),
         state: state.trim().toUpperCase(),
         zip: zip.trim().toUpperCase(),
+        /* Store onboarding currently supports United States businesses. */
+        country: "US",
         latitude: location.latitude,
         longitude: location.longitude,
         placeId: location.placeId,

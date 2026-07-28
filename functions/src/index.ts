@@ -4,13 +4,18 @@ import {onSchedule} from "firebase-functions/v2/scheduler";
 import {getFirestore} from "firebase-admin/firestore";
 import { createShipdayOrder } from "./orders/createShipdayOrder";
 import { shipdayWebhook } from "./webhooks/shipdayWebhook";
+import { stripeConnectWebhook } from "./webhooks/stripeConnectWebhook";
 import { syncCustomerOrders } from "./delivery/syncCustomerOrders";
 import { syncStoreOrders } from "./delivery/syncStoreOrders";
 import { acceptOrder } from "./orders/acceptOrder";
 import { orderStatusChanged } from "./triggers/orderStatusChanged";
 import { syncShipdayDeliveries } from "./scheduler/syncShipdayDeliveries";
 import { createOrder } from "./orders/createOrder";
+import {
+  prepareCheckoutPayment,
+} from "./payment/prepareCheckoutPayment";
 export { processStoreImage } from "./images/processStoreImage";
+
 
 /*
   Initialize the Firebase Admin SDK once.
@@ -18,7 +23,14 @@ export { processStoreImage } from "./images/processStoreImage";
   Cloud Functions uses the Admin SDK because it runs
   on the server and can safely update protected data.
 */
-admin.initializeApp();
+/*
+  Some exported modules initialize Admin while they are being loaded.
+  Guard this call so module-import order can never initialize the default
+  Firebase app twice.
+*/
+if (admin.apps.length === 0) {
+  admin.initializeApp();
+}
 
 /*
   This project uses a Firestore database with the ID "default".
@@ -345,6 +357,7 @@ export const cleanupExpiredCarts = onSchedule(
 export { createShipdayOrder };
 export { acceptOrder };
 export { shipdayWebhook };
+export { stripeConnectWebhook };
 export { syncCustomerOrders };
 export { syncStoreOrders };
 export { orderStatusChanged };
@@ -354,6 +367,9 @@ export {
 export { syncShipdayDeliveries };
 export { remindStoreOrders } from "./scheduler/remindStoreOrders";
 export { createOrder };
+export {
+  prepareCheckoutPayment,
+};
 export {
   processProductImage,
 } from "./images/processProductImage";

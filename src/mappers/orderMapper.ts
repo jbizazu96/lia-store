@@ -90,10 +90,29 @@ export function createOrder(
 
     pricing: {
       subtotal: input.totals.subtotal,
-      deliveryFee: input.totals.deliveryFee,
-      tax: input.totals.tax,
-      tip: input.totals.tip,
-      total: input.totals.total,
+
+      deliveryFee:
+        input.totals.deliveryFee,
+
+      /*
+        Customer-facing platform fee retained by LIA.
+
+        This value currently comes from the checkout estimate. Once Stripe
+        payment preparation is implemented, the backend will recalculate
+        and overwrite all payment-critical pricing from trusted settings
+        and Firestore product data.
+      */
+      serviceFee:
+        input.totals.serviceFee,
+
+      tax:
+        input.totals.tax,
+
+      tip:
+        input.totals.tip,
+
+      total:
+        input.totals.total,
     },
 
     delivery: {

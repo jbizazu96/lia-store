@@ -47,6 +47,13 @@ interface UseCartPricingResult {
 
   deliveryFee: number;
 
+  /*
+    Customer-facing platform fee paid to LIA.
+
+    The amount is calculated from the centralized pricing configuration.
+  */
+  serviceFee: number;
+
   tax: number;
 
   total: number;
@@ -85,6 +92,24 @@ export function useCartPricing({
     const deliveryFee =
       deliveryPricing.deliveryFee;
 
+      /*
+      |--------------------------------------------------------------------------
+      | Service Fee
+      |--------------------------------------------------------------------------
+      |
+      | calculateDeliveryFee() already applies the configured:
+      |
+      | - Percentage
+      | - Minimum fee
+      | - Maximum fee
+      |
+      | Although this service calculates multiple marketplace values, the cart
+      | uses only the customer-facing delivery and service fees here.
+      |
+      */
+
+      const serviceFee =
+        deliveryPricing.serviceFee;
     /*
     |--------------------------------------------------------------------------
     | Tax
@@ -107,6 +132,7 @@ export function useCartPricing({
     const total =
       subtotal +
       deliveryFee +
+      serviceFee +
       tax;
 
     /*
@@ -127,6 +153,8 @@ export function useCartPricing({
       subtotal,
 
       deliveryFee,
+
+      serviceFee,
 
       tax,
 

@@ -60,6 +60,7 @@ export default function CartPage() {
     const {
       subtotal,
       deliveryFee,
+      serviceFee,
       tax,
       total,
       amountUntilFreeDelivery,
@@ -331,11 +332,20 @@ export default function CartPage() {
               <span className="text-gray-800">${subtotal.toFixed(2)}</span>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-gray-500">Delivery Fee</span>
-              <span className="text-gray-800">
-                {deliveryFee === 0 ? "Free" : `$${deliveryFee.toFixed(2)}`}
+            <div>
+              <span className="text-gray-500">
+                Service Fee
               </span>
+
+              <p className="text-[11px] text-gray-400">
+                Helps support LIA operations
+              </p>
             </div>
+
+            <span className="text-gray-800">
+              ${serviceFee.toFixed(2)}
+            </span>
+          </div>
             <div className="flex justify-between text-sm">
               <span className="text-gray-500">
                 Tax ({PRICING_CONFIG.SALES_TAX_RATE * 100}%)

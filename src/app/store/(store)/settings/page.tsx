@@ -8,7 +8,10 @@
 
 import { BrandedLoader } from "@/components/ui/BrandedLoader";
 import { useState, useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
+import {
+  useRouter,
+  useSearchParams,
+} from "next/navigation";
 import { motion } from "framer-motion";
 import {
   Store,
@@ -40,14 +43,67 @@ import { useUnsavedChanges } from "@/hooks/useUnsavedChanges";
 import { useConfirmation } from "@/context/ConfirmationContext";
 import { useSuccessToast } from "@/context/SuccessToastContext";
 
+/*
+  Settings sections supported by this page.
+
+  Keeping these values in one union prevents an arbitrary URL value
+  from becoming the active settings section.
+*/
+type SettingsSection =
+  | "profile"
+  | "business"
+  | "schedule"
+  | "payment"
+  | "notifications"
+  | "security"
+  | "danger";
+
+
+/*
+  Validate a section value read from the URL.
+
+  Example:
+
+  ?section=payment
+      → accepted
+
+  ?section=unknown
+      → rejected
+*/
+function isSettingsSection(
+  value: string | null
+): value is SettingsSection {
+  return (
+    value === "profile" ||
+    value === "business" ||
+    value === "schedule" ||
+    value === "payment" ||
+    value === "notifications" ||
+    value === "security" ||
+    value === "danger"
+  );
+}
+
 export default function SettingsPage() {
   const { showSuccess } = useSuccessToast();
   const router = useRouter();
+
+  /*
+    Read settings navigation information from the URL.
+
+    Stripe onboarding returns the store owner to a URL such as:
+
+    /store/settings?section=payment&stripe=return
+
+    The "section" parameter tells this page which settings panel should
+    be displayed after the redirect.
+  */
+  const searchParams = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [storeData, setStoreData] = useState<any>(null);
   const [storeId, setStoreId] = useState<string>("");
   const [userData, setUserData] = useState<any>(null);
-  const [activeSection, setActiveSection] = useState("profile");
+  const [activeSection, setActiveSection] = useState<SettingsSection>("profile");
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
   const initialStoreData = useRef<string | null>(null);
@@ -107,6 +163,26 @@ export default function SettingsPage() {
 
     fetchData();
   }, [router]);
+
+  /*
+    Open the settings section requested by the URL.
+
+    This is especially important after Stripe-hosted onboarding because
+    Stripe redirects the store owner back to:
+
+    /store/settings?section=payment&stripe=return
+
+    Without this effect, the page would return to the default Profile
+    section instead of showing the Stripe account status.
+  */
+  useEffect(() => {
+    const requestedSection =
+      searchParams.get("section");
+
+    if (isSettingsSection(requestedSection)) {
+      setActiveSection(requestedSection);
+    }
+  }, [searchParams]);
 
   // Save settings
   const handleSave = async () => {
@@ -219,10 +295,23 @@ export default function SettingsPage() {
     );
   }
 
-  const sections = [
+  /*
+  `  Strongly type every sidebar section ID.
+
+    Without this annotation, TypeScript widens values such as "profile"
+    and "payment" into the general string type.
+
+    activeSection only accepts SettingsSection values, so the array must
+    preserve that same type.
+  */
+  const sections: Array<{
+    id: SettingsSection;
+    label: string;
+    icon: typeof Store;
+  }> = [
     { id: "profile", label: "Store Profile", icon: Store },
     { id: "business", label: "Business Info", icon: Building },
-    { id: "schedule", label: "Store Schedule", icon: Clock }, // ✅ Added schedule section
+    { id: "schedule", label: "Store Schedule", icon: Clock },
     { id: "payment", label: "Payment & Payouts", icon: CreditCard },
     { id: "notifications", label: "Notifications", icon: Bell },
     { id: "security", label: "Security", icon: Shield },

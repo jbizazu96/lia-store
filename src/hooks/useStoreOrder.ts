@@ -29,12 +29,17 @@ import {
 import {
   doc,
   getDoc,
+  onSnapshot,
 } from "firebase/firestore";
 
 import {
   auth,
   db,
 } from "@/lib/firebase";
+
+import {
+  mapFirestoreOrder,
+} from "@/mappers/orderMapper";
 
 import {
   orderService,
@@ -110,6 +115,11 @@ export function useStoreOrder({
     setCurrentUser,
   ] = useState<User | null>(null);
 
+  const [
+    ownedStoreId,
+    setOwnedStoreId,
+  ] = useState<string | null>(null);
+
   /*
   |--------------------------------------------------------------------------
   | Load And Verify Order
@@ -145,6 +155,7 @@ export function useStoreOrder({
 
         if (!userSnapshot.exists()) {
           setOrder(null);
+          setOwnedStoreId(null);
 
           setError(
             "Store account not found."
@@ -161,6 +172,7 @@ export function useStoreOrder({
           !storeId.trim()
         ) {
           setOrder(null);
+          setOwnedStoreId(null);
 
           setError(
             "Store not found."
@@ -182,6 +194,7 @@ export function useStoreOrder({
 
         if (!loadedOrder) {
           setOrder(null);
+          setOwnedStoreId(null);
 
           setError(
             "Order not found."
@@ -201,6 +214,7 @@ export function useStoreOrder({
           storeId
         ) {
           setOrder(null);
+          setOwnedStoreId(null);
 
           setError(
             "You do not have permission to view this order."
@@ -210,6 +224,7 @@ export function useStoreOrder({
         }
 
         setOrder(loadedOrder);
+        setOwnedStoreId(storeId);
         setError(null);
       } catch (loadError) {
         console.error(
@@ -218,6 +233,7 @@ export function useStoreOrder({
         );
 
         setOrder(null);
+        setOwnedStoreId(null);
 
         setError(
           "Failed to load order."
@@ -243,6 +259,7 @@ export function useStoreOrder({
         auth,
         (user) => {
           setCurrentUser(user);
+          setOwnedStoreId(null);
 
           if (!user) {
             setOrder(null);
@@ -264,6 +281,57 @@ export function useStoreOrder({
 
     return unsubscribe;
   }, [loadOrder]);
+
+  /*
+  |--------------------------------------------------------------------------
+  | Live Delivery Status Updates
+  |--------------------------------------------------------------------------
+  |
+  | Shipday updates the same Firestore order document. Once ownership has
+  | been verified by the initial load, subscribe to that document so picked
+  | up, out-for-delivery, and completed states appear without a refresh.
+  |
+  */
+
+  useEffect(() => {
+    if (!currentUser || !ownedStoreId) {
+      return;
+    }
+
+    const unsubscribe = onSnapshot(
+      doc(db, "orders", orderId),
+      (snapshot) => {
+        if (!snapshot.exists()) {
+          setOrder(null);
+          setError("Order not found.");
+          return;
+        }
+
+        try {
+          const liveOrder = mapFirestoreOrder(snapshot);
+
+          if (liveOrder.store.id !== ownedStoreId) {
+            setOrder(null);
+            setError("You do not have permission to view this order.");
+            return;
+          }
+
+          setOrder(liveOrder);
+          setError(null);
+        } catch (listenerError) {
+          console.error("Error mapping live store order:", listenerError);
+          setOrder(null);
+          setError("The live order update could not be read.");
+        }
+      },
+      (listenerError) => {
+        console.error("Error listening to store order:", listenerError);
+        setError("Failed to receive live order updates.");
+      }
+    );
+
+    return unsubscribe;
+  }, [currentUser, orderId, ownedStoreId]);
 
   /*
   |--------------------------------------------------------------------------
