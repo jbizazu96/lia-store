@@ -83,6 +83,12 @@ interface ProductCardProps {
   ) => void;
 
   quantity: number;
+
+  /**
+   * Product sections use compact horizontal cards, while category pages use
+   * cards that fill each column of their two-column grid.
+   */
+  layout?: "carousel" | "grid";
 }
 
 /*
@@ -171,6 +177,7 @@ export function ProductCard({
   onAddToCart,
   onQuantityChange,
   quantity,
+  layout = "carousel",
 }: ProductCardProps) {
   const router =
     useRouter();
@@ -207,6 +214,9 @@ export function ProductCard({
 
   const isOutOfStock =
     product.stock <= 0;
+
+  const isGridLayout =
+    layout === "grid";
 
   const stockStatus =
     getStockStatus(
@@ -384,11 +394,13 @@ export function ProductCard({
                 y: -2,
               }
         }
-        className={`w-[135px] flex-shrink-0 cursor-pointer font-sans antialiased outline-none transition focus-visible:rounded-2xl focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2 sm:w-[148px] ${
-          isOutOfStock
-            ? "opacity-60"
-            : ""
-        }`}
+        className={[
+          isGridLayout
+            ? "w-full min-w-0"
+            : "w-[135px] flex-shrink-0 sm:w-[148px]",
+          "cursor-pointer font-sans antialiased outline-none transition focus-visible:rounded-2xl focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2",
+          isOutOfStock ? "opacity-60" : "",
+        ].join(" ")}
       >
         {/*
         |--------------------------------------------------------------------------
@@ -396,7 +408,12 @@ export function ProductCard({
         |--------------------------------------------------------------------------
         */}
 
-        <div className="relative h-[104px] w-full overflow-hidden rounded-2xl bg-gray-100">
+        <div
+          className={[
+            "relative w-full overflow-hidden rounded-2xl bg-gray-100",
+            isGridLayout ? "aspect-square" : "h-[104px]",
+          ].join(" ")}
+        >
           {product.imageUrl ? (
             <Image
               src={
@@ -412,7 +429,11 @@ export function ProductCard({
                 )
               }
               fill
-              sizes="(max-width: 640px) 135px, 148px"
+              sizes={
+                isGridLayout
+                  ? "(max-width: 640px) 50vw, 260px"
+                  : "(max-width: 640px) 135px, 148px"
+              }
               className={`scale-[1.15] object-contain p-2 ${
                 isOutOfStock
                   ? "grayscale"

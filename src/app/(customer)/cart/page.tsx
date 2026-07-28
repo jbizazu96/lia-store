@@ -31,6 +31,7 @@ import {
   X,
   Trash2,
   AlertCircle,
+  Info,
 } from "lucide-react";
 import { useCart } from "@/context/CartContext";
 import {
@@ -39,6 +40,10 @@ import {
 import {
   formatProductName,
 } from "@/utils/productDisplay";
+import {
+  FeeInfoSheet,
+  type FeeInfoType,
+} from "@/components/customer/cart/FeeInfoSheet";
 
 export default function CartPage() {
   const router = useRouter();
@@ -48,6 +53,7 @@ export default function CartPage() {
   const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
   const [itemToRemove, setItemToRemove] = useState<string | null>(null);
   const [itemNameToRemove, setItemNameToRemove] = useState("");
+  const [feeInfoType, setFeeInfoType] = useState<FeeInfoType | null>(null);
 
   const {
       loading: storeLoading,
@@ -60,13 +66,17 @@ export default function CartPage() {
     const {
       subtotal,
       deliveryFee,
+      originalDeliveryFee,
       serviceFee,
       tax,
       total,
       amountUntilFreeDelivery,
       hasFreeDelivery,
+      isCalculatingDelivery,
+      deliveryError,
     } = useCartPricing({
       subtotal: totalPrice,
+      storeId,
     });
 
   // Go back to previous page
@@ -117,7 +127,8 @@ export default function CartPage() {
   // ✅ Show loading state
   if (
   isLoading ||
-  storeLoading
+  storeLoading ||
+  isCalculatingDelivery
 ) {
     return <BrandedLoader message="Loading Cart" />;
   }
@@ -165,7 +176,7 @@ export default function CartPage() {
             Your cart is empty
           </h2>
           <p className="text-gray-500 text-sm mb-8">
-            Looks like you haven't added anything to your cart yet.
+            Looks like you haven&apos;t added anything to your cart yet.
             Browse our stores and discover amazing African groceries!
           </p>
 
@@ -276,6 +287,12 @@ export default function CartPage() {
                     {/* Price & Quantity Controls */}
                     <div className="flex items-center justify-between mt-2">
                       <div>
+                        {typeof item.originalPrice === "number" &&
+                          item.originalPrice > item.price && (
+                            <span className="mr-1.5 text-xs text-gray-400 line-through">
+                              ${item.originalPrice.toFixed(2)}
+                            </span>
+                          )}
                         <ProductPrice
                           price={item.price}
                           className="text-gray-900"
@@ -331,25 +348,54 @@ export default function CartPage() {
               <span className="text-gray-500">Subtotal</span>
               <span className="text-gray-800">${subtotal.toFixed(2)}</span>
             </div>
-            <div className="flex justify-between text-sm">
-            <div>
-              <span className="text-gray-500">
-                Service Fee
-              </span>
+            <div className="flex items-center justify-between gap-4 text-sm">
+              <button
+                type="button"
+                onClick={() => setFeeInfoType("delivery")}
+                className="inline-flex items-center gap-1 text-gray-500 transition hover:text-gray-800"
+                aria-label="Learn about the delivery fee"
+              >
+                Delivery Fee
+                <Info className="h-3.5 w-3.5" aria-hidden="true" />
+              </button>
 
-              <p className="text-[11px] text-gray-400">
-                Helps support LIA operations
-              </p>
+              {hasFreeDelivery ? (
+                <span className="flex items-center gap-2 font-medium text-gray-800">
+                  <span className="text-gray-400 line-through">
+                    ${originalDeliveryFee.toFixed(2)}
+                  </span>
+                  <span>$0.00</span>
+                </span>
+              ) : (
+                <span className="text-gray-800">
+                  ${deliveryFee.toFixed(2)}
+                </span>
+              )}
             </div>
-
-            <span className="text-gray-800">
-              ${serviceFee.toFixed(2)}
-            </span>
-          </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-500">
-                Tax ({PRICING_CONFIG.SALES_TAX_RATE * 100}%)
+            <div className="flex items-center justify-between gap-4 text-sm">
+              <button
+                type="button"
+                onClick={() => setFeeInfoType("service")}
+                className="inline-flex items-center gap-1 text-gray-500 transition hover:text-gray-800"
+                aria-label="Learn about the service fee"
+              >
+                Service Fee
+                <Info className="h-3.5 w-3.5" aria-hidden="true" />
+              </button>
+              <span className="text-gray-800">
+                ${serviceFee.toFixed(2)}
               </span>
+            </div>
+            <div className="flex items-center justify-between gap-4 text-sm">
+              <button
+                type="button"
+                onClick={() => setFeeInfoType("tax")}
+                className="inline-flex items-center gap-1 text-gray-500 transition hover:text-gray-800"
+                aria-label="Learn about estimated tax"
+              >
+                Estimated Tax
+                <Info className="h-3.5 w-3.5" aria-hidden="true" />
+              </button>
               <span className="text-gray-800">${tax.toFixed(2)}</span>
             </div>
             <div className="border-t border-gray-200 pt-2">
@@ -368,6 +414,12 @@ export default function CartPage() {
             </div>
           )}
 
+          {deliveryError && (
+            <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-center text-sm text-amber-800">
+              {deliveryError}
+            </div>
+          )}
+
           {!storeError && !isStoreOpen && (
             <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-center">
               <p className="text-sm font-medium text-amber-700">
@@ -381,7 +433,8 @@ export default function CartPage() {
             onClick={handleCheckout}
             disabled={
               !isStoreOpen ||
-              Boolean(storeError)
+              Boolean(storeError) ||
+              Boolean(deliveryError)
             }
             className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-orange-500 to-orange-600 py-3 font-semibold text-white transition hover:from-orange-600 hover:to-orange-700 hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-50"
           >
@@ -391,6 +444,8 @@ export default function CartPage() {
               ? "Store Closed"
               : storeError
                 ? "Store Unavailable"
+                : deliveryError
+                  ? "Delivery Unavailable"
                 : "Proceed to Checkout"}
           </button>
 
@@ -488,6 +543,16 @@ export default function CartPage() {
           </motion.div>
         </div>
       )}
+
+      <AnimatePresence>
+        {feeInfoType && (
+          <FeeInfoSheet
+            type={feeInfoType}
+            estimatedTax={tax}
+            onClose={() => setFeeInfoType(null)}
+          />
+        )}
+      </AnimatePresence>
     </main>
   );
 }

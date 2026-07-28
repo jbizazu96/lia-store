@@ -22,9 +22,11 @@ import {
   getEstimatedTimeNumber,
 } from "@/services/delivery/distance";
 import {
-  getDrivingDistanceMiles,
   hasValidRouteCoordinates,
 } from "@/services/delivery/routing";
+import {
+  getStoreDeliveryRoutes,
+} from "@/services/delivery/deliveryRoutesClientService";
 import { userService } from "@/services/user/userService";
 import { TopNavigation } from "@/components/customer/home/TopNavigation";
 import { SearchBar } from "@/components/customer/home/SearchBar";
@@ -112,23 +114,42 @@ export default function CustomerHomePage() {
         setDistanceError(null);
         const storesData = await storeService.getStores();
 
-          const calculatedStores = await Promise.all(storesData.map(async (store) => {
-            if (!hasValidRouteCoordinates({
+        const storesWithCoordinates =
+          storesData.filter((store) =>
+            store.status === "active" &&
+            hasValidRouteCoordinates({
               latitude: store.latitude,
               longitude: store.longitude,
-            })) {
-              console.error(
-                `Store ${store.id} has no valid saved coordinates and cannot be shown for delivery.`
-              );
-              return null;
-            }
+            })
+          );
 
-            const distance = await getDrivingDistanceMiles(
-              { latitude: userLocation.lat, longitude: userLocation.lng },
-              { latitude: store.latitude, longitude: store.longitude }
+        const routes =
+          storesWithCoordinates.length > 0
+            ? await getStoreDeliveryRoutes(
+                storesWithCoordinates.map(
+                  (store) => store.id
+                ),
+                {
+                  latitude: userLocation.lat,
+                  longitude: userLocation.lng,
+                }
+              )
+            : [];
+
+        const routeByStoreId = new Map(
+          routes.map((route) => [
+            route.storeId,
+            route.distanceMiles,
+          ])
+        );
+
+        const calculatedStores =
+          storesWithCoordinates.map((store) => {
+            const distance = routeByStoreId.get(
+              store.id
             );
 
-            if (distance === null) {
+            if (distance === undefined) {
               return null;
             }
 
@@ -136,19 +157,16 @@ export default function CustomerHomePage() {
 
             return storeMapper.toCustomerStore(store, {
               distance,
-
               deliveryFee: pricing.deliveryFee,
               deliveryFeeDisplay: getDeliveryFeeDisplay(distance),
-
               estimatedPrepTime: getEstimatedTimeNumber(distance),
               estimatedDeliveryTime: getEstimatedTime(distance),
-
               reviewCount: 0,
               categories: [],
               promotions: [],
               isFavorite: false,
             });
-          }));
+          });
 
         const storesWithDistance = calculatedStores.filter(
           (store): store is CustomerStore => store !== null

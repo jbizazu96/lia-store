@@ -54,6 +54,15 @@ export interface CreateOrderPaymentIntentInput {
   */
   customerUid: string;
 
+    /*
+    Stripe Customer associated with the authenticated Firebase user.
+
+    The PaymentIntent and Customer Session must reference this same
+    Customer so the Payment Element can display and save payment
+    methods.
+  */
+  stripeCustomerId: string;
+
   /*
     Customer email from the verified Firebase token or trusted user
     record.
@@ -99,6 +108,7 @@ export type StripePaymentServiceErrorCode =
   | "INVALID_ORDER_ID"
   | "INVALID_ORDER_NUMBER"
   | "INVALID_CUSTOMER_ID"
+  | "INVALID_STRIPE_CUSTOMER_ID"
   | "INVALID_STORE_ID"
   | "INVALID_STORE_STRIPE_ACCOUNT"
   | "INVALID_PAYMENT_AMOUNT"
@@ -181,6 +191,25 @@ async function createOrderPaymentIntent(
       "A valid customer ID is required."
     );
 
+    /*
+      Stripe Customer used for saved payment methods.
+
+      This Customer must also be used when creating the Customer Session.
+    */
+    const stripeCustomerId =
+      requireIdentifier(
+        input.stripeCustomerId,
+        "INVALID_STRIPE_CUSTOMER_ID",
+        "A valid Stripe customer ID is required."
+      );
+
+    if (!stripeCustomerId.startsWith("cus_")) {
+      throw new StripePaymentServiceError(
+        "INVALID_STRIPE_CUSTOMER_ID",
+        "The Stripe customer ID is invalid."
+      );
+    }
+
   const storeId =
     requireIdentifier(
       input.storeId,
@@ -234,6 +263,16 @@ async function createOrderPaymentIntent(
         currency:
           input.pricing.currency,
 
+                  /*
+          Attach the payment to the authenticated customer's reusable
+          Stripe Customer.
+
+          This allows the Customer Session and Payment Element to show
+          payment methods that the customer previously consented to save.
+        */
+        customer:
+          stripeCustomerId,
+
         /*
           Stripe can dynamically show payment methods supported by the
           current account, currency, and customer context.
@@ -276,6 +315,9 @@ async function createOrderPaymentIntent(
 
           liaCustomerUid:
             customerUid,
+
+         liaStripeCustomerId:
+            stripeCustomerId,
 
           liaStoreId:
             storeId,

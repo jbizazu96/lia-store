@@ -34,6 +34,7 @@
 
 import {
   FieldValue,
+  Timestamp,
   getFirestore,
 } from "firebase-admin/firestore";
 
@@ -74,6 +75,22 @@ export type CheckoutStatus =
   Data required to create a payment-pending order.
 */
 export interface CreatePaymentPendingOrderInput {
+
+  /*
+    LIA checkout-session document associated with this order.
+  */
+  checkoutSessionId: string;
+
+  /*
+    Stable fingerprint used to identify an identical checkout.
+  */
+  checkoutFingerprint: string;
+
+  /*
+    ISO expiration timestamp copied from the checkout session.
+  */
+  checkoutExpiresAt: string;
+
   customer: TrustedCheckoutCustomer;
 
   checkoutRequest:
@@ -210,6 +227,32 @@ async function createPaymentPendingOrder(
     );
   }
 
+    const checkoutSessionId =
+    input.checkoutSessionId.trim();
+
+  const checkoutFingerprint =
+    input.checkoutFingerprint.trim();
+
+  const checkoutExpiresAt =
+    new Date(
+      input.checkoutExpiresAt
+    );
+
+  if (
+    !checkoutSessionId ||
+    !checkoutFingerprint ||
+    Number.isNaN(
+      checkoutExpiresAt.getTime()
+    ) ||
+    checkoutExpiresAt.getTime() <=
+      Date.now()
+  ) {
+    throw new PaymentPendingOrderError(
+      "ORDER_CREATE_FAILED",
+      "The checkout session reference is invalid."
+    );
+  }
+
   const orderReference =
     db.collection("orders").doc();
 
@@ -241,6 +284,21 @@ async function createPaymentPendingOrder(
   try {
     await orderReference.set({
       orderNumber,
+
+            /*
+        Temporary checkout-session relationship.
+
+        The payment webhook uses this reference to atomically confirm
+        both the order and its LIA checkout session.
+      */
+      checkoutSessionId,
+
+      checkoutFingerprint,
+
+      checkoutExpiresAt:
+        Timestamp.fromDate(
+          checkoutExpiresAt
+        ),
 
       /*
         Authenticated customer ownership plus delivery-contact details.
@@ -316,6 +374,13 @@ async function createPaymentPendingOrder(
                 item.unitPriceAmount
               ),
 
+            originalPrice:
+              typeof item.originalUnitPriceAmount === "number"
+                ? centsToDollars(
+                    item.originalUnitPriceAmount
+                  )
+                : null,
+
             quantity:
               item.quantity,
 
@@ -330,6 +395,9 @@ async function createPaymentPendingOrder(
             */
             unitPriceAmount:
               item.unitPriceAmount,
+
+            originalUnitPriceAmount:
+              item.originalUnitPriceAmount ?? null,
 
             lineTotalAmount:
               item.lineTotalAmount,

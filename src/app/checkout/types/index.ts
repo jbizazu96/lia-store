@@ -50,6 +50,9 @@ export interface CheckoutItem {
 
   price: number;
 
+  /** Regular unit price before an active product discount. */
+  originalPrice?: number;
+
   quantity: number;
 
   imageUrl?: string;
@@ -72,6 +75,9 @@ export interface CheckoutTotals {
     This can become zero when the order qualifies for free delivery.
   */
   deliveryFee: number;
+
+  /* Delivery price before a free-delivery promotion is applied. */
+  originalDeliveryFee: number;
 
   /*
     Customer-facing platform fee retained by LIA.

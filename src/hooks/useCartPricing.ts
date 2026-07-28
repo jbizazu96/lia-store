@@ -15,8 +15,14 @@
 */
 
 import {
+  useEffect,
   useMemo,
+  useState,
 } from "react";
+
+import {
+  auth,
+} from "@/lib/firebase";
 
 import {
   PRICING_CONFIG,
@@ -25,6 +31,12 @@ import {
 import {
   calculateDeliveryFee,
 } from "@/services/delivery/deliveryPricing";
+import {
+  getStoreDeliveryRoute,
+} from "@/services/delivery/deliveryRoutesClientService";
+import {
+  userService,
+} from "@/services/user/userService";
 
 /*
 |--------------------------------------------------------------------------
@@ -34,6 +46,8 @@ import {
 
 interface UseCartPricingParams {
   subtotal: number;
+
+  storeId?: string;
 }
 
 /*
@@ -46,6 +60,9 @@ interface UseCartPricingResult {
   subtotal: number;
 
   deliveryFee: number;
+
+  /* Delivery price before an eligible free-delivery promotion is applied. */
+  originalDeliveryFee: number;
 
   /*
     Customer-facing platform fee paid to LIA.
@@ -61,6 +78,12 @@ interface UseCartPricingResult {
   amountUntilFreeDelivery: number;
 
   hasFreeDelivery: boolean;
+
+  distanceMiles: number | null;
+
+  isCalculatingDelivery: boolean;
+
+  deliveryError: string | null;
 }
 
 /*
@@ -71,7 +94,122 @@ interface UseCartPricingResult {
 
 export function useCartPricing({
   subtotal,
+  storeId,
 }: UseCartPricingParams): UseCartPricingResult {
+  const [
+    distanceMiles,
+    setDistanceMiles,
+  ] = useState<number | null>(null);
+
+  const [
+    isCalculatingDelivery,
+    setIsCalculatingDelivery,
+  ] = useState(false);
+
+  const [
+    deliveryError,
+    setDeliveryError,
+  ] = useState<string | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    if (!storeId) {
+      const resetTimeout = window.setTimeout(() => {
+        if (!isMounted) {
+          return;
+        }
+
+        setDistanceMiles(null);
+        setIsCalculatingDelivery(false);
+        setDeliveryError(null);
+      }, 0);
+
+      return () => {
+        isMounted = false;
+        window.clearTimeout(resetTimeout);
+      };
+    }
+
+    const user = auth.currentUser;
+
+    if (!user) {
+      const resetTimeout = window.setTimeout(() => {
+        if (!isMounted) {
+          return;
+        }
+
+        setDistanceMiles(null);
+        setIsCalculatingDelivery(false);
+        setDeliveryError(
+          "Sign in to calculate your delivery fee."
+        );
+      }, 0);
+
+      return () => {
+        isMounted = false;
+        window.clearTimeout(resetTimeout);
+      };
+    }
+
+    const loadDeliveryRoute = async () => {
+      setIsCalculatingDelivery(true);
+      setDeliveryError(null);
+
+      try {
+        const location = await userService
+          .getDefaultLocation(user.uid);
+
+        if (!location) {
+          throw new Error(
+            "Add a verified delivery address to calculate your delivery fee."
+          );
+        }
+
+        const route = await getStoreDeliveryRoute(
+          storeId,
+          {
+            latitude: location.lat,
+            longitude: location.lng,
+          }
+        );
+
+        if (!isMounted) {
+          return;
+        }
+
+        if (!route) {
+          throw new Error(
+            "We could not calculate a driving route for your delivery address."
+          );
+        }
+
+        setDistanceMiles(route.distanceMiles);
+      } catch (error: unknown) {
+        if (!isMounted) {
+          return;
+        }
+
+        setDistanceMiles(null);
+        setDeliveryError(
+          error instanceof Error
+            ? error.message
+            : "We could not calculate your delivery fee."
+        );
+      } finally {
+        if (isMounted) {
+          setIsCalculatingDelivery(false);
+        }
+      }
+    };
+
+    void loadDeliveryRoute();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [storeId]);
+
   return useMemo(() => {
     /*
     |--------------------------------------------------------------------------
@@ -85,12 +223,23 @@ export function useCartPricing({
 
     const deliveryPricing =
       calculateDeliveryFee(
-        0,
+        distanceMiles ?? 0,
         subtotal
       );
 
     const deliveryFee =
       deliveryPricing.deliveryFee;
+
+    /*
+      Keep the pre-promotion price for the cart UI. When delivery is free,
+      customers can see the value of the waived fee instead of only $0.00.
+    */
+    const originalDeliveryFee = Math.round(
+      (
+        deliveryPricing.breakdown.distanceFee +
+        deliveryPricing.breakdown.peakSurcharge
+      ) * 100
+    ) / 100;
 
       /*
       |--------------------------------------------------------------------------
@@ -154,6 +303,8 @@ export function useCartPricing({
 
       deliveryFee,
 
+      originalDeliveryFee,
+
       serviceFee,
 
       tax,
@@ -163,8 +314,19 @@ export function useCartPricing({
       amountUntilFreeDelivery,
 
       hasFreeDelivery:
-        deliveryFee === 0 &&
+        deliveryPricing.isFreeDelivery &&
         subtotal > 0,
+
+      distanceMiles,
+
+      isCalculatingDelivery,
+
+      deliveryError,
     };
-  }, [subtotal]);
+  }, [
+    subtotal,
+    distanceMiles,
+    isCalculatingDelivery,
+    deliveryError,
+  ]);
 }

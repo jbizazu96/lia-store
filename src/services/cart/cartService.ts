@@ -42,6 +42,13 @@ export interface CartItem {
 
   price: number;
 
+  /**
+   * Regular unit price before an active product discount is applied.
+   *
+   * Omitted when the item is not discounted.
+   */
+  originalPrice?: number;
+
   imageUrl?: string;
 
   quantity: number;

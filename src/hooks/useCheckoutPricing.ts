@@ -22,9 +22,11 @@ import {
   getEstimatedTimeNumber,
 } from "@/services/delivery/distance";
 import {
-  getDrivingDistanceMiles,
   hasValidRouteCoordinates,
 } from "@/services/delivery/routing";
+import {
+  getStoreDeliveryRoute,
+} from "@/services/delivery/deliveryRoutesClientService";
 
 import {
   calculateDeliveryFee,
@@ -144,13 +146,13 @@ export function useCheckoutPricing({
     setIsCalculatingDistance(true);
     setDistanceError(null);
 
-    getDrivingDistanceMiles(
-      { latitude: store.latitude, longitude: store.longitude },
+    getStoreDeliveryRoute(
+      store.id,
       { latitude: address.latitude, longitude: address.longitude }
     )
-      .then((drivingDistance) => {
+      .then((route) => {
         if (isMounted) {
-          if (drivingDistance === null) {
+          if (route === null) {
             setDistanceMiles(0);
             setDistanceError(
               "We could not calculate a driving route for this delivery address. Please try again shortly."
@@ -158,7 +160,7 @@ export function useCheckoutPricing({
             return;
           }
 
-          setDistanceMiles(drivingDistance);
+          setDistanceMiles(route.distanceMiles);
         }
       })
       .catch(() => {
@@ -189,6 +191,13 @@ export function useCheckoutPricing({
 
     const deliveryFee =
       pricing.deliveryFee;
+
+    const originalDeliveryFee = Math.round(
+      (
+        pricing.breakdown.distanceFee +
+        pricing.breakdown.peakSurcharge
+      ) * 100
+    ) / 100;
     
     /*
     |--------------------------------------------------------------------------
@@ -246,6 +255,7 @@ export function useCheckoutPricing({
       totals: {
         subtotal,
         deliveryFee,
+        originalDeliveryFee,
         serviceFee,
         tax,
         tip,

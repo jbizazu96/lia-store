@@ -198,6 +198,84 @@ function dollarsToCents(
 
 
 /*
+  Get the trusted discounted price from the product document.
+
+  Cart prices are intentionally never trusted for payment. This mirrors the
+  customer promotion rules while using the current Firestore product data.
+*/
+function getTrustedDiscountedUnitPriceAmount(
+  price: number,
+  promotion: unknown,
+  originalUnitPriceAmount: number
+): number {
+  if (
+    !promotion ||
+    typeof promotion !== "object"
+  ) {
+    return originalUnitPriceAmount;
+  }
+
+  const data =
+    promotion as Record<string, unknown>;
+
+  if (
+    data.type !== "discount" ||
+    data.isActive === false
+  ) {
+    return originalUnitPriceAmount;
+  }
+
+  const now = Date.now();
+
+  for (const fieldName of ["startsAt", "endsAt"] as const) {
+    const value = data[fieldName];
+
+    if (value === null || value === undefined) {
+      continue;
+    }
+
+    if (typeof value !== "string") {
+      return originalUnitPriceAmount;
+    }
+
+    const time = Date.parse(value);
+
+    if (
+      Number.isNaN(time) ||
+      (fieldName === "startsAt" && now < time) ||
+      (fieldName === "endsAt" && now > time)
+    ) {
+      return originalUnitPriceAmount;
+    }
+  }
+
+  let discountedPrice = price;
+
+  if (
+    typeof data.discountPercentage === "number" &&
+    Number.isFinite(data.discountPercentage) &&
+    data.discountPercentage > 0
+  ) {
+    discountedPrice =
+      price *
+      (1 - Math.min(data.discountPercentage, 100) / 100);
+  } else if (
+    typeof data.discountAmount === "number" &&
+    Number.isFinite(data.discountAmount) &&
+    data.discountAmount > 0
+  ) {
+    discountedPrice =
+      price - data.discountAmount;
+  }
+
+  return Math.max(
+    0,
+    Math.round(discountedPrice * 100)
+  );
+}
+
+
+/*
   Normalize and validate one customer product selection.
 */
 function validateItemInput(
@@ -410,10 +488,17 @@ function mapTrustedItem(
     );
   }
 
-  const unitPriceAmount =
+  const originalUnitPriceAmount =
     dollarsToCents(
       product.price,
       productName
+    );
+
+  const unitPriceAmount =
+    getTrustedDiscountedUnitPriceAmount(
+      product.price,
+      product.promotion,
+      originalUnitPriceAmount
     );
 
   const lineTotalAmount =
@@ -437,6 +522,11 @@ function mapTrustedItem(
     name: productName,
 
     unitPriceAmount,
+
+    originalUnitPriceAmount:
+      unitPriceAmount < originalUnitPriceAmount
+        ? originalUnitPriceAmount
+        : undefined,
 
     quantity: input.quantity,
 

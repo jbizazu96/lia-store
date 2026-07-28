@@ -14,6 +14,9 @@ import { createOrder } from "./orders/createOrder";
 import {
   prepareCheckoutPayment,
 } from "./payment/prepareCheckoutPayment";
+import {
+  getStoreDeliveryRoutes,
+} from "./delivery/getStoreDeliveryRoutes";
 export { processStoreImage } from "./images/processStoreImage";
 
 
@@ -369,6 +372,9 @@ export { remindStoreOrders } from "./scheduler/remindStoreOrders";
 export { createOrder };
 export {
   prepareCheckoutPayment,
+};
+export {
+  getStoreDeliveryRoutes,
 };
 export {
   processProductImage,

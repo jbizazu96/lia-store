@@ -30,6 +30,10 @@ import {
   AnimatePresence,
   motion,
 } from "framer-motion";
+import {
+  CircleCheckBig,
+  Info,
+} from "lucide-react";
 
 import { useCart } from "@/context/CartContext";
 import { useCustomerStore } from "@/hooks/useCustomerStore";
@@ -140,7 +144,6 @@ export default function StorePage({
   isSearching,
   isFilteringByCategory,
   setSearchQuery,
-  selectCategory,
 } = useProductFilter({
   products: allProducts,
   categories,
@@ -156,6 +159,20 @@ export default function StorePage({
 
   const storeTotalPrice =
     getStoreTotalPrice(storeId);
+
+  const hasFreshCategories =
+    categories.some((category) =>
+      [
+        "produce",
+        "meat",
+        "seafood",
+        "dairy",
+        "bakery",
+        "frozen",
+      ].includes(
+        category.id.toLowerCase()
+      )
+    );
 
   /*
   |--------------------------------------------------------------------------
@@ -195,13 +212,20 @@ export default function StorePage({
      * Otherwise, create a new cart item.
      */
 
+    const discountedPrice =
+      promotionService.getDiscountedPrice(
+        product.price,
+        product.promotion
+      );
+
     void addItem({
       id: product.id,
       name: product.name,
-      price: promotionService.getDiscountedPrice(
-        product.price,
-        product.promotion
-      ),
+      price: discountedPrice,
+      originalPrice:
+        discountedPrice < product.price
+          ? product.price
+          : undefined,
       imageUrl: product.imageUrl,
 
       storeId: store.id,
@@ -458,10 +482,36 @@ export default function StorePage({
 
       {categories.length > 0 && (
         <div className="mt-4 px-4">
+          {hasFreshCategories && (
+            <div className="mb-4 flex items-center gap-2.5 rounded-2xl bg-emerald-50 px-3.5 py-3 text-sm font-semibold text-emerald-900">
+              <CircleCheckBig className="h-5 w-5 shrink-0 text-emerald-600" />
+              <span className="flex-1">
+                Freshness guaranteed or your money back
+              </span>
+              <Info
+                className="h-5 w-5 shrink-0 text-emerald-700/70"
+                aria-hidden="true"
+              />
+            </div>
+          )}
+
           <CategoryScroll
             categories={categories}
-            selectedCategory={selectedCategory}
-            onSelect={selectCategory}
+            onCategoryClick={(categoryId) =>
+              router.push(
+                "/store/" +
+                  store.id +
+                  "/category/" +
+                  encodeURIComponent(categoryId)
+              )
+            }
+            onDealsClick={() =>
+              router.push(
+                "/store/" +
+                  store.id +
+                  "/category/deals"
+              )
+            }
           />
         </div>
       )}
@@ -508,13 +558,17 @@ export default function StorePage({
      ) : isFilteringByCategory ? (
         <div className="mt-4 px-4 pb-24">
           <h3 className="mb-3 font-bold text-gray-800">
-            {selectedCategoryData?.name}
+            {selectedCategory === "deals"
+              ? "Deals"
+              : selectedCategoryData?.name}
           </h3>
 
           {displayProducts.length === 0 ? (
             <div className="py-8 text-center">
               <p className="text-gray-500">
-                No products in this category
+                {selectedCategory === "deals"
+                  ? "No deals are available right now"
+                  : "No products in this category"}
               </p>
             </div>
           ) : (
@@ -555,7 +609,12 @@ export default function StorePage({
               getItemQuantity
             }
             onViewAll={() =>
-              selectCategory(category.id)
+              router.push(
+                "/store/" +
+                  store.id +
+                  "/category/" +
+                  encodeURIComponent(category.id)
+              )
             }
           />
         ))

@@ -1,13 +1,19 @@
 "use client";
 
+import {useState} from "react";
+import {AnimatePresence} from "framer-motion";
 import Image from "next/image";
-import {Store} from "lucide-react";
+import {Info, Store} from "lucide-react";
 import {
   ProductPrice,
 } from "@/components/ui/ProductPrice";
 import {
   formatProductName,
 } from "@/utils/productDisplay";
+import {
+  FeeInfoSheet,
+  type FeeInfoType,
+} from "@/components/customer/cart/FeeInfoSheet";
 import type {
   CheckoutItem,
   CheckoutTotals,
@@ -26,11 +32,9 @@ export function OrderSummary({
   storeName,
   storeAddress,
 }: OrderSummaryProps) {
-  // Format delivery fee - always show, "Free" if 0
-  const getDeliveryFeeDisplay = (fee: number) => {
-    if (fee === 0) return "Free";
-    return `$${fee.toFixed(2)}`;
-  };
+  const [feeInfoType, setFeeInfoType] = useState<FeeInfoType | null>(null);
+  const hasFreeDelivery =
+    totals.deliveryFee === 0 && totals.originalDeliveryFee > 0;
 
   return (
     <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
@@ -79,6 +83,12 @@ export function OrderSummary({
               </div>
               
               <div className="text-right">
+                {typeof item.originalPrice === "number" &&
+                  item.originalPrice > item.price && (
+                    <p className="mb-0.5 text-xs text-gray-400 line-through">
+                      ${(item.originalPrice * item.quantity).toFixed(2)}
+                    </p>
+                  )}
                 <ProductPrice
                   price={item.price * item.quantity}
                   className="text-gray-900"
@@ -96,31 +106,41 @@ export function OrderSummary({
           <span className="text-gray-800">${totals.subtotal.toFixed(2)}</span>
         </div>
         
-        {/* Delivery fee is always visible and shows "Free" when waived. */}
-        <div className="flex justify-between text-sm">
-          <span className="text-gray-500">
+        <div className="flex items-center justify-between gap-4 text-sm">
+          <button
+            type="button"
+            onClick={() => setFeeInfoType("delivery")}
+            className="inline-flex items-center gap-1 text-gray-500 transition hover:text-gray-800"
+            aria-label="Learn about the delivery fee"
+          >
             Delivery Fee
-          </span>
+            <Info className="h-3.5 w-3.5" aria-hidden="true" />
+          </button>
 
-          <span className="text-gray-800">
-            {getDeliveryFeeDisplay(
-              totals.deliveryFee
-            )}
-          </span>
+          {hasFreeDelivery ? (
+            <span className="flex items-center gap-2 font-medium text-gray-800">
+              <span className="text-gray-400 line-through">
+                ${totals.originalDeliveryFee.toFixed(2)}
+              </span>
+              <span>$0.00</span>
+            </span>
+          ) : (
+            <span className="text-gray-800">
+              ${totals.deliveryFee.toFixed(2)}
+            </span>
+          )}
         </div>
 
-        {/* Customer-facing platform fee retained by LIA. */}
-        <div className="flex justify-between gap-4 text-sm">
-          <div>
-            <span className="text-gray-500">
-              Service Fee
-            </span>
-
-            <p className="text-[11px] text-gray-400">
-              Helps support LIA operations
-            </p>
-          </div>
-
+        <div className="flex items-center justify-between gap-4 text-sm">
+          <button
+            type="button"
+            onClick={() => setFeeInfoType("service")}
+            className="inline-flex items-center gap-1 text-gray-500 transition hover:text-gray-800"
+            aria-label="Learn about the service fee"
+          >
+            Service Fee
+            <Info className="h-3.5 w-3.5" aria-hidden="true" />
+          </button>
           <span className="text-gray-800">
             ${totals.serviceFee.toFixed(2)}
           </span>
@@ -135,8 +155,16 @@ export function OrderSummary({
           </div>
         )}
         
-        <div className="flex justify-between text-sm">
-          <span className="text-gray-500">Tax</span>
+        <div className="flex items-center justify-between gap-4 text-sm">
+          <button
+            type="button"
+            onClick={() => setFeeInfoType("tax")}
+            className="inline-flex items-center gap-1 text-gray-500 transition hover:text-gray-800"
+            aria-label="Learn about estimated tax"
+          >
+            Estimated Tax
+            <Info className="h-3.5 w-3.5" aria-hidden="true" />
+          </button>
           <span className="text-gray-800">${totals.tax.toFixed(2)}</span>
         </div>
         
@@ -145,6 +173,16 @@ export function OrderSummary({
           <span className="text-orange-600">${totals.total.toFixed(2)}</span>
         </div>
       </div>
+
+      <AnimatePresence>
+        {feeInfoType && (
+          <FeeInfoSheet
+            type={feeInfoType}
+            estimatedTax={totals.tax}
+            onClose={() => setFeeInfoType(null)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

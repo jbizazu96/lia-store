@@ -91,6 +91,18 @@ export interface PrepareCheckoutPaymentInput {
   storeId: string;
 
   /*
+  Delivery contact name selected by the authenticated customer.
+
+  The Firebase UID still determines ownership of the order.
+  */
+  contactName: string;
+
+  /*
+    Delivery contact phone used by the store and delivery driver.
+  */
+  contactPhone: string;
+
+  /*
     Product IDs, quantities, and optional selected sizes.
   */
   items: CheckoutPaymentItemInput[];
@@ -130,14 +142,42 @@ export interface PrepareCheckoutPaymentInput {
 export interface TrustedCheckoutPricing {
   currency: "usd";
 
+  /*
+    Trusted merchandise subtotal in cents.
+  */
   subtotalAmount: number;
 
+  /*
+    Trusted delivery charge in cents.
+  */
   deliveryFeeAmount: number;
 
+  /*
+    Customer-facing LIA platform service fee in cents.
+
+    Current MVP defaults:
+
+    - 5% of merchandise subtotal
+    - $1.99 minimum
+    - $9.99 maximum
+
+    These values will later come from admin-managed pricing settings.
+  */
+  serviceFeeAmount: number;
+
+  /*
+    Trusted estimated sales tax in cents.
+  */
   taxAmount: number;
 
+  /*
+    Customer-selected driver tip in cents.
+  */
   tipAmount: number;
 
+  /*
+    Final Stripe PaymentIntent amount in cents.
+  */
   totalAmount: number;
 }
 
@@ -151,9 +191,29 @@ export interface TrustedCheckoutPricing {
 export interface PrepareCheckoutPaymentResult {
   orderId: string;
 
-  paymentIntentId: string;
+  /*
+    Human-readable LIA order number returned by the backend.
+  */
+  orderNumber: string;
 
-  clientSecret: string;
+ paymentIntentId: string;
 
-  pricing: TrustedCheckoutPricing;
+/*
+  PaymentIntent client secret used by Stripe.js to confirm this order's
+  payment.
+*/
+clientSecret: string;
+
+/*
+  Short-lived Customer Session client secret.
+
+  Stripe Elements uses this to:
+
+  - Display saved payment methods
+  - Offer the option to save a new payment method
+  - Allow the customer to remove a saved payment method
+*/
+customerSessionClientSecret: string;
+
+pricing: TrustedCheckoutPricing;
 }

@@ -24,6 +24,9 @@ import {
 
 import type { Category } from "@/types/category";
 import type { Product } from "@/types/product";
+import {
+  promotionService,
+} from "@/services/promotion/promotionService";
 
 /*
 |--------------------------------------------------------------------------
@@ -102,7 +105,10 @@ export function useProductFilter({
 
   const selectedCategoryData =
     useMemo(() => {
-      if (selectedCategory === "all") {
+      if (
+        selectedCategory === "all" ||
+        selectedCategory === "deals"
+      ) {
         return undefined;
       }
 
@@ -166,6 +172,20 @@ export function useProductFilter({
 
       if (selectedCategory === "all") {
         return products;
+      }
+
+      /*
+       * Deals is the visual replacement for the former All control.
+       * It shows only products with a currently active promotion.
+       */
+      if (selectedCategory === "deals") {
+        return products.filter(
+          (product) =>
+            product.promotion !== undefined &&
+            promotionService.isActive(
+              product.promotion
+            )
+        );
       }
 
       /*

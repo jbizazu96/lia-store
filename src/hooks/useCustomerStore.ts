@@ -44,9 +44,11 @@ import {
   getEstimatedTimeNumber,
 } from "@/services/delivery/distance";
 import {
-  getDrivingDistanceMiles,
   hasValidRouteCoordinates,
 } from "@/services/delivery/routing";
+import {
+  getStoreDeliveryRoute,
+} from "@/services/delivery/deliveryRoutesClientService";
 
 import {
   calculateDeliveryFee,
@@ -330,19 +332,20 @@ export function useCustomerStore({
             }
 
             {
-              const drivingDistance = await getDrivingDistanceMiles(
-                { latitude: userLocation.lat, longitude: userLocation.lng },
-                {
-                  latitude: domainStore.latitude,
-                  longitude: domainStore.longitude,
-                }
-              );
+              const route =
+                await getStoreDeliveryRoute(
+                  storeId,
+                  {
+                    latitude: userLocation.lat,
+                    longitude: userLocation.lng,
+                  }
+                );
 
-              if (drivingDistance === null) {
+              if (route === null) {
                 throw new Error("Unable to calculate the driving distance to this store.");
               }
 
-              distance = drivingDistance;
+              distance = route.distanceMiles;
 
               const deliveryPricing =
                 calculateDeliveryFee(

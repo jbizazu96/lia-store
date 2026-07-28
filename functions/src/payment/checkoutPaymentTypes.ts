@@ -144,6 +144,12 @@ export interface TrustedCheckoutItem {
   */
   unitPriceAmount: number;
 
+  /*
+    Regular unit price before an active product discount, in cents.
+    Omitted when no product discount applies.
+  */
+  originalUnitPriceAmount?: number;
+
   quantity: number;
 
   /*
@@ -234,12 +240,21 @@ export interface PrepareCheckoutPaymentResponse {
 
   paymentIntentId: string;
 
-  /*
-    Stripe.js uses this value to confirm payment in the browser.
-
-    This is not the Stripe secret API key.
+    /*
+    PaymentIntent client secret used to confirm this order payment.
   */
   clientSecret: string;
+
+  /*
+    Short-lived Customer Session client secret.
+
+    Stripe Elements uses this to:
+
+    - Display saved payment methods
+    - Offer consent to save a new payment method
+    - Allow saved methods to be removed
+  */
+  customerSessionClientSecret: string;
 
   pricing: {
     currency: "usd";

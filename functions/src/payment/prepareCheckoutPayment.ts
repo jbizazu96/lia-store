@@ -3,28 +3,33 @@
 | Prepare Checkout Payment
 |--------------------------------------------------------------------------
 |
-| Authenticated callable Firebase Function that prepares one Stripe
-| customer payment.
+| Authenticated callable Firebase Function that prepares or resumes one
+| Stripe customer payment.
 |
 | Flow:
 |
-| Customer submits permitted checkout choices
+| Validate browser choices
 |        ↓
-| Validate the untrusted request
+| Load trusted store and products
 |        ↓
-| Load trusted store and product data from Firestore
+| Calculate trusted route and pricing
 |        ↓
-| Calculate trusted driving distance with Google Routes
+| Create or retrieve the customer's Stripe Customer
 |        ↓
-| Calculate trusted payment amounts in integer cents
+| Resolve LIA checkout session
 |        ↓
-| Create a payment-pending Firestore order
+| ┌────────────────────────┬─────────────────────────┐
+| | Existing active session| New checkout session    |
+| |                        |                         |
+| | Retrieve PaymentIntent | Create pending order    |
+| |                        | Create PaymentIntent    |
+| └────────────────────────┴─────────────────────────┘
 |        ↓
-| Create a Stripe PaymentIntent on the LIA platform account
+| Create a fresh Stripe Customer Session
 |        ↓
-| Attach the PaymentIntent ID to the order
-|        ↓
-| Return the clientSecret to the browser
+| Return PaymentIntent and Customer Session secrets
+|
+| Important:
 |
 | This function does NOT:
 |
@@ -32,7 +37,7 @@
 | - Deduct inventory
 | - Notify the store
 | - Start fulfillment
-| - Create Shipday delivery
+| - Create a Shipday delivery
 | - Transfer money to the store or driver
 */
 
@@ -58,18 +63,33 @@ import {
 } from "./checkoutDistanceService";
 
 import {
-  calculatePaymentPricing,
-} from "./paymentPricingCalculator";
-
-import {
   isCheckoutPaymentValidationError,
   validatePrepareCheckoutPaymentRequest,
 } from "./checkoutPaymentValidation";
 
 import {
+  isCheckoutSessionServiceError,
+  checkoutSessionService,
+} from "./checkoutSessionService";
+
+import {
   isPaymentPendingOrderError,
   paymentPendingOrderService,
 } from "./paymentPendingOrderService";
+
+import {
+  calculatePaymentPricing,
+} from "./paymentPricingCalculator";
+
+import {
+  isStripeCustomerServiceError,
+  stripeCustomerService,
+} from "./stripeCustomerService";
+
+import {
+  isStripeCustomerSessionError,
+  stripeCustomerSessionService,
+} from "./stripeCustomerSessionService";
 
 import {
   isStripePaymentServiceError,
@@ -81,25 +101,22 @@ import type {
   TrustedCheckoutCustomer,
 } from "./checkoutPaymentTypes";
 
+import type {
+  ReusableCheckoutSession,
+} from "./checkoutSessionTypes";
+
 
 /*
-  Stripe platform secret.
-
-  This must belong to the same Stripe sandbox or live environment used
-  by LIA's customer payments and connected accounts.
+|--------------------------------------------------------------------------
+| Secrets
+|--------------------------------------------------------------------------
 */
+
 const stripeSecretKey =
   defineSecret(
     "STRIPE_SECRET_KEY"
   );
 
-
-/*
-  Server-only Google Maps Platform key.
-
-  Firebase Functions uses this key to calculate the trusted delivery
-  route through Google Routes API.
-*/
 const googleMapsApiKey =
   defineSecret(
     "GOOGLE_MAPS_API_KEY"
@@ -107,24 +124,19 @@ const googleMapsApiKey =
 
 
 /*
-  Convert a trusted distance into a simple delivery-time estimate.
-
-  Current fallback rule:
-
-  - Five minutes preparation
-  - Two driving minutes per mile
-
-  This estimate is informational only and does not affect the amount
-  charged to the customer.
-
-  Later, delivery ETA settings can be loaded from the admin-managed
-  pricing and operations configuration.
+|--------------------------------------------------------------------------
+| Delivery Estimate
+|--------------------------------------------------------------------------
 */
+
 function estimateDeliveryMinutes(
   distanceMiles: number
 ): number {
-  const preparationMinutes = 5;
-  const minutesPerMile = 2;
+  const preparationMinutes =
+    5;
+
+  const minutesPerMile =
+    2;
 
   return Math.max(
     preparationMinutes,
@@ -138,13 +150,11 @@ function estimateDeliveryMinutes(
 
 
 /*
-  Build the trusted customer snapshot.
-
-  request.auth determines ownership.
-
-  The delivery contact name and phone come from the validated checkout
-  request because a customer may legitimately order for another person.
+|--------------------------------------------------------------------------
+| Trusted Customer
+|--------------------------------------------------------------------------
 */
+
 function buildTrustedCustomer(
   uid: string,
   email: string | undefined,
@@ -153,10 +163,13 @@ function buildTrustedCustomer(
 ): TrustedCheckoutCustomer {
   return {
     uid,
+
     email:
       email?.trim() ?? "",
+
     name:
       contactName,
+
     phone:
       contactPhone,
   };
@@ -164,15 +177,138 @@ function buildTrustedCustomer(
 
 
 /*
-  Convert expected application errors into safe callable-function
-  errors.
-
-  Raw Stripe, Firestore, Google, and internal server details must not be
-  exposed to the browser.
+|--------------------------------------------------------------------------
+| Reused PaymentIntent
+|--------------------------------------------------------------------------
 */
+
+interface ReusedPaymentIntentResult {
+  paymentIntentId: string;
+
+  clientSecret: string;
+
+  status:
+    Stripe.PaymentIntent.Status;
+}
+
+
+/*
+  Retrieve and validate the PaymentIntent belonging to a reusable LIA
+  checkout session.
+
+  We do not trust Firestore references by themselves. Stripe remains the
+  source of truth for the payment resource.
+*/
+async function retrieveReusablePaymentIntent(
+  stripe: Stripe,
+  session:
+    ReusableCheckoutSession,
+  expectedStripeCustomerId: string,
+  expectedCustomerUid: string,
+  expectedStoreId: string
+): Promise<
+  ReusedPaymentIntentResult
+> {
+  const paymentIntent =
+    await stripe.paymentIntents.retrieve(
+      session.paymentIntentId
+    );
+
+  const paymentCustomerId =
+    typeof paymentIntent.customer ===
+      "string"
+      ? paymentIntent.customer
+      : paymentIntent.customer?.id;
+
+  /*
+    Confirm that the reused PaymentIntent still represents the exact
+    checkout session and authenticated customer.
+  */
+  if (
+    paymentIntent.id !==
+      session.paymentIntentId ||
+    paymentIntent.amount !==
+      session.totalAmount ||
+    paymentIntent.currency !==
+      session.currency ||
+    paymentCustomerId !==
+      expectedStripeCustomerId ||
+    paymentIntent.metadata
+      .liaOrderId !==
+      session.orderId ||
+    paymentIntent.metadata
+      .liaCustomerUid !==
+      expectedCustomerUid ||
+    paymentIntent.metadata
+      .liaStoreId !==
+      expectedStoreId
+  ) {
+    throw new HttpsError(
+      "failed-precondition",
+      "The existing payment session no longer matches this checkout."
+    );
+  }
+
+  /*
+    These states can continue through the Payment Element.
+  */
+  const reusableStatuses:
+    Stripe.PaymentIntent.Status[] = [
+      "requires_payment_method",
+      "requires_confirmation",
+      "requires_action",
+      "processing",
+    ];
+
+  if (
+    !reusableStatuses.includes(
+      paymentIntent.status
+    )
+  ) {
+    throw new HttpsError(
+      "failed-precondition",
+      "The existing payment session can no longer be reused."
+    );
+  }
+
+  if (
+    !paymentIntent.client_secret
+  ) {
+    throw new HttpsError(
+      "internal",
+      "Stripe did not return the existing payment client secret."
+    );
+  }
+
+  return {
+    paymentIntentId:
+      paymentIntent.id,
+
+    clientSecret:
+      paymentIntent.client_secret,
+
+    status:
+      paymentIntent.status,
+  };
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Error Mapping
+|--------------------------------------------------------------------------
+*/
+
 function throwSafeCheckoutError(
   error: unknown
 ): never {
+  if (
+    error instanceof
+    HttpsError
+  ) {
+    throw error;
+  }
+
   if (
     isCheckoutPaymentValidationError(
       error
@@ -185,7 +321,9 @@ function throwSafeCheckoutError(
   }
 
   if (
-    isCheckoutDataError(error)
+    isCheckoutDataError(
+      error
+    )
   ) {
     switch (error.code) {
       case "STORE_NOT_FOUND":
@@ -214,7 +352,9 @@ function throwSafeCheckoutError(
   }
 
   if (
-    isCheckoutDistanceError(error)
+    isCheckoutDistanceError(
+      error
+    )
   ) {
     switch (error.code) {
       case "INVALID_ROUTE_COORDINATES":
@@ -239,7 +379,47 @@ function throwSafeCheckoutError(
   }
 
   if (
-    isPaymentPendingOrderError(error)
+    isCheckoutSessionServiceError(
+      error
+    )
+  ) {
+    throw new HttpsError(
+      "internal",
+      "The checkout session could not be prepared."
+    );
+  }
+
+  if (
+    isStripeCustomerServiceError(
+      error
+    )
+  ) {
+    switch (error.code) {
+      case "USER_NOT_FOUND":
+        throw new HttpsError(
+          "failed-precondition",
+          "Your customer profile could not be found."
+        );
+
+      case "INVALID_STORED_CUSTOMER":
+      case "STRIPE_CUSTOMER_CONFLICT":
+        throw new HttpsError(
+          "failed-precondition",
+          "Your saved payment profile needs attention."
+        );
+
+      default:
+        throw new HttpsError(
+          "internal",
+          "Your Stripe customer profile could not be prepared."
+        );
+    }
+  }
+
+  if (
+    isPaymentPendingOrderError(
+      error
+    )
   ) {
     throw new HttpsError(
       "internal",
@@ -248,11 +428,24 @@ function throwSafeCheckoutError(
   }
 
   if (
-    isStripePaymentServiceError(error)
+    isStripePaymentServiceError(
+      error
+    )
   ) {
     throw new HttpsError(
       "internal",
       "The payment could not be prepared."
+    );
+  }
+
+  if (
+    isStripeCustomerSessionError(
+      error
+    )
+  ) {
+    throw new HttpsError(
+      "internal",
+      "Your saved payment methods could not be prepared."
     );
   }
 
@@ -265,10 +458,13 @@ function throwSafeCheckoutError(
       {
         type:
           error.type,
+
         code:
           error.code,
+
         message:
           error.message,
+
         requestId:
           error.requestId,
       }
@@ -293,11 +489,11 @@ function throwSafeCheckoutError(
 
 
 /*
-  Prepare a customer Stripe payment.
-
-  Firebase Authentication is required because the authenticated UID
-  becomes the owner of the pending order.
+|--------------------------------------------------------------------------
+| Callable Function
+|--------------------------------------------------------------------------
 */
+
 export const prepareCheckoutPayment =
   onCall(
     {
@@ -329,13 +525,25 @@ export const prepareCheckoutPayment =
       }
 
       /*
-        An order may be created before Stripe is called.
+        These references are populated only for a newly created session.
 
-        Keep its ID outside the try block so a Stripe failure can mark
-        that pending order as failed for audit and cleanup.
+        A reused session must never be marked failed merely because a
+        temporary browser response or Customer Session request fails.
       */
-      let pendingOrderId:
+      let newlyCreatedSessionId:
         string | null = null;
+
+      let newlyCreatedOrderId:
+        string | null = null;
+
+      /*
+        Once this becomes true, the order and checkout session represent a
+        valid reusable payment attempt.
+
+        A later Customer Session failure must not invalidate them.
+      */
+      let paymentIntentAttached =
+        false;
 
       try {
         /*
@@ -348,6 +556,7 @@ export const prepareCheckoutPayment =
           validatePrepareCheckoutPaymentRequest(
             request.data
           );
+
 
         /*
         |--------------------------------------------------------------------------
@@ -362,9 +571,10 @@ export const prepareCheckoutPayment =
               checkoutRequest.items
             );
 
+
         /*
         |--------------------------------------------------------------------------
-        | Calculate Trusted Route
+        | Validate Delivery Coordinates
         |--------------------------------------------------------------------------
         */
 
@@ -390,6 +600,13 @@ export const prepareCheckoutPayment =
           );
         }
 
+
+        /*
+        |--------------------------------------------------------------------------
+        | Calculate Trusted Route
+        |--------------------------------------------------------------------------
+        */
+
         const distanceMiles =
           await checkoutDistanceService
             .getTrustedDrivingDistanceMiles(
@@ -414,6 +631,7 @@ export const prepareCheckoutPayment =
               googleMapsApiKey.value()
             );
 
+
         /*
         |--------------------------------------------------------------------------
         | Calculate Trusted Pricing
@@ -436,6 +654,7 @@ export const prepareCheckoutPayment =
               false,
           });
 
+
         /*
         |--------------------------------------------------------------------------
         | Build Trusted Customer
@@ -445,14 +664,260 @@ export const prepareCheckoutPayment =
         const customer =
           buildTrustedCustomer(
             request.auth.uid,
+
             request.auth.token.email as
               | string
               | undefined,
+
             checkoutRequest
               .contactName,
+
             checkoutRequest
               .contactPhone
           );
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Create Stripe Client
+        |--------------------------------------------------------------------------
+        */
+
+        const stripe =
+          new Stripe(
+            stripeSecretKey.value()
+          );
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Create Or Retrieve Stripe Customer
+        |--------------------------------------------------------------------------
+        */
+
+        const stripeCustomer =
+          await stripeCustomerService
+            .getOrCreateStripeCustomer(
+              stripe,
+              {
+                firebaseUid:
+                  customer.uid,
+
+                email:
+                  customer.email ||
+                  undefined,
+
+                name:
+                  customer.name,
+
+                phone:
+                  customer.phone,
+              }
+            );
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Resolve LIA Checkout Session
+        |--------------------------------------------------------------------------
+        |
+        | The fingerprint uses trusted and normalized checkout facts.
+        |
+        | An identical active checkout reuses its existing order and
+        | PaymentIntent.
+        |
+        */
+
+        const sessionResolution =
+          await checkoutSessionService
+            .resolveCheckoutSession({
+              fingerprintInput: {
+                customerUid:
+                  customer.uid,
+
+                storeId:
+                  checkoutData.store.id,
+
+                items:
+                  checkoutData.items.map(
+                    (
+                      item
+                    ) => ({
+                      productId:
+                        item.productId,
+
+                      quantity:
+                        item.quantity,
+
+                      size:
+                        item.size ??
+                        null,
+                    })
+                  ),
+
+                deliveryAddress: {
+                  street:
+                    checkoutRequest
+                      .deliveryAddress
+                      .street,
+
+                  city:
+                    checkoutRequest
+                      .deliveryAddress
+                      .city,
+
+                  state:
+                    checkoutRequest
+                      .deliveryAddress
+                      .state,
+
+                  zip:
+                    checkoutRequest
+                      .deliveryAddress
+                      .zip,
+
+                  latitude:
+                    destinationLatitude,
+
+                  longitude:
+                    destinationLongitude,
+                },
+
+                tipAmount:
+                  pricing.tipAmount,
+
+                totalAmount:
+                  pricing.totalAmount,
+
+                currency:
+                  pricing.currency,
+              },
+            });
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Reuse Existing Checkout
+        |--------------------------------------------------------------------------
+        */
+
+        if (
+          sessionResolution.type ===
+          "reuse"
+        ) {
+          const reusableSession =
+            sessionResolution.session;
+
+          const paymentIntent =
+            await retrieveReusablePaymentIntent(
+              stripe,
+              reusableSession,
+              stripeCustomer.customerId,
+              customer.uid,
+              checkoutData.store.id
+            );
+
+          /*
+            Create a fresh Customer Session each time checkout opens.
+
+            Customer Session secrets are short-lived and are not stored
+            as reusable LIA session data.
+          */
+          const customerSession =
+            await stripeCustomerSessionService
+              .createCustomerSession(
+                stripe,
+                {
+                  customerId:
+                    stripeCustomer
+                      .customerId,
+                }
+              );
+
+          console.log(
+            "Reusing active checkout session:",
+            {
+              sessionId:
+                reusableSession
+                  .sessionId,
+
+              orderId:
+                reusableSession
+                  .orderId,
+
+              paymentIntentId:
+                paymentIntent
+                  .paymentIntentId,
+            }
+          );
+
+          return {
+            success:
+              true,
+
+            orderId:
+              reusableSession
+                .orderId,
+
+            orderNumber:
+              reusableSession
+                .orderNumber,
+
+            paymentIntentId:
+              paymentIntent
+                .paymentIntentId,
+
+            clientSecret:
+              paymentIntent
+                .clientSecret,
+
+            customerSessionClientSecret:
+              customerSession
+                .clientSecret,
+
+            pricing: {
+              currency:
+                pricing.currency,
+
+              subtotalAmount:
+                pricing
+                  .subtotalAmount,
+
+              deliveryFeeAmount:
+                pricing
+                  .deliveryFeeAmount,
+
+              serviceFeeAmount:
+                pricing
+                  .serviceFeeAmount,
+
+              taxAmount:
+                pricing
+                  .taxAmount,
+
+              tipAmount:
+                pricing
+                  .tipAmount,
+
+              totalAmount:
+                pricing
+                  .totalAmount,
+            },
+          };
+        }
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Create New Checkout Session
+        |--------------------------------------------------------------------------
+        */
+
+        newlyCreatedSessionId =
+          sessionResolution
+            .session
+            .sessionId;
+
 
         /*
         |--------------------------------------------------------------------------
@@ -463,6 +928,20 @@ export const prepareCheckoutPayment =
         const pendingOrder =
           await paymentPendingOrderService
             .createPaymentPendingOrder({
+
+              checkoutSessionId:
+                newlyCreatedSessionId,
+
+              checkoutFingerprint:
+                sessionResolution
+                  .session
+                  .fingerprint,
+
+              checkoutExpiresAt:
+                sessionResolution
+                  .session
+                  .expiresAt,
+
               customer,
 
               checkoutRequest,
@@ -479,19 +958,34 @@ export const prepareCheckoutPayment =
                 ),
             });
 
-        pendingOrderId =
+        newlyCreatedOrderId =
           pendingOrder.orderId;
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Attach Order To Checkout Session
+        |--------------------------------------------------------------------------
+        */
+
+        await checkoutSessionService
+          .attachOrder({
+            sessionId:
+              newlyCreatedSessionId,
+
+            orderId:
+              pendingOrder.orderId,
+
+            orderNumber:
+              pendingOrder.orderNumber,
+          });
+
 
         /*
         |--------------------------------------------------------------------------
         | Create Platform PaymentIntent
         |--------------------------------------------------------------------------
         */
-
-        const stripe =
-          new Stripe(
-            stripeSecretKey.value()
-          );
 
         const paymentIntent =
           await stripePaymentService
@@ -506,6 +1000,10 @@ export const prepareCheckoutPayment =
 
                 customerUid:
                   customer.uid,
+
+                stripeCustomerId:
+                  stripeCustomer
+                    .customerId,
 
                 customerEmail:
                   customer.email ||
@@ -522,19 +1020,93 @@ export const prepareCheckoutPayment =
               }
             );
 
+
         /*
         |--------------------------------------------------------------------------
-        | Attach Stripe Reference
+        | Attach PaymentIntent To Order
         |--------------------------------------------------------------------------
         */
 
         await paymentPendingOrderService
           .attachPaymentIntent(
             pendingOrder.orderId,
+
             paymentIntent
               .paymentIntentId,
+
             paymentIntent.status
           );
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Activate Checkout Session
+        |--------------------------------------------------------------------------
+        |
+        | Once both the order and PaymentIntent are attached, identical
+        | future requests may reuse this checkout session.
+        |
+        */
+
+        await checkoutSessionService
+          .attachPaymentIntent({
+            sessionId:
+              newlyCreatedSessionId,
+
+            paymentIntentId:
+              paymentIntent
+                .paymentIntentId,
+          });
+
+          /*
+            The order and checkout session now reference a real reusable
+            PaymentIntent.
+
+            Failures after this point must preserve the awaiting-payment state.
+          */
+          paymentIntentAttached =
+            true;
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Create Stripe Customer Session
+        |--------------------------------------------------------------------------
+        */
+
+        const customerSession =
+          await stripeCustomerSessionService
+            .createCustomerSession(
+              stripe,
+              {
+                customerId:
+                  stripeCustomer
+                    .customerId,
+              }
+            );
+
+
+        console.log(
+          "Created new checkout session:",
+          {
+            sessionId:
+              newlyCreatedSessionId,
+
+            orderId:
+              pendingOrder.orderId,
+
+            paymentIntentId:
+              paymentIntent
+                .paymentIntentId,
+          }
+        );
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Return Safe Checkout Data
+        |--------------------------------------------------------------------------
+        */
 
         return {
           success:
@@ -552,6 +1124,10 @@ export const prepareCheckoutPayment =
 
           clientSecret:
             paymentIntent
+              .clientSecret,
+
+          customerSessionClientSecret:
+            customerSession
               .clientSecret,
 
           pricing: {
@@ -587,14 +1163,20 @@ export const prepareCheckoutPayment =
         error: unknown
       ) {
         /*
-          A failure after pending-order creation must leave an auditable
-          failed record instead of an unexplained awaiting-payment order.
+          Only newly created resources are marked failed here.
+
+          Existing reusable sessions are left unchanged when a temporary
+          response or Customer Session request fails.
         */
-        if (pendingOrderId) {
+        if (
+          newlyCreatedOrderId &&
+          !paymentIntentAttached
+        ) {
           try {
             await paymentPendingOrderService
               .markPaymentPreparationFailed(
-                pendingOrderId,
+                newlyCreatedOrderId,
+
                 error instanceof Error
                   ? error.message
                   : "Unknown payment preparation failure."
@@ -606,11 +1188,26 @@ export const prepareCheckoutPayment =
               "Unable to mark failed payment preparation:",
               {
                 orderId:
-                  pendingOrderId,
+                  newlyCreatedOrderId,
+
                 cleanupError,
               }
             );
           }
+        }
+
+        if (
+          newlyCreatedSessionId &&
+          !paymentIntentAttached
+        ) {
+          await checkoutSessionService
+            .markSessionFailed(
+              newlyCreatedSessionId,
+
+              error instanceof Error
+                ? error.message
+                : "Unknown checkout session preparation failure."
+            );
         }
 
         throwSafeCheckoutError(

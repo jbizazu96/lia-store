@@ -226,10 +226,20 @@ export default function ProductPage({ params }: ProductPageProps) {
   const addProductToCart = async (target: Product) => {
     if (!store || !target.isAvailable || target.stock <= 0) return;
 
+    const discountedPrice =
+      promotionService.getDiscountedPrice(
+        target.price,
+        target.promotion
+      );
+
     await addItem({
       id: target.id,
       name: target.name,
-      price: promotionService.getDiscountedPrice(target.price, target.promotion),
+      price: discountedPrice,
+      originalPrice:
+        discountedPrice < target.price
+          ? target.price
+          : undefined,
       imageUrl: productImageSelector.getUrl(target, "card"),
       storeId: store.id,
       storeName: store.name,

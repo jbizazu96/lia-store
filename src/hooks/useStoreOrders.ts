@@ -5,15 +5,17 @@
 | useStoreOrders Hook
 |--------------------------------------------------------------------------
 |
-| Loads the signed-in store owner's orders in real time.
+| Loads the signed-in store owner's confirmed orders in real time.
 |
 | Responsibilities:
-| - Wait for Firebase Authentication.
-| - Resolve the owner's store ID.
-| - Synchronize active delivery statuses.
-| - Subscribe to the store's orders.
-| - Convert Firestore documents into Order models.
-| - Clean up authentication and Firestore listeners correctly.
+|
+| - Wait for Firebase Authentication
+| - Resolve the owner's store ID
+| - Synchronize active delivery statuses
+| - Subscribe to the store's orders
+| - Hide unpaid payment-pending orders
+| - Convert Firestore documents into Order models
+| - Clean up authentication and Firestore listeners
 |
 */
 
@@ -57,6 +59,7 @@ import type {
   Order,
 } from "@/types/order";
 
+
 /*
 |--------------------------------------------------------------------------
 | Hook Result
@@ -77,15 +80,16 @@ interface UseStoreOrdersResult {
   needsStoreSetup: boolean;
 }
 
+
 /*
 |--------------------------------------------------------------------------
-| Find Store ID
+| Resolve Store ID
 |--------------------------------------------------------------------------
 |
 | First checks users/{uid}.storeId.
 |
-| The fallback query supports older accounts where the relationship is only
-| stored on stores/{storeId}.ownerId.
+| The fallback supports store accounts whose relationship exists only
+| on stores/{storeId}.ownerId.
 |
 */
 
@@ -101,20 +105,34 @@ async function resolveStoreId(
     return userStoreId;
   }
 
-  const storeQuery = query(
-    collection(db, "stores"),
-    where("ownerId", "==", userId)
-  );
+  const storeQuery =
+    query(
+      collection(
+        db,
+        "stores"
+      ),
+
+      where(
+        "ownerId",
+        "==",
+        userId
+      )
+    );
 
   const storeSnapshot =
-    await getDocs(storeQuery);
+    await getDocs(
+      storeQuery
+    );
 
   if (storeSnapshot.empty) {
     return null;
   }
 
-  return storeSnapshot.docs[0].id;
+  return storeSnapshot
+    .docs[0]
+    .id;
 }
+
 
 /*
 |--------------------------------------------------------------------------
@@ -132,7 +150,9 @@ UseStoreOrdersResult {
   const [
     storeId,
     setStoreId,
-  ] = useState<string | null>(null);
+  ] = useState<string | null>(
+    null
+  );
 
   const [
     loading,
@@ -142,7 +162,9 @@ UseStoreOrdersResult {
   const [
     error,
     setError,
-  ] = useState<string | null>(null);
+  ] = useState<string | null>(
+    null
+  );
 
   const [
     isAuthenticated,
@@ -154,13 +176,23 @@ UseStoreOrdersResult {
     setNeedsStoreSetup,
   ] = useState(false);
 
+
+  /*
+  |--------------------------------------------------------------------------
+  | Authentication And Order Listener
+  |--------------------------------------------------------------------------
+  */
+
   useEffect(() => {
     let unsubscribeFromOrders:
       | (() => void)
       | null = null;
 
     const functions =
-      getFunctions();
+      getFunctions(
+        undefined,
+        "us-central1"
+      );
 
     const synchronizeStoreOrders =
       httpsCallable(
@@ -171,12 +203,28 @@ UseStoreOrdersResult {
     const unsubscribeFromAuth =
       onAuthStateChanged(
         auth,
-        async (user) => {
-          if (unsubscribeFromOrders) {
+
+        async (
+          user
+        ) => {
+          /*
+            Remove the previous store-order listener whenever the
+            authenticated user changes.
+          */
+          if (
+            unsubscribeFromOrders
+          ) {
             unsubscribeFromOrders();
+
             unsubscribeFromOrders =
               null;
           }
+
+          /*
+          |--------------------------------------------------------------------------
+          | Signed Out
+          |--------------------------------------------------------------------------
+          */
 
           if (!user) {
             setOrders([]);
@@ -190,6 +238,13 @@ UseStoreOrdersResult {
 
             return;
           }
+
+
+          /*
+          |--------------------------------------------------------------------------
+          | Signed In
+          |--------------------------------------------------------------------------
+          */
 
           setIsAuthenticated(true);
           setNeedsStoreSetup(false);
@@ -218,26 +273,28 @@ UseStoreOrdersResult {
               resolvedStoreId
             );
 
+
             /*
             |--------------------------------------------------------------------------
             | Synchronize Delivery Statuses
             |--------------------------------------------------------------------------
             |
-            | A synchronization failure should not prevent the owner from
-            | viewing their orders.
+            | A Shipday synchronization failure must not prevent the store
+            | owner from viewing confirmed orders.
             |
             */
 
             try {
               await synchronizeStoreOrders();
             } catch (
-              synchronizationError
+              synchronizationError: unknown
             ) {
               console.error(
                 "Store order synchronization failed:",
                 synchronizationError
               );
             }
+
 
             /*
             |--------------------------------------------------------------------------
@@ -251,11 +308,13 @@ UseStoreOrdersResult {
                   db,
                   "orders"
                 ),
+
                 where(
                   "store.id",
                   "==",
                   resolvedStoreId
                 ),
+
                 orderBy(
                   "createdAt",
                   "desc"
@@ -266,10 +325,58 @@ UseStoreOrdersResult {
               onSnapshot(
                 ordersQuery,
 
-                (snapshot) => {
+                (
+                  snapshot
+                ) => {
                   try {
+                    /*
+                    |--------------------------------------------------------------------------
+                    | Store Order Visibility
+                    |--------------------------------------------------------------------------
+                    |
+                    | Stripe checkout creates a Firestore order before the
+                    | customer completes payment.
+                    |
+                    | Store owners must never see or fulfill those records.
+                    |
+                    | Only the Stripe payment webhook may change:
+                    |
+                    | checkoutStatus
+                    |
+                    | to:
+                    |
+                    | confirmed
+                    |
+                    | Hidden states include:
+                    |
+                    | - awaiting_payment
+                    | - processing
+                    | - payment_failed
+                    | - expired
+                    |
+                    | Orders without checkoutStatus are also hidden.
+                    |
+                    */
+
+                    const visibleOrderDocuments =
+                      snapshot.docs.filter(
+                        (
+                          orderDocument
+                        ) => {
+                          const checkoutStatus =
+                            orderDocument
+                              .data()
+                              .checkoutStatus;
+
+                          return (
+                            checkoutStatus ===
+                            "confirmed"
+                          );
+                        }
+                      );
+
                     const mappedOrders =
-                      snapshot.docs.map(
+                      visibleOrderDocuments.map(
                         mapFirestoreOrder
                       );
 
@@ -280,7 +387,7 @@ UseStoreOrdersResult {
                     setError(null);
                     setLoading(false);
                   } catch (
-                    mappingError
+                    mappingError: unknown
                   ) {
                     console.error(
                       "Error mapping store orders:",
@@ -297,7 +404,9 @@ UseStoreOrdersResult {
                   }
                 },
 
-                (listenerError) => {
+                (
+                  listenerError
+                ) => {
                   console.error(
                     "Error listening to store orders:",
                     listenerError
@@ -312,7 +421,9 @@ UseStoreOrdersResult {
                   setLoading(false);
                 }
               );
-          } catch (loadError) {
+          } catch (
+            loadError: unknown
+          ) {
             console.error(
               "Error loading store orders:",
               loadError
@@ -333,18 +444,32 @@ UseStoreOrdersResult {
     return () => {
       unsubscribeFromAuth();
 
-      if (unsubscribeFromOrders) {
+      if (
+        unsubscribeFromOrders
+      ) {
         unsubscribeFromOrders();
       }
     };
   }, []);
 
+
+  /*
+  |--------------------------------------------------------------------------
+  | Result
+  |--------------------------------------------------------------------------
+  */
+
   return {
     orders,
+
     storeId,
+
     loading,
+
     error,
+
     isAuthenticated,
+
     needsStoreSetup,
   };
 }
