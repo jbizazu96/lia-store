@@ -100,6 +100,16 @@ export interface OrderPaymentIntentResult {
   status: Stripe.PaymentIntent.Status;
 }
 
+/*
+|--------------------------------------------------------------------------
+| Default Payment Method
+|--------------------------------------------------------------------------
+*/
+
+interface ResolvedDefaultPaymentMethod {
+  paymentMethodId: string | null;
+}
+
 
 /*
   Predictable payment-service failure codes.
@@ -154,6 +164,107 @@ function requireIdentifier(
   return normalized;
 }
 
+/*
+|--------------------------------------------------------------------------
+| Resolve Default Payment Method
+|--------------------------------------------------------------------------
+|
+| A Stripe Customer can store a preferred payment method in:
+|
+| invoice_settings.default_payment_method
+|
+| For LIA's one-time PaymentIntent checkout, we explicitly copy that
+| PaymentMethod onto the new PaymentIntent.
+|
+| That allows Stripe Elements to open with the returning customer's
+| preferred saved card already selected.
+|
+*/
+
+async function resolveDefaultPaymentMethod(
+  stripe: Stripe,
+  stripeCustomerId: string
+): Promise<ResolvedDefaultPaymentMethod> {
+  const customer =
+    await stripe.customers.retrieve(
+      stripeCustomerId,
+      {
+        expand: [
+          "invoice_settings.default_payment_method",
+        ],
+      }
+    );
+
+  if (
+    customer.deleted
+  ) {
+    return {
+      paymentMethodId:
+        null,
+    };
+  }
+
+  const defaultPaymentMethod =
+    customer
+      .invoice_settings
+      .default_payment_method;
+
+  const paymentMethodId =
+    typeof defaultPaymentMethod ===
+      "string"
+      ? defaultPaymentMethod
+      : defaultPaymentMethod?.id;
+
+  if (
+    !paymentMethodId ||
+    !paymentMethodId.startsWith(
+      "pm_"
+    )
+  ) {
+    return {
+      paymentMethodId:
+        null,
+    };
+  }
+
+  /*
+    Retrieve the PaymentMethod directly so LIA verifies that:
+
+    - It still exists
+    - It belongs to this Customer
+    - It is eligible for future redisplay
+    - It is a reusable card
+  */
+  const paymentMethod =
+    await stripe.paymentMethods.retrieve(
+      paymentMethodId
+    );
+
+  const paymentMethodCustomerId =
+    typeof paymentMethod.customer ===
+      "string"
+      ? paymentMethod.customer
+      : paymentMethod.customer?.id;
+
+  if (
+    paymentMethodCustomerId !==
+      stripeCustomerId ||
+    paymentMethod.type !==
+      "card" ||
+    paymentMethod.allow_redisplay !==
+      "always"
+  ) {
+    return {
+      paymentMethodId:
+        null,
+    };
+  }
+
+  return {
+    paymentMethodId:
+      paymentMethod.id,
+  };
+}
 
 /*
   Create one PaymentIntent for one LIA order.
@@ -252,10 +363,24 @@ async function createOrderPaymentIntent(
     temporary network failure.
   */
   const idempotencyKey =
-    `lia-order-payment-${orderId}`;
+        `lia-order-payment-${orderId}`;
 
-  const paymentIntent =
-    await stripe.paymentIntents.create(
+      /*
+        Returning customers may already have a saved default card.
+
+        Supplying it directly on the PaymentIntent allows Stripe Elements to
+        initialize with that method selected.
+
+        Customers may still choose another method before pressing Pay.
+      */
+      const defaultPaymentMethod =
+        await resolveDefaultPaymentMethod(
+          stripe,
+          stripeCustomerId
+        );
+
+      const paymentIntent =
+        await stripe.paymentIntents.create(
       {
         amount:
           input.pricing.totalAmount,
@@ -271,17 +396,22 @@ async function createOrderPaymentIntent(
           payment methods that the customer previously consented to save.
         */
         customer:
-          stripeCustomerId,
+            stripeCustomerId,
 
-        /*
-          Stripe can dynamically show payment methods supported by the
-          current account, currency, and customer context.
+          /*
+            Preselect the returning customer's preferred saved card.
 
-          The frontend will later render Stripe's Payment Element.
-        */
-        automatic_payment_methods: {
-          enabled: true,
-        },
+            When no eligible default exists, omit this field and let the Payment
+            Element collect or select a method normally.
+          */
+          payment_method:
+            defaultPaymentMethod
+              .paymentMethodId ??
+            undefined,
+
+          automatic_payment_methods: {
+            enabled: true,
+          },
 
         /*
           Displayed in Stripe Dashboard and useful during support,

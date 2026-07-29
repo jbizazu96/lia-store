@@ -49,6 +49,10 @@ interface StripeCheckoutProps {
 
   totalAmount: number;
 
+  customerEmail: string;
+
+  customerPhone: string;
+
   onPaymentConfirmed: (
     orderId: string
   ) => void;
@@ -70,6 +74,8 @@ export function StripeCheckout({
   clientSecret,
   customerSessionClientSecret,
   totalAmount,
+  customerEmail,
+  customerPhone,
   onPaymentConfirmed,
   onPaymentError,
 }: StripeCheckoutProps) {
@@ -131,6 +137,12 @@ export function StripeCheckout({
         }
         totalAmount={
           totalAmount
+        }
+        customerEmail={
+          customerEmail
+        }
+        customerPhone={
+          customerPhone
         }
         onPaymentConfirmed={
           onPaymentConfirmed

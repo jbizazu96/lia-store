@@ -42,6 +42,10 @@ import {
   mapFirestoreOrder,
 } from "@/mappers/orderMapper";
 
+import {
+  isPaidConfirmedOrder,
+} from "@/utils/orderPaymentVisibility";
+
 import type {
   Order,
 } from "@/types/order";
@@ -132,9 +136,16 @@ UseCustomerOrdersResult {
               (snapshot) => {
                 try {
                   const mappedOrders =
-                    snapshot.docs.map(
-                      mapFirestoreOrder
-                    );
+                    snapshot.docs
+                      .filter(
+                        (orderDocument) =>
+                          isPaidConfirmedOrder(
+                            orderDocument.data()
+                          )
+                      )
+                      .map(
+                        mapFirestoreOrder
+                      );
 
                   setOrders(
                     mappedOrders

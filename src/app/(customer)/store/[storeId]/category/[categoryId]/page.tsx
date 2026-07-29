@@ -56,7 +56,16 @@ export default function StoreCategoryPage({
     isOutsideDeliveryRadius,
     closeDistanceWarning,
     openDistanceWarning,
-  } = useCustomerStore({ storeId });
+  } = useCustomerStore({
+    storeId,
+
+    /*
+     * Category browsing should remain uninterrupted. The same hook still
+     * opens this warning when the customer attempts to add or increase an
+     * item outside the delivery radius.
+     */
+    skipDistanceWarning: true,
+  });
 
   const {
     addItem,

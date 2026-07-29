@@ -150,6 +150,17 @@ export const remindStoreOrders = onSchedule(
 
           const status = order.status;
 
+          /*
+           * An unpaid checkout is stored with fulfillment status "pending"
+           * while the customer is still completing Stripe payment. Stores
+           * must never receive reminders for those records.
+           */
+          if (
+            order.checkoutStatus !== "confirmed"
+          ) {
+            return null;
+          }
+
           if (!isReminderStatus(status)) {
             return null;
           }

@@ -854,6 +854,26 @@ async function activatePaidOrder(
         );
 
         /*
+         * Clear the authenticated customer's saved cart in the same commit
+         * that makes the order visible to the store. The cart is never
+         * cleared for awaiting, failed, expired, or cancelled checkouts.
+         *
+         * At commit, this order has both:
+         * - checkoutStatus: confirmed
+         * - payment.status: paid
+         */
+        const customerUid =
+          getRequiredString(
+            orderData.customer?.uid,
+            "INVALID_ORDER",
+            "The order customer is invalid."
+          );
+
+        transaction.delete(
+          db.collection("carts").doc(customerUid)
+        );
+
+        /*
         |--------------------------------------------------------------------------
         | Confirm Checkout Session
         |--------------------------------------------------------------------------

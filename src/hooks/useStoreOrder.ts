@@ -203,6 +203,21 @@ export function useStoreOrder({
           return;
         }
 
+        const orderSnapshot =
+          await getDoc(
+            doc(db, "orders", orderId)
+          );
+
+        if (
+          !orderSnapshot.exists() ||
+          orderSnapshot.data().checkoutStatus !== "confirmed"
+        ) {
+          setOrder(null);
+          setOwnedStoreId(null);
+          setError("Order not found.");
+          return;
+        }
+
         /*
         |--------------------------------------------------------------------------
         | Verify Store Ownership
@@ -302,6 +317,14 @@ export function useStoreOrder({
       doc(db, "orders", orderId),
       (snapshot) => {
         if (!snapshot.exists()) {
+          setOrder(null);
+          setError("Order not found.");
+          return;
+        }
+
+        if (
+          snapshot.data().checkoutStatus !== "confirmed"
+        ) {
           setOrder(null);
           setError("Order not found.");
           return;

@@ -88,6 +88,8 @@ interface UseCheckoutResult {
 
   userName: string;
 
+  userEmail: string;
+
   userPhone: string;
 
   formData: CheckoutAddressFormData;
@@ -200,6 +202,11 @@ export function useCheckout({
   ] = useState("");
 
   const [
+    userEmail,
+    setUserEmail,
+  ] = useState("");
+
+  const [
     userPhone,
     setUserPhone,
   ] = useState("");
@@ -284,6 +291,9 @@ export function useCheckout({
             let resolvedName =
               user.email?.split("@")[0] ??
               "Customer";
+
+            const resolvedEmail =
+              user.email?.trim() ?? "";
 
             let resolvedPhone = "";
 
@@ -379,6 +389,7 @@ export function useCheckout({
             }
 
             setUserName(resolvedName);
+            setUserEmail(resolvedEmail);
             setUserPhone(resolvedPhone);
             setAddress(defaultAddress);
             setStore(loadedStore);
@@ -441,6 +452,7 @@ export function useCheckout({
     address,
     store,
     userName,
+    userEmail,
     userPhone,
     formData,
     showAddressModal,

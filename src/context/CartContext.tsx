@@ -111,10 +111,25 @@ export function CartProvider({children}: {children: ReactNode}) {
     // Debounce saves to avoid too many writes
     const timeoutId = setTimeout(() => {
       if (items.length > 0) {
-        saveCartToFirestore(currentUser.uid, items);
+        void saveCartToFirestore(
+          currentUser.uid,
+          items
+        ).catch((error: unknown) => {
+          console.error(
+            "Unable to save cart:",
+            error
+          );
+        });
       } else {
         // If cart is empty, clear it from Firestore
-        clearCartFromFirestore(currentUser.uid);
+        void clearCartFromFirestore(
+          currentUser.uid
+        ).catch((error: unknown) => {
+          console.error(
+            "Unable to clear cart:",
+            error
+          );
+        });
       }
     }, 500);
 

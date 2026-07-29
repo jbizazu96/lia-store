@@ -11,8 +11,6 @@ import type { Category } from "@/types/category";
 import type { Product } from "@/types/product";
 import {ProductCard} from "./ProductCard";
 
-const PRODUCTS_PER_STORE_ROW = 7;
-
 interface ProductSectionProps {
   category: Category;
   products: Product[];
@@ -31,12 +29,6 @@ export function ProductSection({
   onViewAll,
 }: ProductSectionProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
-
-  const visibleProducts =
-    products.slice(0, PRODUCTS_PER_STORE_ROW);
-
-  const hasMoreProducts =
-    products.length > PRODUCTS_PER_STORE_ROW;
 
   if (products.length === 0) return null;
 
@@ -72,7 +64,7 @@ export function ProductSection({
         className="flex gap-2.5 overflow-x-auto pb-1 scrollbar-hide px-0.5 snap-x snap-mandatory"
         style={{scrollbarWidth: "none", msOverflowStyle: "none"}}
       >
-        {visibleProducts.map((product, index) => (
+        {products.map((product, index) => (
           <motion.div
             key={product.id}
             initial={{opacity: 0, scale: 0.9}}
@@ -89,28 +81,6 @@ export function ProductSection({
           </motion.div>
         ))}
 
-        {hasMoreProducts && (
-          <motion.button
-            type="button"
-            onClick={onViewAll}
-            initial={{opacity: 0, scale: 0.9}}
-            animate={{opacity: 1, scale: 1}}
-            transition={{
-              delay: visibleProducts.length * 0.03,
-            }}
-            className="flex h-36 w-[135px] flex-shrink-0 snap-start flex-col items-center justify-center rounded-2xl border border-orange-100 bg-gradient-to-b from-orange-50 to-white px-4 text-center text-orange-700 shadow-sm transition hover:border-orange-300 hover:shadow-md sm:w-[148px]"
-            aria-label={`View all ${category.name} products`}
-          >
-            <span className="text-sm font-bold">
-              View more
-            </span>
-            <ArrowRight
-              className="mt-3 h-7 w-7"
-              strokeWidth={2.5}
-              aria-hidden="true"
-            />
-          </motion.button>
-        )}
       </div>
     </section>
   );

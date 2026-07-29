@@ -314,9 +314,19 @@ export default function OrderDetailPage({params}: OrderPageProps) {
               <span className="text-gray-800">{order.pricing.deliveryFee === 0 ? "Free" : `$${order.pricing.deliveryFee.toFixed(2)}`}</span>
             </div>
             <div className="flex justify-between text-sm">
+              <span className="text-gray-500">Service Fee</span>
+              <span className="text-gray-800">${order.pricing.serviceFee.toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between text-sm">
               <span className="text-gray-500">Tax</span>
               <span className="text-gray-800">${order.pricing.tax.toFixed(2)}</span>
             </div>
+            {order.pricing.tip > 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500">Driver Tip</span>
+                <span className="text-gray-800">${order.pricing.tip.toFixed(2)}</span>
+              </div>
+            )}
             <div className="flex justify-between text-lg font-bold pt-2 border-t border-gray-200">
               <span className="text-gray-800">Total</span>
               <span className="text-orange-600">${order.pricing.total.toFixed(2)}</span>

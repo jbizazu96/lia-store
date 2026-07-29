@@ -42,6 +42,10 @@ import {
   mapFirestoreOrder,
 } from "@/mappers/orderMapper";
 
+import {
+  isPaidConfirmedOrder,
+} from "@/utils/orderPaymentVisibility";
+
 import type {
   Order,
 } from "@/types/order";
@@ -184,6 +188,20 @@ export function useCustomerOrder({
 
                 if (
                   !orderSnapshot.exists()
+                ) {
+                  setOrder(null);
+                  setError(
+                    "Order not found."
+                  );
+                  setLoading(false);
+
+                  return;
+                }
+
+                if (
+                  !isPaidConfirmedOrder(
+                    orderSnapshot.data()
+                  )
                 ) {
                   setOrder(null);
                   setError(

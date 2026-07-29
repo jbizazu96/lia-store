@@ -54,6 +54,11 @@ interface CheckoutPaymentFormProps {
   */
   totalAmount: number;
 
+  /** Checkout contact details used to prefill Stripe billing fields. */
+  customerEmail: string;
+
+  customerPhone: string;
+
   /*
     Called when Stripe immediately confirms the payment.
 
@@ -126,6 +131,8 @@ function getPaymentErrorMessage(
 export function CheckoutPaymentForm({
   orderId,
   totalAmount,
+  customerEmail,
+  customerPhone,
   onPaymentConfirmed,
   onPaymentError,
 }: CheckoutPaymentFormProps) {
@@ -352,27 +359,49 @@ export function CheckoutPaymentForm({
           }
         >
           <PaymentElement
-            onReady={() =>
-              setPaymentElementReady(
-                true
-              )
-            }
+              onReady={() =>
+                setPaymentElementReady(
+                  true
+                )
+              }
             options={{
-              layout: {
-                type:
-                  "accordion",
-
-                defaultCollapsed:
-                  false,
-
-                radios:
-                  "always",
-
-                spacedAccordionItems:
-                  false,
+              defaultValues: {
+                billingDetails: {
+                  ...(customerEmail.trim()
+                    ? {email: customerEmail.trim()}
+                    : {}),
+                  ...(customerPhone.trim()
+                    ? {phone: customerPhone.trim()}
+                    : {}),
+                },
               },
-            }}
-          />
+              layout: {
+                  type:
+                    "accordion",
+
+                  /*
+                    Keep the selected payment method open.
+
+                    Returning customers can immediately see the saved card Stripe
+                    selected for this checkout.
+                  */
+                  defaultCollapsed:
+                    false,
+
+                  /*
+                    Let Stripe decide when selection controls are necessary.
+
+                    A returning customer with one saved method can simply click Pay.
+                    Customers with multiple methods can still choose another one.
+                  */
+                  radios:
+                    "auto",
+
+                  spacedAccordionItems:
+                    false,
+                },
+              }}
+            />
         </div>
       </div>
 

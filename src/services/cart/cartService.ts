@@ -119,6 +119,36 @@ function belongsToUser(
   return cart.userId === userId;
 }
 
+/*
+ * Firestore does not accept `undefined`, while optional cart fields are
+ * naturally undefined in React. Remove those fields before persistence so
+ * promotion metadata and optional store/product details remain safe.
+ */
+function removeUndefinedValues(
+  value: unknown
+): unknown {
+  if (Array.isArray(value)) {
+    return value.map(removeUndefinedValues);
+  }
+
+  if (
+    value &&
+    typeof value === "object" &&
+    Object.getPrototypeOf(value) === Object.prototype
+  ) {
+    return Object.fromEntries(
+      Object.entries(value)
+        .filter(([, entryValue]) => entryValue !== undefined)
+        .map(([key, entryValue]) => [
+          key,
+          removeUndefinedValues(entryValue),
+        ])
+    );
+  }
+
+  return value;
+}
+
 /**
  * Save or replace a customer's cart.
  *
@@ -144,7 +174,8 @@ export async function saveCartToFirestore(
   try {
     await setDoc(cartReference, {
       userId,
-      items,
+      items:
+        removeUndefinedValues(items) as CartItem[],
       updatedAt: serverTimestamp(),
       expiresAt: createCartExpiration(),
     });

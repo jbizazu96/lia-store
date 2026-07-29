@@ -275,10 +275,20 @@ export const dashboardService = {
         ordersQuery
       );
 
+    /*
+     * Payment-pending documents intentionally retain a fulfillment status
+     * of "pending". They must not affect store metrics or recent orders
+     * until Stripe has confirmed payment.
+     */
     const orders =
-      ordersSnapshot.docs.map(
-        mapFirestoreOrder
-      );
+      ordersSnapshot.docs
+        .filter(
+          (orderDocument) =>
+            orderDocument.data().checkoutStatus === "confirmed"
+        )
+        .map(
+          mapFirestoreOrder
+        );
 
     const stats =
       calculateDashboardStats(

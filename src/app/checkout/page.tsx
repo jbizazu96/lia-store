@@ -42,6 +42,10 @@
 */
 
 import {
+  useCheckoutPaymentStatus,
+} from "@/hooks/useCheckoutPaymentStatus";
+
+import {
   useEffect,
   useState,
 } from "react";
@@ -175,6 +179,7 @@ export default function CheckoutPage() {
   const {
     items,
     totalPrice,
+    clearCart,
   } = useCart();
 
   const storeId =
@@ -191,6 +196,7 @@ export default function CheckoutPage() {
     address,
     store,
     userName,
+    userEmail,
     userPhone,
     formData,
     showAddressModal,
@@ -240,6 +246,11 @@ export default function CheckoutPage() {
   ] = useState<string | null>(
     null
   );
+
+  const [
+    isLeavingConfirmation,
+    setIsLeavingConfirmation,
+  ] = useState(false);
 
 
   /*
@@ -313,6 +324,25 @@ export default function CheckoutPage() {
         clearPaymentPreparationError,
     } = usePrepareCheckoutPayment();
 
+    const {
+        failureMessage:
+          webhookFailureMessage,
+
+        error:
+          paymentStatusError,
+
+        isProcessing:
+          isWebhookProcessing,
+
+        isConfirmed:
+          isWebhookConfirmed,
+
+        hasPaymentFailed:
+          hasWebhookPaymentFailed,
+      } = useCheckoutPaymentStatus(
+        preparedPayment?.orderId ??
+        null
+      );
 
   /*
   |--------------------------------------------------------------------------
@@ -348,10 +378,11 @@ export default function CheckoutPage() {
     distanceError !== null;
 
   const error =
-    paymentConfirmationError ||
-    paymentPreparationError ||
-    addressError ||
-    checkoutError;
+      paymentConfirmationError ||
+      paymentStatusError ||
+      paymentPreparationError ||
+      addressError ||
+      checkoutError;
 
 
   /*
@@ -377,6 +408,39 @@ export default function CheckoutPage() {
     router,
   ]);
 
+  /*
+  |--------------------------------------------------------------------------
+  | Webhook-Confirmed Payment
+  |--------------------------------------------------------------------------
+  |
+  | The browser-side Stripe result improves responsiveness, but Firestore
+  | written by the verified webhook is the final authority.
+  */
+
+  useEffect(() => {
+    if (
+      !isWebhookConfirmed ||
+      !preparedPayment
+    ) {
+      return;
+    }
+
+    setPaymentConfirmationError(
+      null
+    );
+
+    setCheckoutStep(
+      "payment_submitted"
+    );
+
+    window.scrollTo({
+      top: 0,
+      behavior: "smooth",
+    });
+  }, [
+    isWebhookConfirmed,
+    preparedPayment,
+  ]);
 
   /*
   |--------------------------------------------------------------------------
@@ -741,22 +805,29 @@ export default function CheckoutPage() {
   */
 
   const handlePaymentConfirmed =
-    (
-      _orderId: string
-    ) => {
-      setPaymentConfirmationError(
-        null
-      );
+      (
+        _orderId: string
+      ) => {
+        /*
+          Stripe.js successfully submitted the payment.
 
-      setCheckoutStep(
-        "payment_submitted"
-      );
+          Do not show final success yet.
 
-      window.scrollTo({
-        top: 0,
-        behavior: "smooth",
-      });
-    };
+          The verified Stripe webhook must first:
+
+          - Confirm the payment
+          - Recheck inventory
+          - Deduct stock
+          - Activate the order
+          - Confirm the checkout session
+
+          The realtime Firestore listener will move checkout to the success
+          screen after those server-side operations finish.
+        */
+        setPaymentConfirmationError(
+          null
+        );
+      };
 
 
   const handlePaymentError =
@@ -766,6 +837,99 @@ export default function CheckoutPage() {
       setPaymentConfirmationError(
         message
       );
+    };
+
+    /*
+|--------------------------------------------------------------------------
+| Leave Payment Confirmation
+|--------------------------------------------------------------------------
+|
+| The confirmed cart remains available while the customer reviews the
+| success screen.
+|
+| It is cleared only when the customer leaves checkout.
+|
+*/
+
+const handleViewOrder =
+  async () => {
+    if (
+      !preparedPayment ||
+      isLeavingConfirmation
+    ) {
+      return;
+    }
+
+    setIsLeavingConfirmation(
+      true
+    );
+
+    try {
+      /*
+        Clear both:
+
+        - The cart in React state
+        - The persisted Firestore cart
+      */
+      await clearCart();
+    } catch (
+      clearCartError: unknown
+    ) {
+      /*
+        Payment and order confirmation already succeeded.
+
+        A cart-cleanup failure must not block the customer from viewing
+        the paid order.
+      */
+      console.error(
+        "The order was confirmed, but the cart could not be cleared:",
+        {
+          orderId:
+            preparedPayment.orderId,
+
+          clearCartError,
+        }
+      );
+    } finally {
+      router.push(
+        `/orders/${preparedPayment.orderId}`
+      );
+    }
+  };
+
+
+  const handleContinueShopping =
+    async () => {
+      if (
+        isLeavingConfirmation
+      ) {
+        return;
+      }
+
+      setIsLeavingConfirmation(
+        true
+      );
+
+      try {
+        await clearCart();
+      } catch (
+        clearCartError: unknown
+      ) {
+        console.error(
+          "The order was confirmed, but the cart could not be cleared:",
+          {
+            orderId:
+              preparedPayment?.orderId ??
+              null,
+
+            clearCartError,
+          }
+        );
+      } finally {
+        router.push(
+          "/home"
+        );
+      }
     };
 
 
@@ -814,12 +978,12 @@ export default function CheckoutPage() {
           </div>
 
           <h1 className="text-2xl font-bold text-gray-900">
-            Payment submitted
+            Payment confirmed
           </h1>
 
           <p className="mt-3 text-sm leading-6 text-gray-500">
-            Stripe received your payment. LIA is confirming the payment
-            and preparing your order.
+            Your payment was successful, and your order has been sent to the
+            store for preparation.
           </p>
 
           <div className="mt-5 rounded-2xl bg-gray-50 p-4">
@@ -848,21 +1012,38 @@ export default function CheckoutPage() {
           </div>
 
           <p className="mt-4 text-xs leading-5 text-gray-400">
-            Your cart will be cleared after the payment webhook confirms
-            the order workflow.
+            You can follow preparation and delivery updates from your order page.
           </p>
+
+          <div className="mt-6 space-y-3">
+          <button
+            type="button"
+            onClick={
+              handleViewOrder
+            }
+            disabled={
+              isLeavingConfirmation
+            }
+            className="w-full rounded-xl bg-orange-500 py-3 font-semibold text-white transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {isLeavingConfirmation
+              ? "Finishing..."
+              : "View Order"}
+          </button>
 
           <button
             type="button"
-            onClick={() =>
-              router.push(
-                `/orders/${preparedPayment.orderId}`
-              )
+            onClick={
+              handleContinueShopping
             }
-            className="mt-6 w-full rounded-xl bg-orange-500 py-3 font-semibold text-white transition hover:bg-orange-600"
+            disabled={
+              isLeavingConfirmation
+            }
+            className="w-full rounded-xl border border-gray-200 bg-white py-3 font-semibold text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            View order
+            Continue Shopping
           </button>
+        </div>
         </div>
       </main>
     );
@@ -939,6 +1120,41 @@ export default function CheckoutPage() {
             </div>
           )}
 
+          {hasWebhookPaymentFailed && (
+            <div className="rounded-xl border border-red-200 bg-red-50 p-4">
+              <div className="flex items-start gap-3">
+                <AlertCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-red-500" />
+
+                <div>
+                  <p className="font-semibold text-red-700">
+                    Payment unsuccessful
+                  </p>
+
+                  <p className="mt-1 text-sm leading-5 text-red-600">
+                    {webhookFailureMessage ??
+                      "Your payment method could not be accepted. Please choose another payment method and try again."}
+                  </p>
+
+                  <p className="mt-2 text-xs text-red-500">
+                    Your order has not been sent to the store. Select another payment method and retry.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {isWebhookProcessing && (
+            <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
+              <p className="font-medium text-blue-700">
+                Processing payment...
+              </p>
+
+              <p className="mt-1 text-sm text-blue-600">
+                Stripe is confirming your payment. Please keep this page open.
+              </p>
+            </div>
+          )}
+
           <StripeCheckout
             orderId={
               preparedPayment
@@ -956,6 +1172,12 @@ export default function CheckoutPage() {
               preparedPayment
                 .pricing
                 .totalAmount
+            }
+            customerEmail={
+              userEmail
+            }
+            customerPhone={
+              userPhone
             }
             onPaymentConfirmed={
               handlePaymentConfirmed

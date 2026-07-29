@@ -188,7 +188,19 @@ function StoreLayoutContent({ children }: { children: React.ReactNode }) {
           where("status", "in", ["pending", "accepted", "preparing", "ready_for_pickup"])
         );
         const snapshot = await getDocs(q);
-        setPendingOrdersCount(snapshot.size);
+
+        /*
+         * A fulfillment status of "pending" is also used while Stripe
+         * payment is still awaiting confirmation. Only paid orders belong
+         * in the store navigation badge.
+         */
+        const confirmedOrderCount =
+          snapshot.docs.filter(
+            (orderDocument) =>
+              orderDocument.data().checkoutStatus === "confirmed"
+          ).length;
+
+        setPendingOrdersCount(confirmedOrderCount);
         
       } catch (error) {
         console.error("Error fetching pending orders:", error);

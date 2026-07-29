@@ -361,6 +361,9 @@ export { createShipdayOrder };
 export { acceptOrder };
 export { shipdayWebhook };
 export { stripeConnectWebhook };
+export {
+  stripePaymentWebhook,
+} from "./webhooks/stripePaymentWebhook";
 export { syncCustomerOrders };
 export { syncStoreOrders };
 export { orderStatusChanged };
