@@ -55,38 +55,32 @@ export class NotificationStore {
   input: CreateNotificationInput
   ): Promise<void> {
 
+    const notification = {
+      uid: input.uid,
+      title: input.title,
+      body: input.body,
+      type: input.type,
+      icon: input.icon,
+      color: input.color,
+      ...(input.navigationPath
+        ? {
+            deepLink: input.orderId
+              ? `${input.navigationPath}/${input.orderId}`
+              : input.navigationPath,
+          }
+        : {}),
+      ...(input.orderId
+        ? { orderId: input.orderId }
+        : {}),
+      read: false,
+      createdAt: new Date(),
+    };
+
     await getFirestore("default")
       .collection("users")
       .doc(input.uid)
       .collection("notifications")
-      .add({
-
-        uid: input.uid,
-
-        title: input.title,
-
-        body: input.body,
-
-        type: input.type,
-
-        icon: input.icon,
-
-        color: input.color,
-
-        deepLink:
-          input.navigationPath
-            ? input.orderId
-              ? `${input.navigationPath}/${input.orderId}`
-              : input.navigationPath
-            : undefined,
-
-        orderId: input.orderId,
-
-        read: false,
-
-        createdAt: new Date(),
-
-      });
+      .add(notification);
 
     console.log(
       "Notification stored."

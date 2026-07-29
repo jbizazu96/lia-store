@@ -35,10 +35,12 @@ import {
   AlertCircle,
   Calendar,
   Store,
-  XCircle,
 } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
+import {
+  OrderActions,
+} from "@/components/store/orders/OrderActions";
 import { orderService } from "@/services/order/orderService";
 import { BrandedLoader } from "@/components/ui/BrandedLoader";
 import {
@@ -64,8 +66,6 @@ export default function OrderDetailsPage({params}: OrderDetailsPageProps) {
       orderId,
     });
   const [updating, setUpdating] = useState(false);
-  const [showCancellationModal, setShowCancellationModal] = useState(false);
-  const [cancellationReason, setCancellationReason] = useState("");
 
 
   // ✅ Handle status update - Store can only update up to ready_for_pickup
@@ -104,16 +104,6 @@ export default function OrderDetailsPage({params}: OrderDetailsPageProps) {
     } finally {
       setUpdating(false);
     }
-  };
-
-  const handleCancellationConfirm = async () => {
-    const reason = cancellationReason.trim();
-
-    if (!reason) return;
-
-    await handleStatusUpdate("cancelled", reason);
-    setShowCancellationModal(false);
-    setCancellationReason("");
   };
 
   const getStatusConfig = (
@@ -350,108 +340,18 @@ export default function OrderDetailsPage({params}: OrderDetailsPageProps) {
             </div>
           </div>
 
-          {/* ✅ Actions - Store can only update up to ready_for_pickup */}
-          <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-            <h3 className="font-bold text-gray-800 mb-4">Actions</h3>
-            <div className="space-y-2">
-              {order.status === "pending" && (
-                <button
-                  onClick={() =>
-                    handleStatusUpdate("accepted")
-                  }
-                  disabled={updating}
-                  className="w-full px-4 py-3 bg-green-500 text-white font-semibold rounded-xl hover:bg-green-600 transition disabled:opacity-50"
-                >
-                  Accept Order
-                </button>
-              )}
-              {order.status === "accepted" && (
-                <button
-                  onClick={() => handleStatusUpdate("preparing")}
-                  disabled={updating}
-                  className="w-full px-4 py-3 bg-blue-500 text-white font-semibold rounded-xl hover:bg-blue-600 transition disabled:opacity-50"
-                >
-                  Start Preparing
-                </button>
-              )}
-              {order.status === "preparing" && (
-                <button
-                  onClick={() => handleStatusUpdate("ready_for_pickup")}
-                  disabled={updating}
-                  className="w-full px-4 py-3 bg-purple-500 text-white font-semibold rounded-xl hover:bg-purple-600 transition disabled:opacity-50"
-                >
-                  Ready for Pickup
-                </button>
-              )}
-              {/* ✅ Statuses after ready_for_pickup - Read-only (LIA handles) */}
-              {order.status === "ready_for_pickup" && (
-                <div className="text-center text-indigo-600 font-medium py-2 bg-indigo-50 rounded-xl">
-                  ⏳ Waiting for LIA driver assignment
-                </div>
-              )}
-              {order.status === "out_for_delivery" && (
-                <div className="text-center text-blue-600 font-medium py-2 bg-blue-50 rounded-xl">
-                  🚚 Order out for delivery
-                </div>
-              )}
-              {order.status === "completed" && (
-                <div className="text-center text-green-600 font-medium py-2 bg-green-50 rounded-xl">
-                  ✅ Order completed successfully
-                </div>
-              )}
-              {order.status === "cancelled" && (
-                <div className="rounded-xl bg-red-50 p-3 text-center text-red-600">
-                  <p className="font-medium">Order Cancelled</p>
-                  {order.cancellationReason && (
-                    <p className="mt-1 text-xs text-red-500">
-                      Reason: {order.cancellationReason}
-                    </p>
-                  )}
-                </div>
-              )}
-              {!["cancelled", "completed", "out_for_delivery", "ready_for_pickup"].includes(order.status) && (
-                <button
-                  onClick={() => setShowCancellationModal(true)}
-                  disabled={updating}
-                  className="w-full px-4 py-3 border border-red-200 text-red-600 font-semibold rounded-xl hover:bg-red-50 transition disabled:opacity-50"
-                >
-                  Cancel Order
-                </button>
-              )}
-            </div>
-            {/* ✅ Note about LIA */}
-            <div className="mt-4 pt-3 border-t border-gray-100">
-              <p className="text-xs text-gray-400 text-center">
-                🚚 LIA handles delivery. Status updates after "Ready for Pickup" are automatic.
-              </p>
-            </div>
-          </div>
+          <OrderActions
+            status={order.status}
+            cancellationReason={
+              order.cancellationReason
+            }
+            updating={updating}
+            onStatusUpdate={
+              handleStatusUpdate
+            }
+          />
         </div>
       </div>
-
-      {showCancellationModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div role="dialog" aria-modal="true" aria-labelledby="cancellation-title" className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
-            <h2 id="cancellation-title" className="text-xl font-bold text-gray-800">Cancel order?</h2>
-            <p className="mt-2 text-sm text-gray-500">Tell the customer why this order is being cancelled. This reason will be saved with the order.</p>
-            <label htmlFor="cancellation-reason" className="mt-5 block text-sm font-medium text-gray-700">Cancellation reason</label>
-            <textarea
-              id="cancellation-reason"
-              value={cancellationReason}
-              onChange={(event) => setCancellationReason(event.target.value)}
-              placeholder="For example: An item is unavailable."
-              rows={4}
-              className="mt-2 w-full resize-none rounded-xl border border-gray-200 p-3 text-sm text-gray-800 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-            />
-            <div className="mt-5 flex gap-3">
-              <button type="button" onClick={() => { setShowCancellationModal(false); setCancellationReason(""); }} disabled={updating} className="flex-1 rounded-xl border border-gray-200 px-4 py-3 font-semibold text-gray-600 transition hover:bg-gray-50 disabled:opacity-50">Return</button>
-              <button type="button" onClick={handleCancellationConfirm} disabled={updating || !cancellationReason.trim()} className="flex-1 rounded-xl bg-red-600 px-4 py-3 font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-gray-300">
-                {updating ? "Cancelling..." : "Confirm cancellation"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

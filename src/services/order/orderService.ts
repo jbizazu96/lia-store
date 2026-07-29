@@ -17,11 +17,8 @@
 import { getFunctions, httpsCallable } from "firebase/functions";
 
 import {
-  arrayUnion,
   doc,
   getDoc,
-  serverTimestamp,
-  updateDoc,
 } from "firebase/firestore";
 
 import { db } from "@/lib/firebase";
@@ -112,11 +109,18 @@ export class OrderService {
     return mapFirestoreOrder(snapshot);
   }
 
-  /**
-   * Update an order's status.
+    /**
+   * Update an order's fulfillment status.
    *
-   * Shipday delivery creation occurs only when the order becomes
-   * ready for pickup.
+   * All workflow logic now lives on the backend.
+   *
+   * The backend is responsible for:
+   *
+   * • validating transitions
+   * • verifying store ownership
+   * • appending status history
+   * • creating Shipday deliveries
+   * • preventing duplicate deliveries
    */
   async updateStatus(
     orderId: string,
@@ -129,50 +133,40 @@ export class OrderService {
       );
     }
 
-    const changedAt = new Date();
+    const updateOrderStatusFunction =
+      httpsCallable<
+        {
+          orderId: string;
+          newStatus: OrderStatus;
+          cancellationReason?: string;
+        },
+        {
+          success: boolean;
+          changedAt: string;
+          message: string;
+        }
+      >(
+        functions,
+        "updateOrderStatus"
+      );
 
-    const normalizedCancellationReason = cancellationReason?.trim();
+    const response =
+      await updateOrderStatusFunction({
+        orderId,
+        newStatus,
+        cancellationReason,
+      });
 
-    if (newStatus === "cancelled" && !normalizedCancellationReason) {
-      throw new Error("A cancellation reason is required.");
-    }
-
-    const statusNote = newStatus === "cancelled"
-      ? `Order cancelled: ${normalizedCancellationReason}`
-      : `Order status changed to ${newStatus}`;
-
-    const updateData: Record<string, unknown> = {
-      status: newStatus,
-      updatedAt: serverTimestamp(),
-      statusHistory: arrayUnion({
-        status: newStatus,
-        timestamp: changedAt,
-        note: statusNote,
-      }),
-    };
-
-    if (normalizedCancellationReason) {
-      updateData.cancellationReason = normalizedCancellationReason;
-    }
-
-    await updateDoc(
-      doc(db, "orders", orderId),
-      updateData
-    );
-
-    /**
-     * Business rule:
-     *
-     * Shipday should receive the delivery only after the store has
-     * finished preparing the order.
-     */
-    if (newStatus === "ready_for_pickup") {
-      await this.createShipdayDelivery(
-        orderId
+    if (!response.data.success) {
+      throw new Error(
+        response.data.message ||
+          "The order status could not be updated."
       );
     }
 
-    return changedAt;
+    return new Date(
+      response.data.changedAt
+    );
   }
 
   /**
@@ -189,36 +183,6 @@ export class OrderService {
       orderId,
       "accepted"
     );
-  }
-
-  /**
-   * Ask the backend to create the Shipday delivery.
-   *
-   * Kept private so pages cannot bypass the order-status workflow.
-   */
-  private async createShipdayDelivery(
-    orderId: string
-  ): Promise<void> {
-    const createShipdayOrderFunction =
-      httpsCallable<
-        { orderId: string },
-        WorkflowResponse
-      >(
-        functions,
-        "createShipdayOrder"
-      );
-
-    const response =
-      await createShipdayOrderFunction({
-        orderId,
-      });
-
-    if (!response.data.success) {
-      throw new Error(
-        response.data.message ||
-          "The Shipday delivery could not be created."
-      );
-    }
   }
 }
 

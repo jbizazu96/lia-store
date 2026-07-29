@@ -65,6 +65,10 @@ import {
   validateStripePaymentEvent,
 } from "../payment/stripePaymentWebhookValidation";
 
+import {
+  storeEvents,
+} from "../events/storeEvents";
+
 
 
 
@@ -643,6 +647,50 @@ export const stripePaymentWebhook =
                       .paymentIntentId,
                 }
               );
+            }
+          }
+
+          /*
+          |--------------------------------------------------------------------------
+          | Store notifications
+          |--------------------------------------------------------------------------
+          |
+          | A payment-pending order must remain invisible to the store.  Send the
+          | store notification only after the activation transaction has confirmed
+          | both the payment and checkout.  `newlyActivated` also makes these side
+          | effects safe when Stripe redelivers an event.
+          |
+          */
+
+          if (activation.newlyActivated) {
+            try {
+              await storeEvents.newOrder(
+                activation.orderId,
+                activation.storeOwnerUid
+              );
+            } catch (notificationError) {
+              // A notification must never undo a successful payment activation.
+              console.error(
+                "Unable to create the store new-order notification:",
+                notificationError
+              );
+            }
+
+            for (const alert of activation.lowStockAlerts) {
+              try {
+                await storeEvents.lowStock(
+                  alert.productId,
+                  alert.productName,
+                  alert.remainingStock,
+                  activation.storeOwnerUid
+                );
+              } catch (notificationError) {
+                // Continue notifying about other stock alerts when one fails.
+                console.error(
+                  "Unable to create the store low-stock notification:",
+                  notificationError
+                );
+              }
             }
           }
 

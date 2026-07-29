@@ -28,7 +28,15 @@ import {
 
 import {
   auth,
+  db,
 } from "@/lib/firebase";
+
+import {
+  collection,
+  onSnapshot,
+  query,
+  where,
+} from "firebase/firestore";
 
 import {
   dashboardService,
@@ -241,6 +249,39 @@ UseStoreDashboardResult {
     return unsubscribe;
   }, [
     loadDashboard,
+  ]);
+
+  /*
+   * Refresh dashboard counts and recent orders as checkout records change.
+   * The dashboard service itself filters out unpaid orders, so a pending
+   * checkout does not appear until the Stripe webhook confirms payment.
+   */
+  useEffect(() => {
+    if (!storeId) {
+      return;
+    }
+
+    const ordersQuery =
+      query(
+        collection(db, "orders"),
+        where("store.id", "==", storeId)
+      );
+
+    return onSnapshot(
+      ordersQuery,
+      () => {
+        void loadDashboard(storeId, false);
+      },
+      (listenerError) => {
+        console.error(
+          "Unable to refresh store dashboard orders:",
+          listenerError
+        );
+      }
+    );
+  }, [
+    loadDashboard,
+    storeId,
   ]);
 
   /*

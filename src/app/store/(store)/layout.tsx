@@ -7,7 +7,6 @@
 */
 "use client";
 
-import { useNotifications } from "@/context/NotificationContext";
 import { useAuth } from "@/context/AuthContext";
 import { useState, useEffect, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
@@ -54,12 +53,14 @@ function StoreLayoutContent({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const sidebarRef = useRef<HTMLDivElement>(null);
   const [isMobile, setIsMobile] = useState(false);
-  const { unreadCount } = useNotifications();
   const { user } = useAuth();
   
   // ✅ Notification dropdown state
   const [showNotifications, setShowNotifications] = useState(false);
   const [unreadNotifications, setUnreadNotifications] = useState<Notification[]>([]);
+  const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
+  const [notificationsLoading, setNotificationsLoading] = useState(true);
+  const [notificationsError, setNotificationsError] = useState(false);
   const notificationRef = useRef<HTMLDivElement>(null);
   
   // ✅ State for pending orders count
@@ -134,9 +135,15 @@ function StoreLayoutContent({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!user) {
       setUnreadNotifications([]);
+      setUnreadNotificationCount(0);
+      setNotificationsLoading(false);
+      setNotificationsError(false);
       setShowNotifications(false);
       return;
     }
+
+    setNotificationsLoading(true);
+    setNotificationsError(false);
 
     const unsubscribe = notificationService.listenForNotifications(
       user.uid,
@@ -147,12 +154,16 @@ function StoreLayoutContent({ children }: { children: React.ReactNode }) {
         const sorted = unread.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
         const visibleUnread = sorted.slice(0, 4);
         setUnreadNotifications(visibleUnread);
+        setUnreadNotificationCount(unread.length);
+        setNotificationsLoading(false);
 
       },
       (error) => {
         console.error("Failed to load store notifications:", error);
         setUnreadNotifications([]);
-        setShowNotifications(false);
+        setUnreadNotificationCount(0);
+        setNotificationsLoading(false);
+        setNotificationsError(true);
       }
     );
 
@@ -309,13 +320,9 @@ function StoreLayoutContent({ children }: { children: React.ReactNode }) {
   // ✅ Mark all as read
   const handleMarkAllAsRead = async () => {
     const user = auth.currentUser;
-    if (!user || unreadNotifications.length === 0) return;
+    if (!user || unreadNotificationCount === 0) return;
 
-    for (const notification of unreadNotifications) {
-      await notificationService.markAsRead(user.uid, notification.id);
-    }
-    // ✅ Clear all unread from dropdown
-    setUnreadNotifications([]);
+    await notificationService.markAllAsRead(user.uid);
   };
 
   // ✅ Format time
@@ -576,9 +583,9 @@ function StoreLayoutContent({ children }: { children: React.ReactNode }) {
                   aria-label="Notifications"
                 >
                   <Bell className="w-5 h-5 text-gray-600" />
-                  {unreadCount > 0 && (
+                  {unreadNotificationCount > 0 && (
                     <span className="absolute top-1 right-1 w-4 h-4 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center">
-                      {unreadCount > 99 ? "99+" : unreadCount}
+                      {unreadNotificationCount > 99 ? "99+" : unreadNotificationCount}
                     </span>
                   )}
                 </button>
@@ -597,7 +604,7 @@ function StoreLayoutContent({ children }: { children: React.ReactNode }) {
                       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
                         <h3 className="font-semibold text-gray-800 text-sm">Unread Notifications</h3>
                         <div className="flex items-center gap-2">
-                          {unreadNotifications.length > 0 && (
+                          {unreadNotificationCount > 0 && (
                             <button
                               onClick={handleMarkAllAsRead}
                               className="text-xs text-orange-600 hover:text-orange-700 font-medium transition"
@@ -606,14 +613,23 @@ function StoreLayoutContent({ children }: { children: React.ReactNode }) {
                             </button>
                           )}
                           <span className="text-xs text-gray-400">
-                            {unreadNotifications.length}
+                            {unreadNotificationCount}
                           </span>
                         </div>
                       </div>
 
                       {/* Notification List - Only Unread */}
                       <div className="max-h-96 overflow-y-auto">
-                        {unreadNotifications.length === 0 ? (
+                        {notificationsLoading ? (
+                          <div className="p-8 text-center">
+                            <p className="text-sm font-medium text-gray-600">Loading notifications...</p>
+                          </div>
+                        ) : notificationsError ? (
+                          <div className="p-8 text-center">
+                            <p className="text-sm font-medium text-red-600">Notifications could not be loaded.</p>
+                            <p className="mt-1 text-xs text-gray-400">Please refresh and try again.</p>
+                          </div>
+                        ) : unreadNotifications.length === 0 ? (
                           <div className="p-8 text-center">
                             <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-green-50">
                               <CheckCircle className="h-6 w-6 text-green-500" />

@@ -7,301 +7,452 @@
 | -------
 | Keeps LIA synchronized with external delivery providers.
 |
-| WHY?
-| ----
-| During development we will poll Shipday for updates.
+| During development, LIA polls Shipday for delivery updates.
 |
-| Later, this service can also receive updates from:
+| Later, the same synchronization layer can receive updates from:
 |
-| • Shipday Webhooks
+| • Shipday webhooks
 | • Uber Direct
 | • DoorDash Drive
 | • Roadie
 |
-| The rest of the application never needs to know where
-| the update came from.
+| The rest of the application does not need to know which provider
+| supplied the update.
 |
 */
 
-import {mapShipdayStatus} from "../mappers/shipdayStatusMapper";
 import {
-  getFirestore,
   FieldValue,
+  getFirestore,
 } from "firebase-admin/firestore";
-import {shipdayService} from "../services/shipdayService"
 
-/**
- * DeliverySyncService
- *
- * Synchronizes delivery information between LIA
- * and external delivery providers.
- */
+import {
+  mapShipdayStatus,
+} from "../mappers/shipdayStatusMapper";
+
+import {
+  shipdayService,
+} from "../services/shipdayService";
+
+
+/*
+|--------------------------------------------------------------------------
+| Shipday Order Shape
+|--------------------------------------------------------------------------
+|
+| Shipday is an external API, so getOrderDetails() returns unknown.
+|
+| This interface describes only the fields this synchronization service
+| currently needs.
+|
+*/
+
+interface ShipdayOrderDetails {
+  orderStatus: {
+    orderState: string;
+  };
+
+  [key: string]: unknown;
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Shipday Response Guard
+|--------------------------------------------------------------------------
+*/
+
+function isShipdayOrderDetails(
+  value: unknown
+): value is ShipdayOrderDetails {
+  if (
+    typeof value !== "object" ||
+    value === null
+  ) {
+    return false;
+  }
+
+  const candidate =
+    value as {
+      orderStatus?: unknown;
+    };
+
+  if (
+    typeof candidate.orderStatus !==
+      "object" ||
+    candidate.orderStatus === null
+  ) {
+    return false;
+  }
+
+  const orderStatus =
+    candidate.orderStatus as {
+      orderState?: unknown;
+    };
+
+  return (
+    typeof orderStatus.orderState ===
+      "string" &&
+    Boolean(
+      orderStatus.orderState.trim()
+    )
+  );
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Delivery Sync Service
+|--------------------------------------------------------------------------
+*/
+
 export class DeliverySyncService {
-
-  /**
-   * Synchronize one delivery.
-   *
-   * @param orderId
-   * Firestore order document ID.
-   */
-
-  /**
- * Synchronize all active deliveries
- * for a single customer.
- *
- * @param customerId
- * Firebase Authentication UID.
- */
-async syncCustomerOrders(
-  customerId: string
-): Promise<void> {
-
-  console.log(
-    `Synchronizing orders for customer ${customerId}`
-  );
-
-  const snapshot = await this.db
-    .collection("orders")
-    .where("customer.uid", "==", customerId)
-    //.where("shipday.active", "==", true)
-    .get();
-
-  console.log(
-    `Found ${snapshot.size} active customer deliveries.`
-  );
-
-  for (const document of snapshot.docs) {
-
-    await this.syncOrder(document.id);
-
-  }
-
-  console.log(
-    "Customer delivery synchronization complete."
-  );
-
-}
-
-/**
- * Synchronize all active deliveries
- * for a single store.
- *
- * @param storeId
- * Firestore store document ID.
- */
-
-async syncStoreOrders(
-  storeId: string
-): Promise<void> {
-
-  console.log(
-    `Synchronizing orders for store ${storeId}`
-  );
-
-console.log("syncStoreOrders() called");
-
-console.log("Store ID:", storeId);
-
-  const snapshot = await this.db
-    .collection("orders")
-    .where("store.id", "==", storeId)
-    .where("shipday.active", "==", true)
-    .get();
-
-  console.log(
-    `Found ${snapshot.size} active store deliveries.`
-  );
-
-  for (const document of snapshot.docs) {
-
-    await this.syncOrder(document.id);
-
-  }
-
-  console.log(
-    "Store delivery synchronization complete."
-  );
-
-}
-  /**
- * Synchronize every active delivery.
- */
-async syncActiveDeliveries(): Promise<void> {
-
-  console.log("Starting delivery synchronization...");
-
-  const snapshot = await this.db
-    .collection("orders")
-    .where("shipday.active", "==", true)
-    .get();
-
-  console.log(
-    `Found ${snapshot.size} active deliveries.`
-  );
-
-  for (const document of snapshot.docs) {
-
-    await this.syncOrder(document.id);
-
-  }
-
-  console.log(
-    "Delivery synchronization complete."
-  );
-
-}
+  /*
+  |--------------------------------------------------------------------------
+  | Firestore
+  |--------------------------------------------------------------------------
+  */
 
   private get db() {
-      return getFirestore("default");
+    return getFirestore("default");
+  }
+
+
+  /*
+  |--------------------------------------------------------------------------
+  | Synchronize Customer Orders
+  |--------------------------------------------------------------------------
+  */
+
+  async syncCustomerOrders(
+    customerId: string
+  ): Promise<void> {
+    console.log(
+      `Synchronizing orders for customer ${customerId}`
+    );
+
+    const snapshot =
+      await this.db
+        .collection("orders")
+        .where(
+          "customer.uid",
+          "==",
+          customerId
+        )
+        .get();
+
+    console.log(
+      `Found ${snapshot.size} customer orders.`
+    );
+
+    for (
+      const document of
+      snapshot.docs
+    ) {
+      await this.syncOrder(
+        document.id
+      );
     }
+
+    console.log(
+      "Customer delivery synchronization complete."
+    );
+  }
+
+
+  /*
+  |--------------------------------------------------------------------------
+  | Synchronize Store Orders
+  |--------------------------------------------------------------------------
+  */
+
+  async syncStoreOrders(
+    storeId: string
+  ): Promise<void> {
+    console.log(
+      "syncStoreOrders() called.",
+      {
+        storeId,
+      }
+    );
+
+    const snapshot =
+      await this.db
+        .collection("orders")
+        .where(
+          "store.id",
+          "==",
+          storeId
+        )
+        .where(
+          "shipday.active",
+          "==",
+          true
+        )
+        .get();
+
+    console.log(
+      `Found ${snapshot.size} active store deliveries.`
+    );
+
+    for (
+      const document of
+      snapshot.docs
+    ) {
+      await this.syncOrder(
+        document.id
+      );
+    }
+
+    console.log(
+      "Store delivery synchronization complete."
+    );
+  }
+
+
+  /*
+  |--------------------------------------------------------------------------
+  | Synchronize Every Active Delivery
+  |--------------------------------------------------------------------------
+  */
+
+  async syncActiveDeliveries(): Promise<void> {
+    console.log(
+      "Starting delivery synchronization..."
+    );
+
+    const snapshot =
+      await this.db
+        .collection("orders")
+        .where(
+          "shipday.active",
+          "==",
+          true
+        )
+        .get();
+
+    console.log(
+      `Found ${snapshot.size} active deliveries.`
+    );
+
+    for (
+      const document of
+      snapshot.docs
+    ) {
+      await this.syncOrder(
+        document.id
+      );
+    }
+
+    console.log(
+      "Delivery synchronization complete."
+    );
+  }
+
+
+  /*
+  |--------------------------------------------------------------------------
+  | Synchronize One Order
+  |--------------------------------------------------------------------------
+  */
+
   async syncOrder(
     orderId: string
   ): Promise<void> {
-
     console.log(
-  `Synchronizing delivery for order ${orderId}`
+      `Synchronizing delivery for order ${orderId}`
     );
 
-
-    // ----------------------------------------------------
-    // STEP 1
-    // Load the Firestore order.
-    // ----------------------------------------------------
-    const orderDoc = await this.db
-      .collection("orders")
-      .doc(orderId)
-      .get();
+    /*
+      Step 1:
+      Load the Firestore order.
+    */
+    const orderDoc =
+      await this.db
+        .collection("orders")
+        .doc(orderId)
+        .get();
 
     if (!orderDoc.exists) {
-      throw new Error("Order not found.");
+      throw new Error(
+        "Order not found."
+      );
     }
 
-    const order = orderDoc.data();
+    const order =
+      orderDoc.data();
+
+    if (!order) {
+      throw new Error(
+        "Order data is missing."
+      );
+    }
+
+    /*
+      Step 2:
+      Verify that the order has a Shipday delivery.
+    */
+    if (!order.shipday?.orderId) {
+      console.log(
+        "Order has no Shipday delivery."
+      );
+
+      return;
+    }
+
+    if (
+      typeof order.orderNumber !==
+        "string" ||
+      !order.orderNumber.trim()
+    ) {
+      throw new Error(
+        "The order does not have a valid order number."
+      );
+    }
+
+    /*
+      Step 3:
+      Load the latest delivery information from Shipday.
+    */
+    const rawShipdayOrder =
+      await shipdayService
+        .getOrderDetails(
+          order.orderNumber
+        );
+
+    if (
+      !isShipdayOrderDetails(
+        rawShipdayOrder
+      )
+    ) {
+      throw new Error(
+        "Shipday returned an invalid order-details response."
+      );
+    }
+
+    const shipdayOrder =
+      rawShipdayOrder;
+
+    const shipdayOrderState =
+      shipdayOrder
+        .orderStatus
+        .orderState
+        .trim();
 
     console.log(
-      "Firestore order loaded."
+      "Latest Shipday delivery:",
+      shipdayOrder
     );
 
-    
-    // ----------------------------------------------------
-// STEP 2
-// Verify this order has a Shipday delivery.
-// ----------------------------------------------------
-if (!order?.shipday?.orderId) {
-  console.log(
-    "Order has no Shipday delivery."
-  );
+    console.log(
+      "Shipday order state:",
+      shipdayOrderState
+    );
 
-  return;
-}
+    /*
+      Step 4:
+      Convert the Shipday state into LIA statuses.
+    */
+    const mappedStatus =
+      mapShipdayStatus(
+        shipdayOrderState
+      );
 
-// ----------------------------------------------------
-// STEP 3
-// Load the latest delivery from Shipday.
-// ----------------------------------------------------
-const shipdayOrder =
-  await shipdayService.getOrderDetails(
-    order.orderNumber
-  );
+    console.log(
+      "Mapped Shipday status:",
+      mappedStatus
+    );
 
-console.log(
-  "Latest Shipday delivery:"
-);
+    /*
+      Step 5:
+      Skip the Firestore update when nothing changed.
+    */
+    if (
+      order.shipday?.status ===
+        mappedStatus.shipdayStatus &&
+      order.status ===
+        mappedStatus.orderStatus
+    ) {
+      console.log(
+        "Order already synchronized."
+      );
 
-console.log(shipdayOrder);
+      return;
+    }
 
-console.log(
-  "Shipday order state:",
-  shipdayOrder.orderStatus.orderState
-);
-// ----------------------------------------------------
-// STEP 4
-// Convert Shipday status into LIA status.
-// ----------------------------------------------------
-const mappedStatus =
-  mapShipdayStatus(
-    shipdayOrder.orderStatus.orderState
-  );
+    /*
+      Step 6:
+      Prepare the Firestore update.
+    */
+    const now =
+      new Date();
 
-  
-console.log(
-  "Mapped Shipday status:"
-);
+    const updateData:
+      Record<string, unknown> = {
+        "shipday.status":
+          mappedStatus.shipdayStatus,
 
-console.log(mappedStatus);
+        "shipday.lastUpdated":
+          now,
 
-// ----------------------------------------------------
-// STEP 5
-// Skip synchronization if nothing changed.
-// ----------------------------------------------------
-if (
-  order.shipday?.status ===
-    mappedStatus.shipdayStatus &&
+        "shipday.lastSyncAt":
+          now,
+      };
 
-  order.status ===
-    mappedStatus.orderStatus
-) {
+    /*
+      Update the LIA business status only when the mapper returns one.
+    */
+    if (
+      mappedStatus.orderStatus
+    ) {
+      updateData.status =
+        mappedStatus.orderStatus;
 
-  console.log(
-    "Order already synchronized."
-  );
+      updateData.statusHistory =
+        FieldValue.arrayUnion({
+          status:
+            mappedStatus.orderStatus,
 
-  return;
+          timestamp:
+            now,
 
-}
-// ----------------------------------------------------
-// STEP 5
-// Update Firestore with the latest Shipday status.
-// ----------------------------------------------------
-const now = new Date();
+          note:
+            "Updated from Shipday",
+        });
+    }
 
-const updateData: Record<string, unknown> = {
-  "shipday.status": mappedStatus.shipdayStatus,
+    /*
+      Stop polling terminal deliveries.
+    */
+    if (
+      mappedStatus.shipdayStatus ===
+        "delivered" ||
+      mappedStatus.shipdayStatus ===
+        "cancelled" ||
+      mappedStatus.shipdayStatus ===
+        "failed"
+    ) {
+      updateData[
+        "shipday.active"
+      ] = false;
+    }
 
-  "shipday.lastUpdated": now,
+    await orderDoc.ref.update(
+      updateData
+    );
 
-  "shipday.lastSyncAt": now,
-};
-
-// If the mapper returned a LIA status,
-// update the business status too.
-if (mappedStatus.orderStatus) {
-
-  updateData.status = mappedStatus.orderStatus;
-
-  updateData.statusHistory =
-    FieldValue.arrayUnion({
-      status: mappedStatus.orderStatus,
-      timestamp: now,
-      note: "Updated from Shipday",
-    });
-
-}
-
-// Delivery completed?
-// Stop polling this order.
-if (
-  mappedStatus.shipdayStatus === "delivered" ||
-  mappedStatus.shipdayStatus === "cancelled" ||
-  mappedStatus.shipdayStatus === "failed"
-) {
-
-  updateData["shipday.active"] = false;
-
-}
-
-await orderDoc.ref.update(updateData);
-
-console.log(
-  "Firestore synchronized successfully."
-);
-
+    console.log(
+      "Firestore synchronized successfully."
+    );
   }
-
 }
 
-/**
- * Shared singleton.
- */
+
+/*
+|--------------------------------------------------------------------------
+| Shared Service
+|--------------------------------------------------------------------------
+*/
+
 export const deliverySyncService =
   new DeliverySyncService();

@@ -34,6 +34,10 @@ import {
 } from "@/mappers/orderMapper";
 
 import {
+  isPaidConfirmedOrder,
+} from "@/utils/orderPaymentVisibility";
+
+import {
   storeService,
 } from "@/services/store/storeService";
 
@@ -284,7 +288,9 @@ export const dashboardService = {
       ordersSnapshot.docs
         .filter(
           (orderDocument) =>
-            orderDocument.data().checkoutStatus === "confirmed"
+            isPaidConfirmedOrder(
+              orderDocument.data()
+            )
         )
         .map(
           mapFirestoreOrder

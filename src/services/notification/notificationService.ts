@@ -172,6 +172,30 @@ export class NotificationService {
 
   }
 
+  /** Marks every unread notification for one user as read in safe batches. */
+  async markAllAsRead(
+    uid: string
+  ): Promise<void> {
+    const unreadQuery = query(
+      collection(db, "users", uid, "notifications"),
+      where("read", "==", false)
+    );
+
+    const snapshot = await getDocs(unreadQuery);
+
+    for (let start = 0; start < snapshot.docs.length; start += 450) {
+      const batch = writeBatch(db);
+
+      snapshot.docs
+        .slice(start, start + 450)
+        .forEach((notificationDocument) => {
+          batch.update(notificationDocument.ref, { read: true });
+        });
+
+      await batch.commit();
+    }
+  }
+
   /** Deletes one notification owned by the current user. */
   async deleteNotification(
     uid: string,

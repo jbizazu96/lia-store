@@ -16,6 +16,9 @@ import {
 } from "firebase/firestore";
 import {onAuthStateChanged} from "firebase/auth";
 import { useRouter } from "next/navigation";
+import {
+  isPaidConfirmedOrder,
+} from "@/utils/orderPaymentVisibility";
 
 interface TopNavigationProps {
   userName: string;
@@ -78,6 +81,15 @@ export function TopNavigation({userName, showSearch = false}: TopNavigationProps
 
       snapshot.forEach((doc) => {
         const data = doc.data();
+
+        /*
+         * The checkout creates an order before payment completes. Keep the
+         * home order badge in sync with the customer order page by ignoring
+         * every record until the Stripe webhook confirms it as paid.
+         */
+        if (!isPaidConfirmedOrder(data)) {
+          return;
+        }
 
         const status = data.status ?? "pending";
 

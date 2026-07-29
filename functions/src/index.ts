@@ -359,6 +359,9 @@ export const cleanupExpiredCarts = onSchedule(
 
 export { createShipdayOrder };
 export { acceptOrder };
+export {
+  updateOrderStatus,
+} from "./orders/updateOrderStatus";
 export { shipdayWebhook };
 export { stripeConnectWebhook };
 export {
