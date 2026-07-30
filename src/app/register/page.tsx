@@ -23,33 +23,17 @@ import {
   CheckCircle,
   AlertCircle,
   Store,
-  User as UserIcon
+  User as UserIcon,
+  CarFront,
 } from "lucide-react";
 
 /*
-  Firebase Authentication function.
+  Registration service.
 */
 import {
-  createUserWithEmailAndPassword,
-  sendEmailVerification,
-  signOut,
-} from "firebase/auth";
-
-/*
-  Firestore functions.
-*/
-import {
-  doc,
-  setDoc,
-} from "firebase/firestore";
-
-/*
-  Firebase configuration.
-*/
-import {
-  auth,
-  db,
-} from "@/lib/firebase";
+  registrationService,
+  type RegistrationAccountType,
+} from "@/services/user/registrationService";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -58,7 +42,7 @@ export default function RegisterPage() {
     Step 1: Account Type Selection
   */
   const [step, setStep] = useState<"select" | "form">("select");
-  const [accountType, setAccountType] = useState<"customer" | "store_owner" | null>(null);
+  const [accountType, setAccountType] = useState<RegistrationAccountType | null>(null);
 
   /*
     Form fields.
@@ -84,7 +68,7 @@ export default function RegisterPage() {
   }
 
   function isValidEmail(email: string) {
-    return email.includes("@");
+    return email.trim().includes("@");
   }
 
   function validateForm() {
@@ -112,8 +96,16 @@ export default function RegisterPage() {
       setError("Password is required");
       return false;
     }
-    if (password.length < 6) {
-      setError("Password must be at least 6 characters");
+    if (password.length < 8) {
+      setError("Password must be at least 8 characters");
+      return false;
+    }
+    if (!/[A-Z]/.test(password)) {
+      setError("Password must include at least one uppercase letter");
+      return false;
+    }
+    if (!/[^A-Za-z0-9]/.test(password)) {
+      setError("Password must include at least one symbol");
       return false;
     }
     if (password !== confirmPassword) {
@@ -135,36 +127,18 @@ export default function RegisterPage() {
       setError("");
       setSuccess(false);
 
-      const result = await createUserWithEmailAndPassword(
-        auth,
+      if (!accountType) {
+        setError("Choose an account type before registering.");
+        return;
+      }
+
+      await registrationService.register({
+        fullName,
         email,
-        password
-      );
-
-      const user = result.user;
-
-      await sendEmailVerification(user);
-
-      /*
-        Create Firestore document with accountType
-      */
-      await setDoc(
-        doc(db, "users", user.uid),
-        {
-          uid: user.uid,
-          displayName: fullName,
-          email: user.email,
-          phone: phone,
-          accountType: accountType, // "customer" or "store_owner"
-          role: "customer", // Both start as "customer" role
-          isActive: true,
-          emailVerified: false,
-          emailVerifiedAt: null,
-          createdAt: new Date().toISOString(),
-        }
-      );
-
-      await signOut(auth);
+        phone,
+        password,
+        accountType,
+      });
 
       setSuccess(true);
       setError("");
@@ -217,7 +191,7 @@ export default function RegisterPage() {
             Create Your Account
           </h1>
           <p className="text-center text-gray-500 mb-8">
-            Are you a customer or a store owner?
+            How will you use LIA?
           </p>
 
           <div className="space-y-4">
@@ -238,6 +212,28 @@ export default function RegisterPage() {
                   <h3 className="font-semibold text-gray-800">Customer</h3>
                   <p className="text-sm text-gray-500">
                     Shop for African groceries and get delivery
+                  </p>
+                </div>
+              </div>
+            </motion.button>
+
+            {/* Driver Option */}
+            <motion.button
+              whileTap={{scale: 0.97}}
+              onClick={() => {
+                setAccountType("driver");
+                setStep("form");
+              }}
+              className="w-full p-6 border-2 border-gray-200 rounded-2xl hover:border-blue-500 hover:bg-blue-50 transition-all group text-left"
+            >
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center group-hover:bg-blue-200 transition">
+                  <CarFront className="w-6 h-6 text-blue-600" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-gray-800">Driver</h3>
+                  <p className="text-sm text-gray-500">
+                    Deliver orders for local stores
                   </p>
                 </div>
               </div>
@@ -308,10 +304,18 @@ export default function RegisterPage() {
         </div>
 
         <h1 className="text-2xl font-bold text-center text-gray-800 mb-2">
-          {accountType === "customer" ? "Customer Registration" : "Store Owner Registration"}
+          {accountType === "customer"
+            ? "Customer Registration"
+            : accountType === "store_owner"
+              ? "Store Owner Registration"
+              : "Driver Registration"}
         </h1>
         <p className="text-center text-gray-500 mb-8">
-          Create your {accountType === "customer" ? "shopping" : "store"} account
+          Create your {accountType === "customer"
+            ? "shopping"
+            : accountType === "store_owner"
+              ? "store"
+              : "driver"} account
         </p>
 
         {/* Success Message */}
@@ -398,10 +402,11 @@ export default function RegisterPage() {
                 value={phone}
                 onChange={handlePhoneChange}
                 className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition"
-                placeholder="(123) 456 - 7890"
+                placeholder="(000) 000 - 0000"
                 required
                 disabled={success}
                 maxLength={18}
+                inputMode="numeric"
               />
             </div>
           </div>
@@ -418,9 +423,10 @@ export default function RegisterPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="w-full pl-10 pr-12 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition"
-                placeholder="Min 6 characters"
+                placeholder="8+ characters, uppercase and symbol"
                 required
                 disabled={success}
+                minLength={8}
               />
               <button
                 type="button"

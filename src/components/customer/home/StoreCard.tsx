@@ -13,7 +13,7 @@ import {motion} from "framer-motion";
 import {Heart, Star, MapPin, Truck, Clock, AlertCircle} from "lucide-react";
 import { formatDistance } from "@/services/delivery/distance";
 import {
-  formatProductName,
+  formatStoreName,
 } from "@/utils/productDisplay";
 
 interface StoreCardProps {
@@ -34,7 +34,7 @@ export function StoreCard({
   const deliveryFee = store.deliveryFeeDisplay;
   const estimatedTime = store.estimatedDeliveryTime;
   const displayName =
-    formatProductName(store.name);
+    formatStoreName(store.name);
 
   const storeStatus = getStoreStatus(
   store.schedule ?? [],

@@ -1,13 +1,18 @@
+import type {
+  Timestamp,
+} from "firebase/firestore";
+
 export interface User {
   uid: string;
   displayName: string;
   email: string;
   phone: string;
-  accountType: "customer" | "store_owner" | "admin";
+  accountType: "customer" | "store_owner" | "driver" | "admin";
   role: string;
   isActive: boolean;
   emailVerified: boolean;
-  emailVerifiedAt: string | null;
+  emailVerifiedAt: Timestamp | null;
+  onboardingCompleted?: boolean;
   defaultAddress?: {
     street: string;
     city: string;
@@ -18,5 +23,6 @@ export interface User {
     formattedAddress: string;
   };
   recentSearches?: string[]; // ✅ Add this field
-  createdAt: string;
+  createdAt: Timestamp;
+  updatedAt?: Timestamp;
 }

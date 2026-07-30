@@ -77,7 +77,11 @@ export async function performSearch(
       
       storesSnapshot.forEach((doc) => {
         const data = doc.data();
-        if (data.status === "active" && data.isOpen) {
+        if (
+          data.isApproved === true &&
+          data.isActive === true &&
+          data.isOpen
+        ) {
           storeIds.add(doc.id);
         }
       });
@@ -90,7 +94,11 @@ export async function performSearch(
       const storeDoc = await getDoc(storeRef);
       if (storeDoc.exists()) {
         const data = storeDoc.data();
-        if (data.status === "active" && data.isOpen) {
+        if (
+          data.isApproved === true &&
+          data.isActive === true &&
+          data.isOpen
+        ) {
           let distance = 0;
           if (userLocation && data.latitude && data.longitude) {
             distance = calculateDistance(
@@ -111,7 +119,6 @@ export async function performSearch(
             deliveryFee: data.deliveryFee || getDeliveryFeeNumber(distance),
             estimatedPrepTime: data.estimatedPrepTime || getEstimatedTimeNumber(distance),
             isOpen: data.isOpen !== false,
-            status: data.status || "pending",
           });
         }
       }
@@ -226,7 +233,11 @@ export async function searchStoresByName(
 
     for (const doc of storesSnapshot.docs) {
       const data = doc.data();
-      if (data.status === "active" && data.isOpen) {
+      if (
+        data.isApproved === true &&
+        data.isActive === true &&
+        data.isOpen
+      ) {
         let distance = 0;
         if (userLocation && data.latitude && data.longitude) {
           distance = calculateDistance(

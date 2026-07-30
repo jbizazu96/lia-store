@@ -150,7 +150,8 @@ export const getStoreDeliveryRoutes =
             const longitude = store?.longitude;
 
             if (
-              store?.status !== "active" ||
+              store?.isApproved !== true ||
+              store?.isActive !== true ||
               typeof latitude !== "number" ||
               typeof longitude !== "number" ||
               !hasValidCheckoutCoordinates({

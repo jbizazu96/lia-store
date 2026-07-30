@@ -39,6 +39,7 @@ import {
 export type AccountType =
   | "customer"
   | "store_owner"
+  | "driver"
   | "admin";
 
 interface RoleGuardProps {
@@ -54,6 +55,8 @@ function getAccountHome(
       return "/store/dashboard";
     case "admin":
       return "/admin";
+    case "driver":
+      return "/driver";
     default:
       return "/home";
   }
@@ -70,6 +73,15 @@ export function RoleGuard({
     user,
     loading: authLoading,
   } = useAuth();
+
+  /*
+    Parents commonly provide this prop as an inline array, for example:
+    allowedAccountTypes={["store_owner"]}. A new array is created whenever a
+    form field changes, so use a stable value based on the actual roles rather
+    than the array reference in the access-verification effect.
+  */
+  const allowedAccountTypesSignature =
+    allowedAccountTypes.join("|");
 
   const [
     accessVerified,
@@ -119,7 +131,9 @@ export function RoleGuard({
 
         if (
           !accountType ||
-          !allowedAccountTypes.includes(
+          !allowedAccountTypesSignature
+            .split("|")
+            .includes(
             accountType
           )
         ) {
@@ -154,7 +168,7 @@ export function RoleGuard({
       active = false;
     };
   }, [
-    allowedAccountTypes,
+    allowedAccountTypesSignature,
     authLoading,
     router,
     user,

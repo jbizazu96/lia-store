@@ -168,6 +168,7 @@ export default function StoreCategoryPage({
       storePhone: store.phone,
       storeLatitude: store.latitude,
       storeLongitude: store.longitude,
+      stock: product.stock,
       size: product.size ?? undefined,
     });
   };

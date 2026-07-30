@@ -54,7 +54,24 @@ console.log("User document exists:", userDoc.exists);
 
 console.log("User data:", userDoc.data());
 
-const storeId = userDoc.data()?.storeId;
+let storeId = userDoc.data()?.storeId;
+
+/*
+  Some valid store-owner profiles predate users/{uid}.storeId. Fall back to
+  the canonical stores.ownerId relationship, while still requiring that the
+  authenticated owner owns the resolved store.
+*/
+if (!storeId) {
+  const storeSnapshot = await db
+    .collection("stores")
+    .where("ownerId", "==", uid)
+    .limit(1)
+    .get();
+
+  if (!storeSnapshot.empty) {
+    storeId = storeSnapshot.docs[0].id;
+  }
+}
 
 console.log("Resolved storeId:", storeId);
 

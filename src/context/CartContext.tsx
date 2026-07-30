@@ -59,23 +59,43 @@ export function CartProvider({children}: {children: ReactNode}) {
 
   // ✅ Load cart from Firestore on auth change
   useEffect(() => {
+    let active = true;
+
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setCurrentUser(user);
+
+      /*
+       * Remove the previous account's items immediately. The async cart load
+       * below is also guarded by `active`, so a prior account can never write
+       * its cart into a newly signed-in customer's memory or Firestore cart.
+       */
+      setItems([]);
 
       if (user) {
         setIsLoading(true);
         try {
           const savedItems = await loadCartFromFirestore(user.uid);
+
+          if (!active || auth.currentUser?.uid !== user.uid) {
+            return;
+          }
+
           if (savedItems) {
             setItems(savedItems);
           } else {
             setItems([]);
           }
         } catch (error) {
+          if (!active || auth.currentUser?.uid !== user.uid) {
+            return;
+          }
+
           console.error("Error loading cart:", error);
           setItems([]);
         } finally {
-          setIsLoading(false);
+          if (active && auth.currentUser?.uid === user.uid) {
+            setIsLoading(false);
+          }
         }
      
         } else {
@@ -91,7 +111,10 @@ export function CartProvider({children}: {children: ReactNode}) {
       
     });
 
-    return () => unsubscribe();
+    return () => {
+      active = false;
+      unsubscribe();
+    };
   }, []);
 
     useEffect(() => {
@@ -180,7 +203,17 @@ const addItem = async (
             ? {
                 ...cartItem,
                 quantity:
-                  cartItem.quantity + 1,
+                  Math.min(
+                    cartItem.quantity + 1,
+                    typeof item.stock === "number"
+                      ? item.stock
+                      : typeof cartItem.stock === "number"
+                        ? cartItem.stock
+                        : Number.MAX_SAFE_INTEGER
+                  ),
+                ...(typeof item.stock === "number"
+                  ? { stock: item.stock }
+                  : {}),
               }
             : cartItem
       );
@@ -209,7 +242,17 @@ const addItem = async (
     }
     setItems(prev =>
       prev.map(i =>
-        i.id === itemId ? {...i, quantity} : i
+        i.id === itemId
+          ? {
+              ...i,
+              quantity: Math.min(
+                quantity,
+                typeof i.stock === "number"
+                  ? i.stock
+                  : Number.MAX_SAFE_INTEGER
+              ),
+            }
+          : i
       )
     );
   };

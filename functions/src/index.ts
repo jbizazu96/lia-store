@@ -1,3 +1,15 @@
+
+import Stripe from "stripe";
+
+import {
+  defineSecret,
+} from "firebase-functions/params";
+import { accountDeletionScheduler } from "./accountDeletion/accountDeletionScheduler";
+import { requestAccountDeletion } from "./callable/requestAccountDeletion";
+import {
+  initializeUserProfile,
+} from "./callable/initializeUserProfile";
+import { driverApproved } from "./triggers/driverApproved";
 import * as admin from "firebase-admin";
 import {onCall, HttpsError} from "firebase-functions/v2/https";
 import {onSchedule} from "firebase-functions/v2/scheduler"; 
@@ -18,6 +30,10 @@ import {
   getStoreDeliveryRoutes,
 } from "./delivery/getStoreDeliveryRoutes";
 export { processStoreImage } from "./images/processStoreImage";
+export { processDriverImage } from "./images/processDriverImage";
+export {
+  processCustomerProfileImage,
+} from "./images/processCustomerProfileImage";
 
 
 /*
@@ -45,13 +61,15 @@ if (admin.apps.length === 0) {
 const db = getFirestore("default");
 
 /*
-  INTERFACE: SyncEmailVerificationData
+  Stripe secret used by the account deletion scheduler.
 
-  Defines the shape of data expected by the syncEmailVerification function.
+  The secret is injected by Firebase Secret Manager only into functions
+  that explicitly declare it in their `secrets` configuration.
 */
-interface SyncEmailVerificationData {
-  email?: string;
-}
+const stripeSecretKey =
+  defineSecret(
+    "STRIPE_SECRET_KEY"
+  );
 
 /*
   FUNCTION 1: syncEmailVerification (Callable Function)
@@ -61,13 +79,13 @@ interface SyncEmailVerificationData {
 
   Flow:
   1. Frontend applies the action code (applyActionCode)
-  2. Frontend calls this function with the user's email
-  3. This function verifies the email is verified in Firebase Auth
+  2. Frontend calls this function as the authenticated user
+  3. This function verifies that user's email in Firebase Auth
   4. Updates Firestore to mark emailVerified: true
 
   This is the primary method for syncing verification status.
 */
-export const syncEmailVerification = onCall<SyncEmailVerificationData>(
+export const syncEmailVerification = onCall(
   {
     region: "us-central1",
     maxInstances: 10,
@@ -81,27 +99,12 @@ export const syncEmailVerification = onCall<SyncEmailVerificationData>(
       );
     }
 
-    const email = request.data.email;
-
-    // Validate input
-    if (!email) {
-      throw new HttpsError(
-        "invalid-argument",
-        "Email is required to sync verification status."
-      );
-    }
-
-    // Validate email format
-    if (!email.includes("@")) {
-      throw new HttpsError(
-        "invalid-argument",
-        "Invalid email format."
-      );
-    }
-
     try {
-      // Look up the Auth user by email
-      const user = await admin.auth().getUserByEmail(email);
+      /*
+        Only synchronize the authenticated caller. Accepting an email from
+        the browser would let one signed-in user target another profile.
+      */
+      const user = await admin.auth().getUser(request.auth.uid);
 
       // Double-check that the email is actually verified in Firebase Auth
       if (!user.emailVerified) {
@@ -114,13 +117,14 @@ export const syncEmailVerification = onCall<SyncEmailVerificationData>(
       // Update Firestore
       await db
         .collection("users")
-        .doc(user.uid)
+        .doc(request.auth.uid)
         .update({
           emailVerified: true,
           emailVerifiedAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
 
-      console.log(`✅ Firestore updated for user: ${user.uid} (${email})`);
+      console.log(`✅ Firestore updated for user: ${user.uid} (${user.email})`);
 
       return {
         success: true,
@@ -373,6 +377,9 @@ export { orderStatusChanged };
 export {
   productCustomerNotifications,
 } from "./triggers/productCustomerNotifications";
+export {
+  storeCustomerNotifications,
+} from "./triggers/storeCustomerNotifications";
 export { syncShipdayDeliveries };
 export { remindStoreOrders } from "./scheduler/remindStoreOrders";
 export { createOrder };
@@ -394,3 +401,47 @@ export {
 export {
   pollClaidImageJobs,
 } from "./claid/pollClaidImageJobs";
+export { driverApproved };
+export {
+  syncShipdayCarriers,
+} from "./scheduler/syncShipdayCarriers";
+export {
+  deleteDriverAccount,
+} from "./callable/deleteDriverAccount";
+export {
+  requestAccountDeletion,
+};
+export {
+  initializeUserProfile,
+};
+export const processAccountDeletionRequests =
+  onSchedule(
+    {
+      schedule: "every 1 minutes",
+      region: "us-central1",
+      memory: "512MiB",
+      timeoutSeconds: 540,
+
+      secrets: [
+        stripeSecretKey,
+      ],
+    },
+    async () => {
+      console.log(
+        "Starting account deletion scheduler..."
+      );
+
+      const stripe =
+        new Stripe(
+          stripeSecretKey.value()
+        );
+
+      await accountDeletionScheduler.run({
+        stripe,
+      });
+
+      console.log(
+        "Account deletion scheduler completed."
+      );
+    }
+  );

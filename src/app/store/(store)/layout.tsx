@@ -42,7 +42,8 @@ interface StoreData {
   id: string;
   name: string;
   logoUrl?: string;
-  status: string;
+  isApproved: boolean;
+  isActive: boolean;
 }
 
 function StoreLayoutContent({ children }: { children: React.ReactNode }) {
@@ -247,15 +248,26 @@ function StoreLayoutContent({ children }: { children: React.ReactNode }) {
         const storeSnapshot = await getDocs(q);
         
         if (storeSnapshot.empty) {
-          router.push("/store/create");
+          router.push("/store/onboarding/owner");
           return;
         }
 
         const storeDoc = storeSnapshot.docs[0];
         const data = storeDoc.data();
 
-        if (data.status !== "active") {
-          router.push("/store/create");
+        if (!data.onboardingCompleted) {
+          router.push(`/store/onboarding/${data.onboardingStep || "owner"}`);
+          return;
+        }
+
+        /*
+          Approval grants the owner access to the private store workspace.
+          Activation is intentionally separate and controls customer visibility.
+        */
+        const isApproved = data.isApproved === true;
+
+        if (!isApproved) {
+          router.replace("/store/pending-approval");
           return;
         }
 
@@ -263,7 +275,8 @@ function StoreLayoutContent({ children }: { children: React.ReactNode }) {
           id: storeDoc.id,
           name: data.name,
           logoUrl: data.logoUrl,
-          status: data.status,
+          isApproved,
+          isActive: data.isActive === true,
         });
       } catch (error) {
         console.error("Error fetching store:", error);
@@ -487,8 +500,14 @@ function StoreLayoutContent({ children }: { children: React.ReactNode }) {
                 {storeData?.name || "My Store"}
               </p>
               <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-green-500" />
-                <span className="text-xs text-gray-500">Active</span>
+                <div
+                  className={`w-2 h-2 rounded-full ${
+                    storeData?.isActive ? "bg-green-500" : "bg-amber-500"
+                  }`}
+                />
+                <span className="text-xs text-gray-500">
+                  {storeData?.isActive ? "Live" : "Approved · Not live"}
+                </span>
               </div>
             </div>
           </Link>

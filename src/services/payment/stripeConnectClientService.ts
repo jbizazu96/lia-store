@@ -264,11 +264,13 @@ async function createOrRetrieveAccount(
   POST /api/stripe/connect/onboarding-link
 */
 async function createOnboardingLink(
-  storeId: string
+  storeId: string,
+  returnContext?: "onboarding"
 ): Promise<CreateStripeOnboardingLinkResponse> {
   return postStripeConnectRequest<CreateStripeOnboardingLinkResponse>(
     "/api/stripe/connect/onboarding-link",
-    storeId
+    storeId,
+    returnContext ? { returnContext } : {}
   );
 }
 

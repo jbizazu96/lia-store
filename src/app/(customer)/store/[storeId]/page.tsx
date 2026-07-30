@@ -235,6 +235,8 @@ export default function StorePage({
       storeLatitude: store.latitude,
       storeLongitude: store.longitude,
 
+      stock: product.stock,
+
       size: product.size ?? undefined,
     });
   };

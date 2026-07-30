@@ -192,6 +192,12 @@ export interface PrepareCheckoutPaymentResult {
   orderId: string;
 
   /*
+    Customer-owned LIA checkout session. The checkout page listens to this
+    lightweight document until the paid order is eligible for reading.
+  */
+  checkoutSessionId: string;
+
+  /*
     Human-readable LIA order number returned by the backend.
   */
   orderNumber: string;

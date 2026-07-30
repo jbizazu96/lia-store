@@ -37,6 +37,7 @@ import { DELIVERY_CONFIG } from "@/config/delivery";
 import { productService } from "@/services/product/productService";
 import { promotionService } from "@/services/promotion/promotionService";
 import { storeService } from "@/services/store/storeService";
+import { isStoreCustomerVisible } from "@/services/store/storeAvailability";
 import { userService } from "@/services/user/userService";
 
 import {
@@ -239,6 +240,15 @@ export function useCustomerStore({
           if (isMounted) {
             setStore(null);
             setError("Store not found");
+          }
+
+          return;
+        }
+
+        if (!isStoreCustomerVisible(domainStore)) {
+          if (isMounted) {
+            setStore(null);
+            setError("This store is not currently available.");
           }
 
           return;

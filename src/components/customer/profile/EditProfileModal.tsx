@@ -6,18 +6,23 @@
 import {useState} from "react";
 import {motion} from "framer-motion";
 import {X, User, Mail, Phone, Save} from "lucide-react";
-import {setDoc, doc} from "firebase/firestore";
-import {updateProfile} from "firebase/auth";
-import {auth, db} from "@/lib/firebase";
 import { useUnsavedChanges } from "@/hooks/useUnsavedChanges";
 import { useConfirmation } from "@/context/ConfirmationContext";
 import {formatPhoneNumber} from "@/utils/phone";
 import {useSuccessToast} from "@/context/SuccessToastContext";
+import {
+  customerProfileClientService,
+  type CustomerProfile,
+} from "@/services/user/customerProfileClientService";
 
 interface EditProfileModalProps {
-  userData: any;
+  userData: CustomerProfile & {
+    displayName: string;
+    email: string;
+    phone: string;
+  };
   onClose: () => void;
-  onUpdate: (data: any) => void;
+  onUpdate: (data: CustomerProfile) => void;
 }
 
 export function EditProfileModal({userData, onClose, onUpdate}: EditProfileModalProps) {
@@ -76,44 +81,14 @@ export function EditProfileModal({userData, onClose, onUpdate}: EditProfileModal
       setLoading(true);
       setError("");
 
-      const user = auth.currentUser;
-      if (!user) throw new Error("No user logged in");
-
       const displayName = formData.displayName.trim();
       const phone = formatPhoneNumber(formData.phone);
-
-      // Update Firebase Auth profile
-      if (displayName !== userData?.displayName) {
-        await updateProfile(user, {
-          displayName,
-        });
-      }
-
-      // Update Firestore
-      const updateData: any = {
-        // Migrates legacy profiles that were created without a UID field.
-        uid: user.uid,
-      };
-      if (displayName !== userData?.displayName) {
-        updateData.displayName = displayName;
-      }
-      if (phone !== userData?.phone) {
-        updateData.phone = phone;
-      }
-
-      if (Object.keys(updateData).length > 0) {
-        await setDoc(
-          doc(db, "users", user.uid),
-          updateData,
-          {merge: true}
-        );
-      }
-
-      onUpdate({
-        ...formData,
+      const updatedProfile = await customerProfileClientService.updateProfile({
         displayName,
         phone,
       });
+
+      onUpdate(updatedProfile);
       showSuccess("Profile updated successfully.");
       onClose();
 
@@ -205,14 +180,9 @@ export function EditProfileModal({userData, onClose, onUpdate}: EditProfileModal
                   disabled={!isEditing.email}
                 />
               </div>
-              <button
-                type="button"
-                onClick={() => toggleEdit("email")}
-                className="px-3 py-2 text-sm text-orange-600 font-medium hover:bg-orange-50 rounded-lg transition"
-                aria-label={isEditing.email ? "Done editing email" : "Edit email"}
-              >
-                {isEditing.email ? "Done" : "Edit"}
-              </button>
+              <span className="px-2 text-xs font-medium text-gray-400">
+                Verified
+              </span>
             </div>
           </div>
 

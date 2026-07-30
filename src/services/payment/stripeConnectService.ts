@@ -26,6 +26,15 @@ export interface CreateStoreStripeAccountInput {
   productDescription?: string;
 }
 
+/* Driver payouts use the same Accounts v2 recipient configuration as stores. */
+export interface CreateDriverStripeAccountInput {
+  driverId: string;
+  email: string;
+  phone?: string;
+  country: string;
+  fullName: string;
+}
+
 export interface CreateStripeOnboardingLinkInput {
   accountId: string;
   refreshUrl: string;
@@ -96,6 +105,61 @@ async function createStoreAccount(
   );
 }
 
+/*
+  Create a driver recipient account.
+
+  LIA makes platform transfers to drivers: 70% of delivery fees and 100% of
+  customer tips. Drivers are individual recipients, so Stripe receives that
+  trusted identity type from the server rather than the browser.
+*/
+async function createDriverAccount(
+  input: CreateDriverStripeAccountInput
+): Promise<Stripe.V2.Core.Account> {
+  return stripe.v2.core.accounts.create(
+    {
+      contact_email: input.email,
+      contact_phone: input.phone,
+      display_name: input.fullName,
+      dashboard: "express",
+      identity: {
+        country: input.country,
+        entity_type: "individual",
+      },
+      configuration: {
+        recipient: {
+          capabilities: {
+            stripe_balance: {
+              stripe_transfers: {
+                requested: true,
+              },
+            },
+          },
+        },
+      },
+      defaults: {
+        responsibilities: {
+          fees_collector: "application",
+          losses_collector: "application",
+        },
+        profile: {
+          doing_business_as: input.fullName,
+          product_description: "Independent delivery driver receiving payouts through LIA.",
+        },
+      },
+      metadata: {
+        liaConnectApiVersion: "v2",
+        liaOwnerType: "driver",
+        liaDriverId: input.driverId,
+        liaOwnerId: input.driverId,
+      },
+      include: [...ACCOUNT_INCLUDES],
+    },
+    {
+      idempotencyKey: `driver-connect-account-v2-${input.driverId}`,
+    }
+  );
+}
+
 async function getAccount(
   accountId: string
 ): Promise<Stripe.V2.Core.Account> {
@@ -135,6 +199,7 @@ async function createOnboardingLink(
 
 export const stripeConnectService = {
   createStoreAccount,
+  createDriverAccount,
   getAccount,
   createOnboardingLink,
 };

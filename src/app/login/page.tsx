@@ -17,11 +17,14 @@ import {
   sendEmailVerification,
   signOut,
 } from "firebase/auth";
+import {
+  httpsCallable,
+} from "firebase/functions";
 
 /*
   Firebase instances.
 */
-import {auth, db} from "@/lib/firebase";
+import {auth, db, functions} from "@/lib/firebase";
 
 /*
   Firestore functions.
@@ -45,6 +48,8 @@ import {PasswordResetModal} from "@/components/login/PasswordResetModal";
 import {AddressModal} from "@/components/login/AddressModal";
 import {StoreStatusModal} from "@/components/login/StoreStatusModal";
 import { useConfirmation } from "@/context/ConfirmationContext";
+import { userService } from "@/services/user/userService";
+import { normalizeUsState } from "@/utils/usState";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -66,7 +71,7 @@ export default function LoginPage() {
   const [showAddressModal, setShowAddressModal] = useState(false);
   const [showStoreStatusModal, setShowStoreStatusModal] = useState(false);
   const [storeStatusData, setStoreStatusData] = useState<{
-    status: "active" | "pending" | "none";
+    status: "approved" | "pending" | "none";
     storeName?: string;
   }>({status: "none"});
 
@@ -103,52 +108,19 @@ export default function LoginPage() {
 
     if (!userDoc.exists()) {
       /*
-       * Authentication accounts can outlive their profile document (for
-       * example, after an incomplete migration or an accidental profile
-       * deletion). Restore only the authenticated user's own profile.
-       *
-       * Existing stores are publicly readable, so they can safely determine
-       * whether this UID must be restored as a store owner. No other user
-       * profile is read or modified here.
+       * A profile must be created by the registration callable. This project
+       * does not recreate missing profiles from legacy account data.
        */
-      const ownedStoreSnapshot = await getDocs(
-        query(
-          collection(db, "stores"),
-          where("ownerId", "==", uid),
-          limit(1)
-        )
-      );
-
-      const currentUser = auth.currentUser;
-      const accountType = ownedStoreSnapshot.empty
-        ? "customer"
-        : "store_owner";
-
-      await setDoc(userRef, {
-        uid,
-        displayName:
-          currentUser?.displayName ||
-          currentUser?.email?.split("@")[0] ||
-          "Customer",
-        email: currentUser?.email || "",
-        phone: currentUser?.phoneNumber || "",
-        accountType,
-        role: "customer",
-        isActive: true,
-        emailVerified: true,
-        emailVerifiedAt: new Date().toISOString(),
-        createdAt: new Date().toISOString(),
-        profileRecoveredAt: new Date().toISOString(),
-      });
-
-      userDoc = await getDoc(userRef);
-
-      if (!userDoc.exists()) {
-        setError("We could not restore your user profile. Please try again.");
-        await signOut(auth);
-        return;
-      }
+      setError("Your account profile is incomplete. Please contact support.");
+      await signOut(auth);
+      return;
     }
+
+    /*
+      Firebase Auth is the source of truth for email verification. Sync the
+      now-existing profile through a callable after a verified user signs in.
+    */
+    await httpsCallable(functions, "syncEmailVerification")();
 
     const userData = userDoc.data();
     const accountType = userData.accountType || "customer";
@@ -165,10 +137,10 @@ export default function LoginPage() {
       if (!storeSnapshot.empty) {
         const storeDoc = storeSnapshot.docs[0];
         const storeData = storeDoc.data();
-        const storeStatus = storeData.status || "pending";
+        const isApproved = storeData.isApproved === true;
         const storeName = storeData.name || "Your Store";
 
-        if (storeStatus === "active") {
+        if (isApproved) {
           // ✅ Redirect to the premium dashboard - use /store/dashboard NOT /(store)/dashboard
           router.replace("/store/dashboard");
           return;
@@ -192,13 +164,19 @@ export default function LoginPage() {
     }
 
     /*
+      Driver Flow - The driver workspace is intentionally a placeholder
+      until driver onboarding and delivery tools are added.
+    */
+    if (accountType === "driver") {
+      router.replace("/driver");
+      return;
+    }
+
+    /*
       Customer Flow - Redirect to Home.
     */
-    // Check if address exists
-    const addressRef = doc(db, "addresses", uid);
-    const addressDoc = await getDoc(addressRef);
-
-    if (addressDoc.exists() && addressDoc.data().street) {
+    // Check the user document and users/{uid}/addresses subcollection.
+    if (await userService.hasDefaultDeliveryAddress(uid)) {
       // Address exists - go to home
       router.replace("/home");
     } else {
@@ -296,8 +274,14 @@ export default function LoginPage() {
         return;
       }
 
+      const normalizedState = normalizeUsState(addressData.state);
+      if (!normalizedState) {
+        setAddressError("Enter a valid U.S. state name or two-letter abbreviation.");
+        return;
+      }
+
       const {geocodeAddress} = await import("@/services/delivery/geocode");
-      const fullAddress = `${addressData.street}, ${addressData.city}, ${addressData.state} ${addressData.zip}`;
+      const fullAddress = `${addressData.street}, ${addressData.city}, ${normalizedState} ${addressData.zip}`;
       const location = await geocodeAddress(fullAddress);
 
       if (!location) {
@@ -322,14 +306,13 @@ export default function LoginPage() {
         ...addressData,
         street: addressData.street.trim().toUpperCase(),
         city: addressData.city.trim().toUpperCase(),
-        state: addressData.state.trim().toUpperCase(),
+        state: normalizedState,
         zip: addressData.zip.trim().toUpperCase(),
         country: addressData.country.trim().toUpperCase(),
         formattedAddress: (location.formattedAddress || fullAddress).toUpperCase(),
       };
 
-      await setDoc(doc(db, "addresses", user.uid), {
-        userId: user.uid,
+      await setDoc(doc(db, "users", user.uid, "addresses", "default"), {
         ...savedAddress,
         latitude: location.latitude,
         longitude: location.longitude,
@@ -408,8 +391,7 @@ export default function LoginPage() {
         status={storeStatusData.status}
         storeName={storeStatusData.storeName}
         onClose={() => setShowStoreStatusModal(false)}
-        onCreateStore={() => router.push("/store/create")}
-        onGoHome={() => router.push("/home")}
+        onCreateStore={() => router.push("/store/onboarding/owner")}
         onGoToDashboard={() => router.push("/store/dashboard")}
       />
     </>

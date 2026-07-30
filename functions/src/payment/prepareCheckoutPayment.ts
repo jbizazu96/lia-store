@@ -859,6 +859,10 @@ export const prepareCheckoutPayment =
               reusableSession
                 .orderId,
 
+            checkoutSessionId:
+              reusableSession
+                .sessionId,
+
             orderNumber:
               reusableSession
                 .orderNumber,
@@ -1114,6 +1118,9 @@ export const prepareCheckoutPayment =
 
           orderId:
             pendingOrder.orderId,
+
+          checkoutSessionId:
+            newlyCreatedSessionId,
 
           orderNumber:
             pendingOrder.orderNumber,

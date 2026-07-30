@@ -21,8 +21,10 @@ import {
   doc,
   getDoc,
   getDocs,
+  onSnapshot,
   type DocumentData,
 } from "firebase/firestore";
+import { isStoreActive, isStoreApproved } from "./storeAvailability";
 
 import { db } from "@/lib/firebase";
 import type { Store } from "@/types/store";
@@ -63,7 +65,11 @@ function mapStoreDocument(
 
     minimumOrder: data.minimumOrder ?? 20,
 
-    status: data.status ?? "pending",
+    isApproved: isStoreApproved(data),
+    isActive: isStoreActive(data),
+    onboardingCompleted: data.onboardingCompleted === true,
+    onboardingStep: data.onboardingStep ?? undefined,
+    owner: data.owner ?? undefined,
     isOpen: data.isOpen ?? false,
     schedule: data.schedule ?? [],
 
@@ -103,6 +109,30 @@ export const storeService = {
         storeDocument.id,
         storeDocument.data()
       )
+    );
+  },
+
+  /**
+   * Subscribe to store changes so customer discovery updates as soon as an
+   * administrator activates a newly approved store.
+   */
+  listenToStores(
+    onChange: (stores: Store[]) => void,
+    onError?: (error: Error) => void
+  ): () => void {
+    return onSnapshot(
+      collection(db, "stores"),
+      (snapshot) => {
+        onChange(
+          snapshot.docs.map((storeDocument) =>
+            mapStoreDocument(
+              storeDocument.id,
+              storeDocument.data()
+            )
+          )
+        );
+      },
+      (error) => onError?.(error)
     );
   },
 

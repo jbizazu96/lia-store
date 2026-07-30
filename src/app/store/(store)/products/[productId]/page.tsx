@@ -168,7 +168,7 @@ export default function EditProductPage({
 
             if (!storeId) {
               router.replace(
-                "/store/create"
+                "/store/onboarding/owner"
               );
 
               return;

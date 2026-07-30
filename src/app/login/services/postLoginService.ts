@@ -7,11 +7,12 @@
 
 import {doc, getDoc, updateDoc, collection, query, where, getDocs} from "firebase/firestore";
 import {auth, db} from "@/lib/firebase";
+import {userService} from "@/services/user/userService";
 
 interface PostLoginResult {
-  accountType: "customer" | "store_owner" | "admin";
+  accountType: "customer" | "store_owner" | "driver" | "admin";
   hasAddress: boolean;
-  storeStatus: "active" | "pending" | "none";
+  storeStatus: "approved" | "pending" | "none";
   storeName?: string;
   storeId?: string;
 }
@@ -35,16 +36,14 @@ export async function handlePostLogin(uid: string): Promise<PostLoginResult> {
   */
   let hasAddress = false;
   if (accountType === "customer") {
-    const addressRef = doc(db, "addresses", uid);
-    const addressDoc = await getDoc(addressRef);
-    hasAddress = addressDoc.exists() && !!addressDoc.data()?.street;
+    hasAddress = await userService.hasDefaultDeliveryAddress(uid);
   }
 
   /*
     Check store status for store owners.
     Query by ownerId since store ID is not the same as user UID.
   */
-  let storeStatus: "active" | "pending" | "none" = "none";
+  let storeStatus: "approved" | "pending" | "none" = "none";
   let storeName = "";
   let storeId = "";
 
@@ -60,7 +59,7 @@ export async function handlePostLogin(uid: string): Promise<PostLoginResult> {
       const storeData = storeDoc.data();
       storeId = storeDoc.id;
       storeName = storeData.name || "Your Store";
-      storeStatus = storeData.status === "active" ? "active" : "pending";
+      storeStatus = storeData.isApproved === true ? "approved" : "pending";
     }
   }
 

@@ -290,7 +290,8 @@ export function getStripeOnboardingStatus(
 */
 export function mapStripeAccount(
   account: StripeV2Account,
-  storeId: string
+  ownerType: "store" | "driver",
+  ownerId: string
 ): StripeConnectAccount {
   const onboardingStatus =
     getStripeOnboardingStatus(account);
@@ -299,7 +300,8 @@ export function mapStripeAccount(
     getTransferStatus(account) === "active";
 
   return {
-    storeId,
+    ownerType,
+    ownerId,
     accountId: account.id,
     onboardingStatus,
 

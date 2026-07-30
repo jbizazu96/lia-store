@@ -9,31 +9,21 @@
 import {useState, useEffect} from "react";
 import {motion} from "framer-motion";
 import {X, MapPin, Trash2, Edit2, Check, AlertCircle, Plus} from "lucide-react";
-import {doc, getDoc, setDoc, deleteDoc, collection, getDocs} from "firebase/firestore";
-import {db} from "@/lib/firebase";
-import {geocodeAddress} from "@/services/delivery/geocode";
 import { useUnsavedChanges } from "@/hooks/useUnsavedChanges";
 import { useConfirmation } from "@/context/ConfirmationContext";
 import { useSuccessToast } from "@/context/SuccessToastContext";
+import {
+  customerProfileClientService,
+  type CustomerProfileAddress,
+} from "@/services/user/customerProfileClientService";
 
 interface AddressesModalProps {
-  userId: string;
   onClose: () => void;
 }
 
-interface Address {
-  street: string;
-  city: string;
-  state: string;
-  zip: string;
-  latitude?: number;
-  longitude?: number;
-  formattedAddress?: string;
-}
-
-export function AddressesModal({userId, onClose}: AddressesModalProps) {
+export function AddressesModal({onClose}: AddressesModalProps) {
   const {showSuccess} = useSuccessToast();
-  const [address, setAddress] = useState<Address | null>(null);
+  const [address, setAddress] = useState<CustomerProfileAddress | null>(null);
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
   const [error, setError] = useState("");
@@ -79,122 +69,22 @@ export function AddressesModal({userId, onClose}: AddressesModalProps) {
 
   // Fetch address on mount
   useEffect(() => {
-    if (userId) {
-      fetchAddress();
-    }
-  }, [userId]);
+    void fetchAddress();
+  }, []);
 
   async function fetchAddress() {
     try {
       setLoading(true);
-      console.log("🔍 Fetching address for user:", userId);
-      
-      // Try to get the address from the user's document first
-      const userRef = doc(db, "users", userId);
-      const userDoc = await getDoc(userRef);
-      
-      if (userDoc.exists()) {
-        const userData = userDoc.data();
-        console.log("📄 User data:", userData);
-        
-        // Check if address is stored directly in user document
-        if (userData.defaultAddress) {
-          console.log("📍 Found address in user document:", userData.defaultAddress);
-          const addr = userData.defaultAddress;
-          setAddress({
-            street: addr.street || "",
-            city: addr.city || "",
-            state: addr.state || "",
-            zip: addr.zip || "",
-            latitude: addr.latitude,
-            longitude: addr.longitude,
-            formattedAddress: addr.formattedAddress,
-          });
-          setFormData({
-            street: addr.street || "",
-            city: addr.city || "",
-            state: addr.state || "",
-            zip: addr.zip || "",
-          });
-          setLoading(false);
-          return;
-        }
-      }
-      
-      // If not in user document, check the addresses subcollection
-      console.log("🔍 Checking addresses subcollection...");
-      const addressesRef = collection(db, "users", userId, "addresses");
-      const snapshot = await getDocs(addressesRef);
-      
-      if (!snapshot.empty) {
-        // Get the first address (or the one marked as default)
-        let foundAddress: any = null;
-        snapshot.forEach((doc) => {
-          const data = doc.data();
-          if (data.isDefault) {
-            foundAddress = { id: doc.id, ...data };
-          }
-        });
-        
-        // If no default, use the first one
-        if (!foundAddress) {
-          const firstDoc = snapshot.docs[0];
-          foundAddress = { id: firstDoc.id, ...firstDoc.data() };
-        }
-        
-        console.log("📍 Found address in subcollection:", foundAddress);
-        
-        // ✅ Fix: Check if foundAddress has the properties before accessing them
-        if (foundAddress && typeof foundAddress === 'object') {
-          setAddress({
-            street: foundAddress.street || "",
-            city: foundAddress.city || "",
-            state: foundAddress.state || "",
-            zip: foundAddress.zip || "",
-            latitude: foundAddress.latitude,
-            longitude: foundAddress.longitude,
-            formattedAddress: foundAddress.formattedAddress,
-          });
-          setFormData({
-            street: foundAddress.street || "",
-            city: foundAddress.city || "",
-            state: foundAddress.state || "",
-            zip: foundAddress.zip || "",
-          });
-        }
-      } else {
-        /*
-         * The login address flow stores its address at addresses/{uid}.
-         * Keep this legacy fallback so the profile shows the customer's
-         * saved address before offering the add-address form.
-         */
-        const legacyAddressSnapshot = await getDoc(
-          doc(db, "addresses", userId)
-        );
+      const profile = await customerProfileClientService.getProfile();
+      const savedAddress = profile.defaultAddress;
 
-        if (legacyAddressSnapshot.exists()) {
-          const legacyAddress = legacyAddressSnapshot.data();
-
-          setAddress({
-            street: legacyAddress.street || "",
-            city: legacyAddress.city || "",
-            state: legacyAddress.state || "",
-            zip: legacyAddress.zip || "",
-            latitude: legacyAddress.latitude,
-            longitude: legacyAddress.longitude,
-            formattedAddress: legacyAddress.formattedAddress,
-          });
-          setFormData({
-            street: legacyAddress.street || "",
-            city: legacyAddress.city || "",
-            state: legacyAddress.state || "",
-            zip: legacyAddress.zip || "",
-          });
-        } else {
-          console.log("❌ No address found");
-          setAddress(null);
-        }
-      }
+      setAddress(savedAddress);
+      setFormData({
+        street: savedAddress?.street ?? "",
+        city: savedAddress?.city ?? "",
+        state: savedAddress?.state ?? "",
+        zip: savedAddress?.zip ?? "",
+      });
     } catch (error) {
       console.error("Error fetching address:", error);
       setError("Failed to load address");
@@ -218,17 +108,6 @@ export function AddressesModal({userId, onClose}: AddressesModalProps) {
       setError("");
       setSuccess("");
 
-      // Geocode address
-      const fullAddress = `${formData.street}, ${formData.city}, ${formData.state} ${formData.zip}`;
-      const location = await geocodeAddress(fullAddress);
-
-      if (!location) {
-        setError(
-          "We couldn't verify this delivery address. Check the street, city, state, and ZIP code, then try again."
-        );
-        return;
-      }
-
       const confirmed = await confirm({
         title: address ? "Update delivery address?" : "Save delivery address?",
         message: "This verified address will be used for future deliveries.",
@@ -238,29 +117,9 @@ export function AddressesModal({userId, onClose}: AddressesModalProps) {
 
       if (!confirmed) return;
 
-      const addressData: Address = {
-        street: formData.street.trim().toUpperCase(),
-        city: formData.city.trim().toUpperCase(),
-        state: formData.state.trim().toUpperCase(),
-        zip: formData.zip.trim().toUpperCase(),
-        latitude: location.latitude,
-        longitude: location.longitude,
-        formattedAddress: location.formattedAddress.toUpperCase(),
-      };
-
-      // Save to both places for redundancy
-      // 1. Save to user document
-      await setDoc(doc(db, "users", userId), {
-        defaultAddress: addressData,
-      }, { merge: true });
-
-      // 2. Save to addresses subcollection with ID "default"
-      await setDoc(doc(db, "users", userId, "addresses", "default"), {
-        ...addressData,
-        isDefault: true,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      });
+      const addressData = await customerProfileClientService.saveDefaultAddress(
+        formData
+      );
 
       setAddress(addressData);
       setSuccess(address ? "Address updated successfully!" : "Address added successfully!");
@@ -291,13 +150,7 @@ export function AddressesModal({userId, onClose}: AddressesModalProps) {
     if (!confirmed) return;
     
     try {
-      // Remove from user document
-      await setDoc(doc(db, "users", userId), {
-        defaultAddress: null,
-      }, { merge: true });
-
-      // Remove from addresses subcollection
-      await deleteDoc(doc(db, "users", userId, "addresses", "default"));
+      await customerProfileClientService.deleteDefaultAddress();
       
       setAddress(null);
       setSuccess("Address deleted successfully!");

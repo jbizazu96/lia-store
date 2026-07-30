@@ -343,9 +343,10 @@ function mapTrustedStore(
   }
 
   /*
-    Only active stores may receive customer orders.
+    Stores must be approved for owner access and activated before they can
+    receive customer orders.
   */
-  if (data.status !== "active") {
+  if (data.isApproved !== true || data.isActive !== true) {
     throw new CheckoutDataError(
       "STORE_UNAVAILABLE",
       "The selected store is not currently accepting orders."

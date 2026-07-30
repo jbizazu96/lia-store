@@ -40,6 +40,249 @@ service cloud.firestore {
         userAccountType(request.auth.uid) == "store_owner";
     }
 
+    function isCustomerAccount() {
+      return signedIn() &&
+        userAccountType(request.auth.uid) == "customer";
+    }
+
+    function isDriverAccount() {
+      return signedIn() &&
+        userAccountType(request.auth.uid) == "driver";
+    }
+
+    /*
+     * Document image processing and administrator document review are two
+     * separate concerns. Drivers may initialize review fields as pending,
+     * but cannot approve, reject, expire, or alter a reviewer decision.
+     */
+    function documentReviewIsClientSafe(
+      previousDocument,
+      nextDocument,
+      materialDocumentFields
+    ) {
+      return !previousDocument.keys().hasAny([
+        "reviewStatus",
+        "rejectionReason",
+        "reviewedAt",
+        "reviewedBy",
+      ])
+        ? (
+          !nextDocument.keys().hasAny([
+            "reviewStatus",
+            "rejectionReason",
+            "reviewedAt",
+            "reviewedBy",
+          ]) || (
+            nextDocument.keys().hasAll([
+              "reviewStatus",
+              "rejectionReason",
+              "reviewedAt",
+              "reviewedBy",
+            ]) &&
+            nextDocument.reviewStatus == "pending" &&
+            nextDocument.rejectionReason == null &&
+            nextDocument.reviewedAt == null &&
+            nextDocument.reviewedBy == null
+          )
+        )
+        : (
+          (
+            nextDocument.keys().hasAll([
+              "reviewStatus",
+              "rejectionReason",
+              "reviewedAt",
+              "reviewedBy",
+            ]) &&
+            nextDocument.reviewStatus == previousDocument.reviewStatus &&
+            nextDocument.rejectionReason == previousDocument.rejectionReason &&
+            nextDocument.reviewedAt == previousDocument.reviewedAt &&
+            nextDocument.reviewedBy == previousDocument.reviewedBy
+          ) || (
+            /* A material driver edit may resubmit only that document. */
+            nextDocument.keys().hasAll([
+              "reviewStatus",
+              "rejectionReason",
+              "reviewedAt",
+              "reviewedBy",
+            ]) &&
+            nextDocument.reviewStatus == "pending" &&
+            nextDocument.rejectionReason == null &&
+            nextDocument.reviewedAt == null &&
+            nextDocument.reviewedBy == null &&
+            nextDocument.diff(previousDocument).affectedKeys()
+              .hasAny(materialDocumentFields)
+          )
+        );
+    }
+
+    function driverDocumentReviewsAreClientSafe() {
+      return documentReviewIsClientSafe(
+        resource.data.keys().hasAny(["driversLicense"])
+          ? resource.data.driversLicense
+          : {},
+        request.resource.data.keys().hasAny(["driversLicense"])
+          ? request.resource.data.driversLicense
+          : {},
+        [
+          "frontDocumentUrl",
+          "backDocumentUrl",
+          "submissionVersion",
+          "issuingState",
+          "expirationDate",
+        ]
+      ) && documentReviewIsClientSafe(
+        resource.data.keys().hasAny(["vehicleInsurance"])
+          ? resource.data.vehicleInsurance
+          : {},
+        request.resource.data.keys().hasAny(["vehicleInsurance"])
+          ? request.resource.data.vehicleInsurance
+          : {},
+        [
+          "documentUrl",
+          "submissionVersion",
+          "provider",
+          "expirationDate",
+        ]
+      ) && documentReviewIsClientSafe(
+        resource.data.keys().hasAny(["vehicleRegistration"])
+          ? resource.data.vehicleRegistration
+          : {},
+        request.resource.data.keys().hasAny(["vehicleRegistration"])
+          ? request.resource.data.vehicleRegistration
+          : {},
+        [
+          "documentUrl",
+          "submissionVersion",
+          "expirationDate",
+        ]
+      );
+    }
+
+    /*
+    |-----------------------------------------------------------------------
+    | Driver Application Lifecycle
+    |-----------------------------------------------------------------------
+    |
+    | A driver may submit their own draft for review once. Only an
+    | administrator can approve, reject, suspend, or activate a driver.
+    |
+    */
+    function driverLifecycleIsClientSafe() {
+      let currentStatus = resource.data.keys().hasAny(["status"])
+        ? resource.data.status
+        : "draft";
+      let nextStatus = request.resource.data.keys().hasAny(["status"])
+        ? request.resource.data.status
+        : "draft";
+      let nextAvailabilityStatus = request.resource.data.keys().hasAny([
+        "availabilityStatus",
+      ])
+        ? request.resource.data.availabilityStatus
+        : "offline";
+
+      return (
+        nextStatus == currentStatus ||
+        (currentStatus == "draft" && nextStatus == "pending_review")
+      ) && nextAvailabilityStatus == "offline";
+    }
+
+    /* Store owners may submit a draft, while administrators own review state. */
+    function storeLifecycleIsClientSafe() {
+      let currentStatus = resource.data.keys().hasAny(["status"])
+        ? resource.data.status
+        : "draft";
+      let nextStatus = request.resource.data.keys().hasAny(["status"])
+        ? request.resource.data.status
+        : "draft";
+
+      return nextStatus == currentStatus ||
+        (currentStatus == "draft" && nextStatus == "pending_review");
+    }
+
+    /* Only an administrator may assign or change a usable delivery radius. */
+    function driverApprovedRadiusIsClientSafe() {
+      return (
+        !resource.data.keys().hasAny(["serviceArea"]) ||
+        !resource.data.serviceArea.keys().hasAny(["approvedRadiusMiles"])
+      )
+        ? (
+          !request.resource.data.keys().hasAny(["serviceArea"]) ||
+          !request.resource.data.serviceArea.keys().hasAny([
+            "approvedRadiusMiles",
+          ]) ||
+          request.resource.data.serviceArea.approvedRadiusMiles == null
+        )
+        : (
+          request.resource.data.keys().hasAny(["serviceArea"]) &&
+          request.resource.data.serviceArea.keys().hasAny([
+            "approvedRadiusMiles",
+          ]) &&
+          request.resource.data.serviceArea.approvedRadiusMiles ==
+            resource.data.serviceArea.approvedRadiusMiles
+        );
+    }
+
+    /*
+     * Store-upload review status is managed by the authenticated upload API
+     * and administrators. These checks prevent store owners from approving
+     * or altering review outcomes from the browser.
+     */
+    function storeUploadReviewsAreClientSafe() {
+      return documentReviewIsClientSafe(
+        resource.data.keys().hasAny(["owner"]) &&
+          resource.data.owner.keys().hasAny(["photoIdReview"])
+          ? resource.data.owner.photoIdReview
+          : {},
+        request.resource.data.keys().hasAny(["owner"]) &&
+          request.resource.data.owner.keys().hasAny(["photoIdReview"])
+          ? request.resource.data.owner.photoIdReview
+          : {},
+        ["photoIdUrl", "photoIdSubmissionVersion"]
+      ) && documentReviewIsClientSafe(
+        resource.data.keys().hasAny(["logoReview"])
+          ? resource.data.logoReview
+          : {},
+        request.resource.data.keys().hasAny(["logoReview"])
+          ? request.resource.data.logoReview
+          : {},
+        ["logoUrl", "logoSubmissionVersion"]
+      ) && documentReviewIsClientSafe(
+        resource.data.keys().hasAny(["bannerReview"])
+          ? resource.data.bannerReview
+          : {},
+        request.resource.data.keys().hasAny(["bannerReview"])
+          ? request.resource.data.bannerReview
+          : {},
+        ["bannerUrl", "bannerSubmissionVersion"]
+      ) && documentReviewIsClientSafe(
+        resource.data.keys().hasAny(["storeFrontReview"])
+          ? resource.data.storeFrontReview
+          : {},
+        request.resource.data.keys().hasAny(["storeFrontReview"])
+          ? request.resource.data.storeFrontReview
+          : {},
+        ["storeFrontUrl", "storeFrontSubmissionVersion"]
+      ) && documentReviewIsClientSafe(
+        resource.data.keys().hasAny(["storeInsideReview"])
+          ? resource.data.storeInsideReview
+          : {},
+        request.resource.data.keys().hasAny(["storeInsideReview"])
+          ? request.resource.data.storeInsideReview
+          : {},
+        ["storeInsideUrl", "storeInsideSubmissionVersion"]
+      );
+    }
+
+    function newStoreOwnerPhotoIdReviewIsPending() {
+      return request.resource.data.keys().hasAny(["owner"]) &&
+        request.resource.data.owner.keys().hasAny(["photoIdReview"]) &&
+        documentReviewIsClientSafe(
+          {},
+          request.resource.data.owner.photoIdReview,
+          ["photoIdUrl", "photoIdSubmissionVersion"]
+        );
+    }
+
     function ownsStore(storeId) {
       return isStoreOwnerAccount() &&
         get(
@@ -68,6 +311,23 @@ service cloud.firestore {
     }
 
     /*
+     * A customer may read the full order only after the Stripe webhook has
+     * atomically confirmed checkout and payment. Before that point, checkout
+     * listens to its restricted checkoutSessions document instead.
+     */
+    function isPaidConfirmedCustomerOrder(orderData) {
+      return isCustomerAccount() &&
+        isOrderCustomer(orderData) &&
+        orderData.keys().hasAll([
+          "checkoutStatus",
+          "payment",
+        ]) &&
+        orderData.checkoutStatus == "confirmed" &&
+        orderData.payment.keys().hasAll(["status"]) &&
+        orderData.payment.status == "paid";
+    }
+
+    /*
     |----------------------------------------------------------------------
     | User Account Data
     |----------------------------------------------------------------------
@@ -78,15 +338,10 @@ service cloud.firestore {
       allow list: if isAdmin();
 
       /*
-       * A new user can choose customer or store-owner registration, but no
-       * browser client can create an admin profile.
+       * Initial profiles are created only by the authenticated callable.
+       * This prevents a browser from assigning account lifecycle fields.
        */
-      allow create: if isSelf(userId) &&
-        request.resource.data.uid == request.auth.uid &&
-        request.resource.data.accountType in [
-          "customer",
-          "store_owner",
-        ];
+      allow create: if false;
 
       /*
        * Account type and UID are immutable from the client. This prevents a
@@ -98,7 +353,22 @@ service cloud.firestore {
           !resource.data.keys().hasAll(["uid"]) ||
           request.resource.data.uid == resource.data.uid
         ) &&
-        request.resource.data.accountType == resource.data.accountType;
+        request.resource.data.accountType == resource.data.accountType &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          "defaultAddress",
+          "displayName",
+          "driverId",
+          "email",
+          "language",
+          "onboardingCompleted",
+          "phone",
+          "profileImagePath",
+          "profileImageStatus",
+          "profileImageUrl",
+          "recentSearches",
+          "storeId",
+          "updatedAt",
+        ]);
 
       allow delete: if isSelf(userId) || isAdmin();
 
@@ -125,9 +395,23 @@ service cloud.firestore {
     }
 
     match /carts/{userId} {
-      allow read, delete: if isSelf(userId) || isAdmin();
-      allow create, update: if isSelf(userId) &&
+      /* Cart persistence is handled by the authenticated customer API. */
+      allow read, delete: if isCustomerAccount() && isSelf(userId);
+      allow create, update: if isCustomerAccount() &&
+        isSelf(userId) &&
         request.resource.data.userId == request.auth.uid;
+    }
+
+    /*
+     * Checkout sessions are short-lived, customer-owned payment state. They
+     * deliberately contain no card data or Stripe client secret. The browser
+     * may read only one of its own sessions; all writes remain server-only.
+     */
+    match /checkoutSessions/{sessionId} {
+      allow get: if isCustomerAccount() &&
+        resource.data.customerUid == request.auth.uid;
+
+      allow list, create, update, delete: if false;
     }
 
     match /notificationDevices/{deviceId} {
@@ -147,6 +431,62 @@ service cloud.firestore {
 
     /*
     |----------------------------------------------------------------------
+    | Driver Applications
+    |----------------------------------------------------------------------
+    |
+    | Driver identity, address, vehicle, and document data are private. A
+    | driver may update their own application but cannot approve themselves
+    | or replace the server-managed Stripe connection.
+    |
+    */
+    match /drivers/{driverId} {
+      allow get: if isSelf(driverId) || isAdmin();
+      allow list: if isAdmin();
+
+      allow create: if isDriverAccount() &&
+        isSelf(driverId) &&
+        request.resource.data.ownerUid == request.auth.uid &&
+        (
+          !request.resource.data.keys().hasAny(["isApproved"]) ||
+          request.resource.data.isApproved == false
+        );
+
+      allow update: if isAdmin() || (
+        isDriverAccount() &&
+        isSelf(driverId) &&
+        resource.data.ownerUid == request.auth.uid &&
+        request.resource.data.ownerUid == resource.data.ownerUid &&
+        request.resource.data.isApproved == resource.data.isApproved &&
+        driverLifecycleIsClientSafe() &&
+        driverDocumentReviewsAreClientSafe() &&
+        driverApprovedRadiusIsClientSafe() &&
+        (
+          (
+            !resource.data.keys().hasAny(["stripeAccountId"]) &&
+            !request.resource.data.keys().hasAny(["stripeAccountId"])
+          ) || (
+            resource.data.keys().hasAny(["stripeAccountId"]) &&
+            request.resource.data.keys().hasAny(["stripeAccountId"]) &&
+            request.resource.data.stripeAccountId == resource.data.stripeAccountId
+          )
+        ) &&
+        (
+          (
+            !resource.data.keys().hasAny(["stripeConnect"]) &&
+            !request.resource.data.keys().hasAny(["stripeConnect"])
+          ) || (
+            resource.data.keys().hasAny(["stripeConnect"]) &&
+            request.resource.data.keys().hasAny(["stripeConnect"]) &&
+            request.resource.data.stripeConnect == resource.data.stripeConnect
+          )
+        )
+      );
+
+      allow delete: if isAdmin();
+    }
+
+    /*
+    |----------------------------------------------------------------------
     | Marketplace Catalog
     |----------------------------------------------------------------------
     */
@@ -155,9 +495,53 @@ service cloud.firestore {
       allow read: if true;
 
       allow create: if isStoreOwnerAccount() &&
-        request.resource.data.ownerId == request.auth.uid;
+        request.resource.data.ownerId == request.auth.uid &&
+        newStoreOwnerPhotoIdReviewIsPending() &&
+        (
+          !request.resource.data.keys().hasAny(["isApproved"]) ||
+          request.resource.data.isApproved == false
+        ) &&
+        (
+          !request.resource.data.keys().hasAny(["isActive"]) ||
+          request.resource.data.isActive == false
+        ) &&
+        (
+          !request.resource.data.keys().hasAny(["status"]) ||
+          request.resource.data.status == "draft"
+        );
 
-      allow update, delete: if ownsStore(storeId) || isAdmin();
+      /*
+       * Store owners manage their profile, but only an administrator may
+       * approve a store or publish it to customers. Existing onboarding
+       * drafts may initialize absent lifecycle flags to false once.
+       */
+      allow update: if isAdmin() || (
+        ownsStore(storeId) &&
+        storeUploadReviewsAreClientSafe() &&
+        storeLifecycleIsClientSafe() &&
+        (
+          (
+            resource.data.keys().hasAny(["isApproved"]) &&
+            request.resource.data.keys().hasAny(["isApproved"]) &&
+            request.resource.data.isApproved == resource.data.isApproved
+          ) || (
+            !resource.data.keys().hasAny(["isApproved"]) &&
+            request.resource.data.isApproved == false
+          )
+        ) &&
+        (
+          (
+            resource.data.keys().hasAny(["isActive"]) &&
+            request.resource.data.keys().hasAny(["isActive"]) &&
+            request.resource.data.isActive == resource.data.isActive
+          ) || (
+            !resource.data.keys().hasAny(["isActive"]) &&
+            request.resource.data.isActive == false
+          )
+        )
+      );
+
+      allow delete: if ownsStore(storeId) || isAdmin();
     }
 
           match /products/{productId} {
@@ -207,7 +591,7 @@ service cloud.firestore {
 
     match /orders/{orderId} {
       allow read: if signedIn() && (
-        isOrderCustomer(resource.data) ||
+        isPaidConfirmedCustomerOrder(resource.data) ||
         ownsOrder(resource.data) ||
         isAdmin()
       );

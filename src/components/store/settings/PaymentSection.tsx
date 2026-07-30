@@ -648,27 +648,30 @@ export function PaymentSection({
               <p className="text-xs text-gray-500">
                 {status === "complete"
                   ? "You can accept customer orders and receive platform payouts."
-                  : "Complete Stripe onboarding to receive payouts from LIA."}
+                  : storeData.stripeAccountId
+                    ? "Review or update your Stripe payout information."
+                    : "Stripe setup is completed during store onboarding."}
               </p>
             </div>
 
-            <button
-              type="button"
-              onClick={handleConnectStripe}
-              disabled={
-                isConnecting ||
-                isRefreshingStatus
-              }
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {isConnecting ? (
-                <LoaderCircle className="h-4 w-4 animate-spin" />
-              ) : (
-                <CircleDollarSign className="h-4 w-4" />
-              )}
-
-              {buttonLabel}
-            </button>
+            {storeData.stripeAccountId ? (
+              <button
+                type="button"
+                onClick={handleConnectStripe}
+                disabled={isConnecting || isRefreshingStatus}
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isConnecting ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <CircleDollarSign className="h-4 w-4" />}
+                {buttonLabel}
+              </button>
+            ) : (
+              <a
+                href="/store/onboarding/stripe"
+                className="inline-flex items-center justify-center rounded-xl border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 transition hover:bg-blue-100"
+              >
+                View onboarding
+              </a>
+            )}
           </div>
         </div>
       </div>

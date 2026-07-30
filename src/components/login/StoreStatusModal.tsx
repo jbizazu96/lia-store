@@ -4,7 +4,7 @@
   Store status modal.
 
   Shows different messages based on store status:
-  - Active: Redirect to premium dashboard
+  - Approved: Redirect to the private store dashboard
   - Pending: Show pending review message
   - None: Show welcome message with create button
 */
@@ -14,11 +14,10 @@ import {X, Store, Clock, CheckCircle, ArrowRight, Sparkles} from "lucide-react";
 
 interface StoreStatusModalProps {
   isOpen: boolean;
-  status: "active" | "pending" | "none";
+  status: "approved" | "pending" | "none";
   storeName?: string;
   onClose: () => void;
   onCreateStore: () => void;
-  onGoHome: () => void;
   onGoToDashboard: () => void;
 }
 
@@ -28,7 +27,6 @@ export function StoreStatusModal({
   storeName = "Your Store",
   onClose,
   onCreateStore,
-  onGoHome,
   onGoToDashboard,
 }: StoreStatusModalProps) {
   if (!isOpen) return null;
@@ -59,12 +57,6 @@ export function StoreStatusModal({
             Create Your Store <ArrowRight className="w-4 h-4" />
           </button>
 
-          <button
-            onClick={onGoHome}
-            className="w-full mt-3 py-3 border border-gray-200 text-gray-600 rounded-xl font-medium hover:bg-gray-50 transition"
-          >
-            Browse as Customer
-          </button>
         </>
       );
     }
@@ -86,7 +78,8 @@ export function StoreStatusModal({
           <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 mb-6">
             <p className="text-yellow-800 text-sm text-center">
               Your store is currently being reviewed by the LIA team.
-              We'll notify you via email once your store is approved and active.
+              We'll notify you when your store is approved. Once approved, you can
+              start adding products; LIA will activate it for customers separately.
             </p>
             <p className="text-yellow-600 text-xs text-center mt-2">
               This usually takes 24-48 hours.
@@ -103,7 +96,7 @@ export function StoreStatusModal({
       );
     }
 
-    // Store is active - go to premium dashboard
+    // Store is approved - go to the private dashboard.
     return (
       <>
         <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -111,10 +104,10 @@ export function StoreStatusModal({
         </div>
 
         <h2 className="text-2xl font-bold text-center text-gray-800 mb-2">
-          Store is Active! 🚀
+          Store Approved! 🚀
         </h2>
         <p className="text-center text-gray-600 mb-6">
-          Your store <span className="font-semibold">{storeName}</span> is live on LIA!
+          Your store <span className="font-semibold">{storeName}</span> is ready for you to manage.
         </p>
 
         <button

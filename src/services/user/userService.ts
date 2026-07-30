@@ -61,6 +61,18 @@ function toUserLocation(
   return { lat: latitude, lng: longitude };
 }
 
+/* A saved address must include a street value before login can skip setup. */
+function hasSavedDeliveryAddress(
+  address: unknown
+): boolean {
+  return Boolean(
+    address &&
+    typeof address === "object" &&
+    typeof (address as { street?: unknown }).street === "string" &&
+    (address as { street: string }).street.trim()
+  );
+}
+
 /*
 |--------------------------------------------------------------------------
 | User Service
@@ -68,6 +80,29 @@ function toUserLocation(
 */
 
 export const userService = {
+  /**
+   * Checks the canonical user document and addresses subcollection used by
+   * profile, checkout, and customer login.
+   */
+  async hasDefaultDeliveryAddress(userId: string): Promise<boolean> {
+    const userSnapshot = await getDoc(doc(db, "users", userId));
+
+    if (
+      userSnapshot.exists() &&
+      hasSavedDeliveryAddress(userSnapshot.data().defaultAddress)
+    ) {
+      return true;
+    }
+
+    const addressSnapshots = await getDocs(
+      collection(db, "users", userId, "addresses")
+    );
+
+    return addressSnapshots.docs.some((address) =>
+      hasSavedDeliveryAddress(address.data())
+    );
+  },
+
   /*
   |--------------------------------------------------------------------------
   | Get Default Location
@@ -121,14 +156,7 @@ export const userService = {
       return subcollectionLocation;
     }
 
-    // Preserve compatibility with the original login-address document.
-    const legacyAddressSnapshot = await getDoc(
-      doc(db, "addresses", userId)
-    );
-
-    return legacyAddressSnapshot.exists()
-      ? toUserLocation(legacyAddressSnapshot.data())
-      : null;
+    return null;
   },
 
   

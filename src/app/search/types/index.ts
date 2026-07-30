@@ -43,7 +43,6 @@ export interface StoreData {
   deliveryFee: number;
   estimatedPrepTime: number;
   isOpen: boolean;
-  status: string;
 }
 
 export interface StoreGroup {

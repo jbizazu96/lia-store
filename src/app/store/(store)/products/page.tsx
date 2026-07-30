@@ -113,7 +113,7 @@ export default function ProductsPage() {
     }
 
     if (needsStoreSetup) {
-      router.replace("/store/create");
+      router.replace("/store/onboarding/owner");
     }
   }, [
     loading,

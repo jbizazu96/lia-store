@@ -125,7 +125,7 @@ export default function StoreOrdersPage() {
     }
 
     if (needsStoreSetup) {
-      router.replace("/store/create");
+      router.replace("/store/onboarding/owner");
     }
   }, [
     loading,

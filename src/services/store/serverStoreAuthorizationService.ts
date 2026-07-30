@@ -103,12 +103,7 @@ export interface AuthorizedStripeStore {
   /* Stripe API generation associated with stripeAccountId. */
   stripeConnectApiVersion?: string;
 
-  /*
-    Original ISO timestamp for when the store first connected Stripe.
-
-    This value must remain stable during later account-status
-    synchronizations.
-  */
+  /* ISO representation of Firestore's original connection timestamp. */
   stripeConnectedAt?: string;
 }
 
@@ -134,6 +129,32 @@ function getRequiredString(
   }
 
   return value.trim();
+}
+
+function getOptionalTimestampAsIso(
+  data: DocumentData,
+  fieldName: string
+): string | undefined {
+  const value = data[fieldName];
+
+  if (typeof value === "string" && value.trim()) {
+    return value.trim();
+  }
+
+  if (
+    value &&
+    typeof value === "object" &&
+    "toDate" in value &&
+    typeof value.toDate === "function"
+  ) {
+    const date = value.toDate();
+
+    return date instanceof Date && !Number.isNaN(date.getTime())
+      ? date.toISOString()
+      : undefined;
+  }
+
+  return undefined;
 }
 
 
@@ -285,7 +306,7 @@ async function requireOwnedStore(
         Preserve the original connection timestamp during later Stripe
         account refreshes.
       */
-      stripeConnectedAt: getOptionalString(
+      stripeConnectedAt: getOptionalTimestampAsIso(
         storeData,
         "stripeConnectedAt"
       ),

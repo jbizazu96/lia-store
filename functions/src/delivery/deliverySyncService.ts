@@ -176,7 +176,13 @@ export class DeliverySyncService {
       }
     );
 
-    const snapshot =
+    /*
+      Query the store's orders first, then select active Shipday deliveries
+      in memory. This avoids requiring a composite index for a best-effort
+      synchronization task and keeps one malformed legacy delivery from
+      blocking the store orders page.
+    */
+    const storeOrdersSnapshot =
       await this.db
         .collection("orders")
         .where(
@@ -184,24 +190,40 @@ export class DeliverySyncService {
           "==",
           storeId
         )
-        .where(
-          "shipday.active",
-          "==",
-          true
-        )
         .get();
 
+    const activeDeliveryDocuments =
+      storeOrdersSnapshot.docs.filter(
+        (document) =>
+          document.data().shipday?.active === true
+      );
+
     console.log(
-      `Found ${snapshot.size} active store deliveries.`
+      `Found ${activeDeliveryDocuments.length} active store deliveries.`
     );
 
     for (
       const document of
-      snapshot.docs
+      activeDeliveryDocuments
     ) {
-      await this.syncOrder(
-        document.id
-      );
+      try {
+        await this.syncOrder(
+          document.id
+        );
+      } catch (error) {
+        /*
+          Shipday synchronization is informational at page-load time. The
+          store must still be able to open and manage every confirmed order
+          when one provider record is unavailable or malformed.
+        */
+        console.error(
+          "Unable to synchronize store delivery; continuing with remaining orders.",
+          {
+            orderId: document.id,
+            error,
+          }
+        );
+      }
     }
 
     console.log(

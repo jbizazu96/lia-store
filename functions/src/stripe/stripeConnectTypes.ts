@@ -113,9 +113,12 @@ export interface StripeAccountRequirements {
 */
 export interface StripeConnectAccount {
   /*
-    Firestore store document ID.
+    Resource type that owns this connected account.
   */
-  storeId: string;
+  ownerType: "store" | "driver";
+
+  /* Firestore stores/{id} or drivers/{id} document ID. */
+  ownerId: string;
 
   /*
     Stripe Accounts v2 connected-account ID.

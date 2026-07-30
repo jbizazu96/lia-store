@@ -34,6 +34,10 @@ import {
   getFirestore,
   type Firestore,
 } from "firebase-admin/firestore";
+import {
+  getStorage,
+  type Storage,
+} from "firebase-admin/storage";
 
 
 /*
@@ -167,4 +171,15 @@ export function getFirebaseAdminFirestore(): Firestore {
     getFirebaseAdminApp(),
     firestoreDatabaseId
   );
+}
+
+
+/*
+  Return Firebase Admin Storage for trusted server-side uploads.
+
+  Server uploads are used for private onboarding images after the API
+  route verifies that the authenticated user owns the target store.
+*/
+export function getFirebaseAdminStorage(): Storage {
+  return getStorage(getFirebaseAdminApp());
 }

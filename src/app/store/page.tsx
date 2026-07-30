@@ -39,20 +39,23 @@ function StorePageContent() {
         if (!snapshot.empty) {
           const storeData = snapshot.docs[0].data();
           
-          // If store is active, go to dashboard
-          if (storeData.status === "active") {
-            router.replace("/store/dashboard");
+          if (storeData.onboardingCompleted === true) {
+            const isApproved = storeData.isApproved === true;
+
+            router.replace(
+              isApproved
+                ? "/store/dashboard"
+                : "/store/pending-approval"
+            );
           } else {
-            // Store is pending or other status
-            router.replace("/store/dashboard");
+            router.replace(`/store/onboarding/${storeData.onboardingStep || "owner"}`);
           }
         } else {
-          // No store - redirect to create page
-          router.replace("/store/create");
+          router.replace("/store/onboarding/owner");
         }
       } catch (error) {
         console.error("Error checking store:", error);
-        router.push("/store/create");
+        router.push("/store/onboarding/owner");
       }
     }
 

@@ -1,13 +1,8 @@
 "use client";
 
-import {
-  getStorage,
-  ref,
-  uploadBytesResumable,
-  type UploadMetadata,
-} from "firebase/storage";
+import { auth } from "@/lib/firebase";
 
-export type StoreImageField = "logo" | "banner";
+export type StoreImageField = "logo" | "banner" | "owner-photo-id" | "front" | "inside";
 
 interface UploadStoreImageParams {
   storeId: string;
@@ -15,13 +10,12 @@ interface UploadStoreImageParams {
   file: File;
 }
 
-function createImageId(): string {
-  return `${Date.now()}-${crypto.randomUUID()}`;
-}
-
 /**
- * Uploads a customer-facing store image for the background resize Function.
- * The Function updates the store document only after its WebP is ready.
+ * Upload an original store image through the authenticated server route.
+ *
+ * The route verifies that the current user owns the store and writes with
+ * Firebase Admin. The background processStoreImage Function then generates
+ * the optimized image and updates the store document.
  */
 export const storeImageService = {
   async uploadOriginalImage({
@@ -41,29 +35,31 @@ export const storeImageService = {
       throw new Error("The image must be between 1 byte and 10 MB.");
     }
 
-    const imageId = createImageId();
-    const extension = file.name.split(".").pop()?.toLowerCase() || "image";
-    const originalPath =
-      `stores/${storeId}/images/originals/${field}/` +
-      `${imageId}.${extension}`;
+    const user = auth.currentUser;
 
-    const metadata: UploadMetadata = {
-      contentType: file.type,
-      cacheControl: "private, max-age=0, no-cache",
-      customMetadata: {
-        storeId,
-        imageId,
-        imageField: field,
-        processingType: "store-image-original",
+    if (!user) {
+      throw new Error("Sign in again before uploading an image.");
+    }
+
+    const formData = new FormData();
+    formData.set("storeId", storeId);
+    formData.set("field", field);
+    formData.set("file", file);
+
+    const response = await fetch("/api/store/images/original", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${await user.getIdToken()}`,
       },
-    };
-
-    await new Promise<void>((resolve, reject) => {
-      uploadBytesResumable(
-        ref(getStorage(), originalPath),
-        file,
-        metadata
-      ).on("state_changed", undefined, reject, resolve);
+      body: formData,
     });
+
+    const payload = await response
+      .json()
+      .catch(() => ({ error: "The image could not be uploaded." }));
+
+    if (!response.ok) {
+      throw new Error(payload.error ?? "The image could not be uploaded.");
+    }
   },
 };

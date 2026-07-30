@@ -1,6 +1,6 @@
 /*
 |--------------------------------------------------------------------------
-| Customer Product Display
+| Customer Product and Store Display
 |--------------------------------------------------------------------------
 |
 | Shared product text and price formatting for the store, cart, and checkout.
@@ -22,6 +22,17 @@ export function formatProductName(
       /\b\p{L}/gu,
       (letter) => letter.toUpperCase()
     );
+}
+
+/* Store names use sentence case: one leading uppercase character only. */
+export function formatStoreName(
+  name: string
+): string {
+  const normalized = name.trim().toLocaleLowerCase();
+
+  return normalized
+    ? normalized.charAt(0).toLocaleUpperCase() + normalized.slice(1)
+    : "";
 }
 
 export function formatProductPrice(

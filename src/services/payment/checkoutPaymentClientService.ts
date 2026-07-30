@@ -85,6 +85,8 @@ interface PrepareCheckoutPaymentCallableResponse {
 
   orderId: string;
 
+  checkoutSessionId: string;
+
   orderNumber: string;
 
   paymentIntentId: string;
@@ -164,6 +166,7 @@ function validateResponse(
   if (
       value.success !== true ||
       !value.orderId?.trim() ||
+      !value.checkoutSessionId?.trim() ||
       !value.orderNumber?.trim() ||
       !value.paymentIntentId?.trim() ||
       !value.clientSecret?.trim() ||
@@ -242,6 +245,9 @@ async function prepareCheckoutPayment(
   return {
     orderId:
       response.data.orderId,
+
+    checkoutSessionId:
+      response.data.checkoutSessionId,
 
     orderNumber:
       response.data.orderNumber,

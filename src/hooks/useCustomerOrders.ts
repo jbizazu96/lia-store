@@ -123,6 +123,23 @@ UseCustomerOrdersResult {
                 "==",
                 user.uid
               ),
+
+              /*
+               * Match the Firestore visibility rule. This prevents the
+               * query from requesting payment-pending order documents.
+               */
+              where(
+                "checkoutStatus",
+                "==",
+                "confirmed"
+              ),
+
+              where(
+                "payment.status",
+                "==",
+                "paid"
+              ),
+
               orderBy(
                 "createdAt",
                 "desc"

@@ -97,7 +97,7 @@ export default function DashboardPage() {
 
     if (needsStoreSetup) {
       router.replace(
-        "/store/create"
+        "/store/onboarding/owner"
       );
     }
   }, [

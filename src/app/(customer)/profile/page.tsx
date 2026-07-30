@@ -7,9 +7,12 @@ import {useState, useEffect} from "react";
 import {useRouter} from "next/navigation";
 import {motion, AnimatePresence} from "framer-motion";
 import {onAuthStateChanged} from "firebase/auth";
-import {doc, getDoc} from "firebase/firestore";
-import {auth, db} from "@/lib/firebase";
+import {auth} from "@/lib/firebase";
 import {ArrowLeft, User, MapPin, Globe, FileText, Shield, LogOut, Trash2} from "lucide-react";
+import {
+  customerProfileClientService,
+  type CustomerProfile,
+} from "@/services/user/customerProfileClientService";
 
 /*
   Components.
@@ -27,8 +30,10 @@ import { BrandedLoader } from "@/components/ui/BrandedLoader";
 export default function ProfilePage() {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
-  const [userData, setUserData] = useState<any>(null);
+  const [userData, setUserData] = useState<CustomerProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [uploadingProfileImage, setUploadingProfileImage] = useState(false);
+  const [profileImagePreview, setProfileImagePreview] = useState("");
 
   /*
     Modal states.
@@ -53,10 +58,7 @@ export default function ProfilePage() {
       setUser(currentUser);
       
       try {
-        const userDoc = await getDoc(doc(db, "users", currentUser.uid));
-        if (userDoc.exists()) {
-          setUserData(userDoc.data());
-        }
+        setUserData(await customerProfileClientService.getProfile());
       } catch (error) {
         console.error("Error fetching user data:", error);
       } finally {
@@ -66,6 +68,33 @@ export default function ProfilePage() {
 
     return () => unsubscribe();
   }, [router]);
+
+  async function handleProfileImageUpload(file: File) {
+    const previewUrl = URL.createObjectURL(file);
+
+    try {
+      setUploadingProfileImage(true);
+      setProfileImagePreview(previewUrl);
+      await customerProfileClientService.uploadProfileImage(file);
+
+      /* The Function writes the optimized URL asynchronously after resize. */
+      for (let attempt = 0; attempt < 12; attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+        const updatedProfile = await customerProfileClientService.getProfile();
+
+        if (updatedProfile.profileImageStatus === "ready") {
+          setUserData(updatedProfile);
+          setProfileImagePreview("");
+          return;
+        }
+      }
+    } catch (error) {
+      console.error("Unable to upload profile image:", error);
+      setProfileImagePreview("");
+    } finally {
+      setUploadingProfileImage(false);
+    }
+  }
 
   /*
     Menu items configuration.
@@ -107,8 +136,7 @@ export default function ProfilePage() {
     return <BrandedLoader message="Loading Profile" />;
   }
 
-  const profileData = {
-    ...userData,
+  const profileData: CustomerProfile = {
     displayName:
       userData?.displayName ||
       user?.displayName ||
@@ -116,10 +144,14 @@ export default function ProfilePage() {
       "User",
     email: userData?.email || user?.email || "",
     phone: userData?.phone || user?.phoneNumber || "",
+    language: userData?.language || "English",
+    profileImageUrl: userData?.profileImageUrl || "",
+    profileImageStatus: userData?.profileImageStatus || "idle",
+    defaultAddress: userData?.defaultAddress || null,
   };
 
   return (
-    <main className="min-h-screen bg-gray-50">
+    <main className="min-h-screen bg-white">
       {/* Header with Back Button */}
       <div className="bg-white border-b border-gray-100 sticky top-0 z-20">
         <div className="flex items-center gap-3 px-4 py-4 max-w-lg mx-auto">
@@ -139,6 +171,9 @@ export default function ProfilePage() {
         <ProfileHeader 
           displayName={profileData.displayName}
           email={profileData.email}
+          profileImageUrl={profileImagePreview || profileData.profileImageUrl}
+          isUploadingImage={uploadingProfileImage}
+          onSelectProfileImage={handleProfileImageUpload}
         />
 
         {/* Menu Items */}
@@ -182,7 +217,7 @@ export default function ProfilePage() {
           <EditProfileModal
             userData={profileData}
             onClose={() => setShowEditProfile(false)}
-            onUpdate={(data) => setUserData({...userData, ...data})}
+            onUpdate={setUserData}
           />
         )}
       </AnimatePresence>
@@ -190,7 +225,6 @@ export default function ProfilePage() {
       <AnimatePresence>
         {showAddresses && (
           <AddressesModal
-            userId={user?.uid}
             onClose={() => setShowAddresses(false)}
           />
         )}
@@ -201,8 +235,13 @@ export default function ProfilePage() {
           <LanguageModal
             currentLanguage={profileData.language || "English"}
             onClose={() => setShowLanguage(false)}
-            onSelect={(lang) => {
-              setUserData({...userData, language: lang});
+            onSelect={async (lang) => {
+              const updatedProfile = await customerProfileClientService.updateProfile({
+                displayName: profileData.displayName,
+                phone: profileData.phone,
+                language: lang,
+              });
+              setUserData(updatedProfile);
             }}
           />
         )}

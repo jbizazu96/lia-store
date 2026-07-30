@@ -5,8 +5,10 @@ import {motion} from "framer-motion";
 import {X, Trash2} from "lucide-react";
 import {useRouter} from "next/navigation";
 import {deleteUser, reauthenticateWithCredential, EmailAuthProvider} from "firebase/auth";
-import {deleteDoc, doc} from "firebase/firestore";
-import {auth, db} from "@/lib/firebase";
+import {auth} from "@/lib/firebase";
+import {
+  customerProfileClientService,
+} from "@/services/user/customerProfileClientService";
 
 interface DeleteAccountModalProps {
   onClose: () => void;
@@ -32,7 +34,8 @@ export function DeleteAccountModal({onClose}: DeleteAccountModalProps) {
       const credential = EmailAuthProvider.credential(user.email, password);
       await reauthenticateWithCredential(user, credential);
 
-      await deleteDoc(doc(db, "users", user.uid));
+      /* Server-side cleanup deletes only data owned by this verified user. */
+      await customerProfileClientService.deleteProfileData();
       await deleteUser(user);
 
       router.push("/");

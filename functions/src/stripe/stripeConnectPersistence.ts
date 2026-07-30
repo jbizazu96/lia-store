@@ -22,6 +22,7 @@
 
 import {
   getFirestore,
+  Timestamp,
   type DocumentData,
   type Transaction,
 } from "firebase-admin/firestore";
@@ -60,6 +61,8 @@ const db = getFirestore("default");
 export type StripeWebhookPersistenceErrorCode =
   | "INVALID_STORE_ID"
   | "STORE_NOT_FOUND"
+  | "INVALID_DRIVER_ID"
+  | "DRIVER_NOT_FOUND"
   | "STRIPE_ACCOUNT_MISMATCH"
   | "STRIPE_API_VERSION_MISMATCH";
 
@@ -100,6 +103,20 @@ function getOptionalString(
   return normalized.length > 0
     ? normalized
     : undefined;
+}
+
+/* The mapper uses ISO strings internally; Firestore persists native timestamps. */
+function timestampFromIso(value: string, fieldName: string): Timestamp {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    throw new StripeWebhookPersistenceError(
+      "STRIPE_API_VERSION_MISMATCH",
+      `Stripe returned an invalid ${fieldName} timestamp.`
+    );
+  }
+
+  return Timestamp.fromDate(date);
 }
 
 
@@ -187,7 +204,14 @@ async function saveStoreStripeStatus(
   stripeAccount: StripeConnectAccount
 ): Promise<void> {
   const storeId =
-    stripeAccount.storeId.trim();
+    stripeAccount.ownerId.trim();
+
+  if (stripeAccount.ownerType !== "store") {
+    throw new StripeWebhookPersistenceError(
+      "INVALID_STORE_ID",
+      "The Stripe account is not owned by a store."
+    );
+  }
 
   if (!storeId) {
     throw new StripeWebhookPersistenceError(
@@ -245,10 +269,82 @@ async function saveStoreStripeStatus(
           This changes every time the account is synchronized.
         */
         stripeUpdatedAt:
-          stripeAccount.updatedAt,
+          timestampFromIso(stripeAccount.updatedAt, "update"),
       });
     }
   );
+}
+
+/*
+  Save the latest Stripe state for a driver recipient account. Driver
+  documents use the same Accounts v2 readiness fields, plus the compact
+  stripeConnect object used by the driver onboarding flow.
+*/
+async function saveDriverStripeStatus(
+  stripeAccount: StripeConnectAccount
+): Promise<void> {
+  if (stripeAccount.ownerType !== "driver") {
+    throw new StripeWebhookPersistenceError(
+      "INVALID_DRIVER_ID",
+      "The Stripe account is not owned by a driver."
+    );
+  }
+
+  const driverId = stripeAccount.ownerId.trim();
+
+  if (!driverId) {
+    throw new StripeWebhookPersistenceError(
+      "INVALID_DRIVER_ID",
+      "Stripe account metadata does not contain a valid LIA driver ID."
+    );
+  }
+
+  const driverReference = db.collection("drivers").doc(driverId);
+
+  await db.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(driverReference);
+    const driver = snapshot.data();
+
+    if (!snapshot.exists || !driver) {
+      throw new StripeWebhookPersistenceError(
+        "DRIVER_NOT_FOUND",
+        "The Stripe account references a driver that does not exist."
+      );
+    }
+
+    const existingAccountId = getOptionalString(driver, "stripeAccountId");
+
+    if (!existingAccountId || existingAccountId !== stripeAccount.accountId) {
+      throw new StripeWebhookPersistenceError(
+        "STRIPE_ACCOUNT_MISMATCH",
+        "The driver does not reference the Stripe account from this event."
+      );
+    }
+
+    if (getOptionalString(driver, "stripeConnectApiVersion") !== "v2") {
+      throw new StripeWebhookPersistenceError(
+        "STRIPE_API_VERSION_MISMATCH",
+        "The driver is not configured as a Stripe Accounts v2 record."
+      );
+    }
+
+    transaction.update(driverReference, {
+      stripeConnectApiVersion: "v2",
+      stripeConnect: {
+        status: stripeAccount.onboardingStatus,
+        transfersEnabled: stripeAccount.transfersEnabled,
+        payoutsEnabled: stripeAccount.payoutsEnabled,
+      },
+      stripeAccountStatus: stripeAccount.onboardingStatus,
+      stripeChargesEnabled: stripeAccount.chargesEnabled,
+      stripeTransfersEnabled: stripeAccount.transfersEnabled,
+      stripePayoutsEnabled: stripeAccount.payoutsEnabled,
+      stripeDetailsSubmitted: stripeAccount.detailsSubmitted,
+      stripeRequiresAction: stripeAccount.onboardingStatus === "action_required" || stripeAccount.onboardingStatus === "restricted",
+      stripeIsReady: stripeAccount.onboardingStatus === "complete",
+      stripeUpdatedAt: timestampFromIso(stripeAccount.updatedAt, "update"),
+    });
+  });
 }
 
 
@@ -270,4 +366,5 @@ export function isStripeWebhookPersistenceError(
 */
 export const stripeConnectPersistence = {
   saveStoreStripeStatus,
+  saveDriverStripeStatus,
 };

@@ -33,6 +33,7 @@ import { productImageSelector } from "@/services/product/productImageSelector";
 import { productService } from "@/services/product/productService";
 import { promotionService } from "@/services/promotion/promotionService";
 import { storeService } from "@/services/store/storeService";
+import { isStoreCustomerVisible } from "@/services/store/storeAvailability";
 import { formatProductName } from "@/utils/productDisplay";
 
 import type {
@@ -152,6 +153,11 @@ export default function ProductPage({ params }: ProductPageProps) {
 
         if (!active) return;
 
+        if (!storeData || !isStoreCustomerVisible(storeData)) {
+          setError("This store is not currently available.");
+          return;
+        }
+
         setProduct(productData);
         setStore(storeData);
         setGalleryImages(imageData);
@@ -247,6 +253,7 @@ export default function ProductPage({ params }: ProductPageProps) {
       storePhone: store.phone,
       storeLatitude: store.latitude,
       storeLongitude: store.longitude,
+      stock: target.stock,
       size: target.size ?? undefined,
     });
   };

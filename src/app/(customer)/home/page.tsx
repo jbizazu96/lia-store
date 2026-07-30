@@ -10,9 +10,11 @@ import {
 } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import type { CustomerStore } from "@/types/view-models/customerStore";
+import type { Store } from "@/types/store";
 import { DELIVERY_CONFIG } from "@/config/delivery";
 import { storeMapper } from "@/mappers/storeMapper";
 import { storeService } from "@/services/store/storeService";
+import { isStoreCustomerVisible } from "@/services/store/storeAvailability";
 import {
   calculateDeliveryFee,
   getDeliveryFeeDisplay,
@@ -94,9 +96,12 @@ export default function CustomerHomePage() {
     return () => unsubscribe();
   }, [router]);
 
-  // Fetch stores
+  // Keep customer store discovery synchronized with newly activated stores.
   useEffect(() => {
-    const fetchStores = async () => {
+    let isMounted = true;
+    let latestRequest = 0;
+
+    const updateStores = async (storesData: Store[]) => {
       if (!locationReady) {
         return;
       }
@@ -112,11 +117,11 @@ export default function CustomerHomePage() {
       try {
         setLoading(true);
         setDistanceError(null);
-        const storesData = await storeService.getStores();
+        const requestId = ++latestRequest;
 
         const storesWithCoordinates =
           storesData.filter((store) =>
-            store.status === "active" &&
+            isStoreCustomerVisible(store) &&
             hasValidRouteCoordinates({
               latitude: store.latitude,
               longitude: store.longitude,
@@ -135,6 +140,10 @@ export default function CustomerHomePage() {
                 }
               )
             : [];
+
+        if (!isMounted || requestId !== latestRequest) {
+          return;
+        }
 
         const routeByStoreId = new Map(
           routes.map((route) => [
@@ -172,7 +181,13 @@ export default function CustomerHomePage() {
           (store): store is CustomerStore => store !== null
         );
 
-        if (storesWithDistance.length !== storesData.length) {
+        /*
+          Only compare routes against the stores actually submitted to
+          Google Routes. Pending, suspended, inactive, or ungeocoded stores
+          are intentionally excluded before the request and must not trigger
+          a misleading delivery-distance warning.
+        */
+        if (storesWithDistance.length !== storesWithCoordinates.length) {
           setDistanceError(
             "Some stores could not be shown because their delivery distance could not be calculated."
           );
@@ -181,9 +196,9 @@ export default function CustomerHomePage() {
         // Sort by distance (closest first)
         storesWithDistance.sort((a, b) => a.distance - b.distance);
         
-        // Filter only active stores
+        // Closed stores remain visible; their card displays the current schedule.
         const activeStores = storesWithDistance.filter(store => 
-          store.status === "active" && store.isOpen
+          isStoreCustomerVisible(store)
         );
         
         // Split stores into nearby (≤25mi) and far (>25mi)
@@ -197,17 +212,43 @@ export default function CustomerHomePage() {
             store.distance > DELIVERY_CONFIG.MAX_RADIUS_MILES
         );
         
-        setNearbyStores(nearby);
-        setFarStores(far);
-        setFilteredNearby(nearby);
+        if (isMounted && requestId === latestRequest) {
+          setNearbyStores(nearby);
+          setFarStores(far);
+          setFilteredNearby(nearby);
+        }
       } catch (error) {
         console.error("Error fetching stores:", error);
       } finally {
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     };
 
-    fetchStores();
+    if (!locationReady || !userLocation) {
+      void updateStores([]);
+      return () => {
+        isMounted = false;
+      };
+    }
+
+    const unsubscribe = storeService.listenToStores(
+      (stores) => {
+        void updateStores(stores);
+      },
+      (error) => {
+        console.error("Error listening to stores:", error);
+        if (isMounted) {
+          setLoading(false);
+        }
+      }
+    );
+
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
   }, [locationReady, userLocation]);
 
   // Handle search

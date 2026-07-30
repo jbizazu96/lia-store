@@ -251,6 +251,7 @@ export default function CartPage() {
                         alt={productName}
                         fill
                         className="object-contain p-1"
+                        sizes="80px"
                       />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center">
@@ -325,8 +326,18 @@ export default function CartPage() {
                         </span>
                         <button
                           onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                          className="w-7 h-7 rounded-full bg-orange-500 text-white flex items-center justify-center hover:bg-orange-600 transition"
+                          disabled={
+                            typeof item.stock === "number" &&
+                            item.quantity >= item.stock
+                          }
+                          className="w-7 h-7 rounded-full bg-orange-500 text-white flex items-center justify-center hover:bg-orange-600 transition disabled:cursor-not-allowed disabled:bg-gray-300"
                           aria-label={`Increase ${productName} quantity`}
+                          title={
+                            typeof item.stock === "number" &&
+                            item.quantity >= item.stock
+                              ? "Maximum available quantity reached"
+                              : undefined
+                          }
                         >
                           <Plus className="w-3.5 h-3.5" />
                         </button>

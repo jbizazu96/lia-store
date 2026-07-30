@@ -1,282 +1,99 @@
 /*
 |--------------------------------------------------------------------------
-| Cart Service
+| Customer Cart Client Service
 |--------------------------------------------------------------------------
 |
-| Responsible for:
-|
-| • Saving the signed-in customer's cart
-| • Loading the signed-in customer's cart
-| • Clearing the signed-in customer's cart
-| • Refreshing the cart's 48-hour expiration time
-| • Defensively deleting an expired cart when it is loaded
-|
-| Global expired-cart cleanup is handled by the scheduled
-| Firebase Cloud Function.
+| Cart UI uses this client service only. The authenticated API route owns all
+| Firestore reads, writes, expiry management, and customer-role checks.
 |
 */
 
 import {
-  deleteDoc,
-  doc,
-  getDoc,
-  serverTimestamp,
-  setDoc,
-  Timestamp,
-} from "firebase/firestore";
+  auth,
+} from "@/lib/firebase";
 
-import { db } from "@/lib/firebase";
+import type {
+  CartItem,
+} from "@/types/cart";
 
-/**
- * Number of hours a saved cart remains available after its latest update.
- */
-const CART_EXPIRY_HOURS = 48;
+export type {
+  CartItem,
+} from "@/types/cart";
 
-/**
- * One product stored in the customer's cart.
- */
-export interface CartItem {
-  id: string;
+async function authorizedRequest(
+  path: string,
+  init: RequestInit = {}
+): Promise<Response> {
+  const user = auth.currentUser;
 
-  name: string;
+  if (!user) {
+    throw new Error("Sign in again before managing your cart.");
+  }
 
-  price: number;
+  const headers = new Headers(init.headers);
+  headers.set("Authorization", `Bearer ${await user.getIdToken()}`);
 
-  /**
-   * Regular unit price before an active product discount is applied.
-   *
-   * Omitted when the item is not discounted.
-   */
-  originalPrice?: number;
-
-  imageUrl?: string;
-
-  quantity: number;
-
-  storeId: string;
-
-  storeName: string;
-
-  storeAddress?: string;
-
-  storePhone?: string;
-
-  storeLatitude?: number;
-
-  storeLongitude?: number;
-
-  size?: {
-    value: number;
-    unit: string;
-  };
+  return fetch(path, {
+    ...init,
+    headers,
+  });
 }
 
-/**
- * Cart document as it exists after being read from Firestore.
- */
-interface CartDocumentData {
-  userId: string;
+async function requestJson<T>(
+  path: string,
+  init?: RequestInit
+): Promise<T> {
+  const response = await authorizedRequest(path, init);
+  const payload = await response.json().catch(() => ({})) as {
+    error?: string;
+  } & T;
 
-  items: CartItem[];
+  if (!response.ok) {
+    throw new Error(payload.error ?? "The cart request could not be completed.");
+  }
 
-  updatedAt?: Timestamp;
-
-  /**
-   * Cart expiration time.
-   *
-   * Every cart update extends this by another 48 hours.
-   */
-  expiresAt?: Timestamp;
+  return payload;
 }
 
-/**
- * Build the expiration timestamp for a newly saved cart.
- */
-function createCartExpiration(): Timestamp {
-  const expirationDate = new Date(
-    Date.now() +
-      CART_EXPIRY_HOURS *
-        60 *
-        60 *
-        1000
-  );
-
-  return Timestamp.fromDate(
-    expirationDate
-  );
-}
-
-/**
- * Validate that a cart belongs to the user requesting it.
- *
- * The document ID already uses the user's UID, but this additional
- * check protects against malformed or incorrectly written data.
- */
-function belongsToUser(
-  cart: CartDocumentData,
+function requireCurrentCustomer(
   userId: string
-): boolean {
-  return cart.userId === userId;
+): void {
+  if (!userId.trim() || auth.currentUser?.uid !== userId) {
+    throw new Error("You are not authorized to manage this cart.");
+  }
 }
 
-/*
- * Firestore does not accept `undefined`, while optional cart fields are
- * naturally undefined in React. Remove those fields before persistence so
- * promotion metadata and optional store/product details remain safe.
- */
-function removeUndefinedValues(
-  value: unknown
-): unknown {
-  if (Array.isArray(value)) {
-    return value.map(removeUndefinedValues);
-  }
-
-  if (
-    value &&
-    typeof value === "object" &&
-    Object.getPrototypeOf(value) === Object.prototype
-  ) {
-    return Object.fromEntries(
-      Object.entries(value)
-        .filter(([, entryValue]) => entryValue !== undefined)
-        .map(([key, entryValue]) => [
-          key,
-          removeUndefinedValues(entryValue),
-        ])
-    );
-  }
-
-  return value;
-}
-
-/**
- * Save or replace a customer's cart.
- *
- * Saving the cart refreshes its expiration time to 48 hours
- * from the latest update.
- */
 export async function saveCartToFirestore(
   userId: string,
   items: CartItem[]
 ): Promise<void> {
-  if (!userId.trim()) {
-    throw new Error(
-      "A user ID is required to save a cart."
-    );
-  }
+  requireCurrentCustomer(userId);
 
-  const cartReference = doc(
-    db,
-    "carts",
-    userId
-  );
-
-  try {
-    await setDoc(cartReference, {
-      userId,
-      items:
-        removeUndefinedValues(items) as CartItem[],
-      updatedAt: serverTimestamp(),
-      expiresAt: createCartExpiration(),
-    });
-  } catch (error) {
-    console.error(
-      "Error saving cart to Firestore:",
-      error
-    );
-
-    throw error;
-  }
+  await requestJson("/api/customer/cart", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ items }),
+  });
 }
 
-/**
- * Load the signed-in customer's saved cart.
- *
- * This function can only read:
- *
- * carts/{userId}
- *
- * It never queries another customer's cart.
- */
 export async function loadCartFromFirestore(
   userId: string
 ): Promise<CartItem[] | null> {
-  if (!userId.trim()) {
-    return null;
-  }
+  requireCurrentCustomer(userId);
 
-  const cartReference = doc(
-    db,
-    "carts",
-    userId
-  );
+  const response = await requestJson<{
+    items: CartItem[];
+  }>("/api/customer/cart");
 
-  try {
-    const cartSnapshot =
-      await getDoc(cartReference);
-
-    if (!cartSnapshot.exists()) {
-      return null;
-    }
-
-    const cart =
-      cartSnapshot.data() as CartDocumentData;
-
-    if (!belongsToUser(cart, userId)) {
-      console.error(
-        "Cart document does not belong to the signed-in customer."
-      );
-
-      return null;
-    }
-
-    /**
-     * A missing expiration timestamp is treated as expired.
-     *
-     * This prevents old or malformed carts from remaining forever.
-     */
-    const expirationDate =
-      cart.expiresAt?.toDate() ??
-      new Date(0);
-
-    if (expirationDate.getTime() <= Date.now()) {
-      await deleteDoc(cartReference);
-      return null;
-    }
-
-    return Array.isArray(cart.items)
-      ? cart.items
-      : [];
-  } catch (error) {
-    console.error(
-      "Error loading cart from Firestore:",
-      error
-    );
-
-    throw error;
-  }
+  return response.items;
 }
 
-/**
- * Delete the signed-in customer's cart.
- */
 export async function clearCartFromFirestore(
   userId: string
 ): Promise<void> {
-  if (!userId.trim()) {
-    return;
-  }
+  requireCurrentCustomer(userId);
 
-  try {
-    await deleteDoc(
-      doc(db, "carts", userId)
-    );
-  } catch (error) {
-    console.error(
-      "Error clearing cart from Firestore:",
-      error
-    );
-
-    throw error;
-  }
+  await requestJson("/api/customer/cart", {
+    method: "DELETE",
+  });
 }

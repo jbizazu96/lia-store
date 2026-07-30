@@ -1,0 +1,107 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function ownsStore(storeId) {
+      return signedIn() &&
+        firestore.get(
+          /databases/(default)/documents/stores/$(storeId)
+        ).data.ownerId == request.auth.uid;
+    }
+
+    function ownsDriver(driverId) {
+      return signedIn() &&
+        firestore.get(
+          /databases/(default)/documents/drivers/$(driverId)
+        ).data.ownerUid == request.auth.uid;
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Public Optimized Images
+    |--------------------------------------------------------------------------
+    |
+    | Customer-facing images are public.
+    |
+    */
+    match /stores/{storeId}/products/{productId}/gallery/{imageId}/optimized/{fileName} {
+      allow read: if true;
+
+      // Only Firebase Functions (Admin SDK) should write optimized files.
+      allow write: if false;
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Original Product Images
+    |--------------------------------------------------------------------------
+    |
+    | Store owners upload originals here.
+    | Firebase Functions later process them.
+    |
+    */
+    match /stores/{storeId}/products/{productId}/gallery/{imageId}/{fileName} {
+      allow read: if signedIn();
+      allow write: if signedIn();
+    }
+
+    /*
+     * Store onboarding and Settings uploads.
+     * Browser uploads only originals; the processStoreImage Function writes
+     * optimized files with the Admin SDK.
+     */
+    match /stores/{storeId}/images/originals/{imageField}/{fileName} {
+      allow read, write: if ownsStore(storeId);
+    }
+
+    match /stores/{storeId}/images/optimized/{imageField}/{fileName} {
+      allow read: if imageField == "logo" ||
+        imageField == "banner" ||
+        imageField == "front" ||
+        imageField == "inside";
+      allow write: if false;
+    }
+
+    /* Owner verification images are never readable through Storage rules. */
+    match /stores/{storeId}/images/optimized/owner-photo-id/{fileName} {
+      allow read: if ownsStore(storeId);
+      allow write: if false;
+    }
+
+    /*
+     * Driver onboarding uploads use the same resize-only pipeline as store
+     * profile images. All driver document images remain private.
+     */
+    match /drivers/{driverId}/images/originals/{imageField}/{fileName} {
+      allow read, write: if ownsDriver(driverId);
+    }
+
+    match /drivers/{driverId}/images/optimized/{imageField}/{fileName} {
+      allow read: if ownsDriver(driverId);
+      allow write: if false;
+    }
+
+    /* Customer profile photos are private to their authenticated owner. */
+    match /users/{userId}/images/originals/profile/{fileName} {
+      allow read, write: if signedIn() && request.auth.uid == userId;
+    }
+
+    match /users/{userId}/images/optimized/profile/{fileName} {
+      allow read: if signedIn() && request.auth.uid == userId;
+      allow write: if false;
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Everything Else
+    |--------------------------------------------------------------------------
+    */
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

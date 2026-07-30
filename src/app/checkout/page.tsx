@@ -340,7 +340,7 @@ export default function CheckoutPage() {
         hasPaymentFailed:
           hasWebhookPaymentFailed,
       } = useCheckoutPaymentStatus(
-        preparedPayment?.orderId ??
+        preparedPayment?.checkoutSessionId ??
         null
       );
 

@@ -14,11 +14,13 @@ import {
   checkActionCode,
 } from "firebase/auth";
 
-/*
-  Firestore functions.
-*/
-import { doc, updateDoc } from "firebase/firestore";
-import { auth, db } from "@/lib/firebase";
+import {
+  httpsCallable,
+} from "firebase/functions";
+import {
+  auth,
+  functions,
+} from "@/lib/firebase";
 
 // Inner component that uses useSearchParams
 function VerifyEmailContent() {
@@ -40,23 +42,18 @@ function VerifyEmailContent() {
         }
 
         // Step 1: Get the email from the verification code
-        const { data } = await checkActionCode(auth, oobCode);
-        const email = data.email;
+        await checkActionCode(auth, oobCode);
 
         // Step 2: Apply the verification (this updates Firebase Auth)
         await applyActionCode(auth, oobCode);
 
-        // Step 3: Update only the currently authenticated user's profile.
-        // Never query the users collection by email from the browser: users
-        // must not be able to discover or update someone else's profile.
+        // Step 3: Synchronize only the authenticated account through the
+        // callable. A verification link commonly opens without a session, so
+        // login also performs this safe synchronization.
         const currentUser = auth.currentUser;
         if (currentUser) {
-          // Update using current user's UID
-          await updateDoc(doc(db, "users", currentUser.uid), {
-            emailVerified: true,
-            emailVerifiedAt: new Date().toISOString(),
-          });
-          console.log("✅ Firestore updated for current user");
+          await httpsCallable(functions, "syncEmailVerification")();
+          console.log("✅ Email verification synchronized");
         } else {
           console.log(
             "Email verified in Firebase Auth. The profile will sync after sign-in."

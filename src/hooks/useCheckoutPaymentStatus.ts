@@ -5,10 +5,10 @@
 | useCheckoutPaymentStatus Hook
 |--------------------------------------------------------------------------
 |
-| Listens to one checkout order in Firestore and exposes its latest
-| payment lifecycle state.
+| Listens to one customer-owned checkout session in Firestore and exposes its
+| latest payment lifecycle state.
 |
-| The Stripe payment webhook updates the order document after receiving:
+| The Stripe payment webhook updates the checkout session after receiving:
 |
 | - payment_intent.processing
 | - payment_intent.payment_failed
@@ -36,8 +36,8 @@
 | - Notify the store
 | - Create another PaymentIntent
 |
-| Firestore changes written by the verified Stripe webhook remain the
-| source of truth.
+| The session contains only checkout lifecycle data. The full order remains
+| unreadable to the customer until the webhook marks it paid and confirmed.
 */
 
 import {
@@ -184,7 +184,7 @@ function normalizeOptionalString(
 */
 
 export function useCheckoutPaymentStatus(
-  orderId:
+  checkoutSessionId:
     string | null
 ): UseCheckoutPaymentStatusResult {
   const [
@@ -230,7 +230,7 @@ export function useCheckoutPaymentStatus(
 
   /*
   |--------------------------------------------------------------------------
-  | Realtime Order Listener
+  | Realtime Checkout-Session Listener
   |--------------------------------------------------------------------------
   */
 
@@ -239,7 +239,7 @@ export function useCheckoutPaymentStatus(
       No payment has been prepared yet.
     */
     if (
-      !orderId?.trim()
+      !checkoutSessionId?.trim()
     ) {
       setCheckoutStatus(
         "idle"
@@ -276,16 +276,16 @@ export function useCheckoutPaymentStatus(
       null
     );
 
-    const orderReference =
+    const checkoutSessionReference =
       doc(
         db,
-        "orders",
-        orderId.trim()
+        "checkoutSessions",
+        checkoutSessionId.trim()
       );
 
     const unsubscribe =
       onSnapshot(
-        orderReference,
+        checkoutSessionReference,
 
         (
           snapshot
@@ -310,7 +310,7 @@ export function useCheckoutPaymentStatus(
             );
 
             setError(
-              "The checkout order could not be found."
+              "The checkout session could not be found."
             );
 
             setLoading(
@@ -323,38 +323,39 @@ export function useCheckoutPaymentStatus(
           const data =
             snapshot.data();
 
-          const payment =
-            data.payment &&
-            typeof data.payment ===
-              "object"
-              ? data.payment as
-                  Record<
-                    string,
-                    unknown
-                  >
-              : {};
-
           const nextCheckoutStatus =
             normalizeCheckoutStatus(
-              data.checkoutStatus
+              data.status
             );
 
+          /*
+           * Checkout sessions intentionally do not expose the full order
+           * payment map. Derive the customer-facing payment state from the
+           * webhook-controlled session status instead.
+           */
           const nextPaymentStatus =
-            normalizeOptionalString(
-              payment.status
-            );
+            nextCheckoutStatus === "confirmed"
+              ? "paid"
+              : nextCheckoutStatus === "processing"
+                ? "processing"
+                : nextCheckoutStatus === "awaiting_payment" &&
+                    normalizeOptionalString(
+                      data.failureMessage
+                    )
+                  ? "failed"
+                  : "pending";
 
+          /*
+           * Stripe's detailed PaymentIntent status is deliberately retained
+           * server-side with the order. Checkout only needs the normalized
+           * LIA session state above.
+           */
           const nextStripeStatus =
-            normalizeOptionalString(
-              payment.stripeStatus
-            );
+            null;
 
           const nextFailureMessage =
             normalizeOptionalString(
-              payment.failureMessage
-            ) ??
-            normalizeOptionalString(
-              payment.failureReason
+              data.failureMessage
             );
 
           setCheckoutStatus(
@@ -395,7 +396,7 @@ export function useCheckoutPaymentStatus(
           listenerError
         ) => {
           console.error(
-            "Unable to listen to checkout payment status:",
+            "Unable to listen to checkout session status:",
             listenerError
           );
 
@@ -411,7 +412,7 @@ export function useCheckoutPaymentStatus(
 
     return unsubscribe;
   }, [
-    orderId,
+    checkoutSessionId,
   ]);
 
 

@@ -5,6 +5,19 @@ export interface StoreScheduleDay {
   close: string;
   isClosed: boolean;
 }
+
+export interface StoreOwnerProfile {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  address: string;
+  city: string;
+  state: string;
+  zip: string;
+  formattedAddress?: string;
+  photoIdUrl?: string;
+}
 export interface Store {
   id: string;
   ownerId: string;
@@ -28,7 +41,12 @@ export interface Store {
   distance?: number;
   deliveryFee?: number;
   minimumOrder: number;
-  status: "pending" | "active" | "suspended";
+  /* Approval unlocks owner tools; activation publishes to customers. */
+  isApproved: boolean;
+  isActive: boolean;
+  onboardingCompleted?: boolean;
+  onboardingStep?: "owner" | "store-information" | "business-information" | "schedule" | "stripe";
+  owner?: StoreOwnerProfile;
   isOpen: boolean;
   schedule?: StoreScheduleDay[];
   createdAt: string;

@@ -193,9 +193,9 @@ function getRelatedAccountId(
   These metadata fields were written when LIA originally created the
   connected account.
 */
-function getStoreIdFromMetadata(
+function getOwnerFromMetadata(
   account: Stripe.V2.Core.Account
-): string {
+): { ownerType: "store" | "driver"; ownerId: string } {
   const ownerType =
     account.metadata?.liaOwnerType;
 
@@ -204,16 +204,12 @@ function getStoreIdFromMetadata(
 
   const storeId =
     account.metadata?.liaStoreId?.trim();
+  const driverId =
+    account.metadata?.liaDriverId?.trim();
 
-  /*
-    This webhook currently synchronizes store recipient accounts only.
-
-    Driver accounts will use the shared Stripe architecture later but
-    should have their own persistence rules.
-  */
-  if (ownerType !== "store") {
+  if (ownerType !== "store" && ownerType !== "driver") {
     throw new Error(
-      `Stripe account ${account.id} is not a LIA store account.`
+      `Stripe account ${account.id} is not a supported LIA recipient account.`
     );
   }
 
@@ -228,13 +224,15 @@ function getStoreIdFromMetadata(
     );
   }
 
-  if (!storeId) {
+  const ownerId = ownerType === "store" ? storeId : driverId;
+
+  if (!ownerId) {
     throw new Error(
-      `Stripe account ${account.id} is missing liaStoreId metadata.`
+      `Stripe account ${account.id} is missing its LIA owner metadata.`
     );
   }
 
-  return storeId;
+  return { ownerType, ownerId };
 }
 
 
@@ -409,29 +407,27 @@ export const stripeConnectWebhook = onRequest(
         );
 
       /*
-        Use metadata written during initial account creation to locate
-        the correct Firestore store.
+      Use metadata written during initial account creation to locate
+      the correct Firestore owner record.
       */
-      const storeId =
-        getStoreIdFromMetadata(account);
+      const owner = getOwnerFromMetadata(account);
 
       const mappedAccount =
         mapStripeAccount(
           account,
-          storeId
+          owner.ownerType,
+          owner.ownerId
         );
 
       /*
-        The persistence service verifies that:
-
-        - The store exists
-        - It references this exact Stripe account
-        - It is marked as Accounts v2
+      The persistence service verifies the matching store or driver record,
+      connected-account relationship, and Accounts v2 marker.
       */
-      await stripeConnectPersistence
-        .saveStoreStripeStatus(
-          mappedAccount
-        );
+      if (owner.ownerType === "store") {
+        await stripeConnectPersistence.saveStoreStripeStatus(mappedAccount);
+      } else {
+        await stripeConnectPersistence.saveDriverStripeStatus(mappedAccount);
+      }
 
       console.log(
         "Stripe Connect account synchronized:",
@@ -439,7 +435,8 @@ export const stripeConnectWebhook = onRequest(
           eventId: eventNotification.id,
           eventType: eventNotification.type,
           accountId: account.id,
-          storeId,
+          ownerType: owner.ownerType,
+          ownerId: owner.ownerId,
           onboardingStatus:
             mappedAccount.onboardingStatus,
           transfersEnabled:

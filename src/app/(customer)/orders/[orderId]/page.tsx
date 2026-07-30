@@ -105,6 +105,30 @@ export default function OrderDetailPage({params}: OrderPageProps) {
     getCurrentOrderStep(
       order.status
     );
+
+  /*
+  |--------------------------------------------------------------------------
+  | Cancelled Order Timeline
+  |--------------------------------------------------------------------------
+  |
+  | "cancelled" is not a fulfillment step, so it must not reset the visual
+  | timeline. For a cancelled order, status history is the source of truth
+  | for the steps the store already completed.
+  |
+  */
+  const isCancelled =
+    order.status === "cancelled";
+
+  const cancellationTimestamp =
+    getStatusTimestamp(
+      order.statusHistory,
+      "cancelled"
+    );
+
+  const cancellationReason =
+    order.cancellationReason?.trim() ||
+    "The store did not provide a cancellation reason.";
+
   const iscompleted = (index: number) => index <= currentStepIndex;
 
   return (
@@ -143,7 +167,7 @@ export default function OrderDetailPage({params}: OrderPageProps) {
           </div>
         </div>
 
-        {order.cancellationReason?.trim() && (
+        {isCancelled && (
           <div className="rounded-2xl border border-red-100 bg-red-50 p-5 shadow-sm">
             <div className="flex items-start gap-3">
               <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-red-100">
@@ -151,7 +175,7 @@ export default function OrderDetailPage({params}: OrderPageProps) {
               <div>
                 <h3 className="font-semibold text-red-800">Order cancellation reason</h3>
                 <p className="mt-1 text-sm leading-6 text-red-700">
-                  {order.cancellationReason}
+                  {cancellationReason}
                 </p>
               </div>
             </div>
@@ -169,13 +193,23 @@ export default function OrderDetailPage({params}: OrderPageProps) {
             
             <div className="space-y-6">
               {ORDER_STATUS_STEPS.map((step, index) => {
-                const completed = iscompleted(index);
                 const Icon = step.icon;
                 const timestamp =
                   getStatusTimestamp(
                     order.statusHistory,
                     step.key
                   );
+
+                /*
+                 * A cancelled order has no matching step in
+                 * ORDER_STATUS_STEPS. Preserve the already recorded
+                 * fulfillment steps instead of treating all of them as
+                 * unfinished.
+                 */
+                const completed =
+                  isCancelled
+                    ? Boolean(timestamp)
+                    : iscompleted(index);
                 
                 return (
                   <div key={step.key} className="flex items-start gap-4 relative">
@@ -211,6 +245,35 @@ export default function OrderDetailPage({params}: OrderPageProps) {
                   </div>
                 );
               })}
+
+              {isCancelled && (
+                <div className="flex items-start gap-4 relative">
+                  <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 z-10 bg-red-500">
+                    <StatusIcon className="w-4 h-4 text-white" />
+                  </div>
+
+                  <div className="flex-1 pt-0.5">
+                    <div className="flex items-center gap-2">
+                      <p className="font-medium text-sm text-red-700">
+                        Order Cancelled
+                      </p>
+                      <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full">
+                        Current
+                      </span>
+                    </div>
+
+                    {cancellationTimestamp && (
+                      <p className="text-xs text-gray-400">
+                        {formatOrderDate(cancellationTimestamp)}
+                      </p>
+                    )}
+
+                    <p className="mt-1 text-xs leading-5 text-red-700">
+                      Reason: {cancellationReason}
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>

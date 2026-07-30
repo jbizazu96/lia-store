@@ -30,6 +30,7 @@ import {
 import { auth, db } from "@/lib/firebase";
 import { doc, getDoc, updateDoc, collection, query, where, getDocs } from "firebase/firestore";
 import { geocodeAddress } from "@/services/delivery/geocode";
+import { normalizeUsState } from "@/utils/usState";
 
 // Components
 import { ProfileSection } from "@/components/store/settings/ProfileSection";
@@ -150,7 +151,7 @@ export default function SettingsPage() {
           initialStoreData.current = JSON.stringify(loadedStoreData);
         } else {
           // No store found - redirect to create
-          router.push("/store/create");
+          router.push("/store/onboarding/owner");
           return;
         }
 
@@ -207,10 +208,16 @@ export default function SettingsPage() {
           return;
         }
 
+        const normalizedState = normalizeUsState(storeData.state);
+        if (!normalizedState) {
+          setSaveMessage("Enter a valid U.S. state name or two-letter abbreviation.");
+          return;
+        }
+
         const fullAddress = [
           storeData.address,
           storeData.city,
-          storeData.state,
+          normalizedState,
           storeData.zip,
         ]
           .join(", ");
@@ -237,7 +244,7 @@ export default function SettingsPage() {
           ...storeData,
           address: storeData.address.trim().toUpperCase(),
           city: storeData.city.trim().toUpperCase(),
-          state: storeData.state.trim().toUpperCase(),
+          state: normalizedState,
           zip: storeData.zip.trim().toUpperCase(),
           formattedAddress: (location.formattedAddress || fullAddress).toUpperCase(),
           latitude: location.latitude,

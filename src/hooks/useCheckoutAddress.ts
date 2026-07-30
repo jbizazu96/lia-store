@@ -27,6 +27,7 @@ import {
 import { geocodeAddress } from "@/services/delivery/geocode";
 import { useConfirmation } from "@/context/ConfirmationContext";
 import { useSuccessToast } from "@/context/SuccessToastContext";
+import { normalizeUsState } from "@/utils/usState";
 
 import type {
   CheckoutAddress,
@@ -107,7 +108,14 @@ UseCheckoutAddressResult {
         );
       }
 
-      const fullAddress = `${formData.street}, ${formData.city}, ${formData.state} ${formData.zip}`;
+      const normalizedState = normalizeUsState(formData.state);
+
+      if (!normalizedState) {
+        setError("Enter a valid U.S. state name or two-letter abbreviation.");
+        return null;
+      }
+
+      const fullAddress = `${formData.street}, ${formData.city}, ${normalizedState} ${formData.zip}`;
 
       const result = await geocodeAddress(
         fullAddress
@@ -140,7 +148,7 @@ UseCheckoutAddressResult {
             formData.city.trim().toUpperCase(),
 
           state:
-            formData.state.trim().toUpperCase(),
+            normalizedState,
 
           zip:
             formData.zip.trim().toUpperCase(),

@@ -23,6 +23,7 @@ import {
 
 import { storeMapper } from "@/mappers/storeMapper";
 import { storeService } from "@/services/store/storeService";
+import { isStoreCustomerVisible } from "@/services/store/storeAvailability";
 
 import type { CustomerStore } from "@/types/view-models/customerStore";
 
@@ -96,6 +97,15 @@ export function useStoreInfo({
             setError(
               "Store not found"
             );
+          }
+
+          return;
+        }
+
+        if (!isStoreCustomerVisible(domainStore)) {
+          if (isMounted) {
+            setStore(null);
+            setError("This store is not currently available.");
           }
 
           return;

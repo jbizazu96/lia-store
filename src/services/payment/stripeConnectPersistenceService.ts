@@ -30,7 +30,10 @@
 
 import "server-only";
 
-import type {Transaction} from "firebase-admin/firestore";
+import {
+  Timestamp,
+  type Transaction,
+} from "firebase-admin/firestore";
 
 import {getFirebaseAdminFirestore} from "@/lib/firebaseAdmin";
 import type {StripeConnectAccount} from "@/types/stripeConnect";
@@ -85,6 +88,20 @@ function requireStoreOwnerType(
       "This persistence operation supports store Stripe accounts only."
     );
   }
+}
+
+/* Convert the Stripe domain model's ISO value into a native Firestore timestamp. */
+function timestampFromIso(value: string, fieldName: string): Timestamp {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    throw new StripeConnectPersistenceError(
+      "INVALID_OWNER_TYPE",
+      `Stripe returned an invalid ${fieldName} timestamp.`
+    );
+  }
+
+  return Timestamp.fromDate(date);
 }
 
 
@@ -256,12 +273,15 @@ async function saveAuthorizedStoreAccount(
       stripeIsReady:
         account.onboardingStatus === "complete",
 
-      /*
-        Store the original connection and latest synchronization times
-        as ISO strings to match the existing LIA domain conventions.
-      */
-      stripeConnectedAt: account.connectedAt,
-      stripeUpdatedAt: account.updatedAt,
+      /* Native timestamps keep Firestore sorting and querying predictable. */
+      stripeConnectedAt: timestampFromIso(
+        account.connectedAt,
+        "connection"
+      ),
+      stripeUpdatedAt: timestampFromIso(
+        account.updatedAt,
+        "update"
+      ),
     });
   });
 }

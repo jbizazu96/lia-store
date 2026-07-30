@@ -10,14 +10,14 @@ import {
   downloadOriginalImage,
 } from "./imageStorage";
 
-type StoreImageField = "logo" | "banner";
+type StoreImageField = "logo" | "banner" | "owner-photo-id" | "front" | "inside";
 
 function getMetadata(metadata: Record<string, string> | undefined) {
   if (
     metadata?.processingType !== "store-image-original" ||
     !metadata.storeId ||
     !metadata.imageId ||
-    (metadata.imageField !== "logo" && metadata.imageField !== "banner")
+    (metadata.imageField !== "logo" && metadata.imageField !== "banner" && metadata.imageField !== "owner-photo-id" && metadata.imageField !== "front" && metadata.imageField !== "inside")
   ) {
     return null;
   }
@@ -66,10 +66,21 @@ export const processStoreImage = onObjectFinalized(
         },
       });
 
-      const fieldName =
-        metadata.imageField === "logo" ? "logoUrl" : "bannerUrl";
-      const pathFieldName =
-        metadata.imageField === "logo" ? "logoImagePath" : "bannerImagePath";
+      const fieldName = {
+        logo: "logoUrl", banner: "bannerUrl", front: "storeFrontUrl",
+        inside: "storeInsideUrl", "owner-photo-id": "owner.photoIdUrl",
+      }[metadata.imageField];
+      const pathFieldName = {
+        logo: "logoImagePath", banner: "bannerImagePath", front: "storeFrontImagePath",
+        inside: "storeInsideImagePath", "owner-photo-id": "ownerPhotoIdImagePath",
+      }[metadata.imageField];
+      const statusFieldName: Record<StoreImageField, string> = {
+        logo: "logoImageStatus",
+        banner: "bannerImageStatus",
+        front: "storeFrontImageStatus",
+        inside: "storeInsideImageStatus",
+        "owner-photo-id": "ownerPhotoIdImageStatus",
+      };
       const imageUrl =
         `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/` +
         `${encodeURIComponent(optimizedPath)}?alt=media&token=${token}`;
@@ -87,7 +98,7 @@ export const processStoreImage = onObjectFinalized(
         transaction.update(storeReference, {
           [fieldName]: imageUrl,
           [pathFieldName]: optimizedPath,
-          [`${metadata.imageField}ImageStatus`]: "ready",
+          [statusFieldName[metadata.imageField]]: "ready",
           updatedAt: FieldValue.serverTimestamp(),
         });
 

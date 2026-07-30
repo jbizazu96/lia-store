@@ -132,7 +132,7 @@ export default function AddProductPage() {
 
             if (!resolvedStoreId) {
               router.replace(
-                "/store/create"
+                "/store/onboarding/owner"
               );
 
               return;

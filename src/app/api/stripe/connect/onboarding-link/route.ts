@@ -49,6 +49,7 @@ export const runtime = "nodejs";
 */
 interface CreateOnboardingLinkRequestBody {
   storeId: string;
+  returnContext?: "onboarding";
 }
 
 
@@ -91,6 +92,7 @@ async function parseRequestBody(
   }
 
   const storeId = Reflect.get(body, "storeId");
+  const returnContext = Reflect.get(body, "returnContext");
 
   if (
     typeof storeId !== "string" ||
@@ -103,6 +105,7 @@ async function parseRequestBody(
 
   return {
     storeId: storeId.trim(),
+    ...(returnContext === "onboarding" ? { returnContext } : {}),
   };
 }
 
@@ -175,7 +178,7 @@ export async function POST(request: Request) {
       Step 2:
       Validate the store ID.
     */
-    const {storeId} = await parseRequestBody(request);
+    const {storeId, returnContext} = await parseRequestBody(request);
 
     /*
       Step 3:
@@ -225,10 +228,18 @@ export async function POST(request: Request) {
       We include section=payment so the settings page can reopen the
       payment section when it supports section-based navigation.
     */
+    const returnPath = returnContext === "onboarding"
+      ? "/store/onboarding/stripe"
+      : "/store/settings";
+
+    const returnQueryPrefix = returnContext === "onboarding"
+      ? "?"
+      : "?section=payment&";
+
     const refreshUrl =
-      `${applicationOrigin}/store/settings` +
-      `?section=payment` +
-      `&storeId=${encodeURIComponent(store.id)}` +
+      `${applicationOrigin}${returnPath}` +
+      returnQueryPrefix +
+      `storeId=${encodeURIComponent(store.id)}` +
       `&stripe=refresh`;
 
     /*
@@ -243,9 +254,9 @@ export async function POST(request: Request) {
       account state directly from Stripe.
     */
     const returnUrl =
-      `${applicationOrigin}/store/settings` +
-      `?section=payment` +
-      `&storeId=${encodeURIComponent(store.id)}` +
+      `${applicationOrigin}${returnPath}` +
+      returnQueryPrefix +
+      `storeId=${encodeURIComponent(store.id)}` +
       `&stripe=return`;
 
     /*

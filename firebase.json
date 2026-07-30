@@ -6,6 +6,9 @@
       "indexes": "firestore.indexes"
     }
   ],
+  "storage": {
+    "rules": "storage.rules"
+  },
   "functions": [
     {
       "source": "functions",

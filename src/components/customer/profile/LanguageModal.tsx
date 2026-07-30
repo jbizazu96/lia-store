@@ -2,11 +2,12 @@
 
 import {motion} from "framer-motion";
 import {X, Check} from "lucide-react";
+import {useState} from "react";
 
 interface LanguageModalProps {
   currentLanguage: string;
   onClose: () => void;
-  onSelect: (language: string) => void;
+  onSelect: (language: string) => Promise<void>;
 }
 
 const languages = [
@@ -16,6 +17,8 @@ const languages = [
 ];
 
 export function LanguageModal({currentLanguage, onClose, onSelect}: LanguageModalProps) {
+  const [savingLanguage, setSavingLanguage] = useState<string | null>(null);
+
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
       <motion.div
@@ -44,10 +47,16 @@ export function LanguageModal({currentLanguage, onClose, onSelect}: LanguageModa
             return (
               <button
                 key={lang.code}
-                onClick={() => {
-                  onSelect(lang.name);
-                  onClose();
+                onClick={async () => {
+                  try {
+                    setSavingLanguage(lang.name);
+                    await onSelect(lang.name);
+                    onClose();
+                  } finally {
+                    setSavingLanguage(null);
+                  }
                 }}
+                disabled={savingLanguage !== null}
                 className="w-full flex items-center justify-between px-4 py-4 hover:bg-gray-50 rounded-xl transition"
                 aria-label={`Select ${lang.name}`}
               >
@@ -55,7 +64,9 @@ export function LanguageModal({currentLanguage, onClose, onSelect}: LanguageModa
                   <span className="text-2xl">{lang.flag}</span>
                   <span className="font-medium text-gray-800">{lang.name}</span>
                 </div>
-                {isSelected && (
+                {savingLanguage === lang.name ? (
+                  <span className="h-5 w-5 animate-spin rounded-full border-2 border-green-600 border-t-transparent" />
+                ) : isSelected && (
                   <Check className="w-5 h-5 text-green-600" />
                 )}
               </button>

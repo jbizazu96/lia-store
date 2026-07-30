@@ -236,6 +236,12 @@ export interface PrepareCheckoutPaymentResponse {
 
   orderId: string;
 
+  /*
+    Customer-owned LIA checkout session used for safe live payment status
+    updates before the full order becomes readable.
+  */
+  checkoutSessionId: string;
+
   orderNumber: string;
 
   paymentIntentId: string;

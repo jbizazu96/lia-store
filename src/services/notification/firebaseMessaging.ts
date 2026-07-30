@@ -46,10 +46,19 @@ export class FirebaseMessaging {
       return null;
     }
 
-   const registration =
-    await navigator.serviceWorker.register(
+    const vapidKey =
+      process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY;
+
+    if (!vapidKey) {
+      throw new Error(
+        "Push notifications are unavailable because the Firebase VAPID key is missing."
+      );
+    }
+
+    const registration =
+      await navigator.serviceWorker.register(
         "/firebase-messaging-sw.js"
-    );
+      );
 
     // Wait until the service worker is active.
     await navigator.serviceWorker.ready;
@@ -58,9 +67,7 @@ export class FirebaseMessaging {
     await getToken(
         messaging,
         {
-          vapidKey:
-            process.env
-              .NEXT_PUBLIC_FIREBASE_VAPID_KEY,
+          vapidKey,
 
           serviceWorkerRegistration:
             registration,
@@ -76,12 +83,6 @@ export class FirebaseMessaging {
       return null;
 
     }
-
-    console.log(
-      "FCM Token:"
-    );
-
-    console.log(token);
 
     return token;
 
