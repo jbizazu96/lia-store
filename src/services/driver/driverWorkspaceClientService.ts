@@ -2,6 +2,20 @@
 import { auth } from "@/lib/firebase";
 import type { DriverNotification, DriverPayment, DriverPaymentTotals, DriverProfile, DriverWorkspaceSummary } from "@/types/driverWorkspace";
 
+/*
+ * Preserve the HTTP status so route guards can distinguish an expired
+ * session from a server-side outage or missing deployment configuration.
+ */
+export class DriverWorkspaceClientError extends Error {
+  constructor(
+    message: string,
+    readonly status: number
+  ) {
+    super(message);
+    this.name = "DriverWorkspaceClientError";
+  }
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const user = auth.currentUser;
   if (!user) throw new Error("Sign in again to access the driver app.");
@@ -9,7 +23,12 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   headers.set("Authorization", `Bearer ${await user.getIdToken()}`);
   const response = await fetch(path, { ...init, headers, cache: "no-store" });
   const payload = await response.json().catch(() => ({})) as T & { error?: string };
-  if (!response.ok) throw new Error(payload.error ?? "The driver request could not be completed.");
+  if (!response.ok) {
+    throw new DriverWorkspaceClientError(
+      payload.error ?? "The driver request could not be completed.",
+      response.status
+    );
+  }
   return payload;
 }
 
