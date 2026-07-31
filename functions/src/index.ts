@@ -29,6 +29,16 @@ import {
 import {
   getStoreDeliveryRoutes,
 } from "./delivery/getStoreDeliveryRoutes";
+export {
+  getDriverWorkspaceEntry,
+  getDriverWorkspaceSummary,
+  getDriverWorkspacePayments,
+  getDriverWorkspaceNotifications,
+  markDriverWorkspaceNotificationRead,
+  clearDriverWorkspaceNotifications,
+  submitDriverDocumentReplacement,
+  updateDriverWorkspaceProfile,
+} from "./callable/driverWorkspace";
 export { processStoreImage } from "./images/processStoreImage";
 export { processDriverImage } from "./images/processDriverImage";
 export {

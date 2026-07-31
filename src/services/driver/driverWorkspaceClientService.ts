@@ -1,11 +1,27 @@
-/* Browser client for the authenticated driver workspace API. */
-import { auth } from "@/lib/firebase";
-import type { DriverNotification, DriverPayment, DriverPaymentTotals, DriverProfile, DriverWorkspaceSummary } from "@/types/driverWorkspace";
-
 /*
- * Preserve the HTTP status so route guards can distinguish an expired
- * session from a server-side outage or missing deployment configuration.
- */
+|--------------------------------------------------------------------------
+| Driver Workspace Client Service
+|--------------------------------------------------------------------------
+|
+| The driver UI calls Firebase callable Functions only. Functions verify the
+| Firebase session and use Admin SDK access for protected driver records.
+|
+*/
+
+import {
+  httpsCallable,
+} from "firebase/functions";
+import {
+  functions,
+} from "@/lib/firebase";
+import type {
+  DriverNotification,
+  DriverPayment,
+  DriverPaymentTotals,
+  DriverProfile,
+  DriverWorkspaceSummary,
+} from "@/types/driverWorkspace";
+
 export class DriverWorkspaceClientError extends Error {
   constructor(
     message: string,
@@ -16,29 +32,90 @@ export class DriverWorkspaceClientError extends Error {
   }
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const user = auth.currentUser;
-  if (!user) throw new Error("Sign in again to access the driver app.");
-  const headers = new Headers(init?.headers);
-  headers.set("Authorization", `Bearer ${await user.getIdToken()}`);
-  const response = await fetch(path, { ...init, headers, cache: "no-store" });
-  const payload = await response.json().catch(() => ({})) as T & { error?: string };
-  if (!response.ok) {
+function statusForFunctionError(code: unknown): number {
+  return code === "functions/unauthenticated" ||
+    code === "functions/permission-denied"
+    ? 403
+    : 500;
+}
+
+async function call<T>(
+  name: string,
+  data?: unknown
+): Promise<T> {
+  try {
+    const callable = httpsCallable<unknown, T>(
+      functions,
+      name
+    );
+    const result = await callable(data);
+    return result.data;
+  } catch (error) {
+    const functionError = error as {
+      code?: unknown;
+      message?: unknown;
+    };
+
     throw new DriverWorkspaceClientError(
-      payload.error ?? "The driver request could not be completed.",
-      response.status
+      typeof functionError.message === "string"
+        ? functionError.message
+        : "The driver request could not be completed.",
+      statusForFunctionError(functionError.code)
     );
   }
-  return payload;
 }
 
 export const driverWorkspaceClientService = {
-  getEntry: () => request<{ hasApplication: boolean; onboardingCompleted: boolean; onboardingStep: string; isApproved: boolean }>("/api/driver/entry"),
-  getSummary: () => request<DriverWorkspaceSummary>("/api/driver/workspace"),
-  updateProfile: (input: DriverProfile) => request<DriverWorkspaceSummary>("/api/driver/profile", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) }),
-  getPayments: () => request<{ payments: DriverPayment[]; totals: DriverPaymentTotals }>("/api/driver/payments"),
-  getNotifications: () => request<{ notifications: DriverNotification[] }>("/api/driver/notifications"),
-  markNotificationRead: (notificationId: string) => request("/api/driver/notifications", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ notificationId }) }),
-  clearNotifications: () => request("/api/driver/notifications", { method: "DELETE" }),
-  submitDocumentReplacement: (input: { field: "drivers-license-front" | "drivers-license-back" | "vehicle-insurance" | "vehicle-registration"; expirationDate: string; issuingState?: string; provider?: string }) => request("/api/driver/documents", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) }),
+  getEntry: () => call<{
+    hasApplication: boolean;
+    onboardingCompleted: boolean;
+    onboardingStep: string;
+    isApproved: boolean;
+  }>("getDriverWorkspaceEntry"),
+
+  getSummary: () =>
+    call<DriverWorkspaceSummary>(
+      "getDriverWorkspaceSummary"
+    ),
+
+  updateProfile: (profile: DriverProfile) =>
+    call<DriverWorkspaceSummary>(
+      "updateDriverWorkspaceProfile",
+      {profile}
+    ),
+
+  getPayments: () =>
+    call<{
+      payments: DriverPayment[];
+      totals: DriverPaymentTotals;
+    }>("getDriverWorkspacePayments"),
+
+  getNotifications: () =>
+    call<{notifications: DriverNotification[]}>(
+      "getDriverWorkspaceNotifications"
+    ),
+
+  markNotificationRead: (notificationId: string) =>
+    call(
+      "markDriverWorkspaceNotificationRead",
+      {notificationId}
+    ),
+
+  clearNotifications: () =>
+    call("clearDriverWorkspaceNotifications"),
+
+  submitDocumentReplacement: (input: {
+    field:
+      | "drivers-license-front"
+      | "drivers-license-back"
+      | "vehicle-insurance"
+      | "vehicle-registration";
+    expirationDate: string;
+    issuingState?: string;
+    provider?: string;
+  }) =>
+    call(
+      "submitDriverDocumentReplacement",
+      input
+    ),
 };

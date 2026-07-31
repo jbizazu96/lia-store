@@ -6,14 +6,19 @@
 |--------------------------------------------------------------------------
 |
 | Driver documents use LIA's resizer pipeline, never Claid. The browser
-| submits the original image to an authenticated API route; the route and
-| Firebase Function handle authorization, storage, and optimization.
+| uploads an original to the driver's private Storage path, whose rule
+| requires ownership. Firebase Functions then handle optimization.
 |
 */
 
 import {
   auth,
+  storage,
 } from "@/lib/firebase";
+import {
+  ref,
+  uploadBytes,
+} from "firebase/storage";
 
 export type DriverImageField =
   | "profile-photo"
@@ -50,23 +55,40 @@ export const driverImageService = {
       throw new Error("Sign in again before uploading an image.");
     }
 
-    const formData = new FormData();
-    formData.set("driverId", driverId);
-    formData.set("field", field);
-    formData.set("file", file);
-
-    const response = await fetch("/api/driver/images/original", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${await user.getIdToken()}`,
-      },
-      body: formData,
-    });
-
-    const payload = await response.json().catch(() => ({}));
-
-    if (!response.ok) {
-      throw new Error(payload.error ?? "The image could not be uploaded.");
+    if (user.uid !== driverId) {
+      throw new Error(
+        "You can upload images only for your own driver application."
+      );
     }
+
+    const extension = file.name
+      .split(".")
+      .pop()
+      ?.toLowerCase()
+      .replace(/[^a-z0-9]/g, "") || "image";
+    const imageId = `${Date.now()}-${crypto.randomUUID()}`;
+    const originalPath = [
+      "drivers",
+      driverId,
+      "images",
+      "originals",
+      field,
+      `${imageId}.${extension}`,
+    ].join("/");
+
+    await uploadBytes(
+      ref(storage, originalPath),
+      file,
+      {
+        contentType: file.type,
+        cacheControl: "private, max-age=0, no-cache",
+        customMetadata: {
+          driverId,
+          imageId,
+          imageField: field,
+          processingType: "driver-image-original",
+        },
+      },
+    );
   },
 };
