@@ -3,14 +3,19 @@
 | Customer Cart Client Service
 |--------------------------------------------------------------------------
 |
-| Cart UI uses this client service only. The authenticated API route owns all
-| Firestore reads, writes, expiry management, and customer-role checks.
+| Cart UI uses this client service only. Authenticated Firebase callable
+| Functions own Firestore reads, writes, expiry management, and customer-role
+| checks.
 |
 */
 
 import {
   auth,
+  functions,
 } from "@/lib/firebase";
+import {
+  httpsCallable,
+} from "firebase/functions";
 
 import type {
   CartItem,
@@ -20,39 +25,29 @@ export type {
   CartItem,
 } from "@/types/cart";
 
-async function authorizedRequest(
-  path: string,
-  init: RequestInit = {}
-): Promise<Response> {
-  const user = auth.currentUser;
-
-  if (!user) {
-    throw new Error("Sign in again before managing your cart.");
-  }
-
-  const headers = new Headers(init.headers);
-  headers.set("Authorization", `Bearer ${await user.getIdToken()}`);
-
-  return fetch(path, {
-    ...init,
-    headers,
-  });
-}
-
-async function requestJson<T>(
-  path: string,
-  init?: RequestInit
+async function call<T>(
+  name: string,
+  data?: unknown
 ): Promise<T> {
-  const response = await authorizedRequest(path, init);
-  const payload = await response.json().catch(() => ({})) as {
-    error?: string;
-  } & T;
+  try {
+    const callable = httpsCallable<unknown, T>(
+      functions,
+      name
+    );
+    const result = await callable(data);
 
-  if (!response.ok) {
-    throw new Error(payload.error ?? "The cart request could not be completed.");
+    return result.data;
+  } catch (error) {
+    const functionError = error as {
+      message?: unknown;
+    };
+
+    throw new Error(
+      typeof functionError.message === "string"
+        ? functionError.message
+        : "The cart request could not be completed."
+    );
   }
-
-  return payload;
 }
 
 function requireCurrentCustomer(
@@ -69,11 +64,7 @@ export async function saveCartToFirestore(
 ): Promise<void> {
   requireCurrentCustomer(userId);
 
-  await requestJson("/api/customer/cart", {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ items }),
-  });
+  await call("saveCustomerCart", { items });
 }
 
 export async function loadCartFromFirestore(
@@ -81,9 +72,9 @@ export async function loadCartFromFirestore(
 ): Promise<CartItem[] | null> {
   requireCurrentCustomer(userId);
 
-  const response = await requestJson<{
+  const response = await call<{
     items: CartItem[];
-  }>("/api/customer/cart");
+  }>("getCustomerCart");
 
   return response.items;
 }
@@ -93,7 +84,5 @@ export async function clearCartFromFirestore(
 ): Promise<void> {
   requireCurrentCustomer(userId);
 
-  await requestJson("/api/customer/cart", {
-    method: "DELETE",
-  });
+  await call("clearCustomerCart");
 }

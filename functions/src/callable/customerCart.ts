@@ -1,32 +1,57 @@
 /*
 |--------------------------------------------------------------------------
-| Server Customer Cart Service
+| Customer Cart Callables
 |--------------------------------------------------------------------------
 |
-| Cart persistence belongs behind an authenticated server boundary. Cart
-| values are display-only, but the server still validates their shape so a
-| browser cannot write malformed or oversized cart documents.
+| Cart persistence runs in Firebase Functions, not a Vercel API route. Each
+| callable derives the customer ID from Firebase Authentication and verifies
+| the matching customer profile before it reads or mutates carts/{uid}.
 |
 */
 
-import "server-only";
-
+import * as admin from "firebase-admin";
 import {
   FieldValue,
+  getFirestore,
   Timestamp,
 } from "firebase-admin/firestore";
-
 import {
-  getFirebaseAdminFirestore,
-} from "@/lib/firebaseAdmin";
+  HttpsError,
+  onCall,
+} from "firebase-functions/v2/https";
 
-import type {
-  CartItem,
-} from "@/types/cart";
+/*
+ * A callable can be evaluated while Firebase is analyzing index.ts. Guarded
+ * initialization keeps this module safe regardless of import order.
+ */
+if (admin.apps.length === 0) {
+  admin.initializeApp();
+}
 
+const db = getFirestore("default");
 const CART_EXPIRY_HOURS = 48;
 const MAX_CART_ITEMS = 100;
 const MAX_ITEM_QUANTITY = 99;
+
+interface CartItem {
+  id: string;
+  name: string;
+  price: number;
+  originalPrice?: number;
+  imageUrl?: string;
+  quantity: number;
+  stock?: number;
+  storeId: string;
+  storeName: string;
+  storeAddress?: string;
+  storePhone?: string;
+  storeLatitude?: number;
+  storeLongitude?: number;
+  size?: {
+    value: number;
+    unit: string;
+  };
+}
 
 function requireString(
   value: unknown,
@@ -34,13 +59,13 @@ function requireString(
   maximumLength: number
 ): string {
   if (typeof value !== "string") {
-    throw new Error(`${field} is invalid.`);
+    throw new HttpsError("invalid-argument", `${field} is invalid.`);
   }
 
   const normalized = value.trim();
 
   if (!normalized || normalized.length > maximumLength) {
-    throw new Error(`${field} is invalid.`);
+    throw new HttpsError("invalid-argument", `${field} is invalid.`);
   }
 
   return normalized;
@@ -61,19 +86,15 @@ function optionalString(
     : undefined;
 }
 
-function optionalNumber(
-  value: unknown
-): number | undefined {
+function optionalNumber(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value)
     ? value
     : undefined;
 }
 
-function normalizeCartItem(
-  value: unknown
-): CartItem {
+function normalizeCartItem(value: unknown): CartItem {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw new Error("A cart item is invalid.");
+    throw new HttpsError("invalid-argument", "A cart item is invalid.");
   }
 
   const item = value as Record<string, unknown>;
@@ -94,18 +115,27 @@ function normalizeCartItem(
       (!Number.isInteger(stock) || stock < 0)) ||
     (originalPrice !== undefined && originalPrice < price)
   ) {
-    throw new Error("A cart item has invalid pricing or quantity.");
+    throw new HttpsError(
+      "invalid-argument",
+      "A cart item has invalid pricing or quantity."
+    );
   }
 
   if (stock !== undefined && quantity > stock) {
-    throw new Error("A cart quantity exceeds the available stock.");
+    throw new HttpsError(
+      "invalid-argument",
+      "A cart quantity exceeds the available stock."
+    );
   }
 
   const normalizedSize =
     size && typeof size === "object" && !Array.isArray(size)
       ? {
           value: optionalNumber((size as Record<string, unknown>).value),
-          unit: optionalString((size as Record<string, unknown>).unit, 20),
+          unit: optionalString(
+            (size as Record<string, unknown>).unit,
+            20
+          ),
         }
       : undefined;
 
@@ -115,7 +145,7 @@ function normalizeCartItem(
       normalizedSize.value <= 0 ||
       !normalizedSize.unit)
   ) {
-    throw new Error("A cart item size is invalid.");
+    throw new HttpsError("invalid-argument", "A cart item size is invalid.");
   }
 
   return {
@@ -155,21 +185,38 @@ function normalizeCartItem(
   };
 }
 
-export function normalizeCustomerCartItems(
-  value: unknown
-): CartItem[] {
+function normalizeCustomerCartItems(value: unknown): CartItem[] {
   if (!Array.isArray(value) || value.length > MAX_CART_ITEMS) {
-    throw new Error("The cart contains too many items.");
+    throw new HttpsError("invalid-argument", "The cart contains too many items.");
   }
 
   const items = value.map(normalizeCartItem);
   const storeId = items[0]?.storeId;
 
   if (storeId && items.some((item) => item.storeId !== storeId)) {
-    throw new Error("A cart may contain products from only one store.");
+    throw new HttpsError(
+      "invalid-argument",
+      "A cart may contain products from only one store."
+    );
   }
 
   return items;
+}
+
+async function requireCustomer(uid: string): Promise<void> {
+  const user = await db.collection("users").doc(uid).get();
+  const data = user.data();
+
+  if (
+    !user.exists ||
+    data?.uid !== uid ||
+    data.accountType !== "customer"
+  ) {
+    throw new HttpsError(
+      "permission-denied",
+      "This account is not authorized to manage a customer cart."
+    );
+  }
 }
 
 function createCartExpiration(): Timestamp {
@@ -178,13 +225,9 @@ function createCartExpiration(): Timestamp {
   );
 }
 
-export async function loadCustomerCart(
-  userId: string
-): Promise<CartItem[]> {
-  const cartReference = getFirebaseAdminFirestore()
-    .collection("carts")
-    .doc(userId);
-  const snapshot = await cartReference.get();
+async function loadCart(userId: string): Promise<CartItem[]> {
+  const reference = db.collection("carts").doc(userId);
+  const snapshot = await reference.get();
 
   if (!snapshot.exists || snapshot.data()?.userId !== userId) {
     return [];
@@ -192,40 +235,80 @@ export async function loadCustomerCart(
 
   const expiresAt = snapshot.data()?.expiresAt;
 
-  if (!(expiresAt instanceof Timestamp) || expiresAt.toMillis() <= Date.now()) {
-    await cartReference.delete();
+  if (
+    !(expiresAt instanceof Timestamp) ||
+    expiresAt.toMillis() <= Date.now()
+  ) {
+    await reference.delete();
     return [];
   }
 
   try {
     return normalizeCustomerCartItems(snapshot.data()?.items ?? []);
   } catch {
-    /* Malformed carts are removed rather than returned to the browser. */
-    await cartReference.delete();
+    /* Remove malformed cart data instead of returning it to the browser. */
+    await reference.delete();
     return [];
   }
 }
 
-export async function saveCustomerCart(
-  userId: string,
-  items: CartItem[]
-): Promise<void> {
-  await getFirebaseAdminFirestore()
-    .collection("carts")
-    .doc(userId)
-    .set({
-      userId,
+export const getCustomerCart = onCall(
+  { region: "us-central1" },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError(
+        "unauthenticated",
+        "Sign in again before managing your cart."
+      );
+    }
+
+    await requireCustomer(request.auth.uid);
+
+    return {
+      items: await loadCart(request.auth.uid),
+    };
+  }
+);
+
+export const saveCustomerCart = onCall(
+  { region: "us-central1" },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError(
+        "unauthenticated",
+        "Sign in again before managing your cart."
+      );
+    }
+
+    await requireCustomer(request.auth.uid);
+
+    const input = request.data as { items?: unknown } | undefined;
+    const items = normalizeCustomerCartItems(input?.items);
+
+    await db.collection("carts").doc(request.auth.uid).set({
+      userId: request.auth.uid,
       items,
       updatedAt: FieldValue.serverTimestamp(),
       expiresAt: createCartExpiration(),
     });
-}
 
-export async function clearCustomerCart(
-  userId: string
-): Promise<void> {
-  await getFirebaseAdminFirestore()
-    .collection("carts")
-    .doc(userId)
-    .delete();
-}
+    return { success: true };
+  }
+);
+
+export const clearCustomerCart = onCall(
+  { region: "us-central1" },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError(
+        "unauthenticated",
+        "Sign in again before managing your cart."
+      );
+    }
+
+    await requireCustomer(request.auth.uid);
+    await db.collection("carts").doc(request.auth.uid).delete();
+
+    return { success: true };
+  }
+);

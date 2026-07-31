@@ -39,6 +39,11 @@ export {
   submitDriverDocumentReplacement,
   updateDriverWorkspaceProfile,
 } from "./callable/driverWorkspace";
+export {
+  clearCustomerCart,
+  getCustomerCart,
+  saveCustomerCart,
+} from "./callable/customerCart";
 export { processStoreImage } from "./images/processStoreImage";
 export { processDriverImage } from "./images/processDriverImage";
 export {
