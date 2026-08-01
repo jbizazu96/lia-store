@@ -16,6 +16,9 @@ export {
 export {
   driverWorkspaceStatusSync,
 } from "./triggers/driverWorkspaceStatusSync";
+export {
+  storeEarningNotifications,
+} from "./triggers/storeEarningNotifications";
 import * as admin from "firebase-admin";
 import {onCall, HttpsError} from "firebase-functions/v2/https";
 import {onSchedule} from "firebase-functions/v2/scheduler"; 

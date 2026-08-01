@@ -78,7 +78,8 @@ export interface DashboardRecentOrder {
   customerName: string;
 
   /*
-   * Revenue earned by the store.
+   * Gross order amount shown on the store order page: merchandise subtotal
+   * plus sales tax, before the marketplace commission is deducted.
    */
   storeTotal: number;
 

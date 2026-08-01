@@ -331,7 +331,19 @@ export const getStoreWorkspaceDashboard = onCall({ region: "us-central1" }, asyn
     recentOrders: recent.map((order, index) => ({
       id: recentOrders.docs[index].id,
       customerName: text(isRecord(order.customer) ? order.customer.name : "") || "Customer",
-      storeTotal: typeof order.pricing?.subtotal === "number" ? order.pricing.subtotal : 0,
+      /*
+       * Recent Orders shows the same gross store order amount as the store
+       * order-detail page: merchandise subtotal plus sales tax. This is not
+       * the eventual transfer amount, which is shown separately in Earnings
+       * after LIA's merchandise commission is applied.
+       */
+      storeTotal:
+        (typeof order.pricing?.subtotal === "number"
+          ? order.pricing.subtotal
+          : 0) +
+        (typeof order.pricing?.tax === "number"
+          ? order.pricing.tax
+          : 0),
       status: text(order.status) || "pending",
       createdAt: serialize(order.createdAt) as string,
       itemCount: Array.isArray(order.items) ? order.items.length : 0,
