@@ -224,6 +224,10 @@ async ({
     return;
   }
 
+  let createdProductId:
+    | string
+    | null = null;
+
   try {
     setSubmitting(
       true
@@ -326,6 +330,9 @@ async ({
         }
       );
 
+    createdProductId =
+      productId;
+
     /*
     |--------------------------------------------------------------------------
     | Upload Front And Back Images
@@ -417,6 +424,25 @@ async ({
       "Product added successfully."
     );
   } catch (submitError) {
+    /*
+     * A product without its required front image must not remain in inventory.
+     * The protected delete callable also removes gallery metadata, while the
+     * product-deletion trigger clears any Storage object that may have won a
+     * concurrent upload race.
+     */
+    if (createdProductId) {
+      try {
+        await productService.deleteProduct(
+          createdProductId
+        );
+      } catch (rollbackError) {
+        console.error(
+          "Unable to roll back the product after its image upload failed:",
+          rollbackError
+        );
+      }
+    }
+
     console.error(
       "Error adding product:",
       submitError

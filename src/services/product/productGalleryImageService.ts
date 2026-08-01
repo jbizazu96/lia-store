@@ -37,6 +37,10 @@ import {
   type UploadMetadata,
 } from "firebase/storage";
 
+import {
+  auth,
+} from "@/lib/firebase";
+
 import type {
   ProductImageRole,
 } from "@/types/productForm";
@@ -276,6 +280,28 @@ export const productGalleryImageService = {
 
     const originalImagePath =
       reservation.data.originalImagePath;
+
+    /*
+    |--------------------------------------------------------------------------
+    | Refresh Store Upload Authorization
+    |--------------------------------------------------------------------------
+    |
+    | The workspace callable issues the server-controlled store upload claim.
+    | Firebase Storage evaluates the ID token carried by this request, not the
+    | caller's current Firestore data. Refresh it after the reservation before
+    | sending image bytes so a newly issued claim is available to the rule.
+    |
+    */
+
+    const user = auth.currentUser;
+
+    if (!user) {
+      throw new Error(
+        "Sign in again before uploading a product image."
+      );
+    }
+
+    await user.getIdToken(true);
 
     /*
     |--------------------------------------------------------------------------

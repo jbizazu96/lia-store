@@ -12,24 +12,17 @@ service firebase.storage {
     }
 
     /*
-     * The path alone is never proof of ownership. Verify both the store and
-     * product relationship so one approved owner cannot upload into another
-     * store's product image path.
+     * Product-image authorization uses the server-issued store claim instead
+     * of Firestore lookups. This avoids depending on Storage-to-Firestore Rules
+     * integration for every upload. The gallery reservation callable and image
+     * processor independently verify the product, store, and image identity.
      */
-    function ownsApprovedProduct(
-      storeId,
-      productId
-    ) {
-      return ownsStore(storeId) &&
-        firestore.get(
-          /databases/(default)/documents/stores/$(storeId)
-        ).data.isApproved == true &&
-        firestore.get(
-          /databases/(default)/documents/stores/$(storeId)
-        ).data.onboardingCompleted == true &&
-        firestore.get(
-          /databases/(default)/documents/products/$(productId)
-        ).data.storeId == storeId;
+    function isSupportedProductImage() {
+      return request.resource.size > 0 &&
+        request.resource.size <= 10 * 1024 * 1024 &&
+        request.resource.contentType.matches(
+          "image/(jpeg|png|webp|avif|heic|heif)"
+        );
     }
 
     function ownsDriver(driverId) {
@@ -72,10 +65,15 @@ service firebase.storage {
     |
     */
     match /stores/{storeId}/products/{productId}/gallery/{imageId}/{fileName} {
-      allow read, write: if ownsApprovedProduct(
-        storeId,
-        productId
-      );
+      allow read: if ownsStore(storeId);
+
+      /*
+       * The owner can upload only a supported original under their own store
+       * claim. Product ownership and the exact canonical path are verified by
+       * the callable reservation and background processor.
+       */
+      allow write: if ownsStore(storeId) &&
+        isSupportedProductImage();
     }
 
     /*

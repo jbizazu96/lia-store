@@ -18,6 +18,9 @@ import {
   HttpsError,
   onCall,
 } from "firebase-functions/v2/https";
+import {
+  grantStoreUploadClaim,
+} from "../services/store/storeUploadClaimService";
 
 if (admin.apps.length === 0) {
   admin.initializeApp();
@@ -95,6 +98,16 @@ export const prepareStoreProductGalleryImage = onCall({ region: "us-central1" },
   }
 
   const { storeId } = await requireOwnedApprovedProduct(request.auth.uid, productId);
+
+  /*
+   * The browser uploads the original directly to its owner-restricted Storage
+   * path. Issue the server-controlled store claim as part of the reservation,
+   * then the browser refreshes its ID token before starting that upload.
+   */
+  await grantStoreUploadClaim(
+    request.auth.uid,
+    storeId
+  );
   const originalImagePath = `stores/${storeId}/products/${productId}/gallery/${imageId}/original.${extension}`;
   const imageReference = db.collection("products").doc(productId).collection("images").doc(imageId);
 

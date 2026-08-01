@@ -136,10 +136,33 @@ export default function ProductPage({ params }: ProductPageProps) {
         setLoading(true);
         setError(null);
 
-        const [productData, imageData] = await Promise.all([
-          productService.getProduct(productId),
-          productGalleryService.getProductImages(productId),
-        ]);
+        /*
+         * Keep these public reads separate so a Firestore failure identifies
+         * the exact projection path: the product document or its gallery.
+         * This is especially useful while validating the public-catalog rules.
+         */
+        let productData: Product | null;
+        let imageData: ProductGalleryImage[];
+
+        try {
+          productData = await productService.getProduct(productId);
+        } catch (productError) {
+          console.error(
+            "Error loading customer product profile:",
+            productError
+          );
+          throw productError;
+        }
+
+        try {
+          imageData = await productGalleryService.getProductImages(productId);
+        } catch (galleryError) {
+          console.error(
+            "Error loading customer product gallery:",
+            galleryError
+          );
+          throw galleryError;
+        }
 
         if (!productData) {
           if (active) setError("Product not found.");

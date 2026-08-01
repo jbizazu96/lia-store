@@ -59,22 +59,30 @@ export function TopNavigation({userName, showSearch = false}: TopNavigationProps
 
   // ✅ Fetch active orders (not completed or cancelled)
   useEffect(() => {
-  const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
-    if (!user) {
-      setOrderCount(0);
-      setLatestOrderStatus(null);
-      setLoading(false);
-      return;
-    }
+    let unsubscribeOrders: (() => void) | null = null;
 
-    const ordersRef = collection(db, "orders");
+    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+      unsubscribeOrders?.();
+      unsubscribeOrders = null;
 
-    const q = query(
-      ordersRef,
-      where("customer.uid", "==", user.uid)
-    );
+      if (!user) {
+        setOrderCount(0);
+        setLatestOrderStatus(null);
+        setLoading(false);
+        return;
+      }
 
-    const unsubscribeOrders = onSnapshot(q, (snapshot) => {
+      const ordersRef = collection(db, "orders");
+
+      /* Match the paid-order Firestore rule so this listener is permitted. */
+      const q = query(
+        ordersRef,
+        where("customer.uid", "==", user.uid),
+        where("checkoutStatus", "==", "confirmed"),
+        where("payment.status", "==", "paid"),
+      );
+
+      unsubscribeOrders = onSnapshot(q, (snapshot) => {
       let activeOrders = 0;
       let latestStatus: string | null = null;
       let latestDate = new Date(0);
@@ -109,16 +117,20 @@ export function TopNavigation({userName, showSearch = false}: TopNavigationProps
 
       setOrderCount(activeOrders);
       setLatestOrderStatus(latestStatus);
-      setLoading(false);
+        setLoading(false);
+      }, (listenerError) => {
+        console.error("Unable to listen to customer order badge:", listenerError);
+        setOrderCount(0);
+        setLatestOrderStatus(null);
+        setLoading(false);
+      });
     });
 
-    // Cleanup Firestore listener when auth changes
-    return unsubscribeOrders;
-  });
-
-  // Cleanup auth listener when component unmounts
-  return () => unsubscribeAuth();
-}, []);
+    return () => {
+      unsubscribeAuth();
+      unsubscribeOrders?.();
+    };
+  }, []);
 
   // ✅ Get color for the order status dot
   const getStatusColor = (status: string | null) => {

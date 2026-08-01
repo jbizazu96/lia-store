@@ -16,18 +16,61 @@ import { onDocumentWritten } from "firebase-functions/v2/firestore";
 
 import { notificationService } from "../services/notificationService";
 import { notificationStore } from "../services/notificationStore";
+import {
+  syncStorePublicProfile,
+  type StorePublicProfileSource,
+} from "../services/store/storePublicProfileService";
 
 interface StoreAnnouncementData {
   isApproved?: unknown;
   isActive?: unknown;
   name?: unknown;
+  ownerId?: unknown;
   customerNotification?: {
-    storeLiveAnnouncementSent?: unknown;
+    storeLiveAnnouncementEventId?: unknown;
+    storeOwnerLiveAnnouncementEventId?: unknown;
   };
 }
 
 function isCustomerVisibleStore(data: StoreAnnouncementData | undefined): boolean {
   return data?.isApproved === true && data.isActive === true;
+}
+
+async function reserveLiveAnnouncement(
+  storeReference: FirebaseFirestore.DocumentReference,
+  marker:
+    | "storeLiveAnnouncementEventId"
+    | "storeOwnerLiveAnnouncementEventId",
+  eventId: string
+): Promise<boolean> {
+  const db = getFirestore("default");
+
+  return db.runTransaction(async (transaction) => {
+    const current = await transaction.get(storeReference);
+    const currentData = current.data() as StoreAnnouncementData | undefined;
+
+    if (
+      !current.exists ||
+      !isCustomerVisibleStore(currentData) ||
+      currentData?.customerNotification?.[marker] === eventId
+    ) {
+      return false;
+    }
+
+    transaction.set(
+      storeReference,
+      {
+        customerNotification: {
+          ...(currentData?.customerNotification ?? {}),
+          [marker]: eventId,
+          [`${marker}At`]: FieldValue.serverTimestamp(),
+        },
+      },
+      { merge: true }
+    );
+
+    return true;
+  });
 }
 
 export const storeCustomerNotifications = onDocumentWritten(
@@ -54,73 +97,101 @@ export const storeCustomerNotifications = onDocumentWritten(
 
     const db = getFirestore("default");
     const storeId = event.params.storeId;
+
+    /*
+     * Firestore triggers are independent and can run in either order. Create
+     * the sanitized customer profile before announcing the store so a tap on
+     * this notification can always open the store, including when it is
+     * currently closed.
+     */
+    await syncStorePublicProfile(
+      storeId,
+      after as StorePublicProfileSource
+    );
+
     const storeName = typeof after.name === "string" && after.name.trim()
       ? after.name.trim()
       : "A new local store";
 
-    /* Reserve the one-time announcement before sending notifications. */
-    const shouldNotify = await db.runTransaction(async (transaction) => {
-      const current = await transaction.get(afterSnapshot.ref);
-      const currentData = current.data() as StoreAnnouncementData | undefined;
-
-      if (
-        !current.exists ||
-        !isCustomerVisibleStore(currentData) ||
-        currentData?.customerNotification?.storeLiveAnnouncementSent === true
-      ) {
-        return false;
-      }
-
-      transaction.set(
+    const [shouldNotifyCustomers, shouldNotifyOwner] = await Promise.all([
+      reserveLiveAnnouncement(
         afterSnapshot.ref,
-        {
-          customerNotification: {
-            ...(currentData?.customerNotification ?? {}),
-            storeLiveAnnouncementSent: true,
-            storeLiveAnnouncementSentAt: FieldValue.serverTimestamp(),
-          },
-        },
-        { merge: true }
+        "storeLiveAnnouncementEventId",
+        event.id
+      ),
+      reserveLiveAnnouncement(
+        afterSnapshot.ref,
+        "storeOwnerLiveAnnouncementEventId",
+        event.id
+      ),
+    ]);
+
+    if (shouldNotifyCustomers) {
+      const customers = await db
+        .collection("users")
+        .where("accountType", "==", "customer")
+        .get();
+
+      const title = "New store now live";
+      const body = storeName + " is now available on LIA.";
+      const results = await Promise.allSettled(
+        customers.docs.map(async (customer) => {
+          await notificationStore.createNotification({
+            uid: customer.id,
+            title,
+            body,
+            type: "system",
+            icon: "store",
+            color: "green",
+            navigationPath: "/store/" + storeId,
+          });
+
+          await notificationService.sendToUser(
+            customer.id,
+            title,
+            body
+          );
+        })
       );
 
-      return true;
-    });
+      const failures = results.filter(
+        (result) => result.status === "rejected"
+      ).length;
 
-    if (!shouldNotify) {
-      return;
+      console.log(
+        "Announced newly live store " + storeId +
+        " to " + customers.size + " customers; " +
+        failures + " notification deliveries failed."
+      );
     }
 
-    const customers = await db
-      .collection("users")
-      .where("accountType", "==", "customer")
-      .get();
+    const ownerId = typeof after.ownerId === "string"
+      ? after.ownerId.trim()
+      : "";
 
-    const title = "New store now live";
-    const body = storeName + " is now available on LIA.";
+    if (shouldNotifyOwner && ownerId) {
+      const title = "Your store is now live";
+      const body = storeName + " is now visible to customers on LIA.";
 
-    await Promise.allSettled(
-      customers.docs.map(async (customer) => {
-        await notificationStore.createNotification({
-          uid: customer.id,
-          title,
-          body,
-          type: "system",
-          icon: "store",
-          color: "green",
-          navigationPath: "/store/" + storeId,
-        });
+      await notificationStore.createNotification({
+        uid: ownerId,
+        title,
+        body,
+        type: "system",
+        icon: "store",
+        color: "green",
+        navigationPath: "/store/dashboard",
+      });
 
-        await notificationService.sendToUser(
-          customer.id,
-          title,
-          body
+      try {
+        await notificationService.sendToUser(ownerId, title, body);
+      } catch (error) {
+        /* The in-app notification is saved even if no push device exists. */
+        console.error(
+          "Unable to send the store-live push notification.",
+          error instanceof Error ? error.message : "Unknown error"
         );
-      })
-    );
-
-    console.log(
-      "Announced newly live store " + storeId +
-      " to " + customers.size + " customers."
-    );
+      }
+    }
   }
 );

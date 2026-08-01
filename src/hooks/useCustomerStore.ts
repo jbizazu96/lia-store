@@ -215,6 +215,7 @@ export function useCustomerStore({
   useEffect(() => {
     let isMounted = true;
     let unsubscribeProducts: (() => void) | null = null;
+    let unsubscribeStore: (() => void) | null = null;
 
     /*
     |--------------------------------------------------------------------------
@@ -429,6 +430,56 @@ export function useCustomerStore({
         setProducts(customerProducts);
         setCategories(storeCategories);
 
+        /*
+         * The store page uses the public projection listener so marketplace
+         * status, opening state, logo, and banner update in real time. Keep
+         * customer-specific distance and already-loaded catalog state intact.
+         */
+        unsubscribeStore = storeService.listenToStore(
+          storeId,
+          (updatedStore) => {
+            if (!isMounted) {
+              return;
+            }
+
+            if (!updatedStore || !isStoreCustomerVisible(updatedStore)) {
+              setStore(null);
+              setProducts([]);
+              setCategories([]);
+              setError("This store is not currently available.");
+              return;
+            }
+
+            setStore((currentStore) => {
+              if (!currentStore) {
+                return currentStore;
+              }
+
+              return storeMapper.toCustomerStore(
+                updatedStore,
+                {
+                  distance: currentStore.distance,
+                  deliveryFee: currentStore.deliveryFee,
+                  deliveryFeeDisplay: currentStore.deliveryFeeDisplay,
+                  estimatedPrepTime: currentStore.estimatedPrepTime,
+                  estimatedDeliveryTime:
+                    currentStore.estimatedDeliveryTime,
+                  reviewCount: currentStore.reviewCount,
+                  categories: currentStore.categories,
+                  promotions: currentStore.promotions,
+                  isFavorite: currentStore.isFavorite,
+                }
+              );
+            });
+          },
+          (listenerError) => {
+            console.error(
+              "Error receiving customer store updates:",
+              listenerError
+            );
+          }
+        );
+
         const exceedsDeliveryRadius =
           distance >
           DELIVERY_CONFIG.MAX_RADIUS_MILES;
@@ -515,6 +566,7 @@ export function useCustomerStore({
 
     return () => {
       isMounted = false;
+      unsubscribeStore?.();
       unsubscribeProducts?.();
     };
   }, [

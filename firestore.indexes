@@ -33,6 +33,28 @@
       ]
     },
     {
+      "collectionGroup": "orders",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "store.id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "checkoutStatus",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "payment.status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "paymentTransfers",
       "queryScope": "COLLECTION",
       "fields": [

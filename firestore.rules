@@ -343,6 +343,24 @@ service cloud.firestore {
     }
 
     /*
+     * Store owners may follow their own fulfilment orders in real time only
+     * after the payment webhook has confirmed the order. This mirrors the
+     * customer visibility rule and prevents a store from seeing an unpaid
+     * checkout attempt that happens to reference its store ID.
+     */
+    function isPaidConfirmedStoreOrder(orderData) {
+      return isStoreOwnerAccount() &&
+        ownsOrder(orderData) &&
+        orderData.keys().hasAll([
+          "checkoutStatus",
+          "payment",
+        ]) &&
+        orderData.checkoutStatus == "confirmed" &&
+        orderData.payment.keys().hasAll(["status"]) &&
+        orderData.payment.status == "paid";
+    }
+
+    /*
     |----------------------------------------------------------------------
     | User Account Data
     |----------------------------------------------------------------------
@@ -460,6 +478,22 @@ service cloud.firestore {
     }
 
     /*
+     * Sanitized server-managed status cards. These provide real-time driver
+     * approval, Stripe readiness, and document review state without granting
+     * browser access to drivers/{driverId} or any document URL.
+     */
+    match /driverWorkspaceStatuses/{driverId} {
+      allow get: if isSelf(driverId);
+      allow list, create, update, delete: if false;
+    }
+
+    /* Store owners can watch their own lifecycle status, not stores/{id}. */
+    match /storeWorkspaceStatuses/{ownerId} {
+      allow get: if isSelf(ownerId);
+      allow list, create, update, delete: if false;
+    }
+
+    /*
     |----------------------------------------------------------------------
     | Marketplace Catalog
     |----------------------------------------------------------------------
@@ -499,8 +533,13 @@ service cloud.firestore {
      * EIN, document review data, or Stripe connection details.
      */
     match /storePublicProfiles/{storeId} {
-      allow get, list: if resource.data.isApproved == true &&
-        resource.data.isActive == true;
+      /*
+       * This collection is a server-managed, deliberately sanitized public
+       * projection. The sync Function creates it only for approved, active
+       * stores and deletes it otherwise. Public reads keep real-time customer
+       * discovery reliable without exposing the private stores collection.
+       */
+      allow get, list: if true;
       allow write: if false;
     }
 
@@ -559,7 +598,7 @@ service cloud.firestore {
     match /orders/{orderId} {
       allow read: if signedIn() && (
         isPaidConfirmedCustomerOrder(resource.data) ||
-        ownsOrder(resource.data) ||
+        isPaidConfirmedStoreOrder(resource.data) ||
         isAdmin()
       );
 

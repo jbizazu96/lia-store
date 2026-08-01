@@ -36,6 +36,23 @@ const googleMapsApiKey = defineSecret("GOOGLE_MAPS_API_KEY");
 const scheduleDays = [
   "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday",
 ] as const;
+const businessTypes = new Set([
+  "grocery",
+  "market",
+  "specialty_food",
+  "african_grocery",
+  "african_restaurant",
+  "home_based",
+  "african_market",
+  "other",
+]);
+const businessStructures = new Set([
+  "sole_proprietorship",
+  "dba",
+  "llc",
+  "partnership",
+  "corporation",
+]);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -52,6 +69,13 @@ function upper(value: string): string {
 function normalizeState(value: string): string | null {
   const normalized = value.trim().toUpperCase();
   return /^[A-Z]{2}$/.test(normalized) ? normalized : null;
+}
+
+function normalizeEin(value: string): string | null {
+  const digits = value.replace(/\D/g, "");
+  if (!digits) return "";
+  if (digits.length !== 9) return null;
+  return `${digits.slice(0, 2)}-${digits.slice(2)}`;
 }
 
 async function requireOwnedStore(uid: string) {
@@ -72,6 +96,30 @@ async function requireOwnedStore(uid: string) {
   return store;
 }
 
+/*
+ * Storage upload authorization is refreshed when a store owner enters the
+ * workspace. It must never block access to the dashboard, orders, or
+ * settings: those callables have already independently verified ownership.
+ *
+ * A failed claim refresh only means the browser must retry its token refresh
+ * before its next image upload. Keeping it non-blocking prevents an Auth
+ * custom-claim permission/configuration issue from surfacing as a generic
+ * `internal` error across every store page.
+ */
+async function refreshStoreUploadClaim(
+  ownerId: string,
+  storeId: string
+): Promise<void> {
+  try {
+    await grantStoreUploadClaim(ownerId, storeId);
+  } catch (error) {
+    console.error(
+      "Unable to refresh the store upload authorization claim.",
+      error instanceof Error ? error.message : "Unknown error"
+    );
+  }
+}
+
 function serialize(value: unknown): unknown {
   if (value && typeof value === "object" && "toDate" in value && typeof value.toDate === "function") {
     const date = value.toDate();
@@ -83,7 +131,11 @@ function serialize(value: unknown): unknown {
 }
 
 function settingsStore(data: Record<string, unknown>, id: string) {
-  /* Explicit allowlist: never return private owner, review, EIN, or Stripe fields. */
+  /*
+   * Explicit owner-only allowlist. The caller has already passed
+   * requireOwnedStore(), so the business registration details can be shown in
+   * the owner's private settings without exposing them on a public store page.
+   */
   return {
     id,
     name: text(data.name), email: text(data.email), phone: text(data.phone), description: text(data.description),
@@ -94,6 +146,12 @@ function settingsStore(data: Record<string, unknown>, id: string) {
     rating: typeof data.rating === "number" ? data.rating : 0, isOpen: data.isOpen === true,
     schedule: Array.isArray(data.schedule) ? serialize(data.schedule) : [],
     isApproved: data.isApproved === true, isActive: data.isActive === true,
+    businessType: text(data.businessType),
+    registeredName: text(data.registeredName),
+    ein: text(data.ein),
+    businessStructure: text(data.businessStructure),
+    storeFrontUrl: text(data.storeFrontUrl),
+    storeInsideUrl: text(data.storeInsideUrl),
   };
 }
 
@@ -143,7 +201,7 @@ async function geocode(address: string) {
 export const getStoreWorkspaceSettings = onCall({ region: "us-central1" }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in to open store settings.");
   const [store, user] = await Promise.all([requireOwnedStore(request.auth.uid), db.collection("users").doc(request.auth.uid).get()]);
-  await grantStoreUploadClaim(request.auth.uid, store.id);
+  await refreshStoreUploadClaim(request.auth.uid, store.id);
   return { store: settingsStore(store.data() ?? {}, store.id), user: settingsUser(user.data() ?? {}) };
 });
 
@@ -153,7 +211,7 @@ export const getStoreWorkspaceEntry = onCall({ region: "us-central1" }, async (r
   if (user.data()?.accountType !== "store_owner") throw new HttpsError("permission-denied", "Only store owners can access this workspace.");
   try {
     const store = await requireOwnedStore(request.auth.uid);
-    await grantStoreUploadClaim(request.auth.uid, store.id);
+    await refreshStoreUploadClaim(request.auth.uid, store.id);
     const data = store.data() ?? {};
     const orders = await db.collection("orders")
       .where("store.id", "==", store.id)
@@ -353,8 +411,15 @@ export const saveStoreWorkspaceSettings = onCall({ region: "us-central1", secret
   const city = text(storeInput.city);
   const state = normalizeState(text(storeInput.state));
   const zip = text(storeInput.zip);
+  const businessType = text(storeInput.businessType);
+  const registeredName = text(storeInput.registeredName);
+  const businessStructure = text(storeInput.businessStructure);
+  const ein = normalizeEin(text(storeInput.ein));
   if (!name || !email.includes("@") || !phone || !description || !address || !city || !state || !zip) {
     throw new HttpsError("invalid-argument", "Complete all store details with a valid email and two-letter state.");
+  }
+  if (!businessTypes.has(businessType) || !registeredName || !businessStructures.has(businessStructure) || ein === null) {
+    throw new HttpsError("invalid-argument", "Complete valid business information. An EIN must use the format 00-0000000.");
   }
   const location = await geocode(`${address}, ${city}, ${state} ${zip}`);
   if (!location) throw new HttpsError("invalid-argument", "We could not verify the store address.");
@@ -363,6 +428,7 @@ export const saveStoreWorkspaceSettings = onCall({ region: "us-central1", secret
     name, email, phone, description,
     address: upper(address), city: upper(city), state, zip: upper(zip), country: "US",
     formattedAddress: upper(location.formattedAddress), latitude: location.latitude, longitude: location.longitude,
+    businessType, registeredName, ein, businessStructure,
     category: text(storeInput.category), isOpen: storeInput.isOpen === true,
     updatedAt: FieldValue.serverTimestamp(),
   });

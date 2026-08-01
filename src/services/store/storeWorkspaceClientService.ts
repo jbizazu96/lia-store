@@ -45,6 +45,12 @@ export interface StoreWorkspaceStore {
   }>;
   isApproved: boolean;
   isActive: boolean;
+  businessType: string;
+  registeredName: string;
+  ein: string;
+  businessStructure: string;
+  storeFrontUrl: string;
+  storeInsideUrl: string;
 }
 
 export interface StoreWorkspaceUser {

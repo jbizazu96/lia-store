@@ -32,6 +32,10 @@ import {
 } from "firebase-functions/v2/storage";
 
 import {
+  getFirestore,
+} from "firebase-admin/firestore";
+
+import {
   claidService,
 } from "../claid/claidService";
 
@@ -161,6 +165,57 @@ function getProductImageMetadata(
 
 /*
 |--------------------------------------------------------------------------
+| Reserved Gallery Upload Validation
+|--------------------------------------------------------------------------
+|
+| Storage Rules authorize the browser by a server-issued store claim. Before
+| processing bytes, independently confirm this exact object was reserved by
+| the protected gallery callable for an approved store and matching product.
+| This prevents arbitrary objects under an owner's store prefix from becoming
+| product images.
+|
+*/
+
+async function isReservedGalleryUpload(
+  metadata: ProductGalleryImageMetadata,
+  originalImagePath: string
+): Promise<boolean> {
+  const firestore = getFirestore("default");
+
+  const [
+    store,
+    product,
+    image,
+  ] = await Promise.all([
+    firestore.collection("stores").doc(metadata.storeId).get(),
+    firestore.collection("products").doc(metadata.productId).get(),
+    firestore
+      .collection("products")
+      .doc(metadata.productId)
+      .collection("images")
+      .doc(metadata.galleryImageId)
+      .get(),
+  ]);
+
+  const imageData = image.data();
+
+  return Boolean(
+    store.exists &&
+      store.data()?.isApproved === true &&
+      store.data()?.onboardingCompleted === true &&
+      product.exists &&
+      product.data()?.storeId === metadata.storeId &&
+      image.exists &&
+      imageData?.productId === metadata.productId &&
+      imageData?.storeId === metadata.storeId &&
+      imageData?.role === metadata.role &&
+      imageData?.position === metadata.position &&
+      imageData?.originalImagePath === originalImagePath
+  );
+}
+
+/*
+|--------------------------------------------------------------------------
 | Trigger
 |--------------------------------------------------------------------------
 */
@@ -279,6 +334,30 @@ export const processProductImage =
           bucketName,
         }
       );
+
+      if (
+        !await isReservedGalleryUpload(
+          metadata,
+          originalImagePath
+        )
+      ) {
+        logger.warn(
+          "Ignoring an unreserved product gallery upload.",
+          {
+            productId,
+            storeId,
+            imageId,
+            originalImagePath,
+          }
+        );
+
+        await deleteOriginalImage(
+          bucketName,
+          originalImagePath
+        );
+
+        return;
+      }
 
       try {
         /*

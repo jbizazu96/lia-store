@@ -15,9 +15,6 @@ import {
   doc,
   getDoc,
   getDocs,
-  onSnapshot,
-  query,
-  where,
   type DocumentData,
   type Unsubscribe,
 } from "firebase/firestore";
@@ -30,6 +27,12 @@ import type {
   ProductGalleryImage,
   ProductImageVariants,
 } from "@/types/product";
+
+const CUSTOMER_STORE_PRODUCTS_REFRESH_INTERVAL_MS = 60_000;
+
+interface CustomerStoreProductsResponse {
+  products: DocumentData[];
+}
 
 /** Firestore does not accept undefined values, including inside nested data. */
 function removeUndefinedFields(
@@ -439,20 +442,21 @@ export const productService = {
       return [];
     }
 
-    const productsQuery = query(
-      collection(db, "productPublicProfiles"),
-      where("storeId", "==", storeId)
-    );
+    const result = await httpsCallable<
+      { storeId: string },
+      CustomerStoreProductsResponse
+    >(
+      functions,
+      "getCustomerStoreProducts"
+    )({ storeId });
 
-    const snapshot = await getDocs(
-      productsQuery
-    );
-
-    return snapshot.docs.map(
+    return result.data.products.map(
       (productDocument) =>
         mapProductDocument(
-          productDocument.id,
-          productDocument.data()
+          typeof productDocument.id === "string"
+            ? productDocument.id
+            : "",
+          productDocument
         )
     );
   },
@@ -471,31 +475,49 @@ export const productService = {
       return () => undefined;
     }
 
-    const productsQuery = query(
-      collection(db, "productPublicProfiles"),
-      where("storeId", "==", storeId)
+    /*
+     * Keep the catalog fresh without a browser Firestore listener. This
+     * mirrors the customer store catalog approach and prevents client Rules
+     * or index configuration from blocking an otherwise public store page.
+     */
+    let active = true;
+    let loading = false;
+
+    const refresh = async (): Promise<void> => {
+      if (loading) {
+        return;
+      }
+
+      loading = true;
+
+      try {
+        const products = await this.getStoreProducts(storeId);
+
+        if (active) {
+          onProducts(products);
+        }
+      } catch (error) {
+        if (active) {
+          onError?.(
+            error instanceof Error
+              ? error
+              : new Error("Unable to load store products.")
+          );
+        }
+      } finally {
+        loading = false;
+      }
+    };
+
+    const intervalId = window.setInterval(
+      () => void refresh(),
+      CUSTOMER_STORE_PRODUCTS_REFRESH_INTERVAL_MS
     );
 
-    return onSnapshot(
-      productsQuery,
-      (snapshot) => {
-        onProducts(
-          snapshot.docs.map((productDocument) =>
-            mapProductDocument(
-              productDocument.id,
-              productDocument.data()
-            )
-          )
-        );
-      },
-      (listenerError) => {
-        console.error(
-          "Error listening to store products:",
-          listenerError
-        );
-        onError?.(listenerError);
-      }
-    );
+    return () => {
+      active = false;
+      window.clearInterval(intervalId);
+    };
   },
 
   /*

@@ -5,14 +5,14 @@
 | useStoreOrders Hook
 |--------------------------------------------------------------------------
 |
-| Store orders are fetched through callable Functions. A short bounded poll
-| keeps Shipday status changes visible without leaving a browser listener on
-| the entire private order history.
+| Fulfilment order status is operational data, so a store owner receives it
+| through one narrowly scoped Firestore listener. The rules independently
+| require ownership plus a paid, confirmed checkout. Store profile, Stripe,
+| earnings, and other private workspace data remain callable-only.
 |
 */
 
 import {
-  useCallback,
   useEffect,
   useState,
 } from "react";
@@ -20,7 +20,15 @@ import {
   onAuthStateChanged,
 } from "firebase/auth";
 import {
+  collection,
+  onSnapshot,
+  orderBy,
+  query,
+  where,
+} from "firebase/firestore";
+import {
   auth,
+  db,
 } from "@/lib/firebase";
 import {
   mapFirestoreOrder,
@@ -41,15 +49,6 @@ interface UseStoreOrdersResult {
   needsStoreSetup: boolean;
 }
 
-function mapOrder(
-  value: Record<string, unknown> & { id: string },
-): Order {
-  return mapFirestoreOrder({
-    id: value.id,
-    data: () => value,
-  } as never);
-}
-
 export function useStoreOrders(): UseStoreOrdersResult {
   const [orders, setOrders] = useState<Order[]>([]);
   const [storeId, setStoreId] = useState<string | null>(null);
@@ -58,51 +57,13 @@ export function useStoreOrders(): UseStoreOrdersResult {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [needsStoreSetup, setNeedsStoreSetup] = useState(false);
 
-  const loadOrders = useCallback(async (
-    showLoading = true,
-    synchronize = false,
-  ): Promise<void> => {
-    if (showLoading) setLoading(true);
-
-    try {
-      const entry = await storeWorkspaceClientService.getEntry();
-      if (!entry.hasStore || !entry.store) {
-        setStoreId(null);
-        setOrders([]);
-        setNeedsStoreSetup(true);
-        setError("No store was found for this account.");
-        return;
-      }
-
-      setStoreId(entry.store.id);
-      setNeedsStoreSetup(false);
-
-      /* The scheduler owns ongoing Shipday sync; opening Orders gets one refresh. */
-      if (synchronize) {
-        try {
-          const { getFunctions, httpsCallable } = await import("firebase/functions");
-          await httpsCallable(getFunctions(undefined, "us-central1"), "syncStoreOrders")();
-        } catch (syncError) {
-          console.error("Store order synchronization failed:", syncError);
-        }
-      }
-
-      const response = await storeWorkspaceClientService.getOrders();
-      setOrders(response.orders.map(mapOrder));
-      setError(null);
-    } catch (loadError) {
-      console.error("Error loading store orders:", loadError);
-      setOrders([]);
-      setError("Failed to load store orders.");
-    } finally {
-      if (showLoading) setLoading(false);
-    }
-  }, []);
-
   useEffect(() => {
-    let refreshTimer: ReturnType<typeof setInterval> | null = null;
+    let unsubscribeOrders: (() => void) | null = null;
 
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+      unsubscribeOrders?.();
+      unsubscribeOrders = null;
+
       if (!user) {
         setOrders([]);
         setStoreId(null);
@@ -114,15 +75,65 @@ export function useStoreOrders(): UseStoreOrdersResult {
       }
 
       setIsAuthenticated(true);
-      void loadOrders(true, true);
-      refreshTimer = setInterval(() => void loadOrders(false), 30_000);
+      setLoading(true);
+
+      void storeWorkspaceClientService.getEntry()
+        .then((entry) => {
+          if (!entry.hasStore || !entry.store) {
+            setStoreId(null);
+            setOrders([]);
+            setNeedsStoreSetup(true);
+            setError("No store was found for this account.");
+            return;
+          }
+
+          const ownedStoreId = entry.store.id;
+          setStoreId(ownedStoreId);
+          setNeedsStoreSetup(false);
+
+          /*
+           * The query constraints intentionally match the read rule. Do not
+           * loosen these fields: Firestore rejects queries that might return
+           * an unpaid order, and the UI must never display one.
+           */
+          const ordersQuery = query(
+            collection(db, "orders"),
+            where("store.id", "==", ownedStoreId),
+            where("checkoutStatus", "==", "confirmed"),
+            where("payment.status", "==", "paid"),
+            orderBy("createdAt", "desc"),
+          );
+
+          unsubscribeOrders = onSnapshot(
+            ordersQuery,
+            (snapshot) => {
+              setOrders(snapshot.docs.map((document) =>
+                mapFirestoreOrder(document),
+              ));
+              setError(null);
+              setLoading(false);
+            },
+            (listenerError) => {
+              console.error("Error listening to store orders:", listenerError);
+              setOrders([]);
+              setError("Failed to load store orders.");
+              setLoading(false);
+            },
+          );
+        })
+        .catch((loadError) => {
+          console.error("Error loading store order access:", loadError);
+          setOrders([]);
+          setError("Failed to load store orders.");
+          setLoading(false);
+        });
     });
 
     return () => {
-      unsubscribe();
-      if (refreshTimer) clearInterval(refreshTimer);
+      unsubscribeAuth();
+      unsubscribeOrders?.();
     };
-  }, [loadOrders]);
+  }, []);
 
   return {
     orders,

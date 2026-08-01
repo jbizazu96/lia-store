@@ -10,6 +10,12 @@ import {
   initializeUserProfile,
 } from "./callable/initializeUserProfile";
 import { driverApproved } from "./triggers/driverApproved";
+export {
+  storeWorkspaceStatusSync,
+} from "./triggers/storeWorkspaceStatusSync";
+export {
+  driverWorkspaceStatusSync,
+} from "./triggers/driverWorkspaceStatusSync";
 import * as admin from "firebase-admin";
 import {onCall, HttpsError} from "firebase-functions/v2/https";
 import {onSchedule} from "firebase-functions/v2/scheduler"; 
@@ -59,6 +65,13 @@ export {
   getCustomerCart,
   saveCustomerCart,
 } from "./callable/customerCart";
+export {
+  getCustomerStoreCatalog,
+  getCustomerStorePublicProfile,
+} from "./callable/customerStoreCatalog";
+export {
+  getCustomerStoreProducts,
+} from "./callable/customerStoreProducts";
 export {
   getOwnedStoreProduct,
   getOwnedStoreProducts,

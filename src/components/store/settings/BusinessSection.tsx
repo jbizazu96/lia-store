@@ -13,6 +13,9 @@ interface BusinessSectionProps {
 
 export function BusinessSection({storeData, setStoreData}: BusinessSectionProps) {
   const businessTypes = [
+    {value: "grocery", label: "Grocery Store"},
+    {value: "market", label: "Market"},
+    {value: "specialty_food", label: "Specialty Food Store"},
     {value: "african_grocery", label: "African Grocery Store"},
     {value: "african_restaurant", label: "African Restaurant"},
     {value: "home_based", label: "Home-Based Business"},

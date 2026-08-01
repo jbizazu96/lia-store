@@ -2,7 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { Banknote, CheckCircle2, Clock3, FileCheck2, ShieldAlert, WalletCards } from "lucide-react";
+import { onAuthStateChanged } from "firebase/auth";
+import { doc, onSnapshot } from "firebase/firestore";
 import { BrandedLoader } from "@/components/ui/BrandedLoader";
+import { auth, db } from "@/lib/firebase";
 import { driverWorkspaceClientService } from "@/services/driver/driverWorkspaceClientService";
 import type { DriverWorkspaceSummary } from "@/types/driverWorkspace";
 
@@ -11,7 +14,85 @@ function statusInfo(status: DriverWorkspaceSummary["status"]) { if (status === "
 
 export default function DriverDashboardPage() {
   const [summary, setSummary] = useState<DriverWorkspaceSummary | null>(null);
-  useEffect(() => { void driverWorkspaceClientService.getSummary().then(setSummary).catch(() => setSummary(null)); }, []);
+  useEffect(() => {
+    let unsubscribeStatus: (() => void) | null = null;
+
+    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+      unsubscribeStatus?.();
+      unsubscribeStatus = null;
+
+      if (!user) {
+        setSummary(null);
+        return;
+      }
+
+      void driverWorkspaceClientService.getSummary()
+        .then(setSummary)
+        .catch(() => setSummary(null));
+
+      /* The projection intentionally excludes address, vehicle, and document URLs. */
+      unsubscribeStatus = onSnapshot(
+        doc(db, "driverWorkspaceStatuses", user.uid),
+        (snapshot) => {
+          if (!snapshot.exists()) return;
+
+          const status = snapshot.data();
+          setSummary((current) => current
+            ? {
+                ...current,
+                onboardingCompleted: status.onboardingCompleted === true,
+                onboardingStep: typeof status.onboardingStep === "string"
+                  ? status.onboardingStep
+                  : current.onboardingStep,
+                status: status.status === "approved" ||
+                  status.status === "suspended" ||
+                  status.status === "rejected" ||
+                  status.status === "pending_review"
+                  ? status.status
+                  : "draft",
+                isApproved: status.isApproved === true,
+                stripe: status.stripe && typeof status.stripe === "object"
+                  ? {
+                      status: typeof status.stripe.status === "string"
+                        ? status.stripe.status
+                        : current.stripe.status,
+                      transfersEnabled: status.stripe.transfersEnabled === true,
+                      payoutsEnabled: status.stripe.payoutsEnabled === true,
+                      requiresAction: status.stripe.requiresAction === true,
+                    }
+                  : current.stripe,
+                documents: Array.isArray(status.documents)
+                  ? status.documents.flatMap((document) => {
+                      if (!document || typeof document !== "object") return [];
+                      const value = document as Record<string, unknown>;
+                      const reviewStatus = value.reviewStatus;
+                      if (typeof value.label !== "string" ||
+                        !["pending", "approved", "rejected", "expired", "missing"].includes(String(reviewStatus))) {
+                        return [];
+                      }
+                      return [{
+                        label: value.label,
+                        reviewStatus: reviewStatus as DriverWorkspaceSummary["documents"][number]["reviewStatus"],
+                        expirationDate: typeof value.expirationDate === "string"
+                          ? value.expirationDate
+                          : undefined,
+                      }];
+                    })
+                  : current.documents,
+              }
+            : current);
+        },
+        (listenerError) => {
+          console.error("Unable to listen to driver workspace status:", listenerError);
+        },
+      );
+    });
+
+    return () => {
+      unsubscribeAuth();
+      unsubscribeStatus?.();
+    };
+  }, []);
   if (!summary) return <BrandedLoader message="Loading Driver Dashboard" />;
   const [label, color, Icon] = statusInfo(summary.status);
   const docsApproved = summary.documents.filter((document) => document.reviewStatus === "approved").length;

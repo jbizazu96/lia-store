@@ -261,7 +261,13 @@ export const mutateStoreProduct = onCall({ region: "us-central1" }, async (reque
   }
 
   if (action === "delete") {
-    await reference.delete();
+    /*
+     * Delete nested gallery-image metadata as well as the parent product.
+     * A product creation that cannot upload its required image is rolled back
+     * by the browser; recursive deletion prevents failed gallery documents
+     * from remaining behind after that rollback.
+     */
+    await db.recursiveDelete(reference);
     return { productId: id };
   }
 

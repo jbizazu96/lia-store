@@ -29,6 +29,11 @@ import {
 } from "lucide-react";
 import { auth } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
+import {
+  doc,
+  onSnapshot,
+} from "firebase/firestore";
+import { db } from "@/lib/firebase";
 import Image from "next/image";
 import Link from "next/link";
 import { notificationService } from "@/services/notification/notificationService";
@@ -210,8 +215,10 @@ function StoreLayoutContent({ children }: { children: React.ReactNode }) {
 
   // Check auth and get store data
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (!user) {
+    const loadStoreWorkspaceEntry = async () => {
+      const currentUser = auth.currentUser;
+
+      if (!currentUser) {
         router.push("/login");
         return;
       }
@@ -233,13 +240,8 @@ function StoreLayoutContent({ children }: { children: React.ReactNode }) {
           return;
         }
 
-        /*
-          Approval grants the owner access to the private store workspace.
-          Activation is intentionally separate and controls customer visibility.
-        */
-        const isApproved = data.isApproved === true;
-
-        if (!isApproved) {
+        /* Approval grants workspace access; activation grants customer visibility. */
+        if (data.isApproved !== true) {
           router.replace("/store/pending-approval");
           return;
         }
@@ -248,7 +250,7 @@ function StoreLayoutContent({ children }: { children: React.ReactNode }) {
           id: data.id,
           name: data.name,
           logoUrl: data.logoUrl,
-          isApproved,
+          isApproved: true,
           isActive: data.isActive === true,
         });
       } catch (error) {
@@ -256,10 +258,53 @@ function StoreLayoutContent({ children }: { children: React.ReactNode }) {
       } finally {
         setLoading(false);
       }
+    };
+
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (!user) {
+        router.push("/login");
+        return;
+      }
+
+      await loadStoreWorkspaceEntry();
     });
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+    };
   }, [router]);
+
+  /*
+   * A server-managed projection makes admin lifecycle changes visible right
+   * away. The private stores document (which contains Stripe, documents, and
+   * business registration data) is never read by this browser listener.
+   */
+  useEffect(() => {
+    if (!user || !storeData) {
+      return;
+    }
+
+    return onSnapshot(
+      doc(db, "storeWorkspaceStatuses", user.uid),
+      (snapshot) => {
+        if (!snapshot.exists()) {
+          return;
+        }
+
+        const status = snapshot.data();
+        setStoreData((current) => current
+          ? {
+              ...current,
+              isApproved: status.isApproved === true,
+              isActive: status.isActive === true,
+            }
+          : current);
+      },
+      (listenerError) => {
+        console.error("Unable to listen to store workspace status:", listenerError);
+      },
+    );
+  }, [storeData?.id, user]);
 
   // Handle logout
   const handleLogout = async () => {

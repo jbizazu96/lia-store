@@ -23,82 +23,127 @@ import {
   getDoc,
   getDocs,
   onSnapshot,
-  type DocumentData,
 } from "firebase/firestore";
 import { isStoreActive, isStoreApproved } from "./storeAvailability";
 
 import { db } from "@/lib/firebase";
 import type { Store } from "@/types/store";
 
+type PublicStoreDocument = Record<string, unknown>;
+
+function text(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+function optionalText(value: unknown): string | undefined {
+  return typeof value === "string" && value
+    ? value
+    : undefined;
+}
+
+function number(value: unknown, fallback = 0): number {
+  return typeof value === "number" && Number.isFinite(value)
+    ? value
+    : fallback;
+}
+
+function schedule(value: unknown): Store["schedule"] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.flatMap((day) => {
+    if (!day || typeof day !== "object" || Array.isArray(day)) {
+      return [];
+    }
+
+    const record = day as Record<string, unknown>;
+
+    return [{
+      day: text(record.day),
+      open: text(record.open),
+      close: text(record.close),
+      isClosed: record.isClosed === true,
+    }];
+  });
+}
+
 function mapStoreDocument(
   storeId: string,
-  data: DocumentData
+  data: PublicStoreDocument
 ): Store {
   return {
     id: storeId,
-    ownerId: data.ownerId ?? "",
+    /* Ownership and onboarding data never leave the callable boundary. */
+    ownerId: "",
 
-    name: data.name ?? "",
-    description: data.description ?? "",
+    name: text(data.name),
+    description: text(data.description),
 
-    phone: data.phone ?? "",
-    email: data.email ?? "",
+    phone: text(data.phone),
+    email: text(data.email),
 
-    address: data.address ?? "",
-    city: data.city ?? "",
-    state: data.state ?? "",
-    zip: data.zip ?? "",
-    country: data.country ?? undefined,
+    address: text(data.address),
+    city: text(data.city),
+    state: text(data.state),
+    zip: text(data.zip),
+    country: optionalText(data.country),
 
-    latitude: data.latitude ?? 0,
-    longitude: data.longitude ?? 0,
-    placeId: data.placeId ?? "",
-    formattedAddress: data.formattedAddress ?? "",
+    latitude: number(data.latitude),
+    longitude: number(data.longitude),
+    placeId: text(data.placeId),
+    formattedAddress: text(data.formattedAddress),
 
-    logoUrl: data.logoUrl ?? "",
-    bannerUrl: data.bannerUrl ?? "",
+    logoUrl: text(data.logoUrl),
+    bannerUrl: text(data.bannerUrl),
 
-    category: data.category ?? undefined,
-    rating: data.rating ?? undefined,
+    category: optionalText(data.category),
+    rating: typeof data.rating === "number"
+      ? number(data.rating)
+      : undefined,
 
-    distance: data.distance ?? undefined,
-    deliveryFee: data.deliveryFee ?? undefined,
+    distance: typeof data.distance === "number"
+      ? number(data.distance)
+      : undefined,
+    deliveryFee: typeof data.deliveryFee === "number"
+      ? number(data.deliveryFee)
+      : undefined,
 
-    minimumOrder: data.minimumOrder ?? 20,
+    minimumOrder: number(data.minimumOrder, 20),
 
     isApproved: isStoreApproved(data),
     isActive: isStoreActive(data),
-    onboardingCompleted: data.onboardingCompleted === true,
-    onboardingStep: data.onboardingStep ?? undefined,
-    owner: data.owner ?? undefined,
-    isOpen: data.isOpen ?? false,
-    schedule: data.schedule ?? [],
+    onboardingCompleted: false,
+    onboardingStep: undefined,
+    owner: undefined,
+    isOpen: data.isOpen === true,
+    schedule: schedule(data.schedule),
 
-    createdAt: data.createdAt ?? "",
-    updatedAt: data.updatedAt ?? "",
+    createdAt: "",
+    updatedAt: text(data.updatedAt),
 
-    stripeAccountId: data.stripeAccountId ?? undefined,
-    stripeConnectApiVersion:
-      data.stripeConnectApiVersion === "v2" ? "v2" : undefined,
+    stripeAccountId: undefined,
+    stripeConnectApiVersion: undefined,
 
-    businessType: data.businessType ?? undefined,
-    registeredName: data.registeredName ?? undefined,
-    ein: data.ein ?? undefined,
-    businessStructure: data.businessStructure ?? undefined,
-    photoIdUrl: data.photoIdUrl ?? undefined,
-    storeFrontUrl: data.storeFrontUrl ?? undefined,
-    storeInsideUrl: data.storeInsideUrl ?? undefined,
+    businessType: undefined,
+    registeredName: undefined,
+    ein: undefined,
+    businessStructure: undefined,
+    photoIdUrl: undefined,
+    storeFrontUrl: undefined,
+    storeInsideUrl: undefined,
 
-    stripeEmail: data.stripeEmail ?? undefined,
-    stripePhone: data.stripePhone ?? undefined,
-    stripeBusinessType: data.stripeBusinessType ?? undefined,
-    stripeAccountType: data.stripeAccountType ?? undefined,
+    stripeEmail: undefined,
+    stripePhone: undefined,
+    stripeBusinessType: undefined,
+    stripeAccountType: undefined,
   };
 }
 
 export const storeService = {
   /**
-   * Get all stores.
+   * Get all customer-visible stores from the server-managed public
+   * projection. No private stores/{storeId} data is available to the browser.
    */
   async getStores(): Promise<Store[]> {
     const snapshot = await getDocs(
@@ -121,6 +166,11 @@ export const storeService = {
     onChange: (stores: Store[]) => void,
     onError?: (error: Error) => void
   ): () => void {
+    /*
+     * The public projection contains only approved, active stores and carries
+     * no owner, Stripe, business-registration, or document-review data.
+     * This is appropriate for a direct real-time customer listener.
+     */
     return onSnapshot(
       collection(db, "storePublicProfiles"),
       (snapshot) => {
@@ -154,6 +204,33 @@ export const storeService = {
     return mapStoreDocument(
       snapshot.id,
       snapshot.data()
+    );
+  },
+
+  /**
+   * Subscribe to a single customer-visible store so name, opening status,
+   * banner, and marketplace availability update without a page reload.
+   */
+  listenToStore(
+    storeId: string,
+    onChange: (store: Store | null) => void,
+    onError?: (error: Error) => void
+  ): () => void {
+    if (!storeId.trim()) {
+      onChange(null);
+      return () => undefined;
+    }
+
+    return onSnapshot(
+      doc(db, "storePublicProfiles", storeId),
+      (snapshot) => {
+        onChange(
+          snapshot.exists()
+            ? mapStoreDocument(snapshot.id, snapshot.data())
+            : null
+        );
+      },
+      (error) => onError?.(error)
     );
   },
 };
