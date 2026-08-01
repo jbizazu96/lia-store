@@ -27,13 +27,15 @@ import {
   ChevronRight,
   CheckCircle,
 } from "lucide-react";
-import { auth, db } from "@/lib/firebase";
-import { collection, query, where, getDocs, doc, getDoc } from "firebase/firestore";
+import { auth } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import Image from "next/image";
 import Link from "next/link";
 import { notificationService } from "@/services/notification/notificationService";
 import type { Notification } from "@/services/notification/notificationTypes";
+import {
+  storeWorkspaceClientService,
+} from "@/services/store/storeWorkspaceClientService";
 import {
   RoleGuard,
 } from "@/components/auth/RoleGuard";
@@ -178,41 +180,13 @@ function StoreLayoutContent({ children }: { children: React.ReactNode }) {
         const user = auth.currentUser;
         if (!user) return;
 
-        const userRef = doc(db, "users", user.uid);
-        const userDoc = await getDoc(userRef);
-        let storeId = userDoc.data()?.storeId;
+        const entry =
+          await storeWorkspaceClientService
+            .getEntry();
 
-        if (!storeId) {
-          const storesRef = collection(db, "stores");
-          const q = query(storesRef, where("ownerId", "==", user.uid));
-          const storeSnapshot = await getDocs(q);
-          if (!storeSnapshot.empty) {
-            storeId = storeSnapshot.docs[0].id;
-          }
-        }
-
-        if (!storeId) return;
-
-        const ordersRef = collection(db, "orders");
-        const q = query(
-          ordersRef,
-          where("store.id", "==", storeId),
-          where("status", "in", ["pending", "accepted", "preparing", "ready_for_pickup"])
+        setPendingOrdersCount(
+          entry.pendingOrderCount
         );
-        const snapshot = await getDocs(q);
-
-        /*
-         * A fulfillment status of "pending" is also used while Stripe
-         * payment is still awaiting confirmation. Only paid orders belong
-         * in the store navigation badge.
-         */
-        const confirmedOrderCount =
-          snapshot.docs.filter(
-            (orderDocument) =>
-              orderDocument.data().checkoutStatus === "confirmed"
-          ).length;
-
-        setPendingOrdersCount(confirmedOrderCount);
         
       } catch (error) {
         console.error("Error fetching pending orders:", error);
@@ -243,17 +217,16 @@ function StoreLayoutContent({ children }: { children: React.ReactNode }) {
       }
 
       try {
-        const storesRef = collection(db, "stores");
-        const q = query(storesRef, where("ownerId", "==", user.uid));
-        const storeSnapshot = await getDocs(q);
-        
-        if (storeSnapshot.empty) {
+        const entry =
+          await storeWorkspaceClientService
+            .getEntry();
+
+        if (!entry.hasStore || !entry.store) {
           router.push("/store/onboarding/owner");
           return;
         }
 
-        const storeDoc = storeSnapshot.docs[0];
-        const data = storeDoc.data();
+        const data = entry.store;
 
         if (!data.onboardingCompleted) {
           router.push(`/store/onboarding/${data.onboardingStep || "owner"}`);
@@ -272,7 +245,7 @@ function StoreLayoutContent({ children }: { children: React.ReactNode }) {
         }
 
         setStoreData({
-          id: storeDoc.id,
+          id: data.id,
           name: data.name,
           logoUrl: data.logoUrl,
           isApproved,

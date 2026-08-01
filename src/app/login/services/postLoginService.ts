@@ -5,9 +5,10 @@
   Checks account type and store status for store owners.
 */
 
-import {doc, getDoc, updateDoc, collection, query, where, getDocs} from "firebase/firestore";
-import {auth, db} from "@/lib/firebase";
+import {doc, getDoc} from "firebase/firestore";
+import {db} from "@/lib/firebase";
 import {userService} from "@/services/user/userService";
+import {storeWorkspaceClientService} from "@/services/store/storeWorkspaceClientService";
 
 interface PostLoginResult {
   accountType: "customer" | "store_owner" | "driver" | "admin";
@@ -48,18 +49,12 @@ export async function handlePostLogin(uid: string): Promise<PostLoginResult> {
   let storeId = "";
 
   if (accountType === "store_owner") {
-    // Query stores collection where ownerId == uid
-    const storesRef = collection(db, "stores");
-    const q = query(storesRef, where("ownerId", "==", uid));
-    const storeSnapshot = await getDocs(q);
+    const entry = await storeWorkspaceClientService.getEntry();
 
-    if (!storeSnapshot.empty) {
-      // Get the first store (should only be one)
-      const storeDoc = storeSnapshot.docs[0];
-      const storeData = storeDoc.data();
-      storeId = storeDoc.id;
-      storeName = storeData.name || "Your Store";
-      storeStatus = storeData.isApproved === true ? "approved" : "pending";
+    if (entry.hasStore && entry.store) {
+      storeId = entry.store.id;
+      storeName = entry.store.name || "Your Store";
+      storeStatus = entry.store.isApproved ? "approved" : "pending";
     }
   }
 

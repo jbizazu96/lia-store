@@ -3,14 +3,25 @@
 | Customer Profile Client Service
 |--------------------------------------------------------------------------
 |
-| Customer profile UI calls this service only. Authenticated API routes own
-| all Firestore, Storage, and server-side validation work.
+| Customer profile UI calls this service only. Authenticated Firebase
+| Functions own profile data, address validation, and lifecycle changes.
+| The browser uploads a profile-image original only to its own Storage path;
+| the image Function owns processing and the final profile URL.
 |
 */
 
 import {
   auth,
+  functions,
+  storage,
 } from "@/lib/firebase";
+import {
+  httpsCallable,
+} from "firebase/functions";
+import {
+  ref,
+  uploadBytes,
+} from "firebase/storage";
 
 export interface CustomerProfileAddress {
   street: string;
@@ -32,44 +43,22 @@ export interface CustomerProfile {
   defaultAddress: CustomerProfileAddress | null;
 }
 
-async function authorizedRequest(
-  path: string,
-  init: RequestInit = {}
-): Promise<Response> {
-  const user = auth.currentUser;
-
-  if (!user) {
-    throw new Error("Sign in again before managing your profile.");
+async function call<T>(name: string, data?: unknown): Promise<T> {
+  try {
+    const result = await httpsCallable<unknown, T>(functions, name)(data);
+    return result.data;
+  } catch (error) {
+    throw new Error(
+      typeof (error as { message?: unknown }).message === "string"
+        ? (error as { message: string }).message
+        : "The profile request could not be completed."
+    );
   }
-
-  const headers = new Headers(init.headers);
-  headers.set("Authorization", `Bearer ${await user.getIdToken()}`);
-
-  return fetch(path, {
-    ...init,
-    headers,
-  });
-}
-
-async function requestJson<T>(
-  path: string,
-  init?: RequestInit
-): Promise<T> {
-  const response = await authorizedRequest(path, init);
-  const payload = await response.json().catch(() => ({})) as {
-    error?: string;
-  } & T;
-
-  if (!response.ok) {
-    throw new Error(payload.error ?? "The profile request could not be completed.");
-  }
-
-  return payload;
 }
 
 export const customerProfileClientService = {
   async getProfile(): Promise<CustomerProfile> {
-    return requestJson<CustomerProfile>("/api/customer/profile");
+    return call<CustomerProfile>("getCustomerProfile");
   },
 
   async updateProfile(input: {
@@ -77,46 +66,45 @@ export const customerProfileClientService = {
     phone: string;
     language?: string;
   }): Promise<CustomerProfile> {
-    return requestJson<CustomerProfile>("/api/customer/profile", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(input),
-    });
+    return call<CustomerProfile>("updateCustomerProfile", input);
   },
 
   async saveDefaultAddress(
     input: Pick<CustomerProfileAddress, "street" | "city" | "state" | "zip">
   ): Promise<CustomerProfileAddress> {
-    const payload = await requestJson<{
+    const payload = await call<{
       defaultAddress: CustomerProfileAddress;
-    }>("/api/customer/profile/address", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(input),
-    });
+    }>("saveCustomerDefaultAddress", input);
 
     return payload.defaultAddress;
   },
 
   async deleteDefaultAddress(): Promise<void> {
-    await requestJson("/api/customer/profile/address", {
-      method: "DELETE",
-    });
+    await call("deleteCustomerDefaultAddress");
   },
 
   async uploadProfileImage(file: File): Promise<void> {
-    const formData = new FormData();
-    formData.set("file", file);
+    const user = auth.currentUser;
+    if (!user) throw new Error("Sign in again before uploading a profile photo.");
 
-    await requestJson("/api/customer/profile/image", {
-      method: "POST",
-      body: formData,
+    const extension = file.name.split(".").pop()?.toLowerCase().replace(/[^a-z0-9]/g, "") || "image";
+    const upload = await call<{ imageId: string; originalPath: string }>(
+      "beginCustomerProfileImageUpload",
+      { contentType: file.type, extension, size: file.size }
+    );
+
+    await uploadBytes(ref(storage, upload.originalPath), file, {
+      contentType: file.type,
+      cacheControl: "private, max-age=0, no-cache",
+      customMetadata: {
+        userId: user.uid,
+        imageId: upload.imageId,
+        processingType: "customer-profile-image-original",
+      },
     });
   },
 
   async deleteProfileData(): Promise<void> {
-    await requestJson("/api/customer/profile", {
-      method: "DELETE",
-    });
+    await call("deleteCustomerProfileData");
   },
 };

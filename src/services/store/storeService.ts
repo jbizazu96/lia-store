@@ -3,9 +3,10 @@
 | Store Service
 |--------------------------------------------------------------------------
 |
-| Responsible for retrieving Store domain models from Firestore.
+| Responsible for retrieving public Store domain models from Firestore.
 |
-| Pages and components should not access the stores collection directly.
+| Pages and components should not access the private stores collection
+| directly. Customer discovery reads a server-managed public profile.
 |
 */
 
@@ -101,7 +102,7 @@ export const storeService = {
    */
   async getStores(): Promise<Store[]> {
     const snapshot = await getDocs(
-      collection(db, "stores")
+      collection(db, "storePublicProfiles")
     );
 
     return snapshot.docs.map((storeDocument) =>
@@ -121,7 +122,7 @@ export const storeService = {
     onError?: (error: Error) => void
   ): () => void {
     return onSnapshot(
-      collection(db, "stores"),
+      collection(db, "storePublicProfiles"),
       (snapshot) => {
         onChange(
           snapshot.docs.map((storeDocument) =>
@@ -143,7 +144,7 @@ export const storeService = {
     storeId: string
   ): Promise<Store | null> {
     const snapshot = await getDoc(
-      doc(db, "stores", storeId)
+      doc(db, "storePublicProfiles", storeId)
     );
 
     if (!snapshot.exists()) {

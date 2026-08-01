@@ -3,30 +3,28 @@
 | Product Service
 |--------------------------------------------------------------------------
 |
-| Responsible for retrieving Product domain models from Firestore.
+| Retrieves public product catalog models and private store inventory.
 |
-| Pages and components should not access the "products" collection
-| directly. They should call this service instead.
+| Customer reads use productPublicProfiles. Store inventory reads use
+| authenticated callable Functions rather than private Firestore documents.
 |
 */
 
 import {
-  addDoc,
   collection,
-  deleteDoc,
   doc,
   getDoc,
   getDocs,
   onSnapshot,
   query,
-  serverTimestamp,
-  updateDoc,
   where,
   type DocumentData,
   type Unsubscribe,
 } from "firebase/firestore";
 
 import { db } from "@/lib/firebase";
+import { functions } from "@/lib/firebase";
+import { httpsCallable } from "firebase/functions";
 import type {
   Product,
   ProductGalleryImage,
@@ -418,7 +416,7 @@ export const productService = {
     }
 
     const snapshot = await getDoc(
-      doc(db, "products", productId)
+      doc(db, "productPublicProfiles", productId)
     );
 
     if (!snapshot.exists()) {
@@ -442,7 +440,7 @@ export const productService = {
     }
 
     const productsQuery = query(
-      collection(db, "products"),
+      collection(db, "productPublicProfiles"),
       where("storeId", "==", storeId)
     );
 
@@ -474,7 +472,7 @@ export const productService = {
     }
 
     const productsQuery = query(
-      collection(db, "products"),
+      collection(db, "productPublicProfiles"),
       where("storeId", "==", storeId)
     );
 
@@ -502,6 +500,64 @@ export const productService = {
 
   /*
   |--------------------------------------------------------------------------
+  | Private Store Inventory
+  |--------------------------------------------------------------------------
+  */
+
+  async getOwnedStoreProducts(): Promise<{
+    storeId: string;
+    products: Product[];
+  }> {
+    const result = await httpsCallable<
+      unknown,
+      {
+        storeId: string;
+        products: Array<Record<string, unknown> & { id: string }>;
+      }
+    >(
+      functions,
+      "getOwnedStoreProducts"
+    )();
+
+    return {
+      storeId: result.data.storeId,
+      products: result.data.products.map(
+        (product) =>
+          mapProductDocument(
+            product.id,
+            product as DocumentData
+          )
+      ),
+    };
+  },
+
+  async getOwnedStoreProduct(
+    productId: string
+  ): Promise<Product | null> {
+    if (!productId.trim()) {
+      throw new Error(
+        "A product ID is required."
+      );
+    }
+
+    const result = await httpsCallable<
+      { productId: string },
+      {
+        product: Record<string, unknown> & { id: string };
+      }
+    >(
+      functions,
+      "getOwnedStoreProduct"
+    )({ productId });
+
+    return mapProductDocument(
+      result.data.product.id,
+      result.data.product as DocumentData
+    );
+  },
+
+  /*
+  |--------------------------------------------------------------------------
   | Create Product
   |--------------------------------------------------------------------------
   */
@@ -514,26 +570,8 @@ export const productService = {
       "updatedAt"
     >
   ): Promise<string> {
-    const productData = removeUndefinedFields(product);
-
-    const productReference =
-      await addDoc(
-        collection(
-          db,
-          "products"
-        ),
-        {
-          ...productData,
-
-          createdAt:
-            serverTimestamp(),
-
-          updatedAt:
-            serverTimestamp(),
-        }
-      );
-
-    return productReference.id;
+    const result = await httpsCallable<unknown, { productId: string }>(functions, "mutateStoreProduct")({ action: "create", product });
+    return result.data.productId;
   },
 
   /*
@@ -552,18 +590,7 @@ async updateAvailability(
     );
   }
 
-  await updateDoc(
-    doc(
-      db,
-      "products",
-      productId
-    ),
-    {
-      isAvailable,
-      updatedAt:
-        serverTimestamp(),
-    }
-  );
+  await httpsCallable(functions, "mutateStoreProduct")({ action: "update", productId, product: { isAvailable } });
 },
 
 /*
@@ -582,18 +609,7 @@ async updateFeatured(
     );
   }
 
-  await updateDoc(
-    doc(
-      db,
-      "products",
-      productId
-    ),
-    {
-      featured,
-      updatedAt:
-        serverTimestamp(),
-    }
-  );
+  await httpsCallable(functions, "mutateStoreProduct")({ action: "update", productId, product: { featured } });
 },
 
 /*
@@ -620,19 +636,7 @@ async updateProduct(
     );
   }
 
-  await updateDoc(
-    doc(
-      db,
-      "products",
-      productId
-    ),
-    {
-      ...removeUndefinedFields(updates),
-
-      updatedAt:
-        serverTimestamp(),
-    }
-  );
+  await httpsCallable(functions, "mutateStoreProduct")({ action: "update", productId, product: removeUndefinedFields(updates) });
 },
 
 /*
@@ -650,13 +654,7 @@ async deleteProduct(
     );
   }
 
-  await deleteDoc(
-    doc(
-      db,
-      "products",
-      productId
-    )
-  );
+  await httpsCallable(functions, "mutateStoreProduct")({ action: "delete", productId });
 },
 
 /*
@@ -668,38 +666,8 @@ async deleteProduct(
 async duplicateProduct(
   product: Product
 ): Promise<string> {
-  const {
-    id: _id,
-    createdAt: _createdAt,
-    updatedAt: _updatedAt,
-    ...productData
-  } = product;
-
-  const duplicateReference =
-    await addDoc(
-      collection(
-        db,
-        "products"
-      ),
-      {
-        ...removeUndefinedFields(productData),
-
-        name:
-          `${product.name} (Copy)`,
-
-        isAvailable: false,
-
-        featured: false,
-
-        createdAt:
-          serverTimestamp(),
-
-        updatedAt:
-          serverTimestamp(),
-      }
-    );
-
-  return duplicateReference.id;
+  const result = await httpsCallable<unknown, { productId: string }>(functions, "mutateStoreProduct")({ action: "duplicate", productId: product.id });
+  return result.data.productId;
 },
 
   /**
@@ -729,7 +697,7 @@ async duplicateProduct(
    */
   async getProducts(): Promise<Product[]> {
     const snapshot = await getDocs(
-      collection(db, "products")
+      collection(db, "productPublicProfiles")
     );
 
     return snapshot.docs.map(

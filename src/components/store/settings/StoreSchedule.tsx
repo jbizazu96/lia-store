@@ -7,8 +7,9 @@
 
 import { useState, useEffect } from "react";
 import { Clock, Save, Edit, AlertCircle, CheckCircle, X } from "lucide-react";
-import { auth, db } from "@/lib/firebase";
-import { doc, setDoc } from "firebase/firestore";
+import {
+  storeWorkspaceClientService,
+} from "@/services/store/storeWorkspaceClientService";
 import { useUnsavedChanges } from "@/hooks/useUnsavedChanges";
 import { useConfirmation } from "@/context/ConfirmationContext";
 import { useSuccessToast } from "@/context/SuccessToastContext";
@@ -98,12 +99,6 @@ export function StoreSchedule({ storeData, setStoreData, storeId }: StoreSchedul
       setSaveError(null);
       setSaveSuccess(false);
 
-      const user = auth.currentUser;
-      if (!user) {
-        setSaveError("You must be logged in to save schedule.");
-        return;
-      }
-
       if (!storeId) {
         setSaveError("Store ID not found. Please try again.");
         return;
@@ -118,16 +113,17 @@ export function StoreSchedule({ storeData, setStoreData, storeId }: StoreSchedul
 
       if (!confirmed) return;
 
-      // Save schedule to store document
-      const storeRef = doc(db, "stores", storeId);
-      await setDoc(storeRef, { schedule: tempSchedule }, { merge: true });
+      /* The callable validates all seven days and business hours server-side. */
+      const result =
+        await storeWorkspaceClientService
+          .saveSchedule(tempSchedule);
 
       // Update local state
-      setSchedule(tempSchedule);
+      setSchedule(result.schedule);
       
       // Update storeData
       if (setStoreData) {
-        setStoreData({ ...storeData, schedule: tempSchedule });
+        setStoreData({ ...storeData, schedule: result.schedule });
       }
 
       setSaveSuccess(true);

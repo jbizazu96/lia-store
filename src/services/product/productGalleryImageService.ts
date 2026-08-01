@@ -26,14 +26,6 @@
 */
 
 import {
-  collection,
-  doc,
-  serverTimestamp,
-  setDoc,
-  updateDoc,
-} from "firebase/firestore";
-
-import {
   getFunctions,
   httpsCallable,
 } from "firebase/functions";
@@ -44,10 +36,6 @@ import {
   uploadBytesResumable,
   type UploadMetadata,
 } from "firebase/storage";
-
-import {
-  db,
-} from "@/lib/firebase";
 
 import type {
   ProductImageRole,
@@ -241,73 +229,53 @@ export const productGalleryImageService = {
         file
       );
 
-    const originalImagePath =
-      `stores/${storeId}` +
-      `/products/${productId}` +
-      `/gallery/${imageId}` +
-      `/original.${extension}`;
-
     /*
     |--------------------------------------------------------------------------
-    | Gallery Image Document
+    | Reserve Gallery Image
     |--------------------------------------------------------------------------
+    |
+    | The callable confirms product ownership and creates the image metadata.
+    | The browser receives only the canonical Storage path and metadata needed
+    | for the direct, owner-protected original-file upload.
+    |
     */
 
-    const galleryImageReference =
-      doc(
-        collection(
-          db,
-          "products",
-          productId,
-          "images"
-        ),
-        imageId
+    const functions = getFunctions(
+      undefined,
+      "us-central1"
+    );
+
+    const reserveImage =
+      httpsCallable<
+        {
+          productId: string;
+          imageId: string;
+          role: ProductImageRole;
+          position: number;
+          extension: string;
+          altText: string;
+        },
+        {
+          originalImagePath: string;
+          metadata: Record<string, string>;
+        }
+      >(
+        functions,
+        "prepareStoreProductGalleryImage"
       );
 
-    await setDoc(
-      galleryImageReference,
-      {
-        id:
-          imageId,
-
+    const reservation =
+      await reserveImage({
         productId,
-
-        storeId,
-
+        imageId,
         role,
-
-        altText:
-          altText.trim(),
-
         position,
+        extension,
+        altText: altText.trim(),
+      });
 
-        isPrimary:
-          role === "front",
-
-        status:
-          "uploading",
-
-        imageUrl:
-          "",
-
-        imageVariants:
-          null,
-
-        originalImagePath,
-
-        optimizedImagePath:
-          null,
-
-        imageError:
-          null,
-
-        createdAt:
-          serverTimestamp(),
-
-        updatedAt:
-          serverTimestamp(),
-      }
-    );
+    const originalImagePath =
+      reservation.data.originalImagePath;
 
     /*
     |--------------------------------------------------------------------------
@@ -326,27 +294,8 @@ export const productGalleryImageService = {
       cacheControl:
         "private, max-age=0, no-cache",
 
-      customMetadata: {
-        productId,
-
-        storeId,
-
-        imageId,
-
-        galleryImageId:
-          imageId,
-
-        role,
-
-        position:
-          position.toString(),
-
-        altText:
-          altText.trim(),
-
-        processingType:
-          "product-gallery-image-original",
-      },
+      customMetadata:
+        reservation.data.metadata,
     };
 
     const storageReference =
@@ -399,26 +348,6 @@ export const productGalleryImageService = {
         }
       );
 
-      /*
-      |--------------------------------------------------------------------------
-      | Hand Off To Firebase Functions
-      |--------------------------------------------------------------------------
-      */
-
-      await updateDoc(
-        galleryImageReference,
-        {
-          status:
-            "processing",
-
-          imageError:
-            null,
-
-          updatedAt:
-            serverTimestamp(),
-        }
-      );
-
       return {
         imageId,
 
@@ -433,21 +362,27 @@ export const productGalleryImageService = {
       );
 
       try {
-        await updateDoc(
-          galleryImageReference,
-          {
-            status:
-              "failed",
+        const markFailed =
+          httpsCallable<
+            {
+              productId: string;
+              imageId: string;
+              error: string;
+            },
+            { success: boolean }
+          >(
+            functions,
+            "failStoreProductGalleryImageUpload"
+          );
 
-            imageError:
-              uploadError instanceof Error
-                ? uploadError.message
-                : "Gallery image upload failed.",
-
-            updatedAt:
-              serverTimestamp(),
-          }
-        );
+        await markFailed({
+          productId,
+          imageId,
+          error:
+            uploadError instanceof Error
+              ? uploadError.message
+              : "Gallery image upload failed.",
+        });
       } catch (
         statusUpdateError
       ) {

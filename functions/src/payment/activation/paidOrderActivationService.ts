@@ -42,7 +42,7 @@ import {
 import type {
   PaidOrderActivationResult,
   ValidatedStripePaymentEvent,
-} from "./stripePaymentWebhookTypes";
+} from "../stripe/stripePaymentWebhookTypes";
 
 
 /*
@@ -83,6 +83,7 @@ export type PaidOrderActivationErrorCode =
   | "ORDER_NOT_FOUND"
   | "INVALID_ORDER"
   | "PAYMENT_INTENT_MISMATCH"
+  | "PAYMENT_CHARGE_MISMATCH"
   | "PAYMENT_AMOUNT_MISMATCH"
   | "PAYMENT_CUSTOMER_MISMATCH"
   | "PAYMENT_STORE_MISMATCH"
@@ -139,6 +140,42 @@ function getRequiredString(
   }
 
   return value.trim();
+}
+
+/*
+|--------------------------------------------------------------------------
+| Stripe Charge Validation
+|--------------------------------------------------------------------------
+|
+| A successful PaymentIntent must have a Stripe Charge.
+|
+| The Charge becomes the trusted source_transaction used later when LIA
+| transfers funds to the store and driver after delivery.
+|
+*/
+
+function getRequiredStripeChargeId(
+  value: unknown
+): string {
+  const chargeId =
+    getRequiredString(
+      value,
+      "PAYMENT_CHARGE_MISMATCH",
+      "The successful Stripe payment is missing its Charge ID."
+    );
+
+  if (
+    !chargeId.startsWith(
+      "ch_"
+    )
+  ) {
+    throw new PaidOrderActivationError(
+      "PAYMENT_CHARGE_MISMATCH",
+      "The Stripe Charge ID is invalid."
+    );
+  }
+
+  return chargeId;
 }
 
 
@@ -535,6 +572,16 @@ async function activatePaidOrder(
           paymentEvent
         );
 
+          /*
+          * Only a succeeded PaymentIntent activates an order.
+          *
+          * Its Charge ID is required because later marketplace transfers use
+          * that charge as their source_transaction.
+          */
+          getRequiredStripeChargeId(
+            paymentEvent.stripeChargeId
+          );
+
         /*
         |--------------------------------------------------------------------------
         | Load Checkout Session
@@ -786,6 +833,28 @@ async function activatePaidOrder(
           }
         );
 
+
+                /*
+        |--------------------------------------------------------------------------
+        | Marketplace Transfer Source
+        |--------------------------------------------------------------------------
+        |
+        | Both the future store transfer and driver transfer are associated
+        | with the same original customer Charge.
+        |
+        | The transfer group is deterministic for this order.
+        |
+        */
+
+        const stripeChargeId =
+          getRequiredStripeChargeId(
+            paymentEvent
+              .stripeChargeId
+          );
+
+        const transferGroup =
+          `lia_order_${orderSnapshot.id}`;
+
         /*
         |--------------------------------------------------------------------------
         | Confirm Order
@@ -827,6 +896,18 @@ async function activatePaidOrder(
             "payment.stripeStatus":
               paymentEvent
                 .paymentIntentStatus,
+
+                        "payment.stripeChargeId":
+              stripeChargeId,
+
+            "payment.transferGroup":
+              transferGroup,
+
+            "payment.architecture":
+              "separate_charges_and_transfers",
+
+            "payment.version":
+              "v1",
 
             "payment.amountReceived":
               paymentEvent

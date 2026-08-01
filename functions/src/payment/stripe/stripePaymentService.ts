@@ -25,7 +25,7 @@ import Stripe from "stripe";
 
 import type {
   PaymentPricingResult,
-} from "./paymentPricingCalculator";
+} from "../pricing/paymentPricingCalculator"
 
 
 /*

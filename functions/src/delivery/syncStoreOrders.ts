@@ -38,47 +38,71 @@ export const syncStoreOrders = onCall(
 
     const uid = request.auth.uid;
 
-    // Find this user's store.
-    console.log("Authenticated UID:", uid);
+    const db = getFirestore("default");
 
-console.log("Loading user document...");
+    /*
+      Resolve the store from the authenticated user's profile first. Do not
+      log the profile because it can contain personal information.
+    */
+    const userDoc = await db
+      .collection("users")
+      .doc(uid)
+      .get();
 
-const db = getFirestore("default");
+    const savedStoreId =
+      userDoc.data()?.storeId;
 
-const userDoc = await db
-  .collection("users")
-  .doc(uid)
-  .get();
+    let storeId =
+      typeof savedStoreId === "string" &&
+      savedStoreId.trim()
+        ? savedStoreId.trim()
+        : undefined;
 
-console.log("User document exists:", userDoc.exists);
+    /*
+      Some valid store-owner profiles predate users/{uid}.storeId. Fall back
+      to the canonical stores.ownerId relationship.
+    */
+    if (!storeId) {
+      const storeSnapshot = await db
+        .collection("stores")
+        .where("ownerId", "==", uid)
+        .limit(1)
+        .get();
 
-console.log("User data:", userDoc.data());
-
-let storeId = userDoc.data()?.storeId;
-
-/*
-  Some valid store-owner profiles predate users/{uid}.storeId. Fall back to
-  the canonical stores.ownerId relationship, while still requiring that the
-  authenticated owner owns the resolved store.
-*/
-if (!storeId) {
-  const storeSnapshot = await db
-    .collection("stores")
-    .where("ownerId", "==", uid)
-    .limit(1)
-    .get();
-
-  if (!storeSnapshot.empty) {
-    storeId = storeSnapshot.docs[0].id;
-  }
-}
-
-console.log("Resolved storeId:", storeId);
+      if (!storeSnapshot.empty) {
+        storeId = storeSnapshot.docs[0].id;
+      }
+    }
 
     if (!storeId) {
       throw new HttpsError(
         "not-found",
         "Store not found."
+      );
+    }
+
+    /*
+      This callable uses the Admin SDK, so verify ownership explicitly before
+      allowing a store's delivery records to be synchronized.
+    */
+    const storeDoc = await db
+      .collection("stores")
+      .doc(storeId)
+      .get();
+
+    if (!storeDoc.exists) {
+      throw new HttpsError(
+        "not-found",
+        "Store not found."
+      );
+    }
+
+    if (
+      storeDoc.data()?.ownerId !== uid
+    ) {
+      throw new HttpsError(
+        "permission-denied",
+        "You are not authorized to synchronize this store's deliveries."
       );
     }
 

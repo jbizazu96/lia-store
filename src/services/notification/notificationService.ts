@@ -16,22 +16,19 @@ import {
   collection,
   deleteDoc,
   doc,
-  addDoc,
   getDocs,
   orderBy,
   query,
   updateDoc,
   where,
   onSnapshot,
-  serverTimestamp,
   writeBatch,
 } from "firebase/firestore";
 
-import { db } from "@/lib/firebase";
+import { auth, db } from "@/lib/firebase";
 
 import type {
   Notification,
-  NotificationType,
 } from "./notificationTypes";
 
 import {
@@ -40,45 +37,13 @@ import {
 
 export class NotificationService {
 
-  /**
-   * Creates a notification.
-   */
-  async createNotification(
-    uid: string,
-    title: string,
-    body: string,
-    type: NotificationType,
-    orderId?: string
-  ): Promise<void> {
+  /* Do not let a caller target another user's notification path. */
+  private requireCurrentUser(uid: string): string {
+    if (!uid.trim() || auth.currentUser?.uid !== uid) {
+      throw new Error("You are not authorized to manage these notifications.");
+    }
 
-    await addDoc(
-
-      collection(
-        db,
-        "users",
-        uid,
-        "notifications"
-      ),
-
-      {
-
-        uid,
-
-        title,
-
-        body,
-
-        type,
-
-        orderId,
-
-        read: false,
-
-        createdAt: serverTimestamp(),
-      }
-
-    );
-
+    return uid;
   }
 
   /**
@@ -88,12 +53,13 @@ export class NotificationService {
     uid: string
   ): Promise<Notification[]> {
 
+    const currentUid = this.requireCurrentUser(uid);
     const q = query(
 
       collection(
         db,
         "users",
-        uid,
+        currentUid,
         "notifications"
       ),
 
@@ -120,12 +86,13 @@ export class NotificationService {
     uid: string
   ): Promise<number> {
 
+    const currentUid = this.requireCurrentUser(uid);
     const q = query(
 
       collection(
         db,
         "users",
-        uid,
+        currentUid,
         "notifications"
       ),
 
@@ -152,12 +119,13 @@ export class NotificationService {
     notificationId: string
   ): Promise<void> {
 
+    const currentUid = this.requireCurrentUser(uid);
     await updateDoc(
 
       doc(
         db,
         "users",
-        uid,
+        currentUid,
         "notifications",
         notificationId
       ),
@@ -176,8 +144,9 @@ export class NotificationService {
   async markAllAsRead(
     uid: string
   ): Promise<void> {
+    const currentUid = this.requireCurrentUser(uid);
     const unreadQuery = query(
-      collection(db, "users", uid, "notifications"),
+      collection(db, "users", currentUid, "notifications"),
       where("read", "==", false)
     );
 
@@ -201,11 +170,12 @@ export class NotificationService {
     uid: string,
     notificationId: string
   ): Promise<void> {
+    const currentUid = this.requireCurrentUser(uid);
     await deleteDoc(
       doc(
         db,
         "users",
-        uid,
+        currentUid,
         "notifications",
         notificationId
       )
@@ -216,10 +186,11 @@ export class NotificationService {
   async clearAllNotifications(
     uid: string
   ): Promise<void> {
+    const currentUid = this.requireCurrentUser(uid);
     const notificationsReference = collection(
       db,
       "users",
-      uid,
+      currentUid,
       "notifications"
     );
 
@@ -247,12 +218,13 @@ listenForUnreadCount(
   callback: (count: number) => void
 ) {
 
+  const currentUid = this.requireCurrentUser(uid);
   const q = query(
 
     collection(
       db,
       "users",
-      uid,
+      currentUid,
       "notifications"
     ),
 
@@ -289,12 +261,13 @@ listenForNotifications(
   onError?: (error: Error) => void
 ) {
 
+  const currentUid = this.requireCurrentUser(uid);
   const q = query(
 
     collection(
       db,
       "users",
-      uid,
+      currentUid,
       "notifications"
     ),
 

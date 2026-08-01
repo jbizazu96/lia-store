@@ -50,8 +50,8 @@ import {
 } from "@/services/product/productService";
 
 import {
-  userService,
-} from "@/services/user/userService";
+  storeWorkspaceClientService,
+} from "@/services/store/storeWorkspaceClientService";
 
 import {
   BrandedLoader,
@@ -161,10 +161,12 @@ export default function EditProductPage({
             setLoading(true);
             setError(null);
 
+            const entry =
+              await storeWorkspaceClientService
+                .getEntry();
+
             const storeId =
-              await userService.getStoreId(
-                user.uid
-              );
+              entry.store?.id ?? null;
 
             if (!storeId) {
               router.replace(
@@ -175,7 +177,7 @@ export default function EditProductPage({
             }
 
             const loadedProduct =
-              await productService.getProduct(
+              await productService.getOwnedStoreProduct(
                 productId
               );
 

@@ -56,6 +56,21 @@ export function CartProvider({children}: {children: ReactNode}) {
   const [items, setItems] = useState<CartItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [isCustomerCartSession, setIsCustomerCartSession] =
+    useState(false);
+
+  /*
+   * Cart persistence belongs only to customer accounts. The protected
+   * customer-cart callable remains the source of truth for that decision;
+   * this check simply prevents the app-wide provider from retrying cart
+   * operations after the callable has rejected a store, driver, or admin.
+   */
+  const isCustomerCartAuthorizationError = (
+    error: unknown
+  ): boolean =>
+    error instanceof Error &&
+    error.message ===
+      "This account is not authorized to manage a customer cart.";
 
   // ✅ Load cart from Firestore on auth change
   useEffect(() => {
@@ -63,6 +78,7 @@ export function CartProvider({children}: {children: ReactNode}) {
 
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setCurrentUser(user);
+      setIsCustomerCartSession(false);
 
       /*
        * Remove the previous account's items immediately. The async cart load
@@ -85,12 +101,22 @@ export function CartProvider({children}: {children: ReactNode}) {
           } else {
             setItems([]);
           }
+
+          setIsCustomerCartSession(true);
         } catch (error) {
           if (!active || auth.currentUser?.uid !== user.uid) {
             return;
           }
 
-          console.error("Error loading cart:", error);
+          /*
+           * The CartProvider wraps every role. A rejected customer-cart
+           * request for a store, driver, or administrator is expected and
+           * must not be shown as an application error during their login.
+           */
+          if (!isCustomerCartAuthorizationError(error)) {
+            console.error("Error loading cart:", error);
+          }
+
           setItems([]);
         } finally {
           if (active && auth.currentUser?.uid === user.uid) {
@@ -127,7 +153,7 @@ export function CartProvider({children}: {children: ReactNode}) {
        * Without this guard, an empty local cart could delete the saved
        * Firestore cart before loadCartFromFirestore() finishes.
        */
-      if (!currentUser || isLoading) {
+      if (!currentUser || isLoading || !isCustomerCartSession) {
         return;
       }
 
@@ -157,7 +183,7 @@ export function CartProvider({children}: {children: ReactNode}) {
     }, 500);
 
     return () => clearTimeout(timeoutId);
-  }, [items, currentUser, isLoading]);
+  }, [items, currentUser, isLoading, isCustomerCartSession]);
 /**
  * Add a product to the cart.
  *
@@ -262,7 +288,7 @@ const addItem = async (
   async (): Promise<void> => {
     setItems([]);
 
-    if (currentUser) {
+    if (currentUser && isCustomerCartSession) {
       await clearCartFromFirestore(
         currentUser.uid
       );

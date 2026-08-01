@@ -290,6 +290,21 @@ service cloud.firestore {
         ).data.ownerId == request.auth.uid;
     }
 
+    /*
+     * A store owner cannot manage catalogue data until an administrator has
+     * approved the completed application. This is deliberately checked from
+     * the protected store document instead of trusting a browser flag.
+     */
+    function ownsApprovedStore(storeId) {
+      return ownsStore(storeId) &&
+        get(
+          /databases/$(database)/documents/stores/$(storeId)
+        ).data.isApproved == true &&
+        get(
+          /databases/$(database)/documents/stores/$(storeId)
+        ).data.onboardingCompleted == true;
+    }
+
     function ownsOrder(orderData) {
       return ownsStore(orderData.store.id);
     }
@@ -440,49 +455,8 @@ service cloud.firestore {
     |
     */
     match /drivers/{driverId} {
-      allow get: if isSelf(driverId) || isAdmin();
-      allow list: if isAdmin();
-
-      allow create: if isDriverAccount() &&
-        isSelf(driverId) &&
-        request.resource.data.ownerUid == request.auth.uid &&
-        (
-          !request.resource.data.keys().hasAny(["isApproved"]) ||
-          request.resource.data.isApproved == false
-        );
-
-      allow update: if isAdmin() || (
-        isDriverAccount() &&
-        isSelf(driverId) &&
-        resource.data.ownerUid == request.auth.uid &&
-        request.resource.data.ownerUid == resource.data.ownerUid &&
-        request.resource.data.isApproved == resource.data.isApproved &&
-        driverLifecycleIsClientSafe() &&
-        driverDocumentReviewsAreClientSafe() &&
-        driverApprovedRadiusIsClientSafe() &&
-        (
-          (
-            !resource.data.keys().hasAny(["stripeAccountId"]) &&
-            !request.resource.data.keys().hasAny(["stripeAccountId"])
-          ) || (
-            resource.data.keys().hasAny(["stripeAccountId"]) &&
-            request.resource.data.keys().hasAny(["stripeAccountId"]) &&
-            request.resource.data.stripeAccountId == resource.data.stripeAccountId
-          )
-        ) &&
-        (
-          (
-            !resource.data.keys().hasAny(["stripeConnect"]) &&
-            !request.resource.data.keys().hasAny(["stripeConnect"])
-          ) || (
-            resource.data.keys().hasAny(["stripeConnect"]) &&
-            request.resource.data.keys().hasAny(["stripeConnect"]) &&
-            request.resource.data.stripeConnect == resource.data.stripeConnect
-          )
-        )
-      );
-
-      allow delete: if isAdmin();
+      /* Driver onboarding and workspace are callable-only. */
+      allow get, list, create, update, delete: if isAdmin();
     }
 
     /*
@@ -492,68 +466,53 @@ service cloud.firestore {
     */
 
     match /stores/{storeId} {
-      allow read: if true;
+      /*
+       * The application document contains private owner identity, business,
+       * document-review, and Stripe data. Customers read the deliberately
+       * sanitized storePublicProfiles collection below instead.
+       */
+      /* Store applications are callable-only for owners and administrators. */
+      allow get, list: if isAdmin();
 
-      allow create: if isStoreOwnerAccount() &&
-        request.resource.data.ownerId == request.auth.uid &&
-        newStoreOwnerPhotoIdReviewIsPending() &&
-        (
-          !request.resource.data.keys().hasAny(["isApproved"]) ||
-          request.resource.data.isApproved == false
-        ) &&
-        (
-          !request.resource.data.keys().hasAny(["isActive"]) ||
-          request.resource.data.isActive == false
-        ) &&
-        (
-          !request.resource.data.keys().hasAny(["status"]) ||
-          request.resource.data.status == "draft"
-        );
+      /* Store drafts are created only by protected onboarding callables. */
+      allow create: if false;
 
       /*
        * Store owners manage their profile, but only an administrator may
        * approve a store or publish it to customers. Existing onboarding
        * drafts may initialize absent lifecycle flags to false once.
        */
-      allow update: if isAdmin() || (
-        ownsStore(storeId) &&
-        storeUploadReviewsAreClientSafe() &&
-        storeLifecycleIsClientSafe() &&
-        (
-          (
-            resource.data.keys().hasAny(["isApproved"]) &&
-            request.resource.data.keys().hasAny(["isApproved"]) &&
-            request.resource.data.isApproved == resource.data.isApproved
-          ) || (
-            !resource.data.keys().hasAny(["isApproved"]) &&
-            request.resource.data.isApproved == false
-          )
-        ) &&
-        (
-          (
-            resource.data.keys().hasAny(["isActive"]) &&
-            request.resource.data.keys().hasAny(["isActive"]) &&
-            request.resource.data.isActive == resource.data.isActive
-          ) || (
-            !resource.data.keys().hasAny(["isActive"]) &&
-            request.resource.data.isActive == false
-          )
-        )
-      );
+      /*
+       * Store settings, geocoding, schedules, Stripe state, and lifecycle
+       * changes are all callable-managed. Never leave an alternate browser
+       * write path that could bypass server validation.
+       */
+      allow update: if isAdmin();
 
-      allow delete: if ownsStore(storeId) || isAdmin();
+      /* Account deletion is an administrator-reviewed backend workflow. */
+      allow delete: if isAdmin();
     }
 
-          match /products/{productId} {
-            allow read: if true;
+    /*
+     * This is the only store document readable by customers. A Function
+     * mirrors a small allowlist from stores/{storeId}, never owner documents,
+     * EIN, document review data, or Stripe connection details.
+     */
+    match /storePublicProfiles/{storeId} {
+      allow get, list: if resource.data.isApproved == true &&
+        resource.data.isActive == true;
+      allow write: if false;
+    }
 
-            allow create: if isStoreOwnerAccount() &&
-              ownsStore(request.resource.data.storeId);
+    /*
+     * Private source-of-truth inventory. Store pages use authenticated
+     * callables; customer pages use productPublicProfiles below.
+     */
+    match /products/{productId} {
+      allow get, list: if isAdmin();
 
-            allow update, delete: if (
-              ownsStore(resource.data.storeId) &&
-              request.resource.data.storeId == resource.data.storeId
-            ) || isAdmin();
+      /* Product changes are validated and written only by Cloud Functions. */
+      allow create, update, delete: if isAdmin();
 
             /*
             * Product gallery image documents.
@@ -561,22 +520,30 @@ service cloud.firestore {
             * Path:
             * products/{productId}/images/{imageId}
             */
-            match /images/{imageId} {
-              allow read: if true;
+      match /images/{imageId} {
+        allow get, list: if isAdmin();
 
               /*
               * Only the store that owns the parent product, or an admin,
               * may manage its gallery images.
               */
-              allow create, update, delete: if (
-                ownsStore(
-                  get(
-                    /databases/$(database)/documents/products/$(productId)
-                  ).data.storeId
-                )
-              ) || isAdmin();
-            }
-          }
+        allow create, update, delete: if isAdmin();
+      }
+    }
+
+    /*
+     * Customer-safe catalog projection. Functions mirror only approved,
+     * active-store products and ready image variants into this collection.
+     */
+    match /productPublicProfiles/{productId} {
+      allow read: if true;
+      allow write: if false;
+
+      match /images/{imageId} {
+        allow read: if true;
+        allow write: if false;
+      }
+    }
 
     match /categories/{categoryId} {
       allow read: if true;
@@ -603,18 +570,11 @@ service cloud.firestore {
       allow create, delete: if isAdmin();
 
       /*
-       * Store owners may update only fulfillment/timeline fields for their
-       * own orders; totals, customer data, store data, and items are fixed.
+       * All fulfilment transitions go through updateOrderStatus. The Callable
+       * verifies ownership, paid state, valid transition sequence, reasons,
+       * Shipday effects, and timeline integrity before using the Admin SDK.
        */
-      allow update: if ownsOrder(resource.data) &&
-        request.resource.data.diff(resource.data)
-          .affectedKeys()
-          .hasOnly([
-            "status",
-            "statusHistory",
-            "cancellationReason",
-            "updatedAt",
-          ]);
+      allow update: if isAdmin();
     }
 
     /*

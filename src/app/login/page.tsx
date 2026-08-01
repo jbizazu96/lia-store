@@ -30,14 +30,8 @@ import {auth, db, functions} from "@/lib/firebase";
   Firestore functions.
 */
 import {
-  collection,
   doc,
   getDoc,
-  getDocs,
-  limit,
-  query,
-  setDoc,
-  where,
 } from "firebase/firestore";
 
 /*
@@ -49,7 +43,8 @@ import {AddressModal} from "@/components/login/AddressModal";
 import {StoreStatusModal} from "@/components/login/StoreStatusModal";
 import { useConfirmation } from "@/context/ConfirmationContext";
 import { userService } from "@/services/user/userService";
-import { normalizeUsState } from "@/utils/usState";
+import { storeWorkspaceClientService } from "@/services/store/storeWorkspaceClientService";
+import { customerProfileClientService } from "@/services/user/customerProfileClientService";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -129,16 +124,16 @@ export default function LoginPage() {
       Store Owner Flow - Redirect to Premium Dashboard.
     */
     if (accountType === "store_owner") {
-      // Query stores by ownerId
-      const storesRef = collection(db, "stores");
-      const q = query(storesRef, where("ownerId", "==", uid));
-      const storeSnapshot = await getDocs(q);
+      /*
+       * Store applications are private. The callable derives the owned
+       * store from the verified Firebase session rather than exposing a
+       * browser query against stores/{storeId}.
+       */
+      const entry = await storeWorkspaceClientService.getEntry();
 
-      if (!storeSnapshot.empty) {
-        const storeDoc = storeSnapshot.docs[0];
-        const storeData = storeDoc.data();
-        const isApproved = storeData.isApproved === true;
-        const storeName = storeData.name || "Your Store";
+      if (entry.hasStore && entry.store) {
+        const isApproved = entry.store.isApproved;
+        const storeName = entry.store.name || "Your Store";
 
         if (isApproved) {
           // ✅ Redirect to the premium dashboard - use /store/dashboard NOT /(store)/dashboard
@@ -268,30 +263,6 @@ export default function LoginPage() {
       setAddressError("");
       setAddressGeocoding(true);
 
-      const user = auth.currentUser;
-      if (!user) {
-        setAddressError("You must be logged in.");
-        return;
-      }
-
-      const normalizedState = normalizeUsState(addressData.state);
-      if (!normalizedState) {
-        setAddressError("Enter a valid U.S. state name or two-letter abbreviation.");
-        return;
-      }
-
-      const {geocodeAddress} = await import("@/services/delivery/geocode");
-      const fullAddress = `${addressData.street}, ${addressData.city}, ${normalizedState} ${addressData.zip}`;
-      const location = await geocodeAddress(fullAddress);
-
-      if (!location) {
-        setAddressError(
-          "We couldn't verify this delivery address. Check the street, city, state, and ZIP code, then try again."
-        );
-        setAddressGeocoding(false);
-        return;
-      }
-
       const confirmed = await confirm({
         title: "Save delivery address?",
         message: "This verified address will be used for deliveries.",
@@ -301,34 +272,16 @@ export default function LoginPage() {
 
       if (!confirmed) return;
 
-      const {setDoc, updateDoc} = await import("firebase/firestore");
-      const savedAddress = {
-        ...addressData,
-        street: addressData.street.trim().toUpperCase(),
-        city: addressData.city.trim().toUpperCase(),
-        state: normalizedState,
-        zip: addressData.zip.trim().toUpperCase(),
-        country: addressData.country.trim().toUpperCase(),
-        formattedAddress: (location.formattedAddress || fullAddress).toUpperCase(),
-      };
-
-      await setDoc(doc(db, "users", user.uid, "addresses", "default"), {
-        ...savedAddress,
-        latitude: location.latitude,
-        longitude: location.longitude,
-        placeId: location.placeId,
-        isDefault: true,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      });
-
-      await updateDoc(doc(db, "users", user.uid), {
-        defaultAddress: {
-          ...savedAddress,
-          latitude: location.latitude,
-          longitude: location.longitude,
-          placeId: location.placeId,
-        },
+      /*
+       * Customer addresses are geocoded, normalized, and persisted only by
+       * the authenticated callable. The login page never writes an address
+       * or coordinates to Firestore directly.
+       */
+      await customerProfileClientService.saveDefaultAddress({
+        street: addressData.street,
+        city: addressData.city,
+        state: addressData.state,
+        zip: addressData.zip,
       });
 
       setShowAddressModal(false);

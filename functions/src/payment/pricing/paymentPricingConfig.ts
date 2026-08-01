@@ -89,6 +89,20 @@ export const PAYMENT_PRICING_CONFIG = {
   freeDeliveryMinimumCents: 15_000,
 
   /*
+    LIA funds driver compensation for qualifying free-delivery orders.
+
+    The customer receives free delivery at the configured threshold, while
+    the incentive is deducted from LIA's retained marketplace revenue.
+  */
+  freeDeliveryDriverIncentiveWithoutTipCents: 500,
+
+  /*
+    A customer tip already contributes to driver earnings, so LIA provides a
+    smaller $3.00 incentive when a qualifying free-delivery order has a tip.
+  */
+  freeDeliveryDriverIncentiveWithTipCents: 300,
+
+  /*
     Default minimum order.
 
     Individual stores may override this with their own minimumOrder

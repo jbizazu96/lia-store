@@ -15,7 +15,7 @@ import {HttpsError, onCall} from "firebase-functions/v2/https";
 import {
   checkoutDistanceService,
   hasValidCheckoutCoordinates,
-} from "../payment/checkoutDistanceService";
+} from "../payment/checkout/checkoutDistanceService";
 
 const db = getFirestore("default");
 

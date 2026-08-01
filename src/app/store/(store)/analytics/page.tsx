@@ -15,8 +15,9 @@ import {
   Clock,
   Filter
 } from "lucide-react";
-import {auth, db} from "@/lib/firebase";
-import {collection, query, where, getDocs, doc, getDoc} from "firebase/firestore";
+import {
+  storeWorkspaceClientService,
+} from "@/services/store/storeWorkspaceClientService";
 import { BrandedLoader } from "@/components/ui/BrandedLoader";
 
 interface AnalyticsData {
@@ -51,50 +52,11 @@ export default function AnalyticsPage() {
   useEffect(() => {
     const fetchAnalytics = async () => {
       try {
-        const user = auth.currentUser;
-        if (!user) return;
+        const financials =
+          await storeWorkspaceClientService
+            .getFinancials();
 
-        const userDoc = await getDoc(doc(db, "users", user.uid));
-        const storeId = userDoc.data()?.storeId;
-
-        if (!storeId) return;
-
-        // Fetch orders
-        const ordersRef = collection(db, "orders");
-        const q = query(ordersRef, where("storeId", "==", storeId));
-        const snapshot = await getDocs(q);
-
-        let totalOrders = 0;
-        let totalRevenue = 0;
-        const customers = new Set();
-
-        snapshot.forEach((doc) => {
-          const data = doc.data();
-          totalOrders++;
-          totalRevenue += data.total || 0;
-          if (data.customerId) {
-            customers.add(data.customerId);
-          }
-        });
-
-        const averageOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
-
-        setAnalytics({
-          totalOrders,
-          totalRevenue,
-          averageOrderValue,
-          totalCustomers: customers.size,
-          averageRating: 4.5,
-          peakHours: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-          dailyOrders: [12, 18, 15, 22, 30, 25, 20],
-          weeklyGrowth: 12.5,
-          revenueGrowth: 0.0,
-          topProducts: [
-            {name: "Jollof Rice", sales: 45},
-            {name: "Plantains", sales: 38},
-            {name: "Palm Oil", sales: 32},
-          ],
-        });
+        setAnalytics(financials.analytics);
 
       } catch (error) {
         console.error("Error fetching analytics:", error);

@@ -11,8 +11,9 @@ import {
   Eye,
   ChevronRight
 } from "lucide-react";
-import {auth, db} from "@/lib/firebase";
-import {collection, query, where, getDocs, doc, getDoc} from "firebase/firestore";
+import {
+  storeWorkspaceClientService,
+} from "@/services/store/storeWorkspaceClientService";
 import Link from "next/link";
 
 interface Payout {
@@ -37,63 +38,17 @@ export default function EarningsPage() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const user = auth.currentUser;
-        if (!user) return;
+        const financials =
+          await storeWorkspaceClientService
+            .getFinancials();
 
-        // Get store ID
-        const userDoc = await getDoc(doc(db, "users", user.uid));
-        const storeId = userDoc.data()?.storeId;
-
-        if (!storeId) return;
-
-        // Fetch orders
-        const ordersRef = collection(db, "orders");
-        const q = query(ordersRef, where("storeId", "==", storeId));
-        const snapshot = await getDocs(q);
-
-        let totalEarnings = 0;
-        let completedOrders = 0;
-
-        snapshot.forEach((doc) => {
-          const data = doc.data();
-          if (data.status === "delivered" || data.status === "completed") {
-            totalEarnings += data.total || 0;
-            completedOrders++;
-          }
-        });
-
-        // Mock payouts
-        const mockPayouts: Payout[] = [
-          {
-            id: "1",
-            amount: 145.00,
-            status: "completed",
-            date: "2024-01-15",
-            method: "Bank Transfer",
-          },
-          {
-            id: "2",
-            amount: 89.50,
-            status: "pending",
-            date: "2024-01-22",
-            method: "Bank Transfer",
-          },
-          {
-            id: "3",
-            amount: 234.00,
-            status: "completed",
-            date: "2024-01-08",
-            method: "Bank Transfer",
-          },
-        ];
-
-        setPayouts(mockPayouts);
+        setPayouts(financials.earnings.payouts);
         setStats({
-          totalEarnings: totalEarnings,
-          availableBalance: totalEarnings * 0.7,
-          pendingBalance: totalEarnings * 0.3,
-          weeklyEarnings: totalEarnings * 0.4,
-          monthlyEarnings: totalEarnings * 0.6,
+          totalEarnings: financials.earnings.totalEarnings,
+          availableBalance: financials.earnings.availableBalance,
+          pendingBalance: financials.earnings.pendingBalance,
+          weeklyEarnings: financials.earnings.weeklyEarnings,
+          monthlyEarnings: financials.earnings.monthlyEarnings,
         });
 
       } catch (error) {

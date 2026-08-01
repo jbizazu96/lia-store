@@ -35,10 +35,6 @@ import {
   productService,
 } from "@/services/product/productService";
 
-import {
-  userService,
-} from "@/services/user/userService";
-
 import type {
   Product,
 } from "@/types/product";
@@ -104,14 +100,21 @@ UseStoreProductsResult {
         try {
           setError(null);
 
-          const loadedProducts =
+          const ownedInventory =
             await productService
-              .getStoreProducts(
-                resolvedStoreId
-              );
+              .getOwnedStoreProducts();
+
+          if (
+            ownedInventory.storeId !==
+            resolvedStoreId
+          ) {
+            throw new Error(
+              "The store inventory could not be verified."
+            );
+          }
 
           setProducts(
-            loadedProducts
+            ownedInventory.products
           );
         } catch (loadError) {
           console.error(
@@ -134,15 +137,14 @@ UseStoreProductsResult {
     );
 
   useEffect(() => {
-    let activeProductListener: (() => void) | null = null;
+    let refreshTimer: ReturnType<
+      typeof setInterval
+    > | null = null;
 
     const unsubscribe =
       onAuthStateChanged(
         auth,
         async (user) => {
-          activeProductListener?.();
-          activeProductListener = null;
-
           if (!user) {
             setProducts([]);
             setStoreId(null);
@@ -162,12 +164,11 @@ UseStoreProductsResult {
           setError(null);
 
           try {
-            const resolvedStoreId =
-              await userService.getStoreId(
-                user.uid
-              );
+            const ownedInventory =
+              await productService
+                .getOwnedStoreProducts();
 
-            if (!resolvedStoreId) {
+            if (!ownedInventory.storeId) {
               setProducts([]);
               setStoreId(null);
               setNeedsStoreSetup(true);
@@ -182,26 +183,30 @@ UseStoreProductsResult {
             }
 
             setStoreId(
-              resolvedStoreId
+              ownedInventory.storeId
             );
 
-            const unsubscribeProducts =
-              productService.listenToStoreProducts(
-                resolvedStoreId,
-                (liveProducts) => {
-                  setProducts(liveProducts);
-                  setError(null);
-                  setLoading(false);
-                },
-                () => {
-                  setError(
-                    "Failed to load products."
-                  );
-                  setLoading(false);
-                }
-              );
+            setProducts(
+              ownedInventory.products
+            );
 
-            activeProductListener = unsubscribeProducts;
+            setError(null);
+            setLoading(false);
+
+            /*
+             * Inventory is private callable data. A bounded refresh keeps
+             * image-processing state current without maintaining a full
+             * Firestore collection listener for every open store tab.
+             */
+            refreshTimer = setInterval(
+              () => {
+                void loadProducts(
+                  ownedInventory.storeId,
+                  false
+                );
+              },
+              30_000
+            );
           } catch (loadError) {
             console.error(
               "Error preparing store products:",
@@ -222,7 +227,10 @@ UseStoreProductsResult {
 
     return () => {
       unsubscribe();
-      activeProductListener?.();
+
+      if (refreshTimer) {
+        clearInterval(refreshTimer);
+      }
     };
   }, [loadProducts]);
 

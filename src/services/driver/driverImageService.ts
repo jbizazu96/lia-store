@@ -13,12 +13,16 @@
 
 import {
   auth,
+  functions,
   storage,
 } from "@/lib/firebase";
 import {
   ref,
   uploadBytes,
 } from "firebase/storage";
+import {
+  httpsCallable,
+} from "firebase/functions";
 
 export type DriverImageField =
   | "profile-photo"
@@ -66,15 +70,16 @@ export const driverImageService = {
       .pop()
       ?.toLowerCase()
       .replace(/[^a-z0-9]/g, "") || "image";
-    const imageId = `${Date.now()}-${crypto.randomUUID()}`;
-    const originalPath = [
-      "drivers",
-      driverId,
-      "images",
-      "originals",
+    const prepare = httpsCallable<
+      { field: DriverImageField; extension: string; contentType: string },
+      { uploadId: string; path: string }
+    >(functions, "prepareDriverImageUpload");
+    const reservation = await prepare({
       field,
-      `${imageId}.${extension}`,
-    ].join("/");
+      extension,
+      contentType: file.type,
+    });
+    const { uploadId, path: originalPath } = reservation.data;
 
     await uploadBytes(
       ref(storage, originalPath),
@@ -84,7 +89,8 @@ export const driverImageService = {
         cacheControl: "private, max-age=0, no-cache",
         customMetadata: {
           driverId,
-          imageId,
+          imageId: uploadId,
+          uploadId,
           imageField: field,
           processingType: "driver-image-original",
         },

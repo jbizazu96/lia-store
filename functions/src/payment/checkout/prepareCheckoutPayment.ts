@@ -75,26 +75,26 @@ import {
 import {
   isPaymentPendingOrderError,
   paymentPendingOrderService,
-} from "./paymentPendingOrderService";
+} from "../paymentPendingOrderService";
 
 import {
   calculatePaymentPricing,
-} from "./paymentPricingCalculator";
+} from "../pricing/paymentPricingCalculator";
 
 import {
   isStripeCustomerServiceError,
   stripeCustomerService,
-} from "./stripeCustomerService";
+} from "../stripe/stripeCustomerService";
 
 import {
   isStripeCustomerSessionError,
   stripeCustomerSessionService,
-} from "./stripeCustomerSessionService";
+} from "../stripe/stripeCustomerSessionService";
 
 import {
   isStripePaymentServiceError,
   stripePaymentService,
-} from "./stripePaymentService";
+} from "../stripe/stripePaymentService";
 
 import type {
   PrepareCheckoutPaymentResponse,

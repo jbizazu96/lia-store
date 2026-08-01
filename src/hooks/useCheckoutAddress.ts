@@ -16,15 +16,10 @@ import { useState } from "react";
 
 import {
   auth,
-  db,
 } from "@/lib/firebase";
-
 import {
-  doc,
-  setDoc,
-} from "firebase/firestore";
-
-import { geocodeAddress } from "@/services/delivery/geocode";
+  customerProfileClientService,
+} from "@/services/user/customerProfileClientService";
 import { useConfirmation } from "@/context/ConfirmationContext";
 import { useSuccessToast } from "@/context/SuccessToastContext";
 import { normalizeUsState } from "@/utils/usState";
@@ -115,19 +110,6 @@ UseCheckoutAddressResult {
         return null;
       }
 
-      const fullAddress = `${formData.street}, ${formData.city}, ${normalizedState} ${formData.zip}`;
-
-      const result = await geocodeAddress(
-        fullAddress
-      );
-
-      if (!result) {
-        setError(
-          "We couldn't verify that delivery address. Check the street, city, state, and ZIP code, then try again."
-        );
-        return null;
-      }
-
       const confirmed = await confirm({
         title: "Save delivery address?",
         message: "This verified address will be used to calculate delivery.",
@@ -139,50 +121,17 @@ UseCheckoutAddressResult {
         return null;
       }
 
-      const address: CheckoutAddress =
-        {
-          street:
-            formData.street.trim().toUpperCase(),
+      const address = await customerProfileClientService.saveDefaultAddress({
+        street: formData.street,
+        city: formData.city,
+        state: normalizedState,
+        zip: formData.zip,
+      }) as CheckoutAddress;
 
-          city:
-            formData.city.trim().toUpperCase(),
-
-          state:
-            normalizedState,
-
-          zip:
-            formData.zip.trim().toUpperCase(),
-
-          latitude:
-            result.latitude,
-
-          longitude:
-            result.longitude,
-
-          formattedAddress:
-            result.formattedAddress.toUpperCase(),
-        };
-
-      await setDoc(
-        doc(
-          db,
-          "users",
-          user.uid
-        ),
-        {
-          defaultAddress:
-            address,
-
-          displayName:
-            formData.name,
-
-          phone:
-            formData.phone,
-        },
-        {
-          merge: true,
-        }
-      );
+      await customerProfileClientService.updateProfile({
+        displayName: formData.name,
+        phone: formData.phone,
+      });
 
       showSuccess("Delivery address saved.");
 

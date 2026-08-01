@@ -61,6 +61,7 @@ export type StripePaymentWebhookValidationErrorCode =
   | "INVALID_PAYMENT_AMOUNT"
   | "INVALID_PAYMENT_CURRENCY"
   | "INVALID_STRIPE_CUSTOMER"
+  | "INVALID_STRIPE_CHARGE"
   | "INVALID_LIA_METADATA";
 
 
@@ -279,6 +280,65 @@ function getPaymentIntent(
     Stripe.PaymentIntent;
 }
 
+/*
+|--------------------------------------------------------------------------
+| Stripe Charge Extraction
+|--------------------------------------------------------------------------
+|
+| latest_charge may be:
+|
+| - A Stripe Charge ID
+| - An expanded Charge object
+| - null before a successful charge exists
+|
+*/
+
+function getStripeChargeId(
+  paymentIntent:
+    Stripe.PaymentIntent,
+  eventType:
+    SupportedStripePaymentEventType
+): string | null {
+  const latestCharge =
+    paymentIntent.latest_charge;
+
+  const chargeId =
+    typeof latestCharge ===
+      "string"
+      ? latestCharge.trim()
+      : latestCharge?.id?.trim();
+
+  /*
+   * Processing and failed events may not have created a successful
+   * Charge yet.
+   */
+  if (!chargeId) {
+    if (
+      eventType ===
+      "payment_intent.succeeded"
+    ) {
+      throw new StripePaymentWebhookValidationError(
+        "INVALID_STRIPE_CHARGE",
+        "The successful PaymentIntent is missing its Stripe Charge."
+      );
+    }
+
+    return null;
+  }
+
+  if (
+    !chargeId.startsWith(
+      "ch_"
+    )
+  ) {
+    throw new StripePaymentWebhookValidationError(
+      "INVALID_STRIPE_CHARGE",
+      "The PaymentIntent Stripe Charge ID is invalid."
+    );
+  }
+
+  return chargeId;
+}
 
 /*
 |--------------------------------------------------------------------------
@@ -362,6 +422,12 @@ export function validateStripePaymentEvent(
       paymentIntent.id,
       "INVALID_PAYMENT_INTENT",
       "The Stripe PaymentIntent ID is invalid."
+    );
+
+  const stripeChargeId =
+    getStripeChargeId(
+      paymentIntent,
+      event.type
     );
 
   if (
@@ -476,6 +542,8 @@ export function validateStripePaymentEvent(
       event.livemode,
 
     paymentIntentId,
+
+    stripeChargeId,
 
     paymentIntentStatus:
       paymentIntent.status,

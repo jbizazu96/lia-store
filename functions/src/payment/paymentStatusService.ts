@@ -37,7 +37,7 @@ import {
 
 import type {
   ValidatedStripePaymentEvent,
-} from "./stripePaymentWebhookTypes";
+} from "./stripe/stripePaymentWebhookTypes";
 
 
 /*

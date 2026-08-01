@@ -28,7 +28,11 @@ export async function performSearch(
 
   try {
     // 1. Search products by name, description, or category
-    const productsRef = collection(db, "products");
+    /* Customer search reads only the server-managed public catalog. */
+    const productsRef = collection(
+      db,
+      "productPublicProfiles"
+    );
     
     const productQuery = firestoreQuery(
       productsRef,
@@ -63,7 +67,10 @@ export async function performSearch(
 
     // 2. If no products found, try searching stores directly
     if (storeIds.size === 0) {
-      const storesRef = collection(db, "stores");
+      const storesRef = collection(
+        db,
+        "storePublicProfiles"
+      );
       const storeQuery = firestoreQuery(
         storesRef,
         or(
@@ -90,7 +97,11 @@ export async function performSearch(
     // 3. Get store details for each store ID
     const storeDataMap = new Map<string, StoreData>();
     for (const storeId of storeIds) {
-      const storeRef = doc(db, "stores", storeId);
+      const storeRef = doc(
+        db,
+        "storePublicProfiles",
+        storeId
+      );
       const storeDoc = await getDoc(storeRef);
       if (storeDoc.exists()) {
         const data = storeDoc.data();
@@ -217,7 +228,10 @@ export async function searchStoresByName(
   const term = searchTerm.trim().toLowerCase();
 
   try {
-    const storesRef = collection(db, "stores");
+    const storesRef = collection(
+      db,
+      "storePublicProfiles"
+    );
     const storeQuery = firestoreQuery(
       storesRef,
       or(

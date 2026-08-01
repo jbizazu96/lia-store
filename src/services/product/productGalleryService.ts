@@ -23,7 +23,12 @@ import {
 } from "firebase/firestore";
 
 import {
+  httpsCallable,
+} from "firebase/functions";
+
+import {
   db,
+  functions,
 } from "@/lib/firebase";
 
 import type {
@@ -163,7 +168,7 @@ export const productGalleryService = {
       query(
         collection(
           db,
-          "products",
+          "productPublicProfiles",
           productId,
           "images"
         ),
@@ -222,22 +227,27 @@ async getAllProductImages(
     return [];
   }
 
-  const snapshot =
-    await getDocs(
-      collection(
-        db,
-        "products",
-        productId,
-        "images"
-      )
-    );
+  const result =
+    await httpsCallable<
+      { productId: string },
+      {
+        images: Array<
+          DocumentData & {
+            id: string;
+          }
+        >;
+      }
+    >(
+      functions,
+      "getOwnedStoreProductImages"
+    )({ productId });
 
-  return snapshot.docs
+  return result.data.images
     .map(
-      (imageDocument) =>
+      (image) =>
         mapGalleryImage(
-          imageDocument.id,
-          imageDocument.data()
+          image.id,
+          image
         )
     )
     .sort(

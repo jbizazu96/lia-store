@@ -21,6 +21,7 @@
 */
 
 import {
+  FieldValue,
   getFirestore,
   Timestamp,
   type DocumentData,
@@ -131,7 +132,9 @@ async function validateStore(
   transaction: Transaction,
   storeReference: FirebaseFirestore.DocumentReference,
   stripeAccount: StripeConnectAccount
-): Promise<void> {
+): Promise<{
+  isInitialConnection: boolean;
+}> {
   const snapshot =
     await transaction.get(storeReference);
 
@@ -162,7 +165,7 @@ async function validateStore(
     );
 
   if (
-    !existingStripeAccountId ||
+    existingStripeAccountId &&
     existingStripeAccountId !== stripeAccount.accountId
   ) {
     throw new StripeWebhookPersistenceError(
@@ -183,12 +186,16 @@ async function validateStore(
       "stripeConnectApiVersion"
     );
 
-  if (apiVersion !== "v2") {
+  if (apiVersion && apiVersion !== "v2") {
     throw new StripeWebhookPersistenceError(
       "STRIPE_API_VERSION_MISMATCH",
       "The store is not configured as a Stripe Accounts v2 record."
     );
   }
+
+  return {
+    isInitialConnection: !existingStripeAccountId,
+  };
 }
 
 
@@ -225,13 +232,27 @@ async function saveStoreStripeStatus(
 
   await db.runTransaction(
     async (transaction) => {
-      await validateStore(
+      const {
+        isInitialConnection,
+      } = await validateStore(
         transaction,
         storeReference,
         stripeAccount
       );
 
       transaction.update(storeReference, {
+        /*
+          The first successful Accounts v2 synchronization binds the newly
+          created Stripe account to this store. Later synchronizations may
+          only update that same account; validateStore rejects replacements.
+        */
+        ...(isInitialConnection
+          ? {
+              stripeAccountId: stripeAccount.accountId,
+              stripeConnectedAt: Timestamp.now(),
+            }
+          : {}),
+
         /*
           This remains an Accounts v2 connected account.
         */
@@ -270,6 +291,9 @@ async function saveStoreStripeStatus(
         */
         stripeUpdatedAt:
           timestampFromIso(stripeAccount.updatedAt, "update"),
+
+        updatedAt:
+          FieldValue.serverTimestamp(),
       });
     }
   );

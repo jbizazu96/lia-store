@@ -51,6 +51,7 @@ function getMetadata(metadata: Record<string, string> | undefined) {
     metadata?.processingType !== "driver-image-original" ||
     !metadata.driverId ||
     !metadata.imageId ||
+    !metadata.uploadId ||
     !imageField ||
     ![
       "profile-photo",
@@ -66,8 +67,29 @@ function getMetadata(metadata: Record<string, string> | undefined) {
   return {
     driverId: metadata.driverId,
     imageId: metadata.imageId,
+    uploadId: metadata.uploadId,
     imageField: imageField as DriverImageField,
   };
+}
+
+/*
+ * Storage custom metadata is supplied by the browser and must never be
+ * treated as authorization.  The object name is the immutable boundary
+ * enforced by Storage Rules, so require it to agree with every value that
+ * will later be used with the Admin SDK.
+ */
+function hasExpectedOriginalPath(
+  originalPath: string,
+  metadata: ReturnType<typeof getMetadata>
+): metadata is NonNullable<ReturnType<typeof getMetadata>> {
+  if (!metadata) return false;
+
+  const prefix =
+    `drivers/${metadata.driverId}/images/originals/` +
+    `${metadata.imageField}/`;
+
+  return originalPath.startsWith(prefix) &&
+    originalPath.length > prefix.length;
 }
 
 export const processDriverImage = onObjectFinalized(
@@ -81,9 +103,42 @@ export const processDriverImage = onObjectFinalized(
     const originalPath = event.data.name;
     const metadata = getMetadata(event.data.metadata);
 
-    if (!bucketName || !originalPath || !metadata) return;
+    if (
+      !bucketName ||
+      !originalPath ||
+      !hasExpectedOriginalPath(originalPath, metadata)
+    ) {
+      logger.warn("Ignored driver image with inconsistent path metadata.", {
+        originalPath,
+      });
+      return;
+    }
 
     try {
+      const uploadReference = getFirestore("default")
+        .collection("driverImageUploads")
+        .doc(metadata.uploadId);
+      const uploadSnapshot = await uploadReference.get();
+      const upload = uploadSnapshot.data();
+
+      /*
+       * A path-matching upload reservation is required before an Admin SDK
+       * image processor can attach a file to a private driver record.
+       */
+      if (
+        !uploadSnapshot.exists ||
+        upload?.status !== "prepared" ||
+        upload.driverId !== metadata.driverId ||
+        upload.field !== metadata.imageField ||
+        upload.path !== originalPath
+      ) {
+        logger.warn("Ignored unreserved driver image upload.", {
+          originalPath,
+          uploadId: metadata.uploadId,
+        });
+        return;
+      }
+
       const image = await processProductImage(
         await downloadOriginalImage(bucketName, originalPath)
       );
@@ -143,6 +198,11 @@ export const processDriverImage = onObjectFinalized(
       });
 
       await deleteOriginalImage(bucketName, originalPath);
+
+      await uploadReference.update({
+        status: "processed",
+        processedAt: FieldValue.serverTimestamp(),
+      });
 
       if (previousPath && previousPath !== optimizedPath) {
         await getStorage().bucket(bucketName).file(previousPath).delete({ ignoreNotFound: true });

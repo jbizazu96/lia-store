@@ -227,6 +227,17 @@ export interface ValidatedStripePaymentEvent {
 
   paymentIntentId: string;
 
+  /*
+    Stripe Charge created by the PaymentIntent.
+
+    This may be null for processing or failed PaymentIntents because
+    Stripe does not guarantee that a successful Charge exists yet.
+
+    A succeeded payment event must contain a valid Charge ID before
+    LIA activates the order and records its future transfer source.
+  */
+  stripeChargeId: string | null;
+
   paymentIntentStatus: string;
 
   amount: number;

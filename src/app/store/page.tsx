@@ -9,8 +9,10 @@ import {useRouter} from "next/navigation";
 /*
   Firebase imports.
 */
-import {auth, db} from "@/lib/firebase";
-import {collection, query, where, getDocs} from "firebase/firestore";
+import {auth} from "@/lib/firebase";
+import {
+  storeWorkspaceClientService,
+} from "@/services/store/storeWorkspaceClientService";
 import { BrandedLoader } from "@/components/ui/BrandedLoader";
 import {
   RoleGuard,
@@ -29,15 +31,12 @@ function StorePageContent() {
       }
 
       try {
-        /*
-          Check if store exists for this user.
-        */
-        const storesRef = collection(db, "stores");
-        const q = query(storesRef, where("ownerId", "==", user.uid));
-        const snapshot = await getDocs(q);
+        const entry =
+          await storeWorkspaceClientService
+            .getEntry();
 
-        if (!snapshot.empty) {
-          const storeData = snapshot.docs[0].data();
+        if (entry.hasStore && entry.store) {
+          const storeData = entry.store;
           
           if (storeData.onboardingCompleted === true) {
             const isApproved = storeData.isApproved === true;

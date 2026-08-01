@@ -33,7 +33,7 @@
 import {
   isStripeDefaultPaymentMethodError,
   stripeDefaultPaymentMethodService,
-} from "../payment/stripeDefaultPaymentMethodService";
+} from "../payment/stripe/stripeDefaultPaymentMethodService";
 
 import {
   defineSecret,
@@ -48,7 +48,7 @@ import Stripe from "stripe";
 import {
   isPaidOrderActivationError,
   paidOrderActivationService,
-} from "../payment/paidOrderActivationService";
+} from "../payment/activation/paidOrderActivationService";
 
 import {
   isPaymentStatusServiceError,
@@ -58,12 +58,12 @@ import {
 import {
   isStripePaymentWebhookEventServiceError,
   stripePaymentWebhookEventService,
-} from "../payment/stripePaymentWebhookEventService";
+} from "../payment/stripe/stripePaymentWebhookEventService";
 
 import {
   isStripePaymentWebhookValidationError,
   validateStripePaymentEvent,
-} from "../payment/stripePaymentWebhookValidation";
+} from "../payment/stripe/stripePaymentWebhookValidation";
 
 import {
   storeEvents,

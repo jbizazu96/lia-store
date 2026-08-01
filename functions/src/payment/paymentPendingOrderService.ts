@@ -42,15 +42,15 @@ import type {
   CheckoutPaymentAddressInput,
   PrepareCheckoutPaymentRequest,
   TrustedCheckoutCustomer,
-} from "./checkoutPaymentTypes";
+} from "./checkout/checkoutPaymentTypes";
 
 import type {
   TrustedCheckoutData,
-} from "./checkoutDataService";
+} from "../payment/checkout/checkoutDataService";
 
 import type {
   PaymentPricingResult,
-} from "./paymentPricingCalculator";
+} from "./pricing/paymentPricingCalculator";
 
 
 const db =

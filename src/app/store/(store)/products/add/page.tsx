@@ -43,8 +43,8 @@ import {
 } from "@/services/product/productService";
 
 import {
-  userService,
-} from "@/services/user/userService";
+  storeWorkspaceClientService,
+} from "@/services/store/storeWorkspaceClientService";
 
 import {
   ProductForm,
@@ -125,10 +125,12 @@ export default function AddProductPage() {
             setLoadingStore(true);
             setError(null);
 
+            const entry =
+              await storeWorkspaceClientService
+                .getEntry();
+
             const resolvedStoreId =
-              await userService.getStoreId(
-                user.uid
-              );
+              entry.store?.id ?? null;
 
             if (!resolvedStoreId) {
               router.replace(

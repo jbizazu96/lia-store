@@ -8,9 +8,8 @@
 |
 */
 
-import {
-  getAuth,
-} from "firebase/auth";
+import { httpsCallable } from "firebase/functions";
+import { functions } from "@/lib/firebase";
 import type {
   StripeConnectAccountSummary,
   StripeOnboardingLinkResult,
@@ -33,34 +32,21 @@ interface DriverStripeResponse {
   onboarding?: StripeOnboardingLinkResult;
 }
 
-async function post(action: "create_account" | "create_onboarding_link" | "get_status"): Promise<DriverStripeResponse> {
-  const user = getAuth().currentUser;
-
-  if (!user) {
-    throw new DriverStripeConnectClientError("You must sign in before managing payouts.", "USER_NOT_AUTHENTICATED", 401);
-  }
-
-  const response = await fetch("/api/stripe/driver/connect", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${await user.getIdToken()}`,
-    },
-    body: JSON.stringify({ action }),
-    cache: "no-store",
-  });
-
-  const payload = await response.json().catch(() => ({}));
-
-  if (!response.ok) {
+async function call(name: string): Promise<DriverStripeResponse> {
+  try {
+    const response = await httpsCallable<unknown, DriverStripeResponse>(
+      functions,
+      name,
+    )();
+    return response.data;
+  } catch (cause) {
+    const error = cause as { code?: unknown; message?: unknown };
     throw new DriverStripeConnectClientError(
-      payload.error ?? "The Stripe request could not be completed.",
-      payload.code ?? "DRIVER_STRIPE_REQUEST_FAILED",
-      response.status
+      typeof error.message === "string" ? error.message : "The Stripe request could not be completed.",
+      typeof error.code === "string" ? error.code : "DRIVER_STRIPE_REQUEST_FAILED",
+      error.code === "functions/unauthenticated" || error.code === "functions/permission-denied" ? 403 : 500,
     );
   }
-
-  return payload as DriverStripeResponse;
 }
 
 export function isDriverStripeConnectClientError(error: unknown): error is DriverStripeConnectClientError {
@@ -68,9 +54,9 @@ export function isDriverStripeConnectClientError(error: unknown): error is Drive
 }
 
 export const driverStripeConnectClientService = {
-  createOrRetrieveAccount: () => post("create_account"),
+  createOrRetrieveAccount: () => call("createOrRetrieveDriverStripeAccount"),
   async createOnboardingLink() {
-    const result = await post("create_onboarding_link");
+    const result = await call("createDriverStripeOnboardingLink");
 
     if (!result.onboarding) {
       throw new DriverStripeConnectClientError("Stripe did not return an onboarding link.", "MISSING_ONBOARDING_LINK", 502);
@@ -78,5 +64,5 @@ export const driverStripeConnectClientService = {
 
     return { onboarding: result.onboarding };
   },
-  getAccountStatus: () => post("get_status"),
+  getAccountStatus: () => call("getDriverStripeAccountStatus"),
 };

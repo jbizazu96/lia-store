@@ -91,17 +91,32 @@ async function requireDriver(uid: string) {
 }
 
 async function getPayments(uid: string) {
-  const snapshot = await db.collection("payouts").where("driverId", "==", uid).get();
+  /*
+   * Marketplace settlement now records every recipient obligation in
+   * paymentTransfers.  The old payouts collection is not part of the live
+   * transfer flow, so reading it made the driver app show zero earnings.
+   */
+  const snapshot = await db.collection("paymentTransfers")
+    .where("recipient.id", "==", uid)
+    .where("recipient.type", "==", "driver")
+    .orderBy("updatedAt", "desc")
+    .limit(100)
+    .get();
   return snapshot.docs.map((document) => {
     const data = document.data();
-    const rawStatus = data.status;
+    const rawStatus = valueString(data.status);
     return {
       id: document.id,
-      deliveryId: valueString(data.deliveryId) || valueString(data.orderId) || document.id,
-      amount: amount(data.amount ?? data.driverAmount),
-      status: rawStatus === "paid" || rawStatus === "failed" ? rawStatus : "pending",
-      paidAt: iso(data.paidAt),
-      createdAt: iso(data.createdAt),
+      deliveryId: valueString(data.orderId) || document.id,
+      /* Transfers store cents; the UI consistently displays dollars. */
+      amount: amount(data.amount) / 100,
+      status: rawStatus === "completed"
+        ? "paid"
+        : rawStatus === "failed"
+          ? "failed"
+          : "pending",
+      paidAt: iso(data.completedAt),
+      createdAt: iso(data.createdAt) ?? iso(data.updatedAt),
     };
   }).sort((left, right) => (right.paidAt ?? right.createdAt ?? "").localeCompare(left.paidAt ?? left.createdAt ?? ""));
 }

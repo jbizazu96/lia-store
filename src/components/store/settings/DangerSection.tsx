@@ -5,24 +5,23 @@
 */
 
 import {useState} from "react";
-import {useRouter} from "next/navigation";
 import {motion} from "framer-motion";
 import {
   AlertTriangle,
   Trash2,
   X,
   AlertCircle,
-  Lock,
 } from "lucide-react";
-import {deleteUser, reauthenticateWithCredential, EmailAuthProvider, signOut} from "firebase/auth";
-import {deleteDoc, doc} from "firebase/firestore";
-import {auth, db} from "@/lib/firebase";
+import {
+  httpsCallable,
+} from "firebase/functions";
+import {
+  auth,
+  functions,
+} from "@/lib/firebase";
 
 export function DangerSection() {
-  const router = useRouter();
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [step, setStep] = useState<"confirm" | "password">("confirm");
-  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -31,38 +30,37 @@ export function DangerSection() {
       setLoading(true);
       setError("");
 
-      const user = auth.currentUser;
-      if (!user || !user.email) {
+      if (!auth.currentUser) {
         throw new Error("No user logged in");
       }
 
-      // Re-authenticate
-      const credential = EmailAuthProvider.credential(user.email, password);
-      await reauthenticateWithCredential(user, credential);
+      /*
+       * Account deletion is never performed in the browser. The backend
+       * creates an admin-reviewed request and later runs the deletion engine.
+       */
+      const requestDeletion = httpsCallable(
+        functions,
+        "requestAccountDeletion"
+      );
 
-      // Delete store data
-      await deleteDoc(doc(db, "stores", user.uid));
-      
-      // Delete user data
-      await deleteDoc(doc(db, "users", user.uid));
+      await requestDeletion({
+        ownerType: "store",
+        reasonCode: "no_longer_needed",
+        reasonDetails: null,
+      });
 
-      // Delete Auth account
-      await deleteUser(user);
+      setShowDeleteModal(false);
+      setError(
+        "Your deletion request was sent for administrator review."
+      );
 
-      // Sign out and redirect
-      await signOut(auth);
-      router.push("/");
-
-    } catch (error: any) {
-      console.error("Error deleting account:", error);
-      if (error.code === "auth/wrong-password") {
-        setError("Incorrect password. Please try again.");
-      } else if (error.code === "auth/too-many-requests") {
-        setError("Too many failed attempts. Please try again later.");
-      } else {
-        setError("Failed to delete account. Please try again.");
-      }
-      setStep("password");
+    } catch (error: unknown) {
+      console.error("Error requesting account deletion:", error);
+      setError(
+        error instanceof Error
+          ? error.message
+          : "Failed to request account deletion. Please try again."
+      );
     } finally {
       setLoading(false);
     }
@@ -78,10 +76,10 @@ export function DangerSection() {
 
         <div className="bg-red-50 rounded-xl p-4 border border-red-200">
           <p className="text-red-700 text-sm font-medium mb-2">
-            Permanently delete your store and account
+            Request store and account deletion
           </p>
           <p className="text-red-600 text-xs mb-4">
-            This action cannot be undone. All your products, orders, and data will be permanently removed.
+            An administrator must review the request before permanent deletion begins.
           </p>
           <button
             type="button"
@@ -90,9 +88,14 @@ export function DangerSection() {
             aria-label="Delete store and account permanently"
           >
             <Trash2 className="w-4 h-4" />
-            Delete Store & Account
+            Request deletion
           </button>
         </div>
+        {error && !showDeleteModal && (
+          <p className="mt-3 text-sm text-green-700">
+            {error}
+          </p>
+        )}
       </div>
 
       {/* Delete Confirmation Modal */}
@@ -120,11 +123,10 @@ export function DangerSection() {
               </button>
             </div>
 
-            {step === "confirm" ? (
-              <>
+            <>
                 <p className="text-gray-600 text-sm mb-6">
-                  Are you sure you want to permanently delete your store and account? 
-                  This action cannot be undone. All your data will be lost.
+                  Request deletion of your store and account? An administrator
+                  will review this before any data is permanently removed.
                 </p>
                 <div className="flex gap-3">
                   <button
@@ -137,62 +139,14 @@ export function DangerSection() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setStep("password")}
+                    onClick={handleDeleteAccount}
                     className="flex-1 py-3 bg-red-600 text-white rounded-xl font-semibold hover:bg-red-700 transition"
                     aria-label="Continue to account deletion"
                   >
-                    Continue
+                    {loading ? "Sending request..." : "Request deletion"}
                   </button>
                 </div>
-              </>
-            ) : (
-              <>
-                <p className="text-gray-600 text-sm mb-4">
-                  Enter your password to confirm account deletion.
-                </p>
-                {error && (
-                  <div className="bg-red-50 text-red-600 p-3 rounded-xl text-sm mb-4">
-                    {error}
-                  </div>
-                )}
-                <div className="relative mb-4">
-                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                  <input
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Enter your password"
-                    className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-red-500"
-                    disabled={loading}
-                    aria-label="Enter your password to confirm deletion"
-                  />
-                </div>
-                <div className="flex gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setStep("confirm")}
-                    className="flex-1 py-3 border border-gray-200 rounded-xl text-gray-600 font-medium hover:bg-gray-50 transition"
-                    disabled={loading}
-                    aria-label="Go back"
-                  >
-                    Back
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleDeleteAccount}
-                    disabled={loading || !password}
-                    className="flex-1 py-3 bg-red-600 text-white rounded-xl font-semibold hover:bg-red-700 transition disabled:opacity-50"
-                    aria-label="Permanently delete account"
-                  >
-                    {loading ? (
-                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mx-auto" />
-                    ) : (
-                      "Delete Forever"
-                    )}
-                  </button>
-                </div>
-              </>
-            )}
+            </>
           </motion.div>
         </div>
       )}

@@ -5,14 +5,9 @@
 | useStoreDashboard Hook
 |--------------------------------------------------------------------------
 |
-| Connects dashboardService to the store dashboard page.
-|
-| Responsibilities:
-|
-| - Wait for Firebase Authentication.
-| - Resolve the signed-in user's store.
-| - Load dashboard data.
-| - Expose loading, error, authentication, and refresh state.
+| Dashboard data is an authenticated callable aggregate. It avoids loading a
+| private store document and every order in the browser whenever one order
+| changes.
 |
 */
 
@@ -21,292 +16,83 @@ import {
   useEffect,
   useState,
 } from "react";
-
 import {
   onAuthStateChanged,
 } from "firebase/auth";
-
 import {
   auth,
-  db,
 } from "@/lib/firebase";
-
 import {
-  collection,
-  onSnapshot,
-  query,
-  where,
-} from "firebase/firestore";
-
-import {
-  dashboardService,
-} from "@/services/dashboard/dashboardService";
-
-import {
-  userService,
-} from "@/services/user/userService";
-
+  storeWorkspaceClientService,
+} from "@/services/store/storeWorkspaceClientService";
 import type {
   DashboardData,
 } from "@/types/dashboard";
 
-/*
-|--------------------------------------------------------------------------
-| Hook Result
-|--------------------------------------------------------------------------
-*/
-
 interface UseStoreDashboardResult {
   data: DashboardData | null;
-
   loading: boolean;
-
   error: string | null;
-
   isAuthenticated: boolean;
-
   needsStoreSetup: boolean;
-
   refreshDashboard: () => Promise<void>;
 }
 
-/*
-|--------------------------------------------------------------------------
-| Hook
-|--------------------------------------------------------------------------
-*/
+export function useStoreDashboard(): UseStoreDashboardResult {
+  const [data, setData] = useState<DashboardData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [needsStoreSetup, setNeedsStoreSetup] = useState(false);
 
-export function useStoreDashboard():
-UseStoreDashboardResult {
-  const [
-    data,
-    setData,
-  ] = useState<DashboardData | null>(
-    null
-  );
+  const loadDashboard = useCallback(async (showLoading = true): Promise<void> => {
+    if (showLoading) setLoading(true);
 
-  const [
-    storeId,
-    setStoreId,
-  ] = useState<string | null>(
-    null
-  );
-
-  const [
-    loading,
-    setLoading,
-  ] = useState(true);
-
-  const [
-    error,
-    setError,
-  ] = useState<string | null>(
-    null
-  );
-
-  const [
-    isAuthenticated,
-    setIsAuthenticated,
-  ] = useState(false);
-
-  const [
-    needsStoreSetup,
-    setNeedsStoreSetup,
-  ] = useState(false);
-
-  /*
-  |--------------------------------------------------------------------------
-  | Load Dashboard
-  |--------------------------------------------------------------------------
-  */
-
-  const loadDashboard =
-    useCallback(
-      async (
-        resolvedStoreId: string,
-        showLoading = true
-      ): Promise<void> => {
-        if (showLoading) {
-          setLoading(true);
-        }
-
-        try {
-          setError(null);
-
-          const dashboardData =
-            await dashboardService
-              .getStoreDashboard(
-                resolvedStoreId
-              );
-
-          if (!dashboardData) {
-            setData(null);
-
-            setError(
-              "Dashboard data could not be loaded."
-            );
-
-            return;
-          }
-
-          setData(
-            dashboardData
-          );
-        } catch (loadError) {
-          console.error(
-            "Error loading store dashboard:",
-            loadError
-          );
-
-          setData(null);
-
-          setError(
-            "Failed to load dashboard."
-          );
-        } finally {
-          if (showLoading) {
-            setLoading(false);
-          }
-        }
-      },
-      []
-    );
-
-  /*
-  |--------------------------------------------------------------------------
-  | Authentication And Store Resolution
-  |--------------------------------------------------------------------------
-  */
-
-  useEffect(() => {
-    const unsubscribe =
-      onAuthStateChanged(
-        auth,
-        async (user) => {
-          if (!user) {
-            setData(null);
-            setStoreId(null);
-            setIsAuthenticated(false);
-            setNeedsStoreSetup(false);
-            setError(
-              "You must sign in."
-            );
-            setLoading(false);
-
-            return;
-          }
-
-          setIsAuthenticated(true);
-          setNeedsStoreSetup(false);
-          setLoading(true);
-          setError(null);
-
-          try {
-            const resolvedStoreId =
-              await userService.getStoreId(
-                user.uid
-              );
-
-            if (!resolvedStoreId) {
-              setData(null);
-              setStoreId(null);
-              setNeedsStoreSetup(true);
-
-              setError(
-                "No store was found for this account."
-              );
-
-              setLoading(false);
-
-              return;
-            }
-
-            setStoreId(
-              resolvedStoreId
-            );
-
-            await loadDashboard(
-              resolvedStoreId
-            );
-          } catch (loadError) {
-            console.error(
-              "Error preparing dashboard:",
-              loadError
-            );
-
-            setData(null);
-            setStoreId(null);
-
-            setError(
-              "Failed to load dashboard."
-            );
-
-            setLoading(false);
-          }
-        }
-      );
-
-    return unsubscribe;
-  }, [
-    loadDashboard,
-  ]);
-
-  /*
-   * Refresh dashboard counts and recent orders as checkout records change.
-   * The dashboard service itself filters out unpaid orders, so a pending
-   * checkout does not appear until the Stripe webhook confirms payment.
-   */
-  useEffect(() => {
-    if (!storeId) {
-      return;
-    }
-
-    const ordersQuery =
-      query(
-        collection(db, "orders"),
-        where("store.id", "==", storeId)
-      );
-
-    return onSnapshot(
-      ordersQuery,
-      () => {
-        void loadDashboard(storeId, false);
-      },
-      (listenerError) => {
-        console.error(
-          "Unable to refresh store dashboard orders:",
-          listenerError
-        );
+    try {
+      const entry = await storeWorkspaceClientService.getEntry();
+      if (!entry.hasStore || !entry.store) {
+        setData(null);
+        setNeedsStoreSetup(true);
+        setError("No store was found for this account.");
+        return;
       }
-    );
-  }, [
-    loadDashboard,
-    storeId,
-  ]);
 
-  /*
-  |--------------------------------------------------------------------------
-  | Manual Refresh
-  |--------------------------------------------------------------------------
-  */
+      const dashboard = await storeWorkspaceClientService.getDashboard();
+      setData(dashboard);
+      setNeedsStoreSetup(false);
+      setError(null);
+    } catch (loadError) {
+      console.error("Error loading store dashboard:", loadError);
+      setData(null);
+      setError("Failed to load dashboard.");
+    } finally {
+      if (showLoading) setLoading(false);
+    }
+  }, []);
 
-  const refreshDashboard =
-    useCallback(
-      async (): Promise<void> => {
-        if (!storeId) {
-          return;
-        }
+  useEffect(() => {
+    let refreshTimer: ReturnType<typeof setInterval> | null = null;
 
-        await loadDashboard(
-          storeId,
-          false
-        );
-      },
-      [
-        loadDashboard,
-        storeId,
-      ]
-    );
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (!user) {
+        setData(null);
+        setIsAuthenticated(false);
+        setNeedsStoreSetup(false);
+        setError("You must sign in.");
+        setLoading(false);
+        return;
+      }
+
+      setIsAuthenticated(true);
+      void loadDashboard();
+      refreshTimer = setInterval(() => void loadDashboard(false), 60_000);
+    });
+
+    return () => {
+      unsubscribe();
+      if (refreshTimer) clearInterval(refreshTimer);
+    };
+  }, [loadDashboard]);
 
   return {
     data,
@@ -314,6 +100,6 @@ UseStoreDashboardResult {
     error,
     isAuthenticated,
     needsStoreSetup,
-    refreshDashboard,
+    refreshDashboard: () => loadDashboard(false),
   };
 }

@@ -36,11 +36,20 @@ import {
   downloadOriginalImage,
 } from "./imageStorage";
 
-function getMetadata(metadata: Record<string, string> | undefined) {
+function getMetadata(
+  originalPath: string,
+  metadata: Record<string, string> | undefined
+) {
+  const pathMatch = originalPath.match(
+    /^users\/([^/]+)\/images\/originals\/profile\/[^/]+$/
+  );
+
   if (
     metadata?.processingType !== "customer-profile-image-original" ||
     !metadata.userId ||
-    !metadata.imageId
+    !metadata.imageId ||
+    !pathMatch ||
+    pathMatch[1] !== metadata.userId
   ) {
     return null;
   }
@@ -60,7 +69,9 @@ export const processCustomerProfileImage = onObjectFinalized(
   async (event) => {
     const bucketName = event.data.bucket;
     const originalPath = event.data.name;
-    const metadata = getMetadata(event.data.metadata);
+    const metadata = originalPath
+      ? getMetadata(originalPath, event.data.metadata)
+      : null;
 
     if (!bucketName || !originalPath || !metadata) {
       return;

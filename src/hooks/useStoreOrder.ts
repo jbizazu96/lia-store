@@ -5,14 +5,9 @@
 | useStoreOrder Hook
 |--------------------------------------------------------------------------
 |
-| Loads a single store order after verifying:
-|
-| - The user is authenticated.
-| - The user owns a store.
-| - The order belongs to that store.
-|
-| The hook also exposes refreshOrder so the page can reload the order after
-| a status update.
+| A callable verifies the authenticated owner and confirmed-payment state
+| before returning a private order. Polling is intentionally limited to the
+| open detail page, avoiding a direct browser order listener.
 |
 */
 
@@ -21,370 +16,86 @@ import {
   useEffect,
   useState,
 } from "react";
-
 import {
   onAuthStateChanged,
+  type User,
 } from "firebase/auth";
-
-import {
-  doc,
-  getDoc,
-  onSnapshot,
-} from "firebase/firestore";
-
 import {
   auth,
-  db,
 } from "@/lib/firebase";
-
 import {
   mapFirestoreOrder,
 } from "@/mappers/orderMapper";
-
 import {
-  orderService,
-} from "@/services/order/orderService";
-
-import type {
-  User,
-} from "firebase/auth";
-
+  storeWorkspaceClientService,
+} from "@/services/store/storeWorkspaceClientService";
 import type {
   Order,
 } from "@/types/order";
-
-/*
-|--------------------------------------------------------------------------
-| Hook Parameters
-|--------------------------------------------------------------------------
-*/
 
 interface UseStoreOrderParams {
   orderId: string;
 }
 
-/*
-|--------------------------------------------------------------------------
-| Hook Result
-|--------------------------------------------------------------------------
-*/
-
 interface UseStoreOrderResult {
   order: Order | null;
-
   loading: boolean;
-
   error: string | null;
-
   isAuthenticated: boolean;
-
   refreshOrder: () => Promise<void>;
 }
 
-/*
-|--------------------------------------------------------------------------
-| Hook
-|--------------------------------------------------------------------------
-*/
+function mapOrder(value: Record<string, unknown> & { id: string }): Order {
+  return mapFirestoreOrder({ id: value.id, data: () => value } as never);
+}
 
-export function useStoreOrder({
-  orderId,
-}: UseStoreOrderParams): UseStoreOrderResult {
-  const [
-    order,
-    setOrder,
-  ] = useState<Order | null>(null);
+export function useStoreOrder({ orderId }: UseStoreOrderParams): UseStoreOrderResult {
+  const [order, setOrder] = useState<Order | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
 
-  const [
-    loading,
-    setLoading,
-  ] = useState(true);
+  const loadOrder = useCallback(async (showLoading = true): Promise<void> => {
+    if (!currentUser || !orderId.trim()) return;
+    if (showLoading) setLoading(true);
 
-  const [
-    error,
-    setError,
-  ] = useState<string | null>(null);
-
-  const [
-    isAuthenticated,
-    setIsAuthenticated,
-  ] = useState(false);
-
-  const [
-    currentUser,
-    setCurrentUser,
-  ] = useState<User | null>(null);
-
-  const [
-    ownedStoreId,
-    setOwnedStoreId,
-  ] = useState<string | null>(null);
-
-  /*
-  |--------------------------------------------------------------------------
-  | Load And Verify Order
-  |--------------------------------------------------------------------------
-  */
-
-  const loadOrder = useCallback(
-    async (
-      user: User,
-      showLoading = true
-    ): Promise<void> => {
-      if (showLoading) {
-        setLoading(true);
-      }
-
-      try {
-        setError(null);
-
-        /*
-        |--------------------------------------------------------------------------
-        | Load Store ID
-        |--------------------------------------------------------------------------
-        */
-
-        const userSnapshot =
-          await getDoc(
-            doc(
-              db,
-              "users",
-              user.uid
-            )
-          );
-
-        if (!userSnapshot.exists()) {
-          setOrder(null);
-          setOwnedStoreId(null);
-
-          setError(
-            "Store account not found."
-          );
-
-          return;
-        }
-
-        const storeId =
-          userSnapshot.data().storeId;
-
-        if (
-          typeof storeId !== "string" ||
-          !storeId.trim()
-        ) {
-          setOrder(null);
-          setOwnedStoreId(null);
-
-          setError(
-            "Store not found."
-          );
-
-          return;
-        }
-
-        /*
-        |--------------------------------------------------------------------------
-        | Load Order
-        |--------------------------------------------------------------------------
-        */
-
-        const loadedOrder =
-          await orderService.getOrder(
-            orderId
-          );
-
-        if (!loadedOrder) {
-          setOrder(null);
-          setOwnedStoreId(null);
-
-          setError(
-            "Order not found."
-          );
-
-          return;
-        }
-
-        const orderSnapshot =
-          await getDoc(
-            doc(db, "orders", orderId)
-          );
-
-        if (
-          !orderSnapshot.exists() ||
-          orderSnapshot.data().checkoutStatus !== "confirmed"
-        ) {
-          setOrder(null);
-          setOwnedStoreId(null);
-          setError("Order not found.");
-          return;
-        }
-
-        /*
-        |--------------------------------------------------------------------------
-        | Verify Store Ownership
-        |--------------------------------------------------------------------------
-        */
-
-        if (
-          loadedOrder.store.id !==
-          storeId
-        ) {
-          setOrder(null);
-          setOwnedStoreId(null);
-
-          setError(
-            "You do not have permission to view this order."
-          );
-
-          return;
-        }
-
-        setOrder(loadedOrder);
-        setOwnedStoreId(storeId);
-        setError(null);
-      } catch (loadError) {
-        console.error(
-          "Error loading store order:",
-          loadError
-        );
-
-        setOrder(null);
-        setOwnedStoreId(null);
-
-        setError(
-          "Failed to load order."
-        );
-      } finally {
-        if (showLoading) {
-          setLoading(false);
-        }
-      }
-    },
-    [orderId]
-  );
-
-  /*
-  |--------------------------------------------------------------------------
-  | Authentication
-  |--------------------------------------------------------------------------
-  */
-
-  useEffect(() => {
-    const unsubscribe =
-      onAuthStateChanged(
-        auth,
-        (user) => {
-          setCurrentUser(user);
-          setOwnedStoreId(null);
-
-          if (!user) {
-            setOrder(null);
-            setLoading(false);
-            setIsAuthenticated(false);
-
-            setError(
-              "You must sign in."
-            );
-
-            return;
-          }
-
-          setIsAuthenticated(true);
-
-          void loadOrder(user);
-        }
-      );
-
-    return unsubscribe;
-  }, [loadOrder]);
-
-  /*
-  |--------------------------------------------------------------------------
-  | Live Delivery Status Updates
-  |--------------------------------------------------------------------------
-  |
-  | Shipday updates the same Firestore order document. Once ownership has
-  | been verified by the initial load, subscribe to that document so picked
-  | up, out-for-delivery, and completed states appear without a refresh.
-  |
-  */
-
-  useEffect(() => {
-    if (!currentUser || !ownedStoreId) {
-      return;
+    try {
+      const response = await storeWorkspaceClientService.getOrder(orderId);
+      setOrder(mapOrder(response.order));
+      setError(null);
+    } catch (loadError) {
+      console.error("Error loading store order:", loadError);
+      setOrder(null);
+      setError("Order not found.");
+    } finally {
+      if (showLoading) setLoading(false);
     }
+  }, [currentUser, orderId]);
 
-    const unsubscribe = onSnapshot(
-      doc(db, "orders", orderId),
-      (snapshot) => {
-        if (!snapshot.exists()) {
-          setOrder(null);
-          setError("Order not found.");
-          return;
-        }
+  useEffect(() => onAuthStateChanged(auth, (user) => {
+    setCurrentUser(user);
+    setIsAuthenticated(Boolean(user));
 
-        if (
-          snapshot.data().checkoutStatus !== "confirmed"
-        ) {
-          setOrder(null);
-          setError("Order not found.");
-          return;
-        }
+    if (!user) {
+      setOrder(null);
+      setError("You must sign in.");
+      setLoading(false);
+    }
+  }), []);
 
-        try {
-          const liveOrder = mapFirestoreOrder(snapshot);
-
-          if (liveOrder.store.id !== ownedStoreId) {
-            setOrder(null);
-            setError("You do not have permission to view this order.");
-            return;
-          }
-
-          setOrder(liveOrder);
-          setError(null);
-        } catch (listenerError) {
-          console.error("Error mapping live store order:", listenerError);
-          setOrder(null);
-          setError("The live order update could not be read.");
-        }
-      },
-      (listenerError) => {
-        console.error("Error listening to store order:", listenerError);
-        setError("Failed to receive live order updates.");
-      }
-    );
-
-    return unsubscribe;
-  }, [currentUser, orderId, ownedStoreId]);
-
-  /*
-  |--------------------------------------------------------------------------
-  | Refresh Order
-  |--------------------------------------------------------------------------
-  |
-  | Reloads the order without replacing the page with the loading screen.
-  |
-  */
-
-  const refreshOrder =
-    useCallback(async (): Promise<void> => {
-      if (!currentUser) {
-        return;
-      }
-
-      await loadOrder(
-        currentUser,
-        false
-      );
-    }, [
-      currentUser,
-      loadOrder,
-    ]);
+  useEffect(() => {
+    if (!currentUser) return;
+    void loadOrder();
+    const refreshTimer = setInterval(() => void loadOrder(false), 20_000);
+    return () => clearInterval(refreshTimer);
+  }, [currentUser, loadOrder]);
 
   return {
     order,
     loading,
     error,
     isAuthenticated,
-    refreshOrder,
+    refreshOrder: () => loadOrder(false),
   };
 }

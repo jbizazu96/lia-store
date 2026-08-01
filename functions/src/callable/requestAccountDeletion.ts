@@ -1,4 +1,7 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
+import {
+  getFirestore,
+} from "firebase-admin/firestore";
 
 import {
   accountDeletionRequestService,
@@ -57,6 +60,34 @@ export const requestAccountDeletion = onCall(
       request.data as RequestAccountDeletionData;
 
     try {
+      /*
+       * Never trust a browser-supplied owner type. It determines which
+       * account-deletion engine will run after administrative approval.
+       */
+      const user = await getFirestore("default")
+        .collection("users")
+        .doc(uid)
+        .get();
+
+      const accountType =
+        user.data()?.accountType;
+
+      const expectedOwnerType =
+        accountType === "store_owner"
+          ? "store"
+          : accountType === "driver"
+            ? "driver"
+            : accountType === "customer"
+              ? "customer"
+              : null;
+
+      if (!expectedOwnerType || data.ownerType !== expectedOwnerType) {
+        throw new HttpsError(
+          "permission-denied",
+          "You cannot request deletion for another account type."
+        );
+      }
+
       const result =
         await accountDeletionRequestService.createRequest({
           ownerType: data.ownerType,

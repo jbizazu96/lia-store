@@ -1,6 +1,20 @@
 "use client";
 
-import { auth } from "@/lib/firebase";
+/*
+  Store Image Service.
+
+  The browser uploads only the original file to an owner-protected Storage
+  path. It never writes Store Firestore data: the onboarding callable saves
+  the step and the processStoreImage Function creates the optimized image.
+*/
+import {
+  auth,
+  storage,
+} from "@/lib/firebase";
+import {
+  ref,
+  uploadBytes,
+} from "firebase/storage";
 
 export type StoreImageField = "logo" | "banner" | "owner-photo-id" | "front" | "inside";
 
@@ -10,13 +24,6 @@ interface UploadStoreImageParams {
   file: File;
 }
 
-/**
- * Upload an original store image through the authenticated server route.
- *
- * The route verifies that the current user owns the store and writes with
- * Firebase Admin. The background processStoreImage Function then generates
- * the optimized image and updates the store document.
- */
 export const storeImageService = {
   async uploadOriginalImage({
     storeId,
@@ -41,25 +48,37 @@ export const storeImageService = {
       throw new Error("Sign in again before uploading an image.");
     }
 
-    const formData = new FormData();
-    formData.set("storeId", storeId);
-    formData.set("field", field);
-    formData.set("file", file);
+    /*
+     * Store upload permission is a server-issued custom claim. Force a token
+     * refresh after the onboarding/workspace callable assigns that claim so
+     * this first upload is evaluated against the current authorization.
+     */
+    await user.getIdToken(true);
 
-    const response = await fetch("/api/store/images/original", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${await user.getIdToken()}`,
+    const extension = file.name
+      .split(".")
+      .pop()
+      ?.toLowerCase()
+      .replace(/[^a-z0-9]/g, "") || "image";
+    const imageId = `${Date.now()}-${crypto.randomUUID()}`;
+    const originalPath = [
+      "stores",
+      storeId,
+      "images",
+      "originals",
+      field,
+      `${imageId}.${extension}`,
+    ].join("/");
+
+    await uploadBytes(ref(storage, originalPath), file, {
+      contentType: file.type,
+      cacheControl: "private, max-age=0, no-cache",
+      customMetadata: {
+        storeId,
+        imageId,
+        imageField: field,
+        processingType: "store-image-original",
       },
-      body: formData,
     });
-
-    const payload = await response
-      .json()
-      .catch(() => ({ error: "The image could not be uploaded." }));
-
-    if (!response.ok) {
-      throw new Error(payload.error ?? "The image could not be uploaded.");
-    }
   },
 };

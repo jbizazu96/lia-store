@@ -27,10 +27,10 @@ import {
   Settings as SettingsIcon,
   Clock,
 } from "lucide-react";
-import { auth, db } from "@/lib/firebase";
-import { doc, getDoc, updateDoc, collection, query, where, getDocs } from "firebase/firestore";
-import { geocodeAddress } from "@/services/delivery/geocode";
-import { normalizeUsState } from "@/utils/usState";
+import { auth } from "@/lib/firebase";
+import {
+  storeWorkspaceClientService,
+} from "@/services/store/storeWorkspaceClientService";
 
 // Components
 import { ProfileSection } from "@/components/store/settings/ProfileSection";
@@ -129,31 +129,16 @@ export default function SettingsPage() {
           return;
         }
 
-        // Get user data
-        const userRef = doc(db, "users", user.uid);
-        const userDoc = await getDoc(userRef);
-        if (userDoc.exists()) {
-          const loadedUserData = userDoc.data();
-          setUserData(loadedUserData);
-          initialUserData.current = JSON.stringify(loadedUserData);
-        }
+        /* The callable verifies the signed-in owner before returning data. */
+        const workspace =
+          await storeWorkspaceClientService
+            .getSettings();
 
-        // ✅ Get store data by querying ownerId
-        const storesRef = collection(db, "stores");
-        const q = query(storesRef, where("ownerId", "==", user.uid));
-        const storeSnapshot = await getDocs(q);
-        
-        if (!storeSnapshot.empty) {
-          const storeDoc = storeSnapshot.docs[0];
-          setStoreId(storeDoc.id);
-          const loadedStoreData = { id: storeDoc.id, ...storeDoc.data() };
-          setStoreData(loadedStoreData);
-          initialStoreData.current = JSON.stringify(loadedStoreData);
-        } else {
-          // No store found - redirect to create
-          router.push("/store/onboarding/owner");
-          return;
-        }
+        setStoreId(workspace.store.id);
+        setStoreData(workspace.store);
+        setUserData(workspace.user);
+        initialStoreData.current = JSON.stringify(workspace.store);
+        initialUserData.current = JSON.stringify(workspace.user);
 
       } catch (error) {
         console.error("Error fetching settings:", error);
@@ -191,95 +176,27 @@ export default function SettingsPage() {
       setSaving(true);
       setSaveMessage("");
 
-      const user = auth.currentUser;
-      if (!user) return;
+      if (!auth.currentUser || !storeData) return;
 
-      // Keep the saved coordinates in sync with the store address.
-      if (storeData && storeId) {
-        if (
-          !storeData.address?.trim() ||
-          !storeData.city?.trim() ||
-          !storeData.state?.trim() ||
-          !storeData.zip?.trim()
-        ) {
-          setSaveMessage(
-            "Enter the complete store address (street, city, state, and ZIP code) so we can verify its location."
-          );
-          return;
-        }
-
-        const normalizedState = normalizeUsState(storeData.state);
-        if (!normalizedState) {
-          setSaveMessage("Enter a valid U.S. state name or two-letter abbreviation.");
-          return;
-        }
-
-        const fullAddress = [
-          storeData.address,
-          storeData.city,
-          normalizedState,
-          storeData.zip,
-        ]
-          .join(", ");
-
-        const location = await geocodeAddress(fullAddress);
-
-        if (!location) {
-          setSaveMessage(
-            "We couldn't verify that store address. Check the street, city, state, and ZIP code, then try again."
-          );
-          return;
-        }
-
-        const confirmed = await confirm({
+      const confirmed = await confirm({
           title: "Save store changes?",
           message: "Your updated store details and location will be saved.",
           confirmLabel: "Save changes",
           cancelLabel: "Keep editing",
         });
 
-        if (!confirmed) return;
+      if (!confirmed) return;
 
-        const updatedStoreData = {
-          ...storeData,
-          address: storeData.address.trim().toUpperCase(),
-          city: storeData.city.trim().toUpperCase(),
-          state: normalizedState,
-          zip: storeData.zip.trim().toUpperCase(),
-          formattedAddress: (location.formattedAddress || fullAddress).toUpperCase(),
-          latitude: location.latitude,
-          longitude: location.longitude,
-          updatedAt: new Date().toISOString(),
-        };
+      /* Server verifies and geocodes the address before persisting it. */
+      const workspace =
+        await storeWorkspaceClientService
+          .saveSettings(storeData, userData ?? {});
 
-        const {
-          id: _id,
-          logoUrl: _logoUrl,
-          bannerUrl: _bannerUrl,
-          logoImagePath: _logoImagePath,
-          bannerImagePath: _bannerImagePath,
-          ...storeFields
-        } = updatedStoreData;
-
-        // Image URLs are written by the background resize Function. Do not
-        // overwrite a freshly processed URL with this page's older state.
-        await updateDoc(doc(db, "stores", storeId), storeFields);
-
-        setStoreData(updatedStoreData);
-        initialStoreData.current = JSON.stringify(updatedStoreData);
-      }
-
-      // Update user
-      if (userData) {
-        const updatedUserData = {
-          ...userData,
-          updatedAt: new Date().toISOString(),
-        };
-
-        await updateDoc(doc(db, "users", user.uid), updatedUserData);
-        setUserData(updatedUserData);
-        initialUserData.current = JSON.stringify(updatedUserData);
-      }
+      setStoreId(workspace.store.id);
+      setStoreData(workspace.store);
+      setUserData(workspace.user);
+      initialStoreData.current = JSON.stringify(workspace.store);
+      initialUserData.current = JSON.stringify(workspace.user);
 
       setSaveMessage("Settings saved successfully! ✅");
       showSuccess("Store settings saved successfully.");
