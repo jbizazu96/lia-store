@@ -2,20 +2,14 @@
   Recent searches service.
 */
 
-import {doc, updateDoc, arrayUnion, getDoc} from "firebase/firestore";
-import {auth, db} from "@/lib/firebase";
+import {auth} from "@/lib/firebase";
+import {customerProfileClientService} from "@/services/user/customerProfileClientService";
 
 export async function loadRecentSearches(): Promise<string[]> {
   try {
     const user = auth.currentUser;
     if (user) {
-      const userDoc = await getDoc(doc(db, "users", user.uid));
-      if (userDoc.exists()) {
-        const data = userDoc.data();
-        if (data.recentSearches) {
-          return data.recentSearches.slice(0, 10);
-        }
-      }
+      return (await customerProfileClientService.getProfile()).recentSearches;
     } else {
       const saved = localStorage.getItem("recentSearches");
       if (saved) {
@@ -35,10 +29,7 @@ export async function saveRecentSearch(query: string): Promise<void> {
   try {
     const user = auth.currentUser;
     if (user) {
-      const userRef = doc(db, "users", user.uid);
-      await updateDoc(userRef, {
-        recentSearches: arrayUnion(query.trim()),
-      });
+      await customerProfileClientService.saveRecentSearch(query.trim());
     } else {
       const saved = localStorage.getItem("recentSearches");
       const searches = saved ? JSON.parse(saved) : [];

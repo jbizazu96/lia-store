@@ -5,10 +5,9 @@
   Checks account type and store status for store owners.
 */
 
-import {doc, getDoc} from "firebase/firestore";
-import {db} from "@/lib/firebase";
 import {userService} from "@/services/user/userService";
 import {storeWorkspaceClientService} from "@/services/store/storeWorkspaceClientService";
+import {currentAccountClientService} from "@/services/user/currentAccountClientService";
 
 interface PostLoginResult {
   accountType: "customer" | "store_owner" | "driver" | "admin";
@@ -19,18 +18,7 @@ interface PostLoginResult {
 }
 
 export async function handlePostLogin(uid: string): Promise<PostLoginResult> {
-  /*
-    Get user data from Firestore.
-  */
-  const userRef = doc(db, "users", uid);
-  const userDoc = await getDoc(userRef);
-
-  if (!userDoc.exists()) {
-    throw new Error("User profile not found. Please contact support.");
-  }
-
-  const userData = userDoc.data();
-  const accountType = userData.accountType || "customer";
+  const {accountType} = await currentAccountClientService.get();
 
   /*
     Check if user has an address (for customers).

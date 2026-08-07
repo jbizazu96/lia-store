@@ -113,8 +113,9 @@ function settingsEditFingerprint(
       ein: store.ein ?? "",
       businessStructure: store.businessStructure ?? "",
       orderNotifications: store.orderNotifications !== false,
+      paymentNotifications: store.paymentNotifications !== false,
+      productStockNotifications: store.productStockNotifications !== false,
       emailNotifications: store.emailNotifications !== false,
-      marketingEmails: store.marketingEmails !== false,
       pushNotifications: store.pushNotifications !== false,
     },
     user: {

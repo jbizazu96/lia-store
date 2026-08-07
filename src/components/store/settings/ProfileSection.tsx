@@ -99,6 +99,7 @@ export function ProfileSection({
               src={bannerPreview}
               alt="Store banner"
               fill
+              sizes="(max-width: 768px) 100vw, 768px"
               className="object-cover"
             />
           ) : (
@@ -135,6 +136,7 @@ export function ProfileSection({
                 src={logoPreview}
                 alt="Store logo"
                 fill
+                sizes="96px"
                 className="object-cover"
               />
             ) : (

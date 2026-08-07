@@ -341,6 +341,30 @@ function ClaimModal({
           </p>
         </section>
 
+        {detail.evidence && (
+          <section className="mt-4 rounded-xl border border-orange-100 bg-orange-50 p-4">
+            <p className="text-xs font-bold uppercase tracking-wide text-orange-700">
+              Customer photo evidence
+            </p>
+            <p className="mt-2 text-sm text-orange-900">
+              The customer attached this photo to support their claim.
+            </p>
+            <a
+              href={detail.evidence.imageUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-3 block overflow-hidden rounded-xl border border-orange-200 bg-white"
+              aria-label="Open customer claim photo evidence"
+            >
+              <img
+                src={detail.evidence.imageUrl}
+                alt="Customer photo evidence for this refund claim"
+                className="max-h-96 w-full object-contain"
+              />
+            </a>
+          </section>
+        )}
+
         <div className="mt-5 grid gap-3 sm:grid-cols-2">
           <Info
             title="Customer"

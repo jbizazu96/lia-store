@@ -1158,6 +1158,10 @@ const handleViewOrder =
               preparedPayment
                 .orderId
             }
+            checkoutSessionId={
+              preparedPayment
+                .checkoutSessionId
+            }
             clientSecret={
               preparedPayment
                 .clientSecret

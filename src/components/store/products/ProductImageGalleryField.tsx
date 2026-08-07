@@ -438,6 +438,7 @@ export function ProductImageGalleryField({
                       imageDefinition.title
                     }
                     fill
+                    sizes="(max-width: 640px) 100vw, 320px"
                     className="object-contain"
                   />
 

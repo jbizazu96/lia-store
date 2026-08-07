@@ -40,7 +40,8 @@ export interface StoreSettings {
   // Notifications
   emailNotifications: boolean;
   orderNotifications: boolean;
-  marketingEmails: boolean;
+  paymentNotifications: boolean;
+  productStockNotifications: boolean;
   pushNotifications: boolean;
 }
 

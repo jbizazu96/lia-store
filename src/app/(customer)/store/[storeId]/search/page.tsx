@@ -23,7 +23,6 @@ import {
 } from "next/navigation";
 import {
   ArrowLeft,
-  PackageOpen,
   Search,
   X,
 } from "lucide-react";
@@ -49,9 +48,8 @@ import {
 import {
   ProductCard,
 } from "@/components/customer/store/ProductCard";
-import {
-  BrandedLoader,
-} from "@/components/ui/BrandedLoader";
+import { CustomerPageState } from "@/components/customer/ui/CustomerPageState";
+import { CustomerPageSkeleton } from "@/components/customer/ui/CustomerPageSkeleton";
 import type {
   Product,
 } from "@/types/product";
@@ -231,7 +229,7 @@ export default function StoreSearchPage({
             </div>
           </div>
         </header>
-        <BrandedLoader message="Loading store search" />
+        <CustomerPageSkeleton variant="search" />
       </main>
     );
   }
@@ -368,16 +366,11 @@ function SearchEmptyState({
   query: string;
 }) {
   return (
-    <section className="flex min-h-[50vh] flex-col items-center justify-center px-6 text-center">
-      <div className="mb-5 flex h-20 w-20 items-center justify-center rounded-full bg-orange-50">
-        <PackageOpen className="h-10 w-10 text-orange-400" />
-      </div>
-      <h2 className="text-xl font-bold text-gray-900">
-        No products found
-      </h2>
-      <p className="mt-2 max-w-xs text-sm leading-6 text-gray-500">
-        Nothing in this store matches “{query.trim()}”. Try a different product name.
-      </p>
-    </section>
+    <CustomerPageState
+      kind="search-empty"
+      title="No products found"
+      description={`Nothing in this store matches “${query.trim()}”. Try a different product name.`}
+      compact
+    />
   );
 }

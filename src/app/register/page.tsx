@@ -181,6 +181,7 @@ export default function RegisterPage() {
                 src="/icon/icon-512.png"
                 alt="LIA"
                 fill
+                sizes="80px"
                 className="object-contain"
                 priority
               />
@@ -298,6 +299,7 @@ export default function RegisterPage() {
               src="/icon/icon-512.png"
               alt="LIA"
               fill
+              sizes="80px"
               className="object-contain"
             />
           </div>

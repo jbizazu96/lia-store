@@ -90,6 +90,7 @@ function VerifyEmailContent() {
             src="/logo.png"
             alt="LIA"
             fill
+            sizes="80px"
             className="object-contain"
           />
         </div>

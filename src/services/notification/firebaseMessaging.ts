@@ -14,6 +14,17 @@ import {
 } from "firebase/messaging";
 import { httpsCallable } from "firebase/functions";
 import { getFirebaseMessaging } from "@/lib/firebase";
+import {
+  capacitorNotificationAdapter,
+  type NotificationPermissionState,
+} from "./capacitorNotificationAdapter";
+import {
+  openLiaDeepLink,
+} from "./notificationDeepLink";
+
+export type {
+  NotificationPermissionState,
+} from "./capacitorNotificationAdapter";
 
 export class FirebaseMessaging {
   private foregroundMessageUnsubscribe: Unsubscribe | null = null;
@@ -52,12 +63,6 @@ export class FirebaseMessaging {
           const title = payload.notification?.title ?? "LIA";
           const body = payload.notification?.body ??
             "You have a new update.";
-          const candidate = payload.data?.deepLink;
-          const deepLink = typeof candidate === "string" &&
-            candidate.startsWith("/") &&
-            !candidate.startsWith("//")
-            ? candidate
-            : "/home";
           const notification = new Notification(title, {
             body,
             icon: "/icon/icon-192.png",
@@ -66,7 +71,7 @@ export class FirebaseMessaging {
 
           notification.onclick = () => {
             window.focus();
-            window.location.assign(deepLink);
+            openLiaDeepLink(payload.data?.deepLink);
             notification.close();
           };
         },
@@ -77,7 +82,26 @@ export class FirebaseMessaging {
   /**
    * Requests notification permission.
    */
+  async getPermissionStatus(): Promise<NotificationPermissionState> {
+    if (capacitorNotificationAdapter.isNativeApp()) {
+      return capacitorNotificationAdapter.getPermission();
+    }
+
+    if (typeof window === "undefined" || !("Notification" in window)) {
+      return "unsupported";
+    }
+
+    if (Notification.permission === "granted") return "granted";
+    if (Notification.permission === "denied") return "denied";
+    return "prompt";
+  }
+
   async requestPermission(): Promise<boolean> {
+    if (capacitorNotificationAdapter.isNativeApp()) {
+      return (
+        await capacitorNotificationAdapter.requestPermission()
+      ) === "granted";
+    }
 
     const permission =
       await Notification.requestPermission();
@@ -90,6 +114,9 @@ export class FirebaseMessaging {
    * Retrieves the Firebase Cloud Messaging token.
    */
   async getToken(): Promise<string | null> {
+    if (capacitorNotificationAdapter.isNativeApp()) {
+      return capacitorNotificationAdapter.getToken();
+    }
 
     const messaging =
       await getFirebaseMessaging();
@@ -147,46 +174,59 @@ export class FirebaseMessaging {
   /**
    * Registers one stable browser installation through a trusted Function.
    */
-  async registerDevice(): Promise<void> {
-    if (typeof window === "undefined" || !("Notification" in window)) {
-      return;
+  async registerDevice(
+    options: {
+      requestPermission?: boolean;
+    } = {},
+  ): Promise<boolean> {
+    const native = capacitorNotificationAdapter.isNativeApp();
+
+    if (
+      typeof window === "undefined" ||
+      (!native && !("Notification" in window))
+    ) {
+      return false;
+    }
+
+    if (native) {
+      await capacitorNotificationAdapter.initialize();
     }
 
     const user = auth.currentUser;
 
     if (!user) {
-      return;
+      return false;
     }
 
-    const permission = Notification.permission === "granted"
-      ? true
-      : await this.requestPermission();
+    let permission = await this.getPermissionStatus();
+    if (permission === "prompt" && options.requestPermission === true) {
+      permission = await this.getPermissionStatus() === "prompt" &&
+        await this.requestPermission()
+        ? "granted"
+        : await this.getPermissionStatus();
+    }
 
-    if (!permission) {
-
-      console.log(
-        "Notification permission denied."
-      );
-
-      return;
-
+    if (permission !== "granted") {
+      return false;
     }
 
     const token =
       await this.getToken();
 
     if (!token) {
-      return;
+      return false;
     }
 
     const deviceId = this.deviceId();
     const cacheKey = "lia.notification-device:" + user.uid;
     const registrationValue = deviceId + ":" + token;
 
-    this.startForegroundMessageListener();
+    if (!native) {
+      this.startForegroundMessageListener();
+    }
 
     if (window.localStorage.getItem(cacheKey) === registrationValue) {
-      return;
+      return true;
     }
 
     const register = httpsCallable<
@@ -202,11 +242,23 @@ export class FirebaseMessaging {
     await register({
       token,
       deviceId,
-      platform: navigator.platform,
+      platform: native ? "capacitor" : navigator.platform,
       userAgent: navigator.userAgent,
     });
 
     window.localStorage.setItem(cacheKey, registrationValue);
+    return true;
+  }
+
+  async initialize(): Promise<void> {
+    if (capacitorNotificationAdapter.isNativeApp()) {
+      await capacitorNotificationAdapter.initialize();
+      return;
+    }
+
+    if (typeof window !== "undefined" && Notification.permission === "granted") {
+      this.startForegroundMessageListener();
+    }
   }
 
 }

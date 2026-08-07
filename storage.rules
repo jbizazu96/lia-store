@@ -40,6 +40,14 @@ service firebase.storage {
         );
     }
 
+    function isSupportedClaimEvidence() {
+      return request.resource.size > 0 &&
+        request.resource.size <= 10 * 1024 * 1024 &&
+        request.resource.contentType.matches(
+          "image/(jpeg|png|webp|heic|heif)"
+        );
+    }
+
     /*
     |--------------------------------------------------------------------------
     | Public Optimized Images
@@ -123,6 +131,22 @@ service firebase.storage {
     match /users/{userId}/images/optimized/profile/{fileName} {
       allow read: if signedIn() && request.auth.uid == userId;
       allow write: if false;
+    }
+
+    /*
+     * Claim evidence is private. A customer may upload only into their own
+     * reserved path; the claim callable verifies the object metadata and the
+     * admin callable returns a short-lived URL after admin authorization.
+     */
+    match /users/{userId}/refund-claim-evidence/{orderId}/{evidenceUploadId}/{fileName} {
+      allow read: if false;
+      allow write: if signedIn() &&
+        request.auth.uid == userId &&
+        fileName.matches("original\\.(jpg|jpeg|png|webp|heic|heif)") &&
+        isSupportedClaimEvidence() &&
+        request.resource.metadata.customerId == userId &&
+        request.resource.metadata.orderId == orderId &&
+        request.resource.metadata.evidenceUploadId == evidenceUploadId;
     }
 
     /*

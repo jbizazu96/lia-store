@@ -140,8 +140,15 @@ export function AuthProvider({
             if (firebaseUser) {
 
               try {
-
-               await firebaseMessaging.registerDevice();
+               /*
+                * Do not show the permission prompt at login. Existing opt-in
+                * devices are silently refreshed; new users choose from
+                * Customer Profile > Notifications.
+                */
+               await firebaseMessaging.initialize();
+               await firebaseMessaging.registerDevice({
+                 requestPermission: false,
+               });
 
               } catch (error) {
 

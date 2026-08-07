@@ -12,6 +12,7 @@
 
 import * as admin from "firebase-admin";
 import {FieldValue, getFirestore} from "firebase-admin/firestore";
+import {getStorage} from "firebase-admin/storage";
 import {HttpsError, onCall} from "firebase-functions/v2/https";
 import {requireActiveAdmin} from "../admin/adminAuthorizationService";
 import {writeAdminAuditLog} from "../admin/adminAuditLogService";
@@ -28,6 +29,7 @@ import {parseMarketplacePricingPolicy} from "../payment/pricing/marketplacePrici
 if (admin.apps.length === 0) admin.initializeApp();
 const db = getFirestore("default");
 const CLAIM_REASONS = new Set(["missing_items", "incorrect_items", "damaged_items", "quality_issue", "delivery_failed", "duplicate_charge", "other"]);
+const EVIDENCE_URL_DURATION_MS = 10 * 60 * 1000;
 
 function record(value: unknown): Record<string, unknown> { return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {}; }
 function text(value: unknown): string { return typeof value === "string" ? value.trim() : ""; }
@@ -36,6 +38,41 @@ function identifier(value: unknown, label: string): string { const id = text(val
 function timestamp(value: unknown): string | null { if (value && typeof value === "object" && "toDate" in value && typeof value.toDate === "function") { const result = value.toDate(); return result instanceof Date ? result.toISOString() : null; } return typeof value === "string" ? value : null; }
 function status(value: unknown): string { return text(value) || "pending_review"; }
 function amounts(value: unknown) { const input = record(value); return {merchandiseAmount: number(input.merchandiseAmount), taxAmount: number(input.taxAmount), deliveryFeeAmount: number(input.deliveryFeeAmount), serviceFeeAmount: number(input.serviceFeeAmount), driverTipAmount: number(input.driverTipAmount)}; }
+
+async function signedEvidenceUrl(
+  evidence: Record<string, unknown>,
+  customerId: string,
+  orderId: string,
+): Promise<string | null> {
+  const uploadId = text(evidence.uploadId);
+  const storagePath = text(evidence.storagePath);
+  const expectedPrefix =
+    `users/${customerId}/refund-claim-evidence/${orderId}/${uploadId}/original.`;
+
+  if (!uploadId || !storagePath.startsWith(expectedPrefix)) {
+    return null;
+  }
+
+  try {
+    const file = getStorage().bucket().file(storagePath);
+    const [exists] = await file.exists();
+
+    if (!exists) {
+      return null;
+    }
+
+    const [url] = await file.getSignedUrl({
+      action: "read",
+      expires: Date.now() + EVIDENCE_URL_DURATION_MS,
+      version: "v4",
+    });
+
+    return url || null;
+  } catch {
+    /* A missing or expired evidence object must not block claim review. */
+    return null;
+  }
+}
 
 function refundValidationError(
   error: unknown
@@ -99,8 +136,8 @@ export const getAdminRefundClaims = onCall({region: "us-central1"}, async (reque
 export const getAdminRefundClaim = onCall({region: "us-central1"}, async (request) => {
   await requireActiveAdmin(request); const claimId = identifier(record(request.data).claimId, "Claim"); const claim = await db.collection("refundClaims").doc(claimId).get();
   if (!claim.exists) throw new HttpsError("not-found", "The refund claim was not found.");
-  const data = claim.data() ?? {}; const order = await db.collection("orders").doc(identifier(data.orderId, "Order")).get(); const orderData = order.data() ?? {}; const pricing = record(orderData.pricing); const customer = record(orderData.customer); const decision = record(data.decision); const refundId = text(data.refundId); const refund = refundId ? await db.collection("paymentRefunds").doc(refundId).get() : null;
-  return {id: claim.id, status: status(data.status), reason: text(data.reason), description: text(data.description), createdAt: timestamp(data.createdAt), customer: {id: text(data.customerId), name: text(customer.name) || "Customer", email: text(customer.email) || null}, order: {id: order.id, orderNumber: text(orderData.orderNumber) || "Unavailable", status: text(orderData.status), currency: text(pricing.currency) || "usd", pricing: {merchandiseAmount: number(pricing.subtotalAmount), taxAmount: number(pricing.taxAmount), deliveryFeeAmount: number(pricing.deliveryFeeAmount), serviceFeeAmount: number(pricing.serviceFeeAmount), driverTipAmount: number(pricing.tipAmount), totalAmount: number(pricing.totalAmount)}}, decision: {reason: text(decision.reason) || null, decidedAt: timestamp(decision.decidedAt), decidedBy: text(decision.decidedBy) || null}, refund: refund?.exists ? {id: refund.id, status: text(refund.data()?.status), amount: number(record(refund.data()?.allocation).totalAmount), completedAt: timestamp(refund.data()?.completedAt), lastError: text(refund.data()?.lastError) || null} : null};
+  const data = claim.data() ?? {}; const orderId = identifier(data.orderId, "Order"); const order = await db.collection("orders").doc(orderId).get(); const orderData = order.data() ?? {}; const pricing = record(orderData.pricing); const customer = record(orderData.customer); const decision = record(data.decision); const refundId = text(data.refundId); const refund = refundId ? await db.collection("paymentRefunds").doc(refundId).get() : null; const customerId = text(data.customerId); const evidence = record(data.evidence); const evidenceUrl = await signedEvidenceUrl(evidence, customerId, orderId);
+  return {id: claim.id, status: status(data.status), reason: text(data.reason), description: text(data.description), createdAt: timestamp(data.createdAt), customer: {id: customerId, name: text(customer.name) || "Customer", email: text(customer.email) || null}, order: {id: order.id, orderNumber: text(orderData.orderNumber) || "Unavailable", status: text(orderData.status), currency: text(pricing.currency) || "usd", pricing: {merchandiseAmount: number(pricing.subtotalAmount), taxAmount: number(pricing.taxAmount), deliveryFeeAmount: number(pricing.deliveryFeeAmount), serviceFeeAmount: number(pricing.serviceFeeAmount), driverTipAmount: number(pricing.tipAmount), totalAmount: number(pricing.totalAmount)}}, evidence: evidenceUrl ? {imageUrl: evidenceUrl, contentType: text(evidence.contentType) || "image"} : null, decision: {reason: text(decision.reason) || null, decidedAt: timestamp(decision.decidedAt), decidedBy: text(decision.decidedBy) || null}, refund: refund?.exists ? {id: refund.id, status: text(refund.data()?.status), amount: number(record(refund.data()?.allocation).totalAmount), completedAt: timestamp(refund.data()?.completedAt), lastError: text(refund.data()?.lastError) || null} : null};
 });
 
 export const decideAdminRefundClaim = onCall({region: "us-central1"}, async (request) => {

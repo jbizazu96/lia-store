@@ -329,6 +329,11 @@ function settingsStore(data: Record<string, unknown>, id: string) {
     businessStructure: text(data.businessStructure),
     storeFrontUrl: text(data.storeFrontUrl),
     storeInsideUrl: text(data.storeInsideUrl),
+    orderNotifications: data.orderNotifications !== false,
+    paymentNotifications: data.paymentNotifications !== false,
+    productStockNotifications: data.productStockNotifications !== false,
+    emailNotifications: data.emailNotifications !== false,
+    pushNotifications: data.pushNotifications !== false,
   };
 }
 
@@ -660,6 +665,13 @@ export const saveStoreWorkspaceSettings = onCall({ region: "us-central1", secret
   const registeredName = text(storeInput.registeredName);
   const businessStructure = text(storeInput.businessStructure);
   const ein = normalizeEin(text(storeInput.ein));
+  const notificationSettings = {
+    orderNotifications: storeInput.orderNotifications !== false,
+    paymentNotifications: storeInput.paymentNotifications !== false,
+    productStockNotifications: storeInput.productStockNotifications !== false,
+    emailNotifications: storeInput.emailNotifications !== false,
+    pushNotifications: storeInput.pushNotifications !== false,
+  };
   if (!name || !email.includes("@") || !phone || !description || !address || !city || !state || !zip) {
     throw new HttpsError("invalid-argument", "Complete all store details with a valid email and two-letter state.");
   }
@@ -675,6 +687,7 @@ export const saveStoreWorkspaceSettings = onCall({ region: "us-central1", secret
     formattedAddress: upper(location.formattedAddress), latitude: location.latitude, longitude: location.longitude,
     businessType, registeredName, ein, businessStructure,
     category: text(storeInput.category), isOpen: storeInput.isOpen === true,
+    ...notificationSettings,
     updatedAt: FieldValue.serverTimestamp(),
   });
   await db.collection("users").doc(request.auth.uid).set({

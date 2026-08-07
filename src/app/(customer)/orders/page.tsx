@@ -7,6 +7,7 @@ import {
 import {
   formatOrderDateOnly,
   formatOrderTime,
+  displayOrderNumber,
 } from "@/utils/orderDisplay";
 import { useCustomerOrders } from "@/hooks/useCustomerOrders";
 import { useRouter } from "next/navigation";
@@ -17,10 +18,12 @@ import {
   Truck,
   ShoppingBag,
   Calendar,
+  ChevronRight,
   MapPin,
 } from "lucide-react";
 import Link from "next/link";
 import { CustomerBottomNavigation } from "@/components/customer/navigation/CustomerBottomNavigation";
+import { CustomerPageState } from "@/components/customer/ui/CustomerPageState";
 
 export default function OrdersPage() {
   const router = useRouter();
@@ -41,7 +44,7 @@ export default function OrdersPage() {
   ========================================== */
   if (loading) {
     return (
-      <div className="min-h-screen bg-white flex flex-col justify-center items-center relative overflow-hidden">
+      <div className="min-h-screen bg-gray-50 flex flex-col justify-center items-center relative overflow-hidden">
         
         {/* Ambient Glows (Soft Yellow accents on white background) */}
         <div className="absolute top-0 right-0 h-[500px] w-[500px] rounded-full bg-yellow-400/5 blur-[120px] pointer-events-none" />
@@ -138,42 +141,34 @@ export default function OrdersPage() {
   }
 
   if (error) {
-  return (
-    <main className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-      <div className="text-center">
-        <Package className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-
-        <p className="text-gray-500 text-lg">
-          {error}
-        </p>
-
-        <button
-          type="button"
-          onClick={() =>
-            router.push("/home")
-          }
-          className="mt-4 px-6 py-2 bg-orange-500 text-white rounded-xl font-semibold hover:bg-orange-600 transition"
-        >
-          Return Home
-        </button>
-      </div>
-    </main>
-  );
-}
+    return (
+      <main className="min-h-screen bg-gray-50">
+        <CustomerPageState
+          kind="error"
+          title="We couldn’t load your orders"
+          description={error}
+          action={{
+            label: "Try again",
+            onClick: () => window.location.reload(),
+          }}
+        />
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-screen bg-gray-50 pb-28">
-      {/* Header and Order Count */}
-      <div className="sticky top-0 z-20 border-b border-gray-200/70 bg-gray-50/95 backdrop-blur-xl">
-        <div className="flex items-center px-4 py-4 max-w-2xl mx-auto">
-          <h1 className="text-xl font-bold text-gray-800">My Orders</h1>
-          <span className="text-xs text-gray-400 ml-auto">
-            {orders.length} order{orders.length !== 1 ? 's' : ''}
+      {/* Header */}
+      <div className="sticky top-0 z-20 bg-gray-50/95 backdrop-blur-xl">
+        <div className="relative flex items-center justify-end px-4 py-4 max-w-2xl mx-auto">
+          <h1 className="pointer-events-none absolute inset-x-0 text-center text-xl font-extrabold tracking-tight text-gray-900">Orders</h1>
+          <span className="relative rounded-full border border-orange-200 bg-orange-50 px-3 py-1.5 text-xs font-bold text-orange-700">
+            {orders.length} total
           </span>
         </div>
       </div>
 
-      <div className="max-w-2xl mx-auto px-4 py-6">
+      <div className="max-w-2xl mx-auto px-4 py-5">
         {orders.length === 0 ? (
           // Beautiful Empty State
           <motion.div
@@ -231,7 +226,7 @@ export default function OrdersPage() {
           </motion.div>
         ) : (
           // Orders List
-          <div className="space-y-4">
+          <div className="space-y-3">
             <AnimatePresence mode="popLayout">
               {orders.map((order, index) => {
                 const statusConfig =
@@ -260,12 +255,15 @@ export default function OrdersPage() {
                       router.push(`/orders/${order.id}`);
                     }
                   }}
-                  className="bg-white rounded-2xl p-5 shadow-sm hover:shadow-md transition border border-gray-100 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2"
+                  className="group cursor-pointer rounded-2xl border border-white/80 bg-white/80 p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-orange-200 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2"
                 >
                   {/* Order Header */}
-                  <div className="flex items-start justify-between mb-3">
+                  <div className="mb-4 flex items-start justify-between gap-3">
                     <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold text-gray-800 truncate">
+                      <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-orange-600">
+                        {displayOrderNumber(order.orderNumber)}
+                      </p>
+                      <h3 className="mt-1 font-extrabold text-gray-900 truncate">
                         {order.store.name || "Unknown Store"}
                       </h3>
                       <div className="flex items-center gap-3 mt-1">
@@ -279,8 +277,8 @@ export default function OrdersPage() {
                         </div>
                       </div>
                     </div>
-                    <div
-                        className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium ${statusConfig.color}`}
+                      <div
+                        className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold ${statusConfig.color}`}
                       >
                         <StatusIcon className="h-5 w-5" />
 
@@ -289,21 +287,21 @@ export default function OrdersPage() {
                   </div>
 
                   {/* Order Details */}
-                  <div className="flex flex-col gap-2 pt-3 border-t border-gray-100">
+                  <div className="flex flex-col gap-2 border-t border-gray-100 pt-3">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-4 text-sm text-gray-500">
                         <span>{order.items.length} item{order.items.length !== 1 ? 's' : ''}</span>
                       </div>
                       <div className="flex items-center gap-3">
-                        <span className="text-lg font-bold text-gray-800">
+                        <span className="text-lg font-extrabold text-gray-900">
                           ${order.pricing.total.toFixed(2)}
                         </span>
                         <Link
                           href={`/orders/${order.id}`}
                           onClick={(event) => event.stopPropagation()}
-                          className="px-3 py-1.5 text-xs bg-orange-50 text-orange-600 font-medium hover:bg-orange-100 rounded-lg transition"
+                          className="inline-flex items-center gap-1 rounded-xl bg-orange-50 px-3 py-2 text-xs font-bold text-orange-700 transition hover:bg-orange-100"
                         >
-                          View Details
+                          Details <ChevronRight className="h-3.5 w-3.5 transition group-hover:translate-x-0.5" />
                         </Link>
                       </div>
                     </div>

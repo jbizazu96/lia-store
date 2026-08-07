@@ -505,6 +505,7 @@ function StoreLayoutContent({ children }: { children: React.ReactNode }) {
                   src={storeData.logoUrl}
                   alt={storeData.name}
                   fill
+                  sizes="40px"
                   className="object-cover"
                 />
               ) : (

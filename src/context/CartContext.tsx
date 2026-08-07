@@ -6,9 +6,11 @@
 */
 
 import {
+  useCallback,
   createContext,
   useContext,
   useEffect,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -21,6 +23,7 @@ import {
   saveCartToFirestore,
   loadCartFromFirestore,
   clearCartFromFirestore,
+  repeatCompletedOrderInCart,
   type CartItem,
 } from "@/services/cart/cartService";
 
@@ -30,7 +33,10 @@ interface CartContextType {
   totalPrice: number;
   addItem: (
   item: Omit<CartItem, "quantity">
-  ) => Promise<void>;
+  ) => Promise<{
+    added: boolean;
+    existingStoreName?: string;
+  }>;
 
   removeItem: (
     itemId: string
@@ -42,6 +48,9 @@ interface CartContextType {
   ) => void;
 
   clearCart: () => Promise<void>;
+  repeatCompletedOrder: (orderId: string) => Promise<{
+    skippedProductNames: string[];
+  }>;
   getStoreId: () => string | null;
   getItemQuantity: (itemId: string) => number;
   getStoreItems: (storeId: string) => CartItem[];
@@ -58,6 +67,28 @@ export function CartProvider({children}: {children: ReactNode}) {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isCustomerCartSession, setIsCustomerCartSession] =
     useState(false);
+  const [cartNotice, setCartNotice] = useState<string | null>(null);
+  const cartNoticeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
+
+  const showCartNotice = useCallback((message: string) => {
+    if (cartNoticeTimeoutRef.current !== null) {
+      clearTimeout(cartNoticeTimeoutRef.current);
+    }
+
+    setCartNotice(message);
+    cartNoticeTimeoutRef.current = setTimeout(() => {
+      setCartNotice(null);
+      cartNoticeTimeoutRef.current = null;
+    }, 5000);
+  }, []);
+
+  useEffect(() => () => {
+    if (cartNoticeTimeoutRef.current !== null) {
+      clearTimeout(cartNoticeTimeoutRef.current);
+    }
+  }, []);
 
   /*
    * Cart persistence belongs only to customer accounts. The protected
@@ -190,12 +221,15 @@ export function CartProvider({children}: {children: ReactNode}) {
  * Business rule:
  * A cart may contain products from only one store.
  *
- * When a product from another store is added,
- * the previous store's cart is replaced.
+ * A product from another store is blocked. The customer must finish or
+ * clear the current store's cart before beginning a separate order.
  */
 const addItem = async (
   item: Omit<CartItem, "quantity">
-): Promise<void> => {
+): Promise<{
+  added: boolean;
+  existingStoreName?: string;
+}> => {
   const existingStoreId =
     items[0]?.storeId ?? null;
 
@@ -204,15 +238,17 @@ const addItem = async (
     existingStoreId !== item.storeId;
 
   if (isDifferentStore) {
-    const newCart: CartItem[] = [
-      {
-        ...item,
-        quantity: 1,
-      },
-    ];
+    const existingStoreName =
+      items[0]?.storeName || "another store";
 
-    setItems(newCart);
-    return;
+    showCartNotice(
+      `Your cart already has items from ${existingStoreName}. Finish or clear that order before adding items from ${item.storeName}.`
+    );
+
+    return {
+      added: false,
+      existingStoreName,
+    };
   }
 
   setItems((previousItems) => {
@@ -253,6 +289,8 @@ const addItem = async (
       },
     ];
   });
+
+  return { added: true };
 };
 
   // Remove item from cart
@@ -293,6 +331,22 @@ const addItem = async (
         currentUser.uid
       );
     }
+  };
+
+  const repeatCompletedOrder = async (orderId: string) => {
+    if (!currentUser || !isCustomerCartSession) {
+      throw new Error("Sign in again before repeating an order.");
+    }
+
+    const result = await repeatCompletedOrderInCart(
+      currentUser.uid,
+      orderId,
+    );
+
+    setItems(result.items);
+    return {
+      skippedProductNames: result.skippedProductNames,
+    };
   };
 
   // Get store ID (all items should be from same store)
@@ -339,6 +393,7 @@ const addItem = async (
       removeItem,
       updateQuantity,
       clearCart,
+      repeatCompletedOrder,
       getStoreId,
       getItemQuantity,
       getStoreItems,
@@ -347,6 +402,26 @@ const addItem = async (
       isLoading,
     }}>
       {children}
+
+      {cartNotice && (
+        <div
+          className="fixed inset-x-4 top-4 z-[120] mx-auto flex max-w-md items-start gap-3 rounded-2xl border border-orange-200 bg-orange-50 px-4 py-3 text-orange-950 shadow-xl"
+          role="alert"
+          aria-live="assertive"
+        >
+          <p className="flex-1 text-sm font-semibold leading-5">
+            {cartNotice}
+          </p>
+          <button
+            type="button"
+            onClick={() => setCartNotice(null)}
+            className="-mr-1 -mt-1 rounded-lg px-2 py-1 text-lg leading-none transition hover:bg-orange-100"
+            aria-label="Dismiss cart message"
+          >
+            ×
+          </button>
+        </div>
+      )}
     </CartContext.Provider>
   );
 }

@@ -151,6 +151,7 @@ export const storeCustomerNotifications = onDocumentWritten(
             title,
             body,
             "/store/" + storeId,
+            "storeUpdates",
           );
         })
       );

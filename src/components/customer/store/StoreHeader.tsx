@@ -40,6 +40,7 @@ export function StoreHeader({
             src={bannerUrl}
             alt={name}
             fill
+            sizes="100vw"
             className="object-cover"
             priority
           />
@@ -90,6 +91,7 @@ export function StoreHeader({
                 src={logoUrl}
                 alt={name}
                 fill
+                sizes="80px"
                 className="object-cover"
               />
             ) : (

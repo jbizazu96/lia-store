@@ -35,6 +35,9 @@ import {
   CreditCard,
   LockKeyhole,
 } from "lucide-react";
+import {
+  checkoutPaymentReturnUrl,
+} from "@/services/payment/checkoutReturnUrl";
 
 
 /*
@@ -48,6 +51,8 @@ interface CheckoutPaymentFormProps {
     Firestore order ID created during payment preparation.
   */
   orderId: string;
+
+  checkoutSessionId: string;
 
   /*
     Trusted backend total in integer cents.
@@ -130,6 +135,7 @@ function getPaymentErrorMessage(
 
 export function CheckoutPaymentForm({
   orderId,
+  checkoutSessionId,
   totalAmount,
   customerEmail,
   customerPhone,
@@ -226,9 +232,10 @@ export function CheckoutPaymentForm({
                 PaymentIntent and wait for the webhook-confirmed order.
               */
               return_url:
-                `${window.location.origin}/checkout/payment-result?orderId=${encodeURIComponent(
-                  orderId
-                )}`,
+                checkoutPaymentReturnUrl(
+                  orderId,
+                  checkoutSessionId,
+                ),
             },
 
             redirect:

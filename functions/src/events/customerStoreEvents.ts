@@ -13,6 +13,7 @@ import { getFirestore } from "firebase-admin/firestore";
 
 import { notificationService } from "../services/notificationService";
 import { notificationStore } from "../services/notificationStore";
+import type { NotificationPreference } from "../services/notificationService";
 
 interface StoreCustomerNotification {
   storeId: string;
@@ -21,6 +22,7 @@ interface StoreCustomerNotification {
   icon: string;
   color: string;
   deepLink: string;
+  preference: NotificationPreference;
 }
 
 async function getStoreCustomerUids(
@@ -68,6 +70,7 @@ export class CustomerStoreEvents {
           input.title,
           input.body,
           input.deepLink,
+          input.preference,
         );
       }),
     );
@@ -101,6 +104,7 @@ export class CustomerStoreEvents {
           input.title,
           input.body,
           input.deepLink,
+          input.preference,
         );
       })
     );
@@ -119,6 +123,7 @@ export class CustomerStoreEvents {
       icon: "package",
       color: "green",
       deepLink: `/product/${productId}`,
+      preference: "productUpdates",
     });
   }
 
@@ -134,6 +139,7 @@ export class CustomerStoreEvents {
       icon: "tag",
       color: "orange",
       deepLink: `/product/${productId}`,
+      preference: "promotions",
     });
   }
 
@@ -148,6 +154,7 @@ export class CustomerStoreEvents {
       icon: "tag",
       color: "orange",
       deepLink,
+      preference: "marketing",
     });
   }
 }

@@ -13,7 +13,7 @@ export function Header({userName}: HeaderProps) {
   const {itemCount} = useCart();
 
   return (
-    <header className="bg-white border-b border-gray-100 sticky top-0 z-40">
+    <header className="sticky top-0 z-40 bg-gray-50/95 backdrop-blur-xl">
       <div className="px-4 py-3">
         <div className="flex items-center justify-between">
           {/* Left: Greeting */}
@@ -23,6 +23,7 @@ export function Header({userName}: HeaderProps) {
                 src="/icon/icon-512.png"
                 alt="LIA"
                 fill
+                sizes="40px"
                 className="object-contain"
               />
             </div>

@@ -38,6 +38,14 @@ export interface CustomerProfileAddress {
   formattedAddress: string;
 }
 
+export interface CustomerNotificationPreferences {
+  orderUpdates: boolean;
+  promotions: boolean;
+  storeUpdates: boolean;
+  productUpdates: boolean;
+  marketing: boolean;
+}
+
 export interface CustomerProfile {
   displayName: string;
   email: string;
@@ -46,6 +54,8 @@ export interface CustomerProfile {
   profileImageUrl: string;
   profileImageStatus: "processing" | "ready" | "failed" | "idle";
   defaultAddress: CustomerProfileAddress | null;
+  recentSearches: string[];
+  notificationPreferences: CustomerNotificationPreferences;
 }
 
 async function call<T>(name: string, data?: unknown): Promise<T> {
@@ -59,6 +69,32 @@ async function call<T>(name: string, data?: unknown): Promise<T> {
         : "The profile request could not be completed."
     );
   }
+}
+
+/*
+ * Keep this as a named export as well as a service method. A named callable
+ * avoids a stale hot-reload service object leaving Profile with an older
+ * object shape while the notification-settings modal is already rendered.
+ */
+export async function updateCustomerNotificationPreferences(
+  input: CustomerNotificationPreferences,
+): Promise<CustomerNotificationPreferences> {
+  const payload = await call<{
+    notificationPreferences: CustomerNotificationPreferences;
+  }>("updateCustomerNotificationPreferences", input);
+
+  const current = await call<CustomerProfile>("getCustomerProfile");
+
+  await writeCached(
+    "customer-profile",
+    {
+      ...current,
+      notificationPreferences: payload.notificationPreferences,
+    },
+    { ttlMs: 30_000 },
+  );
+
+  return payload.notificationPreferences;
 }
 
 export const customerProfileClientService = {
@@ -110,6 +146,17 @@ export const customerProfileClientService = {
       `customer-default-location:${auth.currentUser?.uid ?? ""}`,
     );
   },
+
+  async saveRecentSearch(query: string): Promise<string[]> {
+    const payload = await call<{ recentSearches: string[] }>(
+      "saveCustomerRecentSearch",
+      { query },
+    );
+    invalidateCached("customer-profile");
+    return payload.recentSearches;
+  },
+
+  updateNotificationPreferences: updateCustomerNotificationPreferences,
 
   async uploadProfileImage(file: File): Promise<void> {
     const user = auth.currentUser;

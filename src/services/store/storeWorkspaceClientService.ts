@@ -56,6 +56,11 @@ export interface StoreWorkspaceStore {
   businessStructure: string;
   storeFrontUrl: string;
   storeInsideUrl: string;
+  orderNotifications: boolean;
+  paymentNotifications: boolean;
+  productStockNotifications: boolean;
+  emailNotifications: boolean;
+  pushNotifications: boolean;
 }
 
 export interface StoreWorkspaceUser {

@@ -59,6 +59,7 @@ await notificationStore.createNotification({
       "New Order",
       "You have received a new customer order.",
       "/store/store-orders/" + orderId,
+      "orderUpdates",
 
     );
 
@@ -105,6 +106,7 @@ await notificationStore.createNotification({
       title,
       body,
       "/store/store-orders/" + orderId,
+      "orderUpdates",
     );
   }
 
@@ -142,6 +144,7 @@ await notificationStore.createNotification({
       title,
       body,
       "/store/products/" + productId,
+      "productStock",
     );
   }
 

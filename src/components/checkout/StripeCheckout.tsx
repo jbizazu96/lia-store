@@ -43,6 +43,8 @@ import {
 interface StripeCheckoutProps {
   orderId: string;
 
+  checkoutSessionId: string;
+
   clientSecret: string;
 
   customerSessionClientSecret: string;
@@ -71,6 +73,7 @@ interface StripeCheckoutProps {
 
 export function StripeCheckout({
   orderId,
+  checkoutSessionId,
   clientSecret,
   customerSessionClientSecret,
   totalAmount,
@@ -134,6 +137,9 @@ export function StripeCheckout({
       <CheckoutPaymentForm
         orderId={
           orderId
+        }
+        checkoutSessionId={
+          checkoutSessionId
         }
         totalAmount={
           totalAmount

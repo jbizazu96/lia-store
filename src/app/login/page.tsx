@@ -24,15 +24,7 @@ import {
 /*
   Firebase instances.
 */
-import {auth, db, functions} from "@/lib/firebase";
-
-/*
-  Firestore functions.
-*/
-import {
-  doc,
-  getDoc,
-} from "firebase/firestore";
+import {auth, functions} from "@/lib/firebase";
 
 /*
   Components.
@@ -46,9 +38,9 @@ import { userService } from "@/services/user/userService";
 import { storeWorkspaceClientService } from "@/services/store/storeWorkspaceClientService";
 import { customerProfileClientService } from "@/services/user/customerProfileClientService";
 import {
-  adminWorkspaceClientService,
-  AdminWorkspaceClientError,
-} from "@/services/admin/adminWorkspaceClientService";
+  currentAccountClientService,
+  CurrentAccountClientError,
+} from "@/services/user/currentAccountClientService";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -99,38 +91,18 @@ export default function LoginPage() {
   Handle post-login routing based on account type.
   */
   const handlePostLogin = async (uid: string) => {
-    /*
-     * Administrators are manually provisioned in admins/{uid}. Check that
-     * record before requiring a normal users/{uid} application profile, so
-     * an admin needs only a Firebase Auth account and their admin record.
-     */
+    let accountType: "customer" | "store_owner" | "driver" | "admin";
+
     try {
-      await adminWorkspaceClientService.getEntry();
-      router.replace("/admin");
-      return;
-    } catch (adminError) {
-      if (
-        !(adminError instanceof AdminWorkspaceClientError) ||
-        adminError.status !== 403
-      ) {
-        throw adminError;
+      accountType = (await currentAccountClientService.get()).accountType;
+    } catch (accountError) {
+      if (accountError instanceof CurrentAccountClientError && accountError.status === 403) {
+        setError("Your account profile is incomplete. Please contact support.");
+        await signOut(auth);
+        return;
       }
-    }
 
-    /*
-      Get user data from Firestore.
-    */
-    const userRef = doc(db, "users", uid);
-    let userDoc = await getDoc(userRef);
-
-    if (!userDoc.exists()) {
-      /*
-       * A profile must be created by the registration callable. This project
-       * does not recreate missing profiles from legacy account data.
-       */
-      setError("Your account profile is incomplete. Please contact support.");
-      await signOut(auth);
-      return;
+      throw accountError;
     }
 
     /*
@@ -139,8 +111,10 @@ export default function LoginPage() {
     */
     await httpsCallable(functions, "syncEmailVerification")();
 
-    const userData = userDoc.data();
-    const accountType = userData.accountType || "customer";
+    if (accountType === "admin") {
+      router.replace("/admin");
+      return;
+    }
 
     /*
       Store Owner Flow - Redirect to Premium Dashboard.

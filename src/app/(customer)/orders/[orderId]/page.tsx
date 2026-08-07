@@ -18,7 +18,7 @@ import {
 } from "@/config/orderStatus";
 import { useCustomerOrder } from "@/hooks/useCustomerOrder";
 import {useRouter} from "next/navigation";
-import { use } from "react";
+import { use, useState } from "react";
 import Image from "next/image";
 import {
   formatProductName,
@@ -30,11 +30,15 @@ import {
   CreditCard,
   Store,
   Receipt,
+  ShoppingCart,
 } from "lucide-react";
-import { BrandedLoader } from "@/components/ui/BrandedLoader";
+import { CustomerPageSkeleton } from "@/components/customer/ui/CustomerPageSkeleton";
 import { OrderHelpSection } from "@/components/customer/orders/OrderHelpSection";
 import { StoreReviewPrompt } from "@/components/customer/orders/StoreReviewPrompt";
 import { DeliveryProofCard } from "@/components/customer/orders/DeliveryProofCard";
+import { useCart } from "@/context/CartContext";
+import { useConfirmation } from "@/context/ConfirmationContext";
+import { useSuccessToast } from "@/context/SuccessToastContext";
 
 
 interface OrderPageProps {
@@ -47,6 +51,11 @@ interface OrderPageProps {
 export default function OrderDetailPage({params}: OrderPageProps) {
   const {orderId} = use(params);
   const router = useRouter();
+  const { items: cartItems, repeatCompletedOrder } = useCart();
+  const { confirm } = useConfirmation();
+  const { showSuccess } = useSuccessToast();
+  const [repeatingOrder, setRepeatingOrder] = useState(false);
+  const [repeatOrderError, setRepeatOrderError] = useState("");
   const {
       order,
       loading,
@@ -109,7 +118,7 @@ export default function OrderDetailPage({params}: OrderPageProps) {
   }
 
   if (loading) {
-    return <BrandedLoader message="Loading Order Details" />;
+    return <CustomerPageSkeleton variant="order-detail" />;
   }
 
   if (error || !order) {
@@ -163,11 +172,48 @@ export default function OrderDetailPage({params}: OrderPageProps) {
 
   const iscompleted = (index: number) => index <= currentStepIndex;
 
+  const handleRepeatOrder = async () => {
+    if (repeatingOrder) return;
+    setRepeatOrderError("");
+
+    if (cartItems.length > 0) {
+      const confirmed = await confirm({
+        title: "Replace current cart?",
+        message: "Your current cart will be replaced with the available items from this completed order.",
+        confirmLabel: "Order again",
+        cancelLabel: "Keep cart",
+      });
+
+      if (!confirmed) return;
+    }
+
+    setRepeatingOrder(true);
+    try {
+      const result = await repeatCompletedOrder(order.id);
+      const skipped = result.skippedProductNames;
+
+      showSuccess(
+        skipped.length > 0
+          ? `Your cart was updated. Unavailable: ${skipped.join(", ")}.`
+          : "Your cart is ready for another order.",
+      );
+      router.push("/cart");
+    } catch (cause) {
+      setRepeatOrderError(
+        cause instanceof Error
+          ? cause.message
+          : "Unable to repeat this order right now.",
+      );
+    } finally {
+      setRepeatingOrder(false);
+    }
+  };
+
   return (
     <main className="min-h-screen bg-gray-50 pb-8">
       {/* Header */}
-      <div className="bg-white border-b border-gray-100 sticky top-0 z-20">
-        <div className="flex items-center gap-3 px-4 py-4 max-w-lg mx-auto">
+      <div className="sticky top-0 z-20 bg-gray-50/95 backdrop-blur-xl">
+        <div className="relative flex items-center px-4 py-4 max-w-lg mx-auto">
           <button
             onClick={handleReturn}
             className="p-2 hover:bg-gray-100 rounded-full transition"
@@ -175,8 +221,8 @@ export default function OrderDetailPage({params}: OrderPageProps) {
           >
             <ArrowLeft className="w-5 h-5 text-gray-700" />
           </button>
-          <h1 className="text-xl font-bold text-gray-800">Order Details</h1>
-          <span className="text-xs text-gray-400 ml-auto">
+          <h1 className="pointer-events-none absolute inset-x-20 text-center text-xl font-bold text-gray-800">Order Details</h1>
+          <span className="ml-auto text-xs text-gray-400">
             {displayOrderNumber(order.orderNumber)}
           </span>
         </div>
@@ -198,6 +244,25 @@ export default function OrderDetailPage({params}: OrderPageProps) {
             </div>
           </div>
         </div>
+
+        {order.status === "completed" && (
+          <div className="space-y-2">
+            <button
+              type="button"
+              disabled={repeatingOrder}
+              onClick={() => void handleRepeatOrder()}
+              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-orange-500 px-5 py-4 font-bold text-white shadow-sm transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <ShoppingCart className="h-5 w-5" />
+              {repeatingOrder ? "Adding available items…" : "Order again"}
+            </button>
+            {repeatOrderError && (
+              <p className="rounded-xl bg-red-50 p-3 text-sm text-red-700">
+                {repeatOrderError}
+              </p>
+            )}
+          </div>
+        )}
 
         {isCancelled && (
           <div className="rounded-2xl border border-red-100 bg-red-50 p-5 shadow-sm">
@@ -379,8 +444,8 @@ export default function OrderDetailPage({params}: OrderPageProps) {
                         src={item.imageUrl}
                         alt={formatProductName(item.name)}
                         fill
-                        className="object-contain p-1"
                         sizes="56px"
+                        className="object-contain p-1"
                       />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center">

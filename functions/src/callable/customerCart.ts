@@ -53,6 +53,18 @@ interface CartItem {
   };
 }
 
+function record(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}
+
+function finiteNumber(value: unknown, fallback = 0): number {
+  return typeof value === "number" && Number.isFinite(value)
+    ? value
+    : fallback;
+}
+
 function requireString(
   value: unknown,
   field: string,
@@ -318,4 +330,166 @@ export const clearCustomerCart = onCall(
 
     return { success: true };
   }
+);
+
+/*
+ * Rebuild a completed customer's order from current public store/product
+ * projections. Historic line-item prices and availability are never reused:
+ * the cart always receives the current product price, stock, image, and
+ * store details. Unavailable products are reported to the customer instead
+ * of making the whole repeat-order action fail.
+ */
+export const repeatCustomerOrder = onCall(
+  { region: "us-central1" },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError(
+        "unauthenticated",
+        "Sign in again before repeating an order.",
+      );
+    }
+
+    await requireCustomer(request.auth.uid);
+
+    const input = record(request.data);
+    const orderId = optionalString(input.orderId, 200);
+    if (!orderId) {
+      throw new HttpsError("invalid-argument", "The completed order is invalid.");
+    }
+
+    const order = await db.collection("orders").doc(orderId).get();
+    const orderData = order.data() ?? {};
+    const customer = record(orderData.customer);
+    const payment = record(orderData.payment);
+    const sourceItems = Array.isArray(orderData.items) ? orderData.items : [];
+    const store = record(orderData.store);
+    const storeId = optionalString(store.id, 200);
+
+    if (
+      !order.exists ||
+      customer.uid !== request.auth.uid ||
+      orderData.status !== "completed" ||
+      orderData.checkoutStatus !== "confirmed" ||
+      payment.status !== "paid" ||
+      !storeId ||
+      sourceItems.length === 0 ||
+      sourceItems.length > MAX_CART_ITEMS
+    ) {
+      throw new HttpsError(
+        "failed-precondition",
+        "Only your paid, completed orders can be repeated.",
+      );
+    }
+
+    const storeProfile = await db
+      .collection("storePublicProfiles")
+      .doc(storeId)
+      .get();
+
+    if (!storeProfile.exists) {
+      throw new HttpsError(
+        "failed-precondition",
+        "This store is not currently available for another order.",
+      );
+    }
+
+    const currentStore = storeProfile.data() ?? {};
+    const requestedItems = sourceItems.flatMap((item) => {
+      const source = record(item);
+      const productId = optionalString(source.id, 200);
+      const quantity = Math.floor(finiteNumber(source.quantity));
+
+      return productId && quantity > 0 ? [{productId, quantity}] : [];
+    });
+
+    const productSnapshots = await db.getAll(
+      ...requestedItems.map(({productId}) =>
+        db.collection("productPublicProfiles").doc(productId),
+      ),
+    );
+    const productsById = new Map(
+      productSnapshots.map((snapshot) => [snapshot.id, snapshot]),
+    );
+    const skippedProductNames: string[] = [];
+    const items: CartItem[] = [];
+
+    for (const requested of requestedItems) {
+      const product = productsById.get(requested.productId);
+      const source = record(
+        sourceItems.find((item) => record(item).id === requested.productId),
+      );
+      const productName = optionalString(source.name, 200) ?? "A product";
+
+      if (!product?.exists) {
+        skippedProductNames.push(productName);
+        continue;
+      }
+
+      const data = product.data() ?? {};
+      const stock = Math.max(0, Math.floor(finiteNumber(data.stock)));
+      const available = data.storeId === storeId && data.isAvailable !== false && stock > 0;
+      const name = optionalString(data.name, 200) ?? productName;
+
+      if (!available) {
+        skippedProductNames.push(name);
+        continue;
+      }
+
+      const size = record(data.size);
+      const sizeValue = finiteNumber(size.value);
+      const sizeUnit = optionalString(size.unit, 20);
+
+      items.push({
+        id: product.id,
+        name,
+        price: Math.round(Math.max(0, finiteNumber(data.price)) * 100) / 100,
+        ...(optionalString(data.imageUrl, 4_000)
+          ? { imageUrl: optionalString(data.imageUrl, 4_000) }
+          : {}),
+        quantity: Math.min(requested.quantity, stock, MAX_ITEM_QUANTITY),
+        stock,
+        storeId,
+        storeName: requireString(currentStore.name, "Store name", 200),
+        ...(optionalString(currentStore.formattedAddress, 500) ||
+          optionalString(currentStore.address, 500)
+          ? {
+              storeAddress: optionalString(currentStore.formattedAddress, 500) ??
+                optionalString(currentStore.address, 500),
+            }
+          : {}),
+        ...(optionalString(currentStore.phone, 40)
+          ? { storePhone: optionalString(currentStore.phone, 40) }
+          : {}),
+        ...(typeof currentStore.latitude === "number"
+          ? { storeLatitude: currentStore.latitude }
+          : {}),
+        ...(typeof currentStore.longitude === "number"
+          ? { storeLongitude: currentStore.longitude }
+          : {}),
+        ...(sizeValue > 0 && sizeUnit
+          ? { size: { value: sizeValue, unit: sizeUnit } }
+          : {}),
+      });
+    }
+
+    if (items.length === 0) {
+      throw new HttpsError(
+        "failed-precondition",
+        "None of the products from this order are currently available.",
+      );
+    }
+
+    const normalizedItems = normalizeCustomerCartItems(items);
+    await db.collection("carts").doc(request.auth.uid).set({
+      userId: request.auth.uid,
+      items: normalizedItems,
+      updatedAt: FieldValue.serverTimestamp(),
+      expiresAt: createCartExpiration(),
+    });
+
+    return {
+      items: normalizedItems,
+      skippedProductNames: [...new Set(skippedProductNames)],
+    };
+  },
 );

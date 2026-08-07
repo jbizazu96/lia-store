@@ -3,11 +3,7 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { auth, db } from "@/lib/firebase";
-import {
-  doc,
-  getDoc,
-} from "firebase/firestore";
+import { auth } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import type { CustomerStore } from "@/types/view-models/customerStore";
 import type { Store } from "@/types/store";
@@ -29,6 +25,10 @@ import {
   getStoreDeliveryRoutes,
 } from "@/services/delivery/deliveryRoutesClientService";
 import { userService } from "@/services/user/userService";
+import {
+  customerProfileClientService,
+  type CustomerProfileAddress,
+} from "@/services/user/customerProfileClientService";
 import { TopNavigation } from "@/components/customer/home/TopNavigation";
 import { SearchBar } from "@/components/customer/home/SearchBar";
 import { PromoCarousel } from "@/components/customer/home/PromoCarousel";
@@ -37,11 +37,13 @@ import { DistanceWarningModal } from "@/components/customer/home/DistanceWarning
 import { FloatingCart } from "@/components/customer/home/FloatingCart";
 import { CustomerBottomNavigation } from "@/components/customer/navigation/CustomerBottomNavigation";
 import { useCart } from "@/context/CartContext";
-import { PageContentSkeleton } from "@/components/ui/PageContentSkeleton";
+import { CustomerPageState } from "@/components/customer/ui/CustomerPageState";
+import { CustomerPageSkeleton } from "@/components/customer/ui/CustomerPageSkeleton";
 import {useMarketplacePricingPolicy} from "@/hooks/useMarketplacePricingPolicy";
 import {useOrderDeliveryPolicy} from "@/hooks/useOrderDeliveryPolicy";
 import { useCustomerFavoriteStores } from "@/hooks/useCustomerFavoriteStores";
 import { Heart } from "lucide-react";
+import { AddressesModal } from "@/components/customer/profile/AddressesModal";
 
 export default function CustomerHomePage() {
   const marketplacePolicy = useMarketplacePricingPolicy();
@@ -49,6 +51,8 @@ export default function CustomerHomePage() {
   const router = useRouter();
   const { itemCount, totalPrice } = useCart();
   const [userName, setUserName] = useState("Guest");
+  const [deliveryAddress, setDeliveryAddress] =
+    useState<CustomerProfileAddress | null>(null);
   const [userLocation, setUserLocation] = useState<{lat: number; lng: number} | null>(null);
   const [locationReady, setLocationReady] = useState(false);
   const [distanceError, setDistanceError] = useState<string | null>(null);
@@ -62,6 +66,7 @@ export default function CustomerHomePage() {
   const [selectedStore, setSelectedStore] = useState<CustomerStore | null>(null);
   const [selectedDistance, setSelectedDistance] = useState(0);
   const [showDistanceWarning, setShowDistanceWarning] = useState(false);
+  const [showAddresses, setShowAddresses] = useState(false);
   const {
     storeIds: favoriteStoreIds,
     isFavorite,
@@ -114,12 +119,9 @@ export default function CustomerHomePage() {
       }
 
       try {
-        const userDoc = await getDoc(doc(db, "users", user.uid));
-
-        if (userDoc.exists()) {
-          const data = userDoc.data();
-          setUserName(data.displayName || user.email?.split("@")[0] || "Customer");
-        }
+        const profile = await customerProfileClientService.getProfile();
+        setUserName(profile.displayName || user.email?.split("@")[0] || "Customer");
+        setDeliveryAddress(profile.defaultAddress);
 
         const location = await userService.getDefaultLocation(user.uid);
 
@@ -329,14 +331,37 @@ export default function CustomerHomePage() {
     router.push("/cart");
   };
 
+  const handleDeliveryAddressChange = (
+    address: CustomerProfileAddress | null
+  ) => {
+    setDeliveryAddress(address);
+
+    if (address) {
+      setUserLocation({
+        lat: address.latitude,
+        lng: address.longitude,
+      });
+      setDistanceError(null);
+      return;
+    }
+
+    setUserLocation(null);
+    setDistanceError(
+      "Add a verified delivery address to see driving distances and available delivery."
+    );
+  };
+
   if (loading) {
-    return <main className="min-h-screen bg-gray-50 p-4"><PageContentSkeleton cards={3} rows={4} /></main>;
+    return <CustomerPageSkeleton variant="home" />;
   }
 
   return (
     <main className="min-h-screen bg-gray-50 pb-28">
       {/* Top Navigation */}
-      <TopNavigation />
+      <TopNavigation
+        deliveryAddress={deliveryAddress?.street}
+        onDeliveryAddressClick={() => setShowAddresses(true)}
+      />
 
       {/* Welcome Section */}
       <div className="px-4 pt-4 pb-2">
@@ -402,19 +427,20 @@ export default function CustomerHomePage() {
         </div>
 
         {displayedNearbyStores.length === 0 && displayedFarStores.length === 0 ? (
-          <div className="text-center py-12">
-            <div className="w-16 h-16 text-gray-300 mx-auto mb-4">🏪</div>
-            <p className="text-gray-500">
-              {storeFilter === "favorites"
+          <CustomerPageState
+            kind="empty"
+            title={
+              storeFilter === "favorites"
                 ? "No saved stores yet"
-                : "No stores found"}
-            </p>
-            <p className="text-sm text-gray-400">
-              {storeFilter === "favorites"
-                ? "Tap a heart on any store to save it here."
-                : "Try adjusting your search"}
-            </p>
-          </div>
+                : "No stores available"
+            }
+            description={
+              storeFilter === "favorites"
+                ? "Tap the heart on a store to save it here for quick access."
+                : "Try changing your delivery address or check back soon."
+            }
+            compact
+          />
         ) : (
           <>
             <AnimatePresence mode="popLayout">
@@ -508,6 +534,15 @@ export default function CustomerHomePage() {
             distance={selectedDistance}
             onClose={() => setShowDistanceWarning(false)}
             onContinue={handleContinueToStore}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showAddresses && (
+          <AddressesModal
+            onClose={() => setShowAddresses(false)}
+            onAddressChange={handleDeliveryAddressChange}
           />
         )}
       </AnimatePresence>

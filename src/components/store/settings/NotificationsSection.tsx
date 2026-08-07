@@ -4,7 +4,12 @@
   Notification preferences section.
 */
 
-import {Bell, Mail, ShoppingBag, Megaphone, Smartphone} from "lucide-react";
+import {useEffect, useState} from "react";
+import {Bell, CreditCard, Mail, Package, ShoppingBag, Smartphone} from "lucide-react";
+import {
+  firebaseMessaging,
+  type NotificationPermissionState,
+} from "@/services/notification/firebaseMessaging";
 
 interface NotificationsSectionProps {
   storeData: any;
@@ -12,6 +17,16 @@ interface NotificationsSectionProps {
 }
 
 export function NotificationsSection({storeData, setStoreData}: NotificationsSectionProps) {
+  const [permission, setPermission] =
+    useState<NotificationPermissionState>("prompt");
+  const [enabling, setEnabling] = useState(false);
+
+  useEffect(() => {
+    void firebaseMessaging.getPermissionStatus()
+      .then(setPermission)
+      .catch(() => setPermission("unsupported"));
+  }, []);
+
   const toggleSetting = (key: string) => {
     setStoreData({
       ...storeData,
@@ -27,16 +42,22 @@ export function NotificationsSection({storeData, setStoreData}: NotificationsSec
       icon: ShoppingBag,
     },
     {
-      id: "emailNotifications",
-      label: "Email Notifications",
-      description: "Receive updates via email",
-      icon: Mail,
+      id: "paymentNotifications",
+      label: "Payment Notifications",
+      description: "Payout, transfer, and payment-status updates",
+      icon: CreditCard,
     },
     {
-      id: "marketingEmails",
-      label: "Marketing Emails",
-      description: "Receive promotional offers and updates",
-      icon: Megaphone,
+      id: "productStockNotifications",
+      label: "Product Stock Notifications",
+      description: "Low-stock and out-of-stock product alerts",
+      icon: Package,
+    },
+    {
+      id: "emailNotifications",
+      label: "Email Notifications",
+      description: "Saved now; automatic email delivery is coming soon",
+      icon: Mail,
     },
     {
       id: "pushNotifications",
@@ -52,6 +73,37 @@ export function NotificationsSection({storeData, setStoreData}: NotificationsSec
         <div className="flex items-center gap-3 mb-4">
           <Bell className="w-5 h-5 text-gray-400" />
           <h3 className="font-bold text-gray-800">Notification Preferences</h3>
+        </div>
+
+        <div className="mb-4 rounded-xl bg-orange-50 p-3 text-sm text-orange-900">
+          <p className="font-semibold">Device push notifications</p>
+          <p className="mt-1 text-xs leading-5 text-orange-800">
+            {permission === "granted"
+              ? "Push notifications are enabled on this device."
+              : permission === "denied"
+                ? "Notifications are blocked in this device's settings."
+                : permission === "unsupported"
+                  ? "Push notifications are not available on this device."
+                  : "Enable push notifications to receive alerts outside the LIA app."}
+          </p>
+          {permission === "prompt" && (
+            <button
+              type="button"
+              disabled={enabling}
+              onClick={async () => {
+                setEnabling(true);
+                try {
+                  await firebaseMessaging.registerDevice({requestPermission: true});
+                  setPermission(await firebaseMessaging.getPermissionStatus());
+                } finally {
+                  setEnabling(false);
+                }
+              }}
+              className="mt-3 rounded-lg bg-orange-500 px-3 py-2 text-xs font-bold text-white disabled:opacity-60"
+            >
+              {enabling ? "Enabling…" : "Enable on this device"}
+            </button>
+          )}
         </div>
 
         <div className="space-y-3">

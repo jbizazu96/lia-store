@@ -13,7 +13,7 @@ interface BrandedLoaderProps {
 
 export function BrandedLoader({message = "Loading..."}: BrandedLoaderProps) {
   return (
-    <div className="min-h-screen bg-white flex flex-col justify-center items-center relative overflow-hidden">
+    <div className="min-h-screen bg-gray-50 flex flex-col justify-center items-center relative overflow-hidden">
       {/* Ambient Glows */}
       <div className="absolute top-0 right-0 h-[500px] w-[500px] rounded-full bg-orange-400/5 blur-[120px] pointer-events-none" />
       <div className="absolute bottom-0 left-0 h-[400px] w-[400px] rounded-full bg-blue-500/5 blur-[100px] pointer-events-none" />

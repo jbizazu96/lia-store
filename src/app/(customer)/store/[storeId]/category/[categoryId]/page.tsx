@@ -28,7 +28,7 @@ import { promotionService } from "@/services/promotion/promotionService";
 import { DistanceWarningModal } from "@/components/customer/store/DistanceWarningModal";
 import { BottomBar } from "@/components/customer/store/BottomBar";
 import { ProductCard } from "@/components/customer/store/ProductCard";
-import { BrandedLoader } from "@/components/ui/BrandedLoader";
+import { CustomerPageSkeleton } from "@/components/customer/ui/CustomerPageSkeleton";
 import type { Product } from "@/types/product";
 
 interface StoreCategoryPageProps {
@@ -190,7 +190,7 @@ export default function StoreCategoryPage({
   };
 
   if (loading || resolvedStoreId !== storeId) {
-    return <BrandedLoader message="Loading category" />;
+    return <CustomerPageSkeleton variant="store" />;
   }
 
   if (error || !store) {
@@ -211,7 +211,7 @@ export default function StoreCategoryPage({
   }
 
   return (
-    <main className="min-h-screen bg-white px-4 pb-28 pt-5 sm:px-6">
+    <main className="min-h-screen bg-gray-50 px-4 pb-28 pt-5 sm:px-6">
       <button
         type="button"
         onClick={() => router.back()}

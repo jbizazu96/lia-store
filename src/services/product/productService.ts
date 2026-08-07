@@ -15,6 +15,9 @@ import {
   doc,
   getDoc,
   getDocs,
+  onSnapshot,
+  query,
+  where,
   type DocumentData,
   type Unsubscribe,
 } from "firebase/firestore";
@@ -30,12 +33,6 @@ import type {
   ProductGalleryImage,
   ProductImageVariants,
 } from "@/types/product";
-
-const CUSTOMER_STORE_PRODUCTS_REFRESH_INTERVAL_MS = 60_000;
-
-interface CustomerStoreProductsResponse {
-  products: DocumentData[];
-}
 
 /** Firestore does not accept undefined values, including inside nested data. */
 function removeUndefinedFields(
@@ -451,23 +448,19 @@ export const productService = {
     }
 
     const loadProducts = async () => {
-        const result = await httpsCallable<
-          { storeId: string },
-          CustomerStoreProductsResponse
-        >(
-          functions,
-          "getCustomerStoreProducts"
-        )({ storeId });
+      const snapshot = await getDocs(
+        query(
+          collection(db, "productPublicProfiles"),
+          where("storeId", "==", storeId),
+        ),
+      );
 
-        return result.data.products.map(
-          (productDocument) =>
-            mapProductDocument(
-              typeof productDocument.id === "string"
-                ? productDocument.id
-                : "",
-              productDocument
-            )
-        );
+      return snapshot.docs.map((productDocument) =>
+        mapProductDocument(
+          productDocument.id,
+          productDocument.data(),
+        ),
+      );
     };
 
     if (forceRefresh) {
@@ -495,49 +488,20 @@ export const productService = {
       return () => undefined;
     }
 
-    /*
-     * Keep the catalog fresh without a browser Firestore listener. This
-     * mirrors the customer store catalog approach and prevents client Rules
-     * or index configuration from blocking an otherwise public store page.
-     */
-    let active = true;
-    let loading = false;
-
-    const refresh = async (): Promise<void> => {
-      if (loading) {
-        return;
-      }
-
-      loading = true;
-
-      try {
-        const products = await this.getStoreProducts(storeId, true);
-
-        if (active) {
-          onProducts(products);
-        }
-      } catch (error) {
-        if (active) {
-          onError?.(
-            error instanceof Error
-              ? error
-              : new Error("Unable to load store products.")
-          );
-        }
-      } finally {
-        loading = false;
-      }
-    };
-
-    const intervalId = window.setInterval(
-      () => void refresh(),
-      CUSTOMER_STORE_PRODUCTS_REFRESH_INTERVAL_MS
+    return onSnapshot(
+      query(
+        collection(db, "productPublicProfiles"),
+        where("storeId", "==", storeId),
+      ),
+      (snapshot) => {
+        onProducts(
+          snapshot.docs.map((productDocument) =>
+            mapProductDocument(productDocument.id, productDocument.data()),
+          ),
+        );
+      },
+      (error) => onError?.(error),
     );
-
-    return () => {
-      active = false;
-      window.clearInterval(intervalId);
-    };
   },
 
   /*

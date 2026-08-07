@@ -1,12 +1,14 @@
 "use client";
 
-import {Search} from "lucide-react";
 import {SearchResult} from "../types";
 import {StoreGroup} from "../types";
 import {StoreResult} from "./StoreResult";
+import { CustomerPageState } from "@/components/customer/ui/CustomerPageState";
+import { CustomerPageSkeleton } from "@/components/customer/ui/CustomerPageSkeleton";
 
 interface SearchResultsProps {
   loading: boolean;
+  error?: string | null;
   results: SearchResult[];
   groups: StoreGroup[];
   onStoreClick: (storeId: string) => void;
@@ -14,25 +16,40 @@ interface SearchResultsProps {
 
 export function SearchResults({
   loading,
+  error,
   results,
   groups,
   onStoreClick,
 }: SearchResultsProps) {
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <div className="w-8 h-8 border-4 border-orange-500 border-t-transparent rounded-full animate-spin" />
-      </div>
+      <CustomerPageSkeleton variant="search" />
+    );
+  }
+
+  if (error) {
+    return (
+      <CustomerPageState
+        kind="error"
+        title="Search is unavailable"
+        description={error}
+        action={{
+          label: "Try again",
+          onClick: () => window.location.reload(),
+        }}
+        compact
+      />
     );
   }
 
   if (results.length === 0) {
     return (
-      <div className="text-center py-12">
-        <Search className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-        <p className="text-gray-500 text-lg">No results found</p>
-        <p className="text-gray-400 text-sm">Try adjusting your search</p>
-      </div>
+      <CustomerPageState
+        kind="search-empty"
+        title="No matches yet"
+        description="Try a store name, product name, or a different spelling."
+        compact
+      />
     );
   }
 

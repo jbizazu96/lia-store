@@ -19,6 +19,9 @@ export {
 export {
   storeEarningNotifications,
 } from "./triggers/storeEarningNotifications";
+export {
+  storeStripeStatusNotifications,
+} from "./triggers/storeStripeStatusNotifications";
 import * as admin from "firebase-admin";
 import {onCall, HttpsError} from "firebase-functions/v2/https";
 import {onSchedule} from "firebase-functions/v2/scheduler"; 
@@ -162,6 +165,7 @@ export {
 export {
   clearCustomerCart,
   getCustomerCart,
+  repeatCustomerOrder,
   saveCustomerCart,
 } from "./callable/customerCart";
 export {
@@ -191,10 +195,15 @@ export {
   deleteCustomerProfileData,
   getCustomerFavoriteStores,
   getCustomerProfile,
+  saveCustomerRecentSearch,
   saveCustomerDefaultAddress,
   setCustomerStoreFavorite,
+  updateCustomerNotificationPreferences,
   updateCustomerProfile,
 } from "./callable/customerProfile";
+export {
+  getCurrentAccount,
+} from "./callable/currentAccount";
 export {
   completeStoreOnboarding,
   ensureStoreOnboardingDraft,
@@ -575,6 +584,7 @@ export {
   requestAccountDeletion,
 };
 export {
+  beginCustomerRefundClaimEvidenceUpload,
   createCustomerRefundClaim,
   getCustomerRefundClaim,
 } from "./callable/refundClaims";

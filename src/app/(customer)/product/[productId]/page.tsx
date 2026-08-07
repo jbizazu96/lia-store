@@ -35,7 +35,7 @@ import { promotionService } from "@/services/promotion/promotionService";
 import { storeService } from "@/services/store/storeService";
 import { isStoreCustomerVisible } from "@/services/store/storeAvailability";
 import { formatProductName } from "@/utils/productDisplay";
-import { PageContentSkeleton } from "@/components/ui/PageContentSkeleton";
+import { CustomerPageSkeleton } from "@/components/customer/ui/CustomerPageSkeleton";
 
 import type {
   Product,
@@ -254,8 +254,8 @@ export default function ProductPage({ params }: ProductPageProps) {
     );
   };
 
-  const addProductToCart = async (target: Product) => {
-    if (!store || !target.isAvailable || target.stock <= 0) return;
+  const addProductToCart = async (target: Product): Promise<boolean> => {
+    if (!store || !target.isAvailable || target.stock <= 0) return false;
 
     const discountedPrice =
       promotionService.getDiscountedPrice(
@@ -263,7 +263,7 @@ export default function ProductPage({ params }: ProductPageProps) {
         target.promotion
       );
 
-    await addItem({
+    const result = await addItem({
       id: target.id,
       name: target.name,
       price: discountedPrice,
@@ -281,6 +281,8 @@ export default function ProductPage({ params }: ProductPageProps) {
       stock: target.stock,
       size: target.size ?? undefined,
     });
+
+    return result.added;
   };
 
       const addCurrentProduct =
@@ -301,9 +303,13 @@ export default function ProductPage({ params }: ProductPageProps) {
             * Add the product once when it is not already in the cart.
             */
             if (currentQuantity === 0) {
-              await addProductToCart(
+              const added = await addProductToCart(
                 product
               );
+
+              if (!added) {
+                return;
+              }
             }
 
             /*
@@ -359,12 +365,12 @@ export default function ProductPage({ params }: ProductPageProps) {
   };
 
   if (loading) {
-    return <main className="min-h-screen bg-white p-4"><PageContentSkeleton cards={2} rows={2} /></main>;
+    return <CustomerPageSkeleton variant="product" />;
   }
 
   if (error || !product) {
     return (
-      <main className="flex min-h-screen flex-col items-center justify-center gap-4 bg-white px-6 text-center">
+      <main className="flex min-h-screen flex-col items-center justify-center gap-4 bg-gray-50 px-6 text-center">
         <Package className="h-12 w-12 text-gray-300" />
         <p className="text-gray-600">{error ?? "Product not found."}</p>
         <button
@@ -379,7 +385,7 @@ export default function ProductPage({ params }: ProductPageProps) {
   }
 
   return (
-    <main className="min-h-screen bg-white pb-28 font-sans text-gray-950">
+    <main className="min-h-screen bg-gray-50 pb-28 font-sans text-gray-950">
       <div className="mx-auto max-w-5xl">
         <header className="absolute inset-x-0 top-0 z-20 mx-auto flex max-w-5xl items-center justify-between px-4 pt-4">
           <button

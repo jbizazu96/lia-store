@@ -66,6 +66,7 @@ export function OrderSummary({
                     src={item.imageUrl}
                     alt={productName}
                     fill
+                    sizes="48px"
                     className="object-contain p-1"
                   />
                 ) : (

@@ -35,7 +35,7 @@ import {
   Star,
 } from "lucide-react";
 import Image from "next/image";
-import { BrandedLoader } from "@/components/ui/BrandedLoader";
+import { CustomerPageSkeleton } from "@/components/customer/ui/CustomerPageSkeleton";
 
 
 interface StoreInfoPageProps {params: Promise<{storeId: string;}>;}export default function StoreInfoPage({params,}: StoreInfoPageProps) {
@@ -49,7 +49,7 @@ interface StoreInfoPageProps {params: Promise<{storeId: string;}>;}export defaul
 
 
   if (loading) {
-    return <BrandedLoader message="Loading Store Information" />;
+    return <CustomerPageSkeleton variant="store-info" />;
   }
 
   if (error || !store) {
@@ -130,8 +130,8 @@ const phoneUrl =
   return (
     <main className="min-h-screen bg-gray-50 pb-8">
       {/* Header with Back Button */}
-      <div className="bg-white border-b border-gray-100 sticky top-0 z-20">
-        <div className="flex items-center gap-3 px-4 py-4">
+      <div className="sticky top-0 z-20 bg-gray-50/95 backdrop-blur-xl">
+        <div className="relative flex items-center px-4 py-4">
           <button
             onClick={() => router.back()}
             className="p-2 hover:bg-gray-100 rounded-full transition"
@@ -139,7 +139,7 @@ const phoneUrl =
           >
             <ArrowLeft className="w-5 h-5 text-gray-700" />
           </button>
-          <h1 className="text-lg font-bold text-gray-800 truncate">{store.name}</h1>
+          <h1 className="pointer-events-none absolute inset-x-16 truncate text-center text-lg font-bold text-gray-800">{store.name}</h1>
         </div>
       </div>
 
@@ -187,6 +187,7 @@ const phoneUrl =
                   src={store.logoUrl}
                   alt={store.name}
                   fill
+                  sizes="48px"
                   className="object-cover"
                 />
               </div>

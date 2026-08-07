@@ -330,6 +330,10 @@ export interface AdminRefundClaimDetail {
       totalAmount: number;
     };
   };
+  evidence: {
+    imageUrl: string;
+    contentType: string;
+  } | null;
   decision: {
     reason: string | null;
     decidedAt: string | null;

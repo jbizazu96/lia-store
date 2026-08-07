@@ -49,6 +49,7 @@ import { ProductSection } from "@/components/customer/store/ProductSection";
 import { PromoBanner } from "@/components/customer/store/PromoBanner";
 import { StoreHeader } from "@/components/customer/store/StoreHeader";
 import { StoreInfo } from "@/components/customer/store/StoreInfo";
+import { CustomerPageState } from "@/components/customer/ui/CustomerPageState";
 import type { Product } from "@/types/product";
 
 /*
@@ -300,7 +301,7 @@ export default function StorePage({
 
   if (loading || resolvedStoreId !== storeId) {
     return (
-      <div className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-white">
+      <div className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-gray-50">
         <div className="pointer-events-none absolute right-0 top-0 h-[500px] w-[500px] rounded-full bg-yellow-400/5 blur-[120px]" />
 
         <div className="pointer-events-none absolute bottom-0 left-0 h-[400px] w-[400px] rounded-full bg-blue-500/5 blur-[100px]" />
@@ -428,20 +429,16 @@ export default function StorePage({
 
   if (error || !store) {
     return (
-      <main className="flex min-h-screen flex-col items-center justify-center gap-4 px-6 text-center">
-        <p className="text-gray-500">
-          {error ?? "Store not found"}
-        </p>
-
-        <button
-          type="button"
-          onClick={() =>
-            router.push("/home")
-          }
-          className="rounded-xl bg-orange-500 px-5 py-2.5 font-semibold text-white transition hover:bg-orange-600"
-        >
-          Return Home
-        </button>
+      <main className="min-h-screen bg-gray-50">
+        <CustomerPageState
+          kind="error"
+          title="This store is unavailable"
+          description={error ?? "The store may no longer be available in your area."}
+          action={{
+            label: "Browse stores",
+            href: "/home",
+          }}
+        />
       </main>
     );
   }

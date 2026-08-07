@@ -17,7 +17,7 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
 import Link from "next/link";
-import { BrandedLoader } from "@/components/ui/BrandedLoader";
+import { CustomerPageSkeleton } from "@/components/customer/ui/CustomerPageSkeleton";
 import {
   ShoppingCart,
   Plus,
@@ -27,7 +27,6 @@ import {
   Truck,
   Clock,
   CreditCard,
-  X,
   Trash2,
   AlertCircle,
   Info,
@@ -50,6 +49,7 @@ export default function CartPage() {
   const router = useRouter();
   const { items, itemCount, totalPrice, updateQuantity, removeItem, clearCart, isLoading } = useCart();
   const storeId = items[0]?.storeId;
+  const storeName = items[0]?.storeName || "Your store";
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
   const [itemToRemove, setItemToRemove] = useState<string | null>(null);
@@ -148,7 +148,7 @@ export default function CartPage() {
   storeLoading ||
   isCalculatingDelivery
 ) {
-    return <BrandedLoader message="Loading Cart" />;
+    return <CustomerPageSkeleton variant="cart" />;
   }
 
   // Empty state
@@ -228,8 +228,8 @@ export default function CartPage() {
   return (
     <main className="min-h-screen bg-gray-50">
       {/* Header with Back Button - Matching Notifications Page Style */}
-      <div className="bg-white border-b border-gray-100 sticky top-0 z-20">
-        <div className="flex items-center gap-3 px-4 py-4 max-w-2xl mx-auto">
+      <div className="sticky top-0 z-20 bg-gray-50/95 backdrop-blur-xl">
+        <div className="relative flex items-center px-4 py-4 max-w-2xl mx-auto">
           <button
             onClick={goBack}
             className="p-2 hover:bg-gray-100 rounded-full transition"
@@ -237,17 +237,34 @@ export default function CartPage() {
           >
             <ArrowLeft className="w-5 h-5 text-gray-700" />
           </button>
-          <h1 className="text-xl font-bold text-gray-800">Cart</h1>
-          <span className="text-xs text-gray-400 ml-auto">
+          <h1 className="pointer-events-none absolute inset-x-0 text-center text-xl font-bold text-gray-800">Cart</h1>
+          <span className="ml-auto text-xs text-gray-400">
             {itemCount} item{itemCount !== 1 ? 's' : ''}
           </span>
         </div>
       </div>
 
-      {/* Cart Items */}
-      <div className="max-w-2xl mx-auto px-4 py-4 pb-65 space-y-4">
-        <AnimatePresence mode="popLayout">
-          {items.map((item) => {
+      {/* One cart belongs to one store. Keep its items together like a store basket. */}
+      <div className="mx-auto max-w-2xl px-4 py-5 pb-64">
+        <section className="overflow-hidden rounded-[26px] border border-gray-200 bg-transparent">
+          <div className="flex items-center justify-between gap-3 border-b border-gray-100 px-4 py-4">
+            <div className="min-w-0">
+              <h2 className="truncate text-base font-extrabold text-gray-900">{storeName}</h2>
+            </div>
+            {storeId && (
+              <button
+                type="button"
+                onClick={() => router.push(`/store/${storeId}`)}
+                className="shrink-0 rounded-full border border-orange-200 bg-orange-50 px-3.5 py-2 text-xs font-bold text-orange-700 transition hover:border-orange-300 hover:bg-orange-100"
+              >
+                Add items
+              </button>
+            )}
+          </div>
+
+          <div className="divide-y divide-gray-100">
+            <AnimatePresence mode="popLayout">
+              {items.map((item) => {
             const productName =
               formatProductName(item.name);
 
@@ -258,18 +275,18 @@ export default function CartPage() {
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: 20 }}
                 layout
-                className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100"
+                className="px-4 py-4"
               >
-                <div className="flex gap-4">
+                <div className="flex gap-3">
                   {/* Product Image */}
-                  <div className="relative w-20 h-20 rounded-xl overflow-hidden flex-shrink-0 bg-white-100">
+                  <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-2xl bg-gray-50">
                     {item.imageUrl ? (
                       <Image
                         src={item.imageUrl}
                         alt={productName}
                         fill
-                        className="object-contain p-1"
                         sizes="80px"
+                        className="object-contain p-1"
                       />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center">
@@ -280,31 +297,19 @@ export default function CartPage() {
 
                   {/* Product Info */}
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <h4 className="font-sans text-sm font-semibold text-gray-900 truncate">
+                    <div className="min-w-0">
+                        <h4 className="font-sans text-sm font-bold leading-5 text-gray-900">
                           {productName}
                         </h4>
-                        <p className="text-xs text-gray-500 truncate">
-                          {item.storeName}
-                        </p>
                         {item.size && item.size.value > 0 && (
-                          <p className="text-xs text-gray-400">
+                          <p className="mt-0.5 text-xs text-gray-500">
                             {item.size.value}{item.size.unit}
                           </p>
                         )}
-                      </div>
-                      <button
-                        onClick={() => handleRemoveItem(item.id, productName)}
-                        className="p-1 hover:bg-red-50 rounded-lg transition text-red-400 hover:text-red-600 flex-shrink-0"
-                        aria-label={`Remove ${productName}`}
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
                     </div>
 
                     {/* Price & Quantity Controls */}
-                    <div className="flex items-center justify-between mt-2">
+                    <div className="mt-0.5 grid grid-cols-[minmax(0,1fr)_auto] items-end gap-3">
                       <div>
                         {typeof item.originalPrice === "number" &&
                           item.originalPrice > item.price && (
@@ -312,21 +317,13 @@ export default function CartPage() {
                               ${item.originalPrice.toFixed(2)}
                             </span>
                           )}
-                        <ProductPrice
-                          price={item.price}
-                          className="text-gray-900"
-                        />
-                        {item.quantity > 1 && (
-                          <span className="text-xs text-gray-400 ml-1">
-                            × {item.quantity}
-                          </span>
-                        )}
+                        <ProductPrice price={item.price} className="font-bold text-gray-900" />
                       </div>
 
-                      <div className="flex items-center gap-2 bg-gray-100 rounded-full p-1">
+                      <div className="flex items-center rounded-full border border-gray-200 bg-white p-1 shadow-sm">
                         <button
                           onClick={() => handleDecreaseQuantity(item.id, item.quantity, productName)}
-                          className="w-7 h-7 rounded-full bg-white shadow-sm flex items-center justify-center hover:bg-gray-50 transition"
+                          className="flex h-8 w-8 items-center justify-center rounded-full text-gray-700 transition hover:bg-red-50 hover:text-red-600"
                           aria-label={
                             item.quantity === 1
                               ? `Remove ${productName} from cart`
@@ -334,12 +331,12 @@ export default function CartPage() {
                           }
                         >
                           {item.quantity === 1 ? (
-                            <Trash2 className="w-3.5 h-3.5 text-red-500" />
+                            <Trash2 className="h-4 w-4" />
                           ) : (
-                            <Minus className="w-3.5 h-3.5 text-gray-600" />
+                            <Minus className="h-4 w-4" />
                           )}
                         </button>
-                        <span className="w-6 text-center text-sm font-medium text-gray-800">
+                        <span className="w-7 text-center text-sm font-bold text-gray-900">
                           {item.quantity}
                         </span>
                         <button
@@ -348,7 +345,7 @@ export default function CartPage() {
                             typeof item.stock === "number" &&
                             item.quantity >= item.stock
                           }
-                          className="w-7 h-7 rounded-full bg-orange-500 text-white flex items-center justify-center hover:bg-orange-600 transition disabled:cursor-not-allowed disabled:bg-gray-300"
+                          className="flex h-8 w-8 items-center justify-center rounded-full text-orange-600 transition hover:bg-orange-50 disabled:cursor-not-allowed disabled:text-gray-300"
                           aria-label={`Increase ${productName} quantity`}
                           title={
                             typeof item.stock === "number" &&
@@ -357,7 +354,7 @@ export default function CartPage() {
                               : undefined
                           }
                         >
-                          <Plus className="w-3.5 h-3.5" />
+                          <Plus className="h-5 w-5" />
                         </button>
                       </div>
                     </div>
@@ -365,18 +362,16 @@ export default function CartPage() {
                 </div>
               </motion.div>
             );
-          })}
-        </AnimatePresence>
+              })}
+            </AnimatePresence>
+          </div>
+        </section>
       </div>
 
       {/* Order Summary */}
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-30">
         <div className="max-w-2xl mx-auto px-4 py-4">
           <div className="space-y-2">
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-500">Subtotal</span>
-              <span className="text-gray-800">${subtotal.toFixed(2)}</span>
-            </div>
             <div className="flex items-center justify-between gap-4 text-sm">
               <button
                 type="button"
@@ -456,16 +451,6 @@ export default function CartPage() {
               </p>
             </div>
           )}
-
-          {!storeError &&
-            isStoreOpen &&
-            !meetsMinimumOrder && (
-              <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-center">
-                <p className="text-sm font-medium text-amber-800">
-                  This store requires a ${minimumOrder.toFixed(2)} minimum merchandise order. Add ${amountUntilMinimumOrder.toFixed(2)} more to continue.
-                </p>
-              </div>
-            )}
 
           <button
             type="button"

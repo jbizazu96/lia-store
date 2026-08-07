@@ -8,8 +8,8 @@
 
 import {useState, useEffect} from "react";
 import {useRouter} from "next/navigation";
-import {auth, db} from "@/lib/firebase";
-import {doc, getDoc} from "firebase/firestore";
+import {auth} from "@/lib/firebase";
+import {customerProfileClientService} from "@/services/user/customerProfileClientService";
 
 // Components
 import {SearchHeader} from "./components/SearchHeader";
@@ -29,6 +29,7 @@ export default function SearchPage() {
   const [results, setResults] = useState<SearchResult[]>([]);
   const [groups, setGroups] = useState<StoreGroup[]>([]);
   const [loading, setLoading] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const [userLocation, setUserLocation] = useState<{lat: number; lng: number} | null>(null);
 
@@ -38,18 +39,15 @@ export default function SearchPage() {
       try {
         const user = auth.currentUser;
         if (user) {
-          const userDoc = await getDoc(doc(db, "users", user.uid));
-          if (userDoc.exists()) {
-            const data = userDoc.data();
-            if (data.recentSearches) {
-              setRecentSearches(data.recentSearches.slice(0, 10));
-            }
-            if (data.defaultAddress) {
-              setUserLocation({
-                lat: data.defaultAddress.latitude,
-                lng: data.defaultAddress.longitude,
-              });
-            }
+          const profile = await customerProfileClientService.getProfile();
+          if (profile.recentSearches.length > 0) {
+            setRecentSearches(profile.recentSearches);
+          }
+          if (profile.defaultAddress) {
+            setUserLocation({
+              lat: profile.defaultAddress.latitude,
+              lng: profile.defaultAddress.longitude,
+            });
           }
         }
         const localSearches = await loadRecentSearches();
@@ -69,6 +67,7 @@ export default function SearchPage() {
 
     if (normalizedQuery.length < 2) {
       setLoading(false);
+      setSearchError(null);
       setResults([]);
       setGroups([]);
       return;
@@ -80,6 +79,7 @@ export default function SearchPage() {
      * and flashes "No results found" before a real search has even started.
      */
     setLoading(true);
+    setSearchError(null);
 
     if (!marketplacePolicy) {
       return;
@@ -145,6 +145,9 @@ export default function SearchPage() {
           if (active) {
             setResults([]);
             setGroups([]);
+            setSearchError(
+              "Check your connection and try searching again."
+            );
           }
         } finally {
           if (active) {
@@ -164,6 +167,7 @@ export default function SearchPage() {
 
   const handleClear = () => {
     setSearchQuery("");
+    setSearchError(null);
     setResults([]);
     setGroups([]);
   };
@@ -211,6 +215,7 @@ export default function SearchPage() {
         {searchQuery && (
           <SearchResults
             loading={loading}
+            error={searchError}
             results={results}
             groups={groups}
             onStoreClick={handleStoreClick}

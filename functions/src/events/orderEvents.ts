@@ -46,6 +46,7 @@ export class OrderEvents {
         "Order Accepted",
         "The store has accepted your order.",
         "/orders/" + orderId,
+        "orderUpdates",
       );
 
   }
@@ -74,6 +75,7 @@ export class OrderEvents {
       "Preparing Your Order",
       "The store is preparing your order.",
       "/orders/" + orderId,
+      "orderUpdates",
     );
 
   }
@@ -104,6 +106,7 @@ export class OrderEvents {
       "Ready For Pickup",
       "A driver will be assigned shortly.",
       "/orders/" + orderId,
+      "orderUpdates",
     );
 
   }
@@ -132,6 +135,7 @@ export class OrderEvents {
       "Out For Delivery",
       "Your order is on the way.",
       "/orders/" + orderId,
+      "orderUpdates",
     );
 
   }
@@ -160,6 +164,7 @@ export class OrderEvents {
       "Order Delivered",
       "Your order has been delivered. Share your verified store review in LIA.",
       "/orders/" + orderId,
+      "orderUpdates",
     );
 
   }
@@ -188,6 +193,7 @@ export class OrderEvents {
       "Order Cancelled",
       "Your order has been cancelled.",
       "/orders/" + orderId,
+      "orderUpdates",
     );
 
   }

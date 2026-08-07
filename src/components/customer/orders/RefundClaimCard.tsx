@@ -1,7 +1,7 @@
 "use client";
 
 import {useEffect, useState} from "react";
-import {LoaderCircle, RotateCcw} from "lucide-react";
+import {Camera, Check, Circle, ImagePlus, LoaderCircle, RotateCcw, Upload} from "lucide-react";
 import {refundClaimClientService} from "@/services/refund/refundClaimClientService";
 
 const reasons = [
@@ -20,6 +20,107 @@ function label(value: string): string {
   return value.replace(/_/g, " ");
 }
 
+function displayDate(value: string | null): string | null {
+  if (!value) return null;
+
+  const date = new Date(value);
+
+  return Number.isNaN(date.getTime())
+    ? null
+    : date.toLocaleString(undefined, {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
+}
+
+function ClaimTimeline({claim}: {claim: NonNullable<Claim>}) {
+  const isPending = claim.status === "pending_review";
+  const isApproved = claim.status === "approved";
+  const isRejected = claim.status === "rejected";
+  const isRefunded = claim.refundStatus === "completed";
+  const steps = [
+    {
+      label: "Submitted",
+      detail: displayDate(claim.createdAt) || "Received by LIA Admin",
+      complete: true,
+      current: false,
+    },
+    {
+      label: "Under review",
+      detail: isPending
+        ? "LIA Admin is reviewing your claim"
+        : "Review completed",
+      complete: !isPending,
+      current: isPending,
+    },
+    {
+      label: isRejected ? "Rejected" : isApproved ? "Approved" : "Decision pending",
+      detail: isRejected || isApproved
+        ? displayDate(claim.decisionAt) || "Decision recorded"
+        : "Waiting for review",
+      complete: isRejected || isApproved,
+      current: false,
+    },
+    {
+      label: isRefunded ? "Refunded" : "Refund",
+      detail: isRejected
+        ? "No refund was issued"
+        : isRefunded
+          ? displayDate(claim.refundCompletedAt) || "Refund completed"
+          : isApproved
+            ? claim.refundStatus
+              ? `Refund ${label(claim.refundStatus)}`
+              : "Refund is being prepared"
+            : "Available after approval",
+      complete: isRefunded,
+      current: isApproved && !isRefunded,
+    },
+  ];
+
+  return (
+    <div className="mt-5 border-t border-orange-200 pt-4">
+      <p className="text-xs font-bold uppercase tracking-wide text-gray-500">
+        Claim timeline
+      </p>
+      <ol className="mt-3 space-y-3">
+        {steps.map((step, index) => (
+          <li key={step.label} className="relative flex gap-3">
+            {index < steps.length - 1 && (
+              <span
+                className={
+                  "absolute left-[9px] top-5 h-6 w-px " +
+                  (step.complete ? "bg-green-300" : "bg-gray-200")
+                }
+              />
+            )}
+            <span
+              className={
+                "relative z-10 flex h-5 w-5 shrink-0 items-center justify-center rounded-full " +
+                (step.complete
+                  ? "bg-green-600 text-white"
+                  : step.current
+                    ? "bg-orange-500 text-white"
+                    : "bg-gray-200 text-gray-400")
+              }
+            >
+              {step.complete ? <Check className="h-3 w-3" /> : <Circle className="h-2.5 w-2.5" />}
+            </span>
+            <span className="min-w-0">
+              <span className="block text-sm font-semibold text-gray-800">
+                {step.label}
+              </span>
+              <span className="block text-xs text-gray-500">{step.detail}</span>
+            </span>
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+}
+
 export function RefundClaimCard({
   orderId,
   embedded = false,
@@ -30,10 +131,24 @@ export function RefundClaimCard({
   const [claim, setClaim] = useState<Claim>(null);
   const [reason, setReason] = useState<string>(reasons[0][0]);
   const [description, setDescription] = useState("");
+  const [evidenceFile, setEvidenceFile] = useState<File | null>(null);
+  const [evidencePickerOpen, setEvidencePickerOpen] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const evidenceRequired =
+    reason === "missing_items" ||
+    reason === "damaged_items";
+
+  const chooseEvidenceFile = (file: File | null) => {
+    if (file) {
+      setEvidenceFile(file);
+    }
+
+    setEvidencePickerOpen(false);
+    setError("");
+  };
 
   useEffect(() => {
     let active = true;
@@ -66,20 +181,37 @@ export function RefundClaimCard({
       return;
     }
 
+    if (evidenceRequired && !evidenceFile) {
+      setError(
+        "Add a photo showing the missing or damaged items before submitting.",
+      );
+      return;
+    }
+
     setSaving(true);
     setError("");
 
     try {
+      const evidence = evidenceRequired && evidenceFile
+        ? await refundClaimClientService.uploadPhotoEvidence({
+          orderId,
+          reason,
+          file: evidenceFile,
+        })
+        : null;
+
       await refundClaimClientService.create({
         orderId,
         reason,
         description: description.trim(),
+        ...(evidence ? {evidenceUploadId: evidence.uploadId} : {}),
       });
 
       const result = await refundClaimClientService.get(orderId);
       setClaim(result.claim);
       setShowForm(false);
       setDescription("");
+      setEvidenceFile(null);
     } catch (submitError) {
       setError(
         submitError instanceof Error
@@ -93,10 +225,12 @@ export function RefundClaimCard({
 
   if (loading) {
     return (
-      <div className="flex items-center gap-2 text-sm text-gray-500">
-        <LoaderCircle className="h-4 w-4 animate-spin text-orange-500" />
-        Checking support options…
-      </div>
+      <section className="animate-pulse rounded-2xl border border-gray-100 bg-white/70 p-5 shadow-sm" aria-label="Loading refund claim options">
+        <div className="flex items-start gap-3">
+          <div className="h-10 w-10 rounded-full bg-gray-200" />
+          <div className="flex-1 space-y-2"><div className="h-4 w-36 rounded bg-gray-200" /><div className="h-3 w-4/5 rounded bg-gray-100" /></div>
+        </div>
+      </section>
     );
   }
 
@@ -118,11 +252,17 @@ export function RefundClaimCard({
                 ? " Refund status: " + label(claim.refundStatus) + "."
                 : ""}
             </p>
+            {claim.hasPhotoEvidence && (
+              <p className="mt-2 text-sm font-medium text-gray-800">
+                Photo evidence was attached for Admin review.
+              </p>
+            )}
             {claim.decisionReason && (
               <p className="mt-2 text-sm font-medium text-gray-800">
                 Review note: {claim.decisionReason}
               </p>
             )}
+            <ClaimTimeline claim={claim} />
           </div>
         </div>
       </section>
@@ -168,7 +308,10 @@ export function RefundClaimCard({
             What happened?
             <select
               value={reason}
-              onChange={(event) => setReason(event.target.value)}
+              onChange={(event) => {
+                setReason(event.target.value);
+                setError("");
+              }}
               className="mt-2 block w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-800"
             >
               {reasons.map(([value, reasonLabel]) => (
@@ -187,6 +330,23 @@ export function RefundClaimCard({
               placeholder="Include the affected items or delivery details."
             />
           </label>
+          {evidenceRequired && (
+            <label className="block text-sm font-semibold text-gray-700">
+              Photo evidence required
+              <span className="mt-1 block text-xs font-normal leading-5 text-gray-500">
+                Add a clear photo of the missing or damaged items. Only LIA
+                Admin can view it while reviewing your claim.
+              </span>
+              <button
+                type="button"
+                onClick={() => setEvidencePickerOpen(true)}
+                className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-orange-300 bg-orange-50 px-3 py-3 text-sm font-semibold text-orange-700 transition hover:bg-orange-100"
+              >
+                <ImagePlus className="h-4 w-4" />
+                {evidenceFile ? evidenceFile.name : "Choose photo"}
+              </button>
+            </label>
+          )}
           <div className="flex flex-wrap gap-3">
             <button
               type="button"
@@ -205,6 +365,53 @@ export function RefundClaimCard({
                 setShowForm(false);
               }}
               className="rounded-xl px-4 py-2.5 text-sm font-semibold text-gray-600 hover:bg-gray-100"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {evidencePickerOpen && (
+        <div className="fixed inset-0 z-50 flex items-end bg-black/40 p-4 sm:items-center sm:justify-center">
+          <div className="w-full max-w-sm rounded-3xl bg-white p-5 shadow-2xl">
+            <h3 className="text-lg font-bold text-gray-900">
+              Add photo evidence
+            </h3>
+            <p className="mt-1 text-sm text-gray-500">
+              Choose how you want to add your photo.
+            </p>
+            <div className="mt-5 grid grid-cols-2 gap-3">
+              <label className="flex cursor-pointer flex-col items-center rounded-2xl border border-gray-200 p-4 hover:bg-orange-50">
+                <Camera className="mb-2 h-7 w-7 text-orange-600" />
+                <span className="text-sm font-semibold">Take photo</span>
+                <input
+                  hidden
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={(event) =>
+                    chooseEvidenceFile(event.target.files?.[0] ?? null)
+                  }
+                />
+              </label>
+              <label className="flex cursor-pointer flex-col items-center rounded-2xl border border-gray-200 p-4 hover:bg-orange-50">
+                <Upload className="mb-2 h-7 w-7 text-orange-600" />
+                <span className="text-sm font-semibold">Upload image</span>
+                <input
+                  hidden
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+                  onChange={(event) =>
+                    chooseEvidenceFile(event.target.files?.[0] ?? null)
+                  }
+                />
+              </label>
+            </div>
+            <button
+              type="button"
+              onClick={() => setEvidencePickerOpen(false)}
+              className="mt-4 w-full rounded-xl py-2 text-sm font-semibold text-gray-600 hover:bg-gray-100"
             >
               Cancel
             </button>

@@ -22,6 +22,7 @@ export default function HomePage() {
                   src="/icon/icon-512.png"
                   alt="LIA - Local International African Marketplace"
                   fill
+                  sizes="40px"
                   className="object-contain"
                   priority
                 />
@@ -396,9 +397,10 @@ export default function HomePage() {
                 <div className="relative w-10 h-10">
                   <Image
                     src="/icon/icon-512.png"
-                    alt="LIA"
-                    fill
-                    className="object-contain"
+                  alt="LIA"
+                  fill
+                  sizes="40px"
+                  className="object-contain"
                   />
                 </div>
                 <span className="text-xl font-bold text-white">LIA</span>

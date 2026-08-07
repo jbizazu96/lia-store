@@ -63,6 +63,7 @@ export function StoreCard({
             src={store.bannerUrl || store.logoUrl || "/placeholder-store.jpg"}
             alt={displayName}
             fill
+            sizes="(max-width: 768px) 100vw, 672px"
             className="object-cover"
           />
         ) : (
@@ -138,6 +139,7 @@ export function StoreCard({
                   src={store.logoUrl}
                   alt={displayName}
                   fill
+                  sizes="32px"
                   className="object-cover"
                 />
               </div>

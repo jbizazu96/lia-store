@@ -10,6 +10,7 @@ interface ProfileMenuItemProps {
   description: string;
   onClick: () => void;
   variant?: "default" | "danger";
+  disabled?: boolean;
 }
 
 export function ProfileMenuItem({
@@ -17,7 +18,8 @@ export function ProfileMenuItem({
   label,
   description,
   onClick,
-  variant = "default"
+  variant = "default",
+  disabled = false,
 }: ProfileMenuItemProps) {
   const textColor = variant === "danger" ? "text-red-600" : "text-gray-800";
   const descColor = variant === "danger" ? "text-red-400" : "text-gray-500";
@@ -26,14 +28,15 @@ export function ProfileMenuItem({
     <motion.button
       whileTap={{scale: 0.98}}
       onClick={onClick}
-      className="w-full bg-white px-4 py-3 flex items-center gap-3 hover:bg-gray-50 transition"
+      disabled={disabled}
+      className="flex w-full items-center gap-3 rounded-2xl border border-white/80 bg-white/75 px-4 py-3.5 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-orange-200 hover:bg-white disabled:cursor-default disabled:opacity-70"
     >
       {/* Icon */}
       <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-        variant === "danger" ? "bg-red-50" : "bg-gray-100"
+        variant === "danger" ? "bg-red-50" : "bg-orange-50"
       }`}>
         <Icon className={`w-5 h-5 ${
-          variant === "danger" ? "text-red-600" : "text-gray-600"
+          variant === "danger" ? "text-red-600" : "text-orange-600"
         }`} />
       </div>
 

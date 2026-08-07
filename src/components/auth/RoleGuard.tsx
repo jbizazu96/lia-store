@@ -20,21 +20,15 @@ import {
 } from "next/navigation";
 
 import {
-  doc,
-  getDoc,
-} from "firebase/firestore";
-
-import {
-  db,
-} from "@/lib/firebase";
-
-import {
   useAuth,
 } from "@/context/AuthContext";
 
 import {
   BrandedLoader,
 } from "@/components/ui/BrandedLoader";
+import {
+  currentAccountClientService,
+} from "@/services/user/currentAccountClientService";
 
 export type AccountType =
   | "customer"
@@ -110,24 +104,8 @@ export function RoleGuard({
 
     const verifyAccess = async () => {
       try {
-        const userSnapshot =
-          await getDoc(
-            doc(
-              db,
-              "users",
-              user.uid
-            )
-          );
-
-        if (!userSnapshot.exists()) {
-          throw new Error(
-            "Your account profile could not be found."
-          );
-        }
-
-        const accountType =
-          userSnapshot.data()
-            .accountType as AccountType | undefined;
+        const { accountType } =
+          await currentAccountClientService.get();
 
         if (
           !accountType ||
@@ -138,9 +116,7 @@ export function RoleGuard({
           )
         ) {
           router.replace(
-            getAccountHome(
-              accountType ?? "customer"
-            )
+            getAccountHome(accountType)
           );
           return;
         }

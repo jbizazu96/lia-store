@@ -36,6 +36,13 @@ const supportedImageTypes = new Set([
   "image/avif",
 ]);
 const maximumFavoriteStores = 100;
+const defaultNotificationPreferences = {
+  orderUpdates: true,
+  promotions: true,
+  storeUpdates: true,
+  productUpdates: true,
+  marketing: true,
+};
 
 function text(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -114,6 +121,40 @@ function profileResponse(data: Record<string, unknown>) {
           formattedAddress: address.formattedAddress,
         }
       : null,
+    recentSearches: [...new Set(
+      Array.isArray(data.recentSearches)
+        ? data.recentSearches.filter((item): item is string =>
+          typeof item === "string" && item.trim().length > 0 && item.trim().length <= 100
+        ).map((item) => item.trim())
+        : []
+    )].slice(0, 10),
+    notificationPreferences: notificationPreferences(data),
+  };
+}
+
+function notificationPreferences(
+  data: Record<string, unknown>,
+) {
+  const saved = isRecord(data.notificationPreferences)
+    ? data.notificationPreferences
+    : {};
+
+  return {
+    orderUpdates: saved.orderUpdates === false
+      ? false
+      : defaultNotificationPreferences.orderUpdates,
+    promotions: saved.promotions === false
+      ? false
+      : defaultNotificationPreferences.promotions,
+    storeUpdates: saved.storeUpdates === false
+      ? false
+      : defaultNotificationPreferences.storeUpdates,
+    productUpdates: saved.productUpdates === false
+      ? false
+      : defaultNotificationPreferences.productUpdates,
+    marketing: saved.marketing === false
+      ? false
+      : defaultNotificationPreferences.marketing,
   };
 }
 
@@ -232,6 +273,72 @@ export const deleteCustomerDefaultAddress = onCall(
     ]);
     return { success: true };
   }
+);
+
+export const saveCustomerRecentSearch = onCall(
+  { region: "us-central1" },
+  async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Sign in to save a search.");
+    const { reference, data } = await requireCustomer(request.auth.uid);
+    const query = text(isRecord(request.data) ? request.data.query : "");
+
+    if (!query || query.length > 100) {
+      throw new HttpsError("invalid-argument", "Enter a valid search.");
+    }
+
+    const current = profileResponse(data).recentSearches;
+    const recentSearches = [
+      query,
+      ...current.filter((item) => item.toLowerCase() !== query.toLowerCase()),
+    ].slice(0, 10);
+
+    await reference.update({
+      recentSearches,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    return { recentSearches };
+  },
+);
+
+export const updateCustomerNotificationPreferences = onCall(
+  { region: "us-central1" },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError(
+        "unauthenticated",
+        "Sign in to update notification settings.",
+      );
+    }
+
+    const { reference, data } = await requireCustomer(request.auth.uid);
+    const input = isRecord(request.data) ? request.data : {};
+    const current = notificationPreferences(data);
+    const preferences = {
+      orderUpdates: typeof input.orderUpdates === "boolean"
+        ? input.orderUpdates
+        : current.orderUpdates,
+      promotions: typeof input.promotions === "boolean"
+        ? input.promotions
+        : current.promotions,
+      storeUpdates: typeof input.storeUpdates === "boolean"
+        ? input.storeUpdates
+        : current.storeUpdates,
+      productUpdates: typeof input.productUpdates === "boolean"
+        ? input.productUpdates
+        : current.productUpdates,
+      marketing: typeof input.marketing === "boolean"
+        ? input.marketing
+        : current.marketing,
+    };
+
+    await reference.update({
+      notificationPreferences: preferences,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    return { notificationPreferences: preferences };
+  },
 );
 
 /*

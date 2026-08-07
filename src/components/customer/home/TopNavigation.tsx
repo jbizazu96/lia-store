@@ -2,35 +2,61 @@
 
 import { useNotifications } from "@/context/NotificationContext";
 import Link from "next/link";
-import {Bell, ShoppingCart} from "lucide-react";
+import {Bell, ChevronDown, ShoppingCart} from "lucide-react";
 import Image from "next/image";
 import {useCart} from "@/context/CartContext";
 import { useRouter } from "next/navigation";
 
-export function TopNavigation() {
+interface TopNavigationProps {
+  deliveryAddress?: string;
+  onDeliveryAddressClick?: () => void;
+}
+
+export function TopNavigation({
+  deliveryAddress,
+  onDeliveryAddressClick,
+}: TopNavigationProps) {
   const {itemCount} = useCart();
   const { unreadCount } = useNotifications();
   const router = useRouter();
 
   return (
-    <header className="sticky top-0 z-40 border-b border-gray-200/70 bg-gray-50/95 backdrop-blur-xl">
+    <header className="sticky top-0 z-40 bg-gray-50/95 backdrop-blur-xl">
       <div className="px-4 py-3">
         <div className="flex items-center justify-between">
-          {/* Logo */}
-          <Link href="/home" className="flex items-center gap-2">
+          <div className="flex min-w-0 flex-1 items-center gap-2">
+            {/* Logo */}
+            <Link href="/home" className="shrink-0">
             <div className="relative w-8 h-8">
               <Image
                 src="/icon/icon-192.png"
                 alt=" LIA Logo"
                 fill
+                sizes="32px"
                 className="w-12 h-12 object-contain"
               />
             </div>
-            <span className="text-lg font-bold text-green-800"></span>
-          </Link>
+            </Link>
+
+            <button
+              type="button"
+              onClick={onDeliveryAddressClick}
+              className="flex min-w-0 items-center gap-1 rounded-lg py-1 text-left transition hover:text-orange-600"
+              aria-label={
+                deliveryAddress
+                  ? "Change delivery address"
+                  : "Add a delivery address"
+              }
+            >
+              <span className="truncate text-sm font-bold text-gray-800">
+                {deliveryAddress || "Add delivery address"}
+              </span>
+              <ChevronDown className="h-4 w-4 shrink-0 text-gray-500" />
+            </button>
+          </div>
 
           {/* Navigation and Support live in the floating bottom bar. */}
-          <div className="flex items-center gap-1">
+          <div className="ml-2 flex shrink-0 items-center gap-1">
             {/* Notifications */}
             <button
               onClick={() => router.push("/notifications")}

@@ -84,6 +84,7 @@ async function notifyCustomer(
       title,
       body,
       "/orders/" + orderId,
+      "orderUpdates",
     );
   } catch (error) {
     console.error("Customer refund push notification failed.", {

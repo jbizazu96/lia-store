@@ -19,9 +19,15 @@ import {
 
 interface AddressesModalProps {
   onClose: () => void;
+  onAddressChange?: (
+    address: CustomerProfileAddress | null
+  ) => void;
 }
 
-export function AddressesModal({onClose}: AddressesModalProps) {
+export function AddressesModal({
+  onClose,
+  onAddressChange,
+}: AddressesModalProps) {
   const {showSuccess} = useSuccessToast();
   const [address, setAddress] = useState<CustomerProfileAddress | null>(null);
   const [loading, setLoading] = useState(true);
@@ -122,6 +128,7 @@ export function AddressesModal({onClose}: AddressesModalProps) {
       );
 
       setAddress(addressData);
+      onAddressChange?.(addressData);
       setSuccess(address ? "Address updated successfully!" : "Address added successfully!");
       showSuccess(address ? "Delivery address updated." : "Delivery address added.");
       setIsEditing(false);
@@ -153,6 +160,7 @@ export function AddressesModal({onClose}: AddressesModalProps) {
       await customerProfileClientService.deleteDefaultAddress();
       
       setAddress(null);
+      onAddressChange?.(null);
       setSuccess("Address deleted successfully!");
       showSuccess("Delivery address deleted.");
       

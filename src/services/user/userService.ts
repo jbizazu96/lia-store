@@ -3,20 +3,18 @@
 | User Service
 |--------------------------------------------------------------------------
 |
-| Centralizes Firestore reads related to users.
+| Centralizes authenticated customer-profile reads.
 |
-| UI pages should not read the "users" collection directly.
+| UI pages use callable Functions; they never read the "users" collection.
 |
 */
 
 import {
-  collection,
-  doc,
-  getDocs,
-  getDoc,
-} from "firebase/firestore";
-
-import { db } from "@/lib/firebase";
+  auth,
+} from "@/lib/firebase";
+import {
+  customerProfileClientService,
+} from "./customerProfileClientService";
 import {
   loadCached,
 } from "@/services/cache/clientDataCache";
@@ -84,26 +82,16 @@ function hasSavedDeliveryAddress(
 
 export const userService = {
   /**
-   * Checks the canonical user document and addresses subcollection used by
-   * profile, checkout, and customer login.
+   * Checks the server-owned default address used by profile, checkout, and
+   * customer login.
    */
   async hasDefaultDeliveryAddress(userId: string): Promise<boolean> {
-    const userSnapshot = await getDoc(doc(db, "users", userId));
-
-    if (
-      userSnapshot.exists() &&
-      hasSavedDeliveryAddress(userSnapshot.data().defaultAddress)
-    ) {
-      return true;
+    if (auth.currentUser?.uid !== userId) {
+      throw new Error("You are not authorized to view this address.");
     }
 
-    const addressSnapshots = await getDocs(
-      collection(db, "users", userId, "addresses")
-    );
-
-    return addressSnapshots.docs.some((address) =>
-      hasSavedDeliveryAddress(address.data())
-    );
+    const profile = await customerProfileClientService.getProfile();
+    return hasSavedDeliveryAddress(profile.defaultAddress);
   },
 
   /*
@@ -127,73 +115,15 @@ export const userService = {
     return loadCached(
       `customer-default-location:${userId}`,
       async () => {
-        const userReference = doc(
-          db,
-          "users",
-          userId
-        );
+        if (auth.currentUser?.uid !== userId) {
+          throw new Error("You are not authorized to view this address.");
+        }
 
-        const userSnapshot =
-          await getDoc(userReference);
-
-        const userLocation = userSnapshot.exists()
-          ? toUserLocation(userSnapshot.data().defaultAddress)
-          : null;
-
-        if (userLocation) return userLocation;
-
-        // Older customer accounts may store their default address only in this
-        // subcollection. Checkout already supports it; customer home must too.
-        const addressSnapshots = await getDocs(
-          collection(db, "users", userId, "addresses")
-        );
-
-        const defaultAddress = addressSnapshots.docs.find(
-          (address) => address.data().isDefault === true
-        ) ?? addressSnapshots.docs[0];
-
-        return toUserLocation(defaultAddress?.data());
+        const profile = await customerProfileClientService.getProfile();
+        return toUserLocation(profile.defaultAddress);
       },
       { ttlMs: 30_000 },
     );
   },
 
-  
-  /*
-  |--------------------------------------------------------------------------
-  | Get Store ID
-  |--------------------------------------------------------------------------
-  |
-  | Returns the store ID linked to a user account.
-  |
-  */
-
-  async getStoreId(
-    userId: string
-  ): Promise<string | null> {
-    const userReference = doc(
-      db,
-      "users",
-      userId
-    );
-
-    const userSnapshot =
-      await getDoc(userReference);
-
-    if (!userSnapshot.exists()) {
-      return null;
-    }
-
-    const storeId =
-      userSnapshot.data().storeId;
-
-    if (
-      typeof storeId !== "string" ||
-      !storeId.trim()
-    ) {
-      return null;
-    }
-
-    return storeId;
-  },
 };

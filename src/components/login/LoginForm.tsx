@@ -44,6 +44,7 @@ export function LoginForm({
             src="/icon/icon-512.png"
             alt="LIA - Local International African Marketplace"
             fill
+            sizes="80px"
             className="object-contain"
             priority
           />

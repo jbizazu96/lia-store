@@ -86,3 +86,15 @@ export async function clearCartFromFirestore(
 
   await call("clearCustomerCart");
 }
+
+export async function repeatCompletedOrderInCart(
+  userId: string,
+  orderId: string,
+): Promise<{
+  items: CartItem[];
+  skippedProductNames: string[];
+}> {
+  requireCurrentCustomer(userId);
+
+  return call("repeatCustomerOrder", {orderId});
+}

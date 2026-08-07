@@ -109,6 +109,7 @@ async function createStoreNotification(input: {
       title,
       body,
       "/store/earnings",
+      "paymentUpdates",
     );
   } catch (error) {
     /* The in-app notification remains available if a push device fails. */
