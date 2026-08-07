@@ -82,18 +82,6 @@ export default function StoreSearchPage({
   const [searchQuery, setSearchQuery] = useState("");
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    /* See the global search header: App Router transitions can drop the
-     * browser's native focus handoff on mobile. */
-    const frame = window.requestAnimationFrame(() => {
-      searchInputRef.current?.focus({
-        preventScroll: true,
-      });
-    });
-
-    return () => window.cancelAnimationFrame(frame);
-  }, []);
-
   const {
     store,
     products,
@@ -108,6 +96,23 @@ export default function StoreSearchPage({
     storeId,
     skipDistanceWarning: true,
   });
+
+  useEffect(() => {
+    /* See the global search header: App Router transitions can drop the
+     * browser's native focus handoff on mobile. This page first renders its
+     * store loader, so wait until the actual search input is mounted. */
+    if (loading) {
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      searchInputRef.current?.focus({
+        preventScroll: true,
+      });
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [loading]);
 
   const {
     addItem,
