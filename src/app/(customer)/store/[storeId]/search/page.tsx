@@ -13,7 +13,9 @@
 
 import {
   use,
+  useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import {
@@ -78,6 +80,19 @@ export default function StoreSearchPage({
   } = use(params);
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    /* See the global search header: App Router transitions can drop the
+     * browser's native focus handoff on mobile. */
+    const frame = window.requestAnimationFrame(() => {
+      searchInputRef.current?.focus({
+        preventScroll: true,
+      });
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
 
   const {
     store,
@@ -219,6 +234,7 @@ export default function StoreSearchPage({
           <div className="relative min-w-0 flex-1">
             <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-500" />
             <input
+              ref={searchInputRef}
               autoFocus
               type="search"
               value={searchQuery}

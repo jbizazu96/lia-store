@@ -1,5 +1,9 @@
 "use client";
 
+import {
+  useEffect,
+  useRef,
+} from "react";
 import {ArrowLeft, Search, X} from "lucide-react";
 
 interface SearchHeaderProps {
@@ -17,6 +21,23 @@ export function SearchHeader({
   onBack,
   onSubmit,
 }: SearchHeaderProps) {
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    /*
+     * autoFocus is occasionally lost during an App Router transition on
+     * mobile. Explicitly restoring focus keeps the keyboard open after the
+     * customer taps the search field on Home.
+     */
+    const frame = window.requestAnimationFrame(() => {
+      inputRef.current?.focus({
+        preventScroll: true,
+      });
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
+
   return (
     <div className="sticky top-0 z-20 bg-gray-50/95 px-4 py-3 backdrop-blur">
       <div className="mx-auto flex max-w-lg items-center gap-2">
@@ -31,6 +52,7 @@ export function SearchHeader({
         <div className="relative flex-1 rounded-full bg-white shadow-lg ring-1 ring-gray-200">
           <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-500" />
           <input
+            ref={inputRef}
             type="text"
             value={value}
             onChange={(e) => onChange(e.target.value)}

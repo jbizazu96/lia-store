@@ -41,9 +41,12 @@ export function BottomBar({
             <input
               type="text"
               value={searchQuery}
-              onChange={(e) => onSearchChange(e.target.value)}
-              onClick={onSearchClick}
-              readOnly={onSearchClick !== undefined}
+              onChange={(e) => {
+                if (!onSearchClick) {
+                  onSearchChange(e.target.value);
+                }
+              }}
+              onFocus={onSearchClick}
               placeholder="Search this store..."
               className="w-full rounded-full border border-gray-200 bg-white/90 py-3 pl-9 pr-4 text-base placeholder-gray-400 shadow-lg backdrop-blur-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-orange-400 sm:text-sm"
             />
