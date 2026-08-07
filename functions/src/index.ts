@@ -165,6 +165,10 @@ export {
   saveCustomerCart,
 } from "./callable/customerCart";
 export {
+  getCustomerStoreReview,
+  submitCustomerStoreReview,
+} from "./callable/customerStoreReviews";
+export {
   getCustomerStoreCatalog,
   getCustomerStorePublicProfile,
 } from "./callable/customerStoreCatalog";

@@ -143,18 +143,18 @@ export class OrderEvents {
     await notificationStore.createNotification({
       uid: customerUid,
       title: "Order Delivered",
-      body: "Your order has been delivered.",
+      body: "Your order has been delivered. Tap to share your verified store review.",
       type: "delivery",
       icon: "check-circle",
       color: "green",
       orderId,
-      navigationPath: "/orders",
+      navigationPath: `/orders/${orderId}`,
     });
 
     await notificationService.sendToUser(
       customerUid,
       "Order Delivered",
-      "Your order has been delivered."
+      "Your order has been delivered. Share your verified store review in LIA."
     );
 
   }

@@ -40,7 +40,7 @@ export const storeMapper = {
       deliveryFeeDisplay: options.deliveryFeeDisplay ?? "$0.00",
       estimatedPrepTime: options.estimatedPrepTime ?? 15,
       estimatedDeliveryTime: options.estimatedDeliveryTime ?? "15 min",
-      reviewCount: options.reviewCount ?? 0,
+      reviewCount: options.reviewCount ?? store.reviewCount ?? 0,
 
       categories: options.categories ?? [],
 

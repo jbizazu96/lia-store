@@ -229,7 +229,7 @@ export const createCustomerOrderSupportRequest =
             orderId,
             orderNumber:
               text(orderData.orderNumber) ||
-              orderId.slice(0, 8).toUpperCase(),
+              "Unavailable",
             customerId,
             customerName:
               text(customer.name) || "Customer",

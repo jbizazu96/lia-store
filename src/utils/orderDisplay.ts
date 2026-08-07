@@ -26,6 +26,26 @@ import {
 
 /*
 |--------------------------------------------------------------------------
+| Human-readable order number
+|--------------------------------------------------------------------------
+|
+| Firestore document IDs are internal implementation details. They must
+| never become a customer, store, driver, or administrator-facing order
+| label. Orders created by the current checkout flow always carry an
+| orderNumber (for example, LIA-...); the explicit fallback keeps a legacy
+| record from exposing its database ID.
+|
+*/
+export function displayOrderNumber(
+  value: unknown
+): string {
+  return typeof value === "string" && value.trim()
+    ? value.trim()
+    : "Unavailable";
+}
+
+/*
+|--------------------------------------------------------------------------
 | Format Date
 |--------------------------------------------------------------------------
 */

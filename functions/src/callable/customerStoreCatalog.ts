@@ -99,6 +99,7 @@ function publicStore(
     bannerUrl: text(data.bannerUrl),
     category: text(data.category),
     rating: number(data.rating),
+    reviewCount: Math.max(0, Math.floor(number(data.reviewCount))),
     minimumOrder: number(data.minimumOrder, 30),
     isApproved: data.isApproved === true,
     isActive: data.isActive === true,

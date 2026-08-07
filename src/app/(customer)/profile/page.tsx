@@ -8,7 +8,7 @@ import {useRouter} from "next/navigation";
 import {motion, AnimatePresence} from "framer-motion";
 import {onAuthStateChanged} from "firebase/auth";
 import {auth} from "@/lib/firebase";
-import {ArrowLeft, User, MapPin, Globe, FileText, Shield, LogOut, Trash2} from "lucide-react";
+import {User, MapPin, Globe, FileText, Shield, LogOut, Trash2} from "lucide-react";
 import {
   customerProfileClientService,
   type CustomerProfile,
@@ -153,16 +153,9 @@ export default function ProfilePage() {
 
   return (
     <main className="min-h-screen bg-gray-50 pb-28">
-      {/* Header with Back Button */}
+      {/* Header */}
       <div className="sticky top-0 z-20 border-b border-gray-200/70 bg-gray-50/95 backdrop-blur-xl">
-        <div className="flex items-center gap-3 px-4 py-4 max-w-lg mx-auto">
-          <button
-            onClick={() => router.back()}
-            className="p-2 hover:bg-gray-100 rounded-full transition"
-            aria-label="Go back"
-          >
-            <ArrowLeft className="w-5 h-5 text-gray-700" />
-          </button>
+        <div className="flex items-center px-4 py-4 max-w-lg mx-auto">
           <h1 className="text-xl font-bold text-gray-800">Profile</h1>
         </div>
       </div>

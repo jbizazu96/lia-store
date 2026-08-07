@@ -38,6 +38,7 @@ export interface Store {
   bannerUrl: string;
   category?: string;
   rating?: number;
+  reviewCount?: number;
   distance?: number;
   deliveryFee?: number;
   minimumOrder: number;

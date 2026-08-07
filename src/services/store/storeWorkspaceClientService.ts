@@ -68,6 +68,7 @@ export interface StoreWorkspaceUser {
 export interface StoreWorkspacePayout {
   id: string;
   orderId: string;
+  orderNumber: string | null;
   amount: number;
   merchandiseSubtotal: number;
   salesTax: number;

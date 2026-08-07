@@ -118,7 +118,7 @@ export const orderSupportRequestCreated =
       const requestId = event.params.requestId;
       const orderId = text(support.orderId);
       const orderNumber = text(support.orderNumber) ||
-        orderId.slice(0, 8).toUpperCase();
+        "Unavailable";
       const topic = label(
         text(support.reason)
       );

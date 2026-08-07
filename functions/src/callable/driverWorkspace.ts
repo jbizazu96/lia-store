@@ -104,12 +104,30 @@ async function getPayments(uid: string) {
     .orderBy("updatedAt", "desc")
     .limit(100)
     .get();
+  const orderIds = Array.from(new Set(
+    snapshot.docs
+      .map((document) => valueString(document.data().orderId))
+      .filter(Boolean),
+  ));
+  const orders = orderIds.length
+    ? await db.getAll(
+      ...orderIds.map((orderId) => db.collection("orders").doc(orderId)),
+    )
+    : [];
+  const orderNumbers = new Map(
+    orders.map((order) => [
+      order.id,
+      valueString(order.data()?.orderNumber) || null,
+    ]),
+  );
+
   return snapshot.docs.map((document) => {
     const data = document.data();
     const rawStatus = valueString(data.status);
+    const orderId = valueString(data.orderId);
     return {
       id: document.id,
-      deliveryId: valueString(data.orderId) || document.id,
+      orderNumber: orderNumbers.get(orderId) ?? null,
       /* Transfers store cents; the UI consistently displays dollars. */
       amount: amount(data.amount) / 100,
       status: rawStatus === "completed"

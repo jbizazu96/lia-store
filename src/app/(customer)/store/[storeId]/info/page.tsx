@@ -193,7 +193,7 @@ const phoneUrl =
             )}
             <div>
               <h2 className="text-xl font-bold text-gray-800">{store.name}</h2>
-              {(store.rating ?? 0) > 0 && (
+              {(store.reviewCount ?? 0) > 0 && (
                 <div className="flex items-center gap-1 mt-0.5">
                   <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
                   <span className="text-sm font-medium text-gray-700">{store.rating ?? 0}</span>

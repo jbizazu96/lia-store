@@ -55,10 +55,10 @@ export const getAdminFinanceOverview = onCall({region: "us-central1"}, async (re
   const orderSnapshots = orderIds.length
     ? await db.getAll(...orderIds.map((id) => db.collection("orders").doc(id)))
     : [];
-  const orderNumbers = new Map(orderSnapshots.map((snapshot) => [snapshot.id, text(snapshot.data()?.orderNumber) || snapshot.id.slice(0, 8).toUpperCase()]));
+  const orderNumbers = new Map(orderSnapshots.map((snapshot) => [snapshot.id, text(snapshot.data()?.orderNumber) || null]));
   const addOrderNumber = <T extends {orderId: string}>(item: T) => ({
     ...item,
-    orderNumber: item.orderId ? orderNumbers.get(item.orderId) ?? item.orderId.slice(0, 8).toUpperCase() : null,
+    orderNumber: item.orderId ? orderNumbers.get(item.orderId) ?? null : null,
   });
   return {
     metrics: {

@@ -15,7 +15,6 @@ import {
   Package,
   Clock,
   Truck,
-  ArrowLeft,
   ShoppingBag,
   Calendar,
   MapPin,
@@ -164,16 +163,9 @@ export default function OrdersPage() {
 
   return (
     <main className="min-h-screen bg-gray-50 pb-28">
-      {/* Header with Back Button and Order Count */}
+      {/* Header and Order Count */}
       <div className="sticky top-0 z-20 border-b border-gray-200/70 bg-gray-50/95 backdrop-blur-xl">
-        <div className="flex items-center gap-3 px-4 py-4 max-w-2xl mx-auto">
-          <button
-            onClick={() => router.back()}
-            className="p-2 hover:bg-gray-100 rounded-full transition"
-            aria-label="Go back"
-          >
-            <ArrowLeft className="w-5 h-5 text-gray-700" />
-          </button>
+        <div className="flex items-center px-4 py-4 max-w-2xl mx-auto">
           <h1 className="text-xl font-bold text-gray-800">My Orders</h1>
           <span className="text-xs text-gray-400 ml-auto">
             {orders.length} order{orders.length !== 1 ? 's' : ''}
@@ -260,7 +252,7 @@ export default function OrdersPage() {
                   transition={{delay: index * 0.05}}
                   role="link"
                   tabIndex={0}
-                  aria-label={`View details for order ${order.orderNumber || order.id}`}
+                  aria-label={`View details for order ${order.orderNumber || "Unavailable"}`}
                   onClick={() => router.push(`/orders/${order.id}`)}
                   onKeyDown={(event) => {
                     if (event.key === "Enter" || event.key === " ") {

@@ -89,14 +89,16 @@ export function StoreInfo({
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-xl font-bold text-gray-800">{name}</h1>
-          <div className="flex items-center gap-2 mt-1">
-            <div className="flex items-center gap-0.5">
-              <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-              <span className="text-sm font-medium text-gray-700">{rating}</span>
+          {reviewCount > 0 && (
+            <div className="flex items-center gap-2 mt-1">
+              <div className="flex items-center gap-0.5">
+                <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
+                <span className="text-sm font-medium text-gray-700">{rating.toFixed(1)}</span>
+              </div>
+              <span className="text-xs text-gray-400">•</span>
+              <span className="text-sm text-gray-500">{reviewCount} {reviewCount === 1 ? "review" : "reviews"}</span>
             </div>
-            <span className="text-xs text-gray-400">•</span>
-            <span className="text-sm text-gray-500">{reviewCount} reviews</span>
-          </div>
+          )}
         </div>
         <button
             type="button"

@@ -12,12 +12,12 @@ import {ArrowLeft, Printer, Calendar} from "lucide-react";
 import {StatusBadge} from "@/components/store/orders/StatusBadge";
 
 interface OrderDetailHeaderProps {
-  orderId: string;
+  orderNumber: string;
   status: string;
   createdAt: string;
 }
 
-export function OrderDetailHeader({orderId, status, createdAt}: OrderDetailHeaderProps) {
+export function OrderDetailHeader({orderNumber, status, createdAt}: OrderDetailHeaderProps) {
 
   return (
     <div className="flex items-center gap-4">
@@ -29,7 +29,7 @@ export function OrderDetailHeader({orderId, status, createdAt}: OrderDetailHeade
       </Link>
       <div>
         <h1 className="text-2xl font-bold text-gray-800">
-          Order #{orderId.slice(0, 8).toUpperCase()}
+          Order {orderNumber || "Unavailable"}
         </h1>
         <div className="flex items-center gap-3 mt-1">
           <StatusBadge status={status} size="sm" />

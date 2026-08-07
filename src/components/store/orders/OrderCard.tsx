@@ -15,6 +15,7 @@
 import {
   formatOrderCurrency,
   formatOrderDate,
+  displayOrderNumber,
 } from "@/utils/orderDisplay";
 import type { Order } from "@/types/order";
 import {motion} from "framer-motion";
@@ -37,7 +38,7 @@ export function OrderCard({order, index}: OrderCardProps) {
     <Link
       href={`/store/store-orders/${order.id}`}
       className="block rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2"
-      aria-label={`View details for order ${order.orderNumber || order.id}`}
+      aria-label={`View details for order ${displayOrderNumber(order.orderNumber)}`}
     >
       <motion.div
         initial={{opacity: 0, y: 20}}
@@ -50,7 +51,7 @@ export function OrderCard({order, index}: OrderCardProps) {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-3 mb-2 flex-wrap">
             <span className="font-mono text-sm font-bold text-gray-600">
-              #{order.id.slice(0, 8).toUpperCase()}
+              {displayOrderNumber(order.orderNumber)}
             </span>
             <StatusBadge status={order.status} size="sm" />
             <OrderInvestigationNotice

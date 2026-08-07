@@ -57,7 +57,7 @@ function listItem(document: FirebaseFirestore.QueryDocumentSnapshot) {
   const data = document.data(); const store = record(data.store); const customer = record(data.customer);
   const delivery = record(data.delivery); const shipday = record(data.shipday); const payment = record(data.payment);
   return {
-    id: document.id, orderNumber: text(data.orderNumber) || document.id.slice(0, 8).toUpperCase(),
+    id: document.id, orderNumber: text(data.orderNumber) || "Unavailable",
     status: text(data.status) || "pending", createdAt: date(data.createdAt),
     storeName: text(store.name) || "Store", customerName: text(customer.name) || "Customer",
     totalAmount: pricing(data).totalAmount, currency: pricing(data).currency,

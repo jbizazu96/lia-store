@@ -7,6 +7,9 @@ import {
 import type {
   StoreWorkspacePayout,
 } from "@/services/store/storeWorkspaceClientService";
+import {
+  displayOrderNumber,
+} from "@/utils/orderDisplay";
 
 interface PayoutDetailModalProps {
   payout: StoreWorkspacePayout;
@@ -70,7 +73,7 @@ export function PayoutDetailModal({
         </div>
 
         <div className="mt-6 space-y-2 rounded-2xl border border-slate-100 p-4 text-sm">
-          <div className="flex justify-between gap-4"><span className="text-slate-500">Order number</span><span className="max-w-[60%] truncate font-medium">{payout.orderId ? `Order #${payout.orderId.slice(0, 8).toUpperCase()}` : "Not available"}</span></div>
+          <div className="flex justify-between gap-4"><span className="text-slate-500">Order number</span><span className="max-w-[60%] truncate font-medium">Order {displayOrderNumber(payout.orderNumber)}</span></div>
           <div className="flex justify-between gap-4"><span className="text-slate-500">Earning created</span><span className="text-right font-medium">{formatDate(payout.createdAt)}</span></div>
           {payout.status === "completed" && <div className="flex justify-between gap-4"><span className="text-slate-500">Paid through Stripe</span><span className="text-right font-medium">{formatDate(payout.completedAt)}</span></div>}
           <div className="flex justify-between gap-4"><span className="text-slate-500">Payout reference</span><span className="max-w-[60%] truncate font-medium">{payout.id}</span></div>

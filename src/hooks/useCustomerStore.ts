@@ -96,6 +96,9 @@ interface UseCustomerStoreResult {
 
   loading: boolean;
 
+  /* The store ID whose initial request has reached a terminal result. */
+  resolvedStoreId: string | null;
+
   error: string | null;
 
   showDistanceWarning: boolean;
@@ -205,6 +208,9 @@ export function useCustomerStore({
   const [loading, setLoading] =
     useState(true);
 
+  const [resolvedStoreId, setResolvedStoreId] =
+    useState<string | null>(null);
+
   const [error, setError] =
     useState<string | null>(null);
 
@@ -272,6 +278,7 @@ export function useCustomerStore({
           if (isMounted) {
             setStore(null);
             setError("Store not found");
+            setResolvedStoreId(storeId);
           }
 
           return;
@@ -281,6 +288,7 @@ export function useCustomerStore({
           if (isMounted) {
             setStore(null);
             setError("This store is not currently available.");
+            setResolvedStoreId(storeId);
           }
 
           return;
@@ -438,8 +446,6 @@ export function useCustomerStore({
                   orderDeliveryPolicy,
                 ),
 
-              reviewCount: 0,
-
               categories:
                 storeCategories,
 
@@ -465,6 +471,7 @@ export function useCustomerStore({
         setStore(customerStore);
         setProducts(customerProducts);
         setCategories(storeCategories);
+        setResolvedStoreId(storeId);
 
         /*
          * The store page uses the public projection listener so marketplace
@@ -580,6 +587,7 @@ export function useCustomerStore({
           setError(
             "Unable to load this store"
           );
+          setResolvedStoreId(storeId);
         }
       } finally {
         if (isMounted) {
@@ -634,6 +642,7 @@ export function useCustomerStore({
     categories,
     products,
     loading,
+    resolvedStoreId,
     error,
     showDistanceWarning,
     distanceValue,

@@ -72,7 +72,7 @@ export interface DriverProfile {
 
 export interface DriverPayment {
   id: string;
-  deliveryId: string;
+  orderNumber: string | null;
   amount: number;
   status: "pending" | "paid" | "failed";
   paidAt: string | null;

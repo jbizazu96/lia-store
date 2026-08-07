@@ -11,6 +11,7 @@
 import {
   formatOrderCurrency,
   formatOrderDate,
+  displayOrderNumber,
   getCurrentOrderStep,
   getStatusTimestamp,
 } from "@/utils/orderDisplay";
@@ -170,7 +171,7 @@ export default function OrderDetailsPage({params}: OrderDetailsPageProps) {
         </Link>
         <div>
           <h1 className="text-2xl font-bold text-gray-800">
-            Order #{order.id.slice(0, 8).toUpperCase()}
+            Order {displayOrderNumber(order.orderNumber)}
           </h1>
           <div className="flex items-center gap-3 mt-1 flex-wrap">
             <span className={`px-3 py-1 rounded-full text-xs font-medium flex items-center gap-1.5 ${statusConfig.color}`}>

@@ -216,7 +216,6 @@ export default function CustomerHomePage() {
               deliveryFeeDisplay: getDeliveryFeeDisplay(distance, marketplacePolicy),
               estimatedPrepTime: getEstimatedTimeNumber(distance, orderDeliveryPolicy),
               estimatedDeliveryTime: getEstimatedTime(distance, orderDeliveryPolicy),
-              reviewCount: 0,
               categories: [],
               promotions: [],
               isFavorite: false,

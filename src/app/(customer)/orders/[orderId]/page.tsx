@@ -10,6 +10,7 @@ import {
   formatOrderPrice,
   getCurrentOrderStep,
   getStatusTimestamp,
+  displayOrderNumber,
 } from "@/utils/orderDisplay";
 import {
   ORDER_STATUS_CONFIG,
@@ -32,6 +33,7 @@ import {
 } from "lucide-react";
 import { BrandedLoader } from "@/components/ui/BrandedLoader";
 import { OrderHelpSection } from "@/components/customer/orders/OrderHelpSection";
+import { StoreReviewPrompt } from "@/components/customer/orders/StoreReviewPrompt";
 
 
 interface OrderPageProps {
@@ -174,7 +176,7 @@ export default function OrderDetailPage({params}: OrderPageProps) {
           </button>
           <h1 className="text-xl font-bold text-gray-800">Order Details</h1>
           <span className="text-xs text-gray-400 ml-auto">
-            #{order.id.slice(0, 8).toUpperCase()}
+            {displayOrderNumber(order.orderNumber)}
           </span>
         </div>
       </div>
@@ -215,6 +217,13 @@ export default function OrderDetailPage({params}: OrderPageProps) {
           <OrderHelpSection
             orderId={orderId}
             canRequestRefund={order.status === "completed"}
+          />
+        )}
+
+        {order.status === "completed" && (
+          <StoreReviewPrompt
+            orderId={order.id}
+            storeName={order.store.name || "this store"}
           />
         )}
 

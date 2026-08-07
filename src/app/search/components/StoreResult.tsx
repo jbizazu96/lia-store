@@ -161,11 +161,15 @@ export function StoreResult({
           </div>
 
           <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-gray-600">
-            <span className="inline-flex items-center gap-1 font-semibold text-gray-800">
-              <Star className="h-3.5 w-3.5 fill-orange-400 text-orange-400" />
-              {group.storeRating.toFixed(1)}
-            </span>
-            <span>•</span>
+            {group.storeRating > 0 && (
+              <>
+                <span className="inline-flex items-center gap-1 font-semibold text-gray-800">
+                  <Star className="h-3.5 w-3.5 fill-orange-400 text-orange-400" />
+                  {group.storeRating.toFixed(1)}
+                </span>
+                <span>•</span>
+              </>
+            )}
             <span className="inline-flex items-center gap-1">
               <MapPin className="h-3.5 w-3.5" />
               {formatDistance(group.storeDistance)}

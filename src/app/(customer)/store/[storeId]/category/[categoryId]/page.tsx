@@ -50,6 +50,7 @@ export default function StoreCategoryPage({
     categories,
     products,
     loading,
+    resolvedStoreId,
     error,
     showDistanceWarning,
     distanceValue,
@@ -188,7 +189,7 @@ export default function StoreCategoryPage({
     updateQuantity(productId, Math.max(0, quantity));
   };
 
-  if (loading) {
+  if (loading || resolvedStoreId !== storeId) {
     return <BrandedLoader message="Loading category" />;
   }
 
@@ -277,8 +278,9 @@ export default function StoreCategoryPage({
       )}
 
       <BottomBar
-        searchQuery={searchQuery}
+        searchQuery=""
         onSearchChange={setSearchQuery}
+        onSearchClick={() => router.push(`/store/${storeId}/search`)}
         itemCount={storeItemCount}
         totalPrice={storeTotalPrice}
         storeId={store.id}

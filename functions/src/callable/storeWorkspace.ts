@@ -155,16 +155,20 @@ async function buildStorePayoutDetails(
   const orders = orderReferences.length > 0
     ? await db.getAll(...orderReferences)
     : [];
-  const pricingByOrderId = new Map(
+  const orderDetailsById = new Map(
     orders
       .filter((order) => order.exists && order.data()?.store?.id === storeId)
-      .map((order) => [order.id, order.data()?.pricing]),
+      .map((order) => [order.id, {
+        pricing: order.data()?.pricing,
+        orderNumber: text(order.data()?.orderNumber) || null,
+      }]),
   );
 
   return transfers.map((transfer) => {
     const data = transfer.data;
     const orderId = text(data.orderId);
-    const pricing = pricingByOrderId.get(orderId);
+    const order = orderDetailsById.get(orderId);
+    const pricing = order?.pricing;
     const merchandiseSubtotal = nonNegativeCentAmount(pricing?.subtotalAmount);
     const salesTax = nonNegativeCentAmount(pricing?.taxAmount);
     const grossStoreOrderAmount = merchandiseSubtotal + salesTax;
@@ -173,6 +177,7 @@ async function buildStorePayoutDetails(
     return {
       id: transfer.id,
       orderId,
+      orderNumber: order?.orderNumber ?? null,
       amount: transferAmount / 100,
       merchandiseSubtotal: merchandiseSubtotal / 100,
       salesTax: salesTax / 100,

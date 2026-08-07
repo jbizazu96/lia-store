@@ -123,6 +123,7 @@ export default function StorePage({
     store,
     categories,
     loading,
+    resolvedStoreId,
     error,
     showDistanceWarning,
     distanceValue,
@@ -297,7 +298,7 @@ export default function StorePage({
   |--------------------------------------------------------------------------
   */
 
-  if (loading) {
+  if (loading || resolvedStoreId !== storeId) {
     return (
       <div className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-white">
         <div className="pointer-events-none absolute right-0 top-0 h-[500px] w-[500px] rounded-full bg-yellow-400/5 blur-[120px]" />

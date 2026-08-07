@@ -41,6 +41,7 @@ export function StoreCard({
   const estimatedTime = store.estimatedDeliveryTime;
   const displayName =
     formatStoreName(store.name);
+  const hasReviews = (store.reviewCount ?? 0) > 0;
 
   const storeStatus = getStoreStatus(
   store.schedule ?? [],
@@ -146,12 +147,14 @@ export function StoreCard({
             </h4>
           </div>
           
-          <div className="flex items-center gap-1">
-            <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-            <span className="text-sm font-medium text-gray-700">
-              {store.rating ?? 0}
-            </span>
-          </div>
+          {hasReviews && (
+            <div className="flex items-center gap-1">
+              <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
+              <span className="text-sm font-medium text-gray-700">
+                {(store.rating ?? 0).toFixed(1)}
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Distance, Delivery Fee & Estimated Time */}

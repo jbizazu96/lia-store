@@ -38,18 +38,23 @@ export function BottomBar({
         {showSearch && (
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => {
-                if (!onSearchClick) {
-                  onSearchChange(e.target.value);
-                }
-              }}
-              onFocus={onSearchClick}
-              placeholder="Search this store..."
-              className="w-full rounded-full border border-gray-200 bg-white/90 py-3 pl-9 pr-4 text-base placeholder-gray-400 shadow-lg backdrop-blur-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-orange-400 sm:text-sm"
-            />
+            {onSearchClick ? (
+              <button
+                type="button"
+                onClick={onSearchClick}
+                className="w-full rounded-full border border-gray-200 bg-white/90 py-3 pl-9 pr-4 text-left text-base text-gray-400 shadow-lg backdrop-blur-sm transition hover:border-orange-300 focus:outline-none focus:ring-2 focus:ring-orange-400 sm:text-sm"
+              >
+                Search this store...
+              </button>
+            ) : (
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => onSearchChange(e.target.value)}
+                placeholder="Search this store..."
+                className="w-full rounded-full border border-gray-200 bg-white/90 py-3 pl-9 pr-4 text-base placeholder-gray-400 shadow-lg backdrop-blur-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-orange-400 sm:text-sm"
+              />
+            )}
           </div>
         )}
 

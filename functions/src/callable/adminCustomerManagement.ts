@@ -106,7 +106,7 @@ function orderSummary(
 
   return {
     id: document.id,
-    orderNumber: text(data.orderNumber) || document.id.slice(0, 8).toUpperCase(),
+    orderNumber: text(data.orderNumber) || "Unavailable",
     status: text(data.status) || "pending",
     paymentStatus: text(payment.status) || "unknown",
     totalAmount: typeof pricing.totalAmount === "number"

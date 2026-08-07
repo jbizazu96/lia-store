@@ -35,6 +35,7 @@ export interface StorePublicProfileSource {
   bannerUrl?: unknown;
   category?: unknown;
   rating?: unknown;
+  reviewCount?: unknown;
   minimumOrder?: unknown;
   isApproved?: unknown;
   isActive?: unknown;
@@ -110,6 +111,7 @@ export async function syncStorePublicProfile(
         store.category,
       ]),
       rating: publicNumber(store.rating),
+      reviewCount: Math.max(0, Math.floor(publicNumber(store.reviewCount))),
       minimumOrder: publicNumber(
         store.minimumOrder,
         30

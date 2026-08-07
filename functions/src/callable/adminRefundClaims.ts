@@ -61,13 +61,11 @@ function summary(
   orderData: Record<string, unknown>
 ) {
   const data = document.data();
-  const orderId = text(data.orderId);
   const customer = record(orderData.customer);
 
   return {
     id: document.id,
-    orderNumber: text(orderData.orderNumber) ||
-      orderId.slice(0, 8).toUpperCase(),
+    orderNumber: text(orderData.orderNumber) || "Unavailable",
     customerName: text(customer.name) || "Customer",
     reason: text(data.reason),
     status: status(data.status),
@@ -102,7 +100,7 @@ export const getAdminRefundClaim = onCall({region: "us-central1"}, async (reques
   await requireActiveAdmin(request); const claimId = identifier(record(request.data).claimId, "Claim"); const claim = await db.collection("refundClaims").doc(claimId).get();
   if (!claim.exists) throw new HttpsError("not-found", "The refund claim was not found.");
   const data = claim.data() ?? {}; const order = await db.collection("orders").doc(identifier(data.orderId, "Order")).get(); const orderData = order.data() ?? {}; const pricing = record(orderData.pricing); const customer = record(orderData.customer); const decision = record(data.decision); const refundId = text(data.refundId); const refund = refundId ? await db.collection("paymentRefunds").doc(refundId).get() : null;
-  return {id: claim.id, status: status(data.status), reason: text(data.reason), description: text(data.description), createdAt: timestamp(data.createdAt), customer: {id: text(data.customerId), name: text(customer.name) || "Customer", email: text(customer.email) || null}, order: {id: order.id, orderNumber: text(orderData.orderNumber) || order.id.slice(0, 8).toUpperCase(), status: text(orderData.status), currency: text(pricing.currency) || "usd", pricing: {merchandiseAmount: number(pricing.subtotalAmount), taxAmount: number(pricing.taxAmount), deliveryFeeAmount: number(pricing.deliveryFeeAmount), serviceFeeAmount: number(pricing.serviceFeeAmount), driverTipAmount: number(pricing.tipAmount), totalAmount: number(pricing.totalAmount)}}, decision: {reason: text(decision.reason) || null, decidedAt: timestamp(decision.decidedAt), decidedBy: text(decision.decidedBy) || null}, refund: refund?.exists ? {id: refund.id, status: text(refund.data()?.status), amount: number(record(refund.data()?.allocation).totalAmount), completedAt: timestamp(refund.data()?.completedAt), lastError: text(refund.data()?.lastError) || null} : null};
+  return {id: claim.id, status: status(data.status), reason: text(data.reason), description: text(data.description), createdAt: timestamp(data.createdAt), customer: {id: text(data.customerId), name: text(customer.name) || "Customer", email: text(customer.email) || null}, order: {id: order.id, orderNumber: text(orderData.orderNumber) || "Unavailable", status: text(orderData.status), currency: text(pricing.currency) || "usd", pricing: {merchandiseAmount: number(pricing.subtotalAmount), taxAmount: number(pricing.taxAmount), deliveryFeeAmount: number(pricing.deliveryFeeAmount), serviceFeeAmount: number(pricing.serviceFeeAmount), driverTipAmount: number(pricing.tipAmount), totalAmount: number(pricing.totalAmount)}}, decision: {reason: text(decision.reason) || null, decidedAt: timestamp(decision.decidedAt), decidedBy: text(decision.decidedBy) || null}, refund: refund?.exists ? {id: refund.id, status: text(refund.data()?.status), amount: number(record(refund.data()?.allocation).totalAmount), completedAt: timestamp(refund.data()?.completedAt), lastError: text(refund.data()?.lastError) || null} : null};
 });
 
 export const decideAdminRefundClaim = onCall({region: "us-central1"}, async (request) => {

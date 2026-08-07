@@ -86,6 +86,7 @@ export default function StoreSearchPage({
     store,
     products,
     loading,
+    resolvedStoreId,
     error,
     showDistanceWarning,
     distanceValue,
@@ -101,7 +102,7 @@ export default function StoreSearchPage({
     /* See the global search header: App Router transitions can drop the
      * browser's native focus handoff on mobile. This page first renders its
      * store loader, so wait until the actual search input is mounted. */
-    if (loading) {
+    if (loading || resolvedStoreId !== storeId) {
       return;
     }
 
@@ -112,7 +113,7 @@ export default function StoreSearchPage({
     });
 
     return () => window.cancelAnimationFrame(frame);
-  }, [loading]);
+  }, [loading, resolvedStoreId, storeId]);
 
   const {
     addItem,
@@ -202,7 +203,7 @@ export default function StoreSearchPage({
     updateQuantity(productId, Math.max(0, quantity));
   };
 
-  if (loading) {
+  if (loading || resolvedStoreId !== storeId) {
     return <BrandedLoader message="Loading store search" />;
   }
 

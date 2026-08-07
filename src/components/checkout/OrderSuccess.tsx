@@ -4,11 +4,11 @@ import {motion} from "framer-motion";
 import {CheckCircle, Truck, Clock, AlertCircle} from "lucide-react";
 
 interface OrderSuccessProps {
-  orderId: string;
+  orderNumber: string;
   onViewOrders: () => void;
 }
 
-export function OrderSuccess({orderId, onViewOrders,}: OrderSuccessProps) {
+export function OrderSuccess({orderNumber, onViewOrders,}: OrderSuccessProps) {
   return (
     <motion.div
       initial={{opacity: 0, scale: 0.95}}
@@ -20,7 +20,7 @@ export function OrderSuccess({orderId, onViewOrders,}: OrderSuccessProps) {
       </div>
       <h2 className="text-2xl font-bold text-gray-800 mb-2">Order Placed! 🎉</h2>
       <p className="text-gray-500 text-sm mb-4">
-        Your order #{orderId.slice(0, 8).toUpperCase()} has been placed successfully.
+        Your order {orderNumber || "is being prepared"} has been placed successfully.
       </p>
 
       <p className="text-gray-400 text-xs">

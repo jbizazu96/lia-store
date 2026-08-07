@@ -104,6 +104,9 @@ function mapStoreDocument(
     rating: typeof data.rating === "number"
       ? number(data.rating)
       : undefined,
+    reviewCount: typeof data.reviewCount === "number"
+      ? Math.max(0, Math.floor(number(data.reviewCount)))
+      : 0,
 
     distance: typeof data.distance === "number"
       ? number(data.distance)
