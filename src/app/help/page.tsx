@@ -12,7 +12,6 @@
 
 import {
   useRouter,
-  useSearchParams,
 } from "next/navigation";
 import {
   ArrowLeft,
@@ -22,10 +21,16 @@ import {
 
 export default function HelpPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const customerHelp = searchParams.get("from") === "customer";
 
   const handleBack = () => {
+    /*
+    - Read the optional source only after a customer presses Back. This page
+    - can still be prerendered for production without a useSearchParams
+    - suspense boundary.
+     */
+    const customerHelp = new URLSearchParams(
+      window.location.search
+    ).get("from") === "customer";
     const fallback = customerHelp
       ? "/home"
       : "/";
