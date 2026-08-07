@@ -65,63 +65,101 @@ export default function SearchPage() {
 
   // Handle search
   useEffect(() => {
-    const timer = setTimeout(async () => {
-      if (searchQuery.trim().length >= 2 && marketplacePolicy) {
-        setLoading(true);
-        
-        // ✅ Search both products and stores
-        const [productResults, storeResults] = await Promise.all([
-          performSearch(searchQuery, userLocation, marketplacePolicy),
-          searchStoresByName(searchQuery, userLocation, marketplacePolicy),
-        ]);
-        
-        // Product matches are grouped under their store. A direct store match
-        // is added as a store-only group instead of being rendered as a fake
-        // product card.
-        const combinedResults = [...productResults, ...storeResults];
-        const groupedProducts = groupResultsByStore(productResults);
-        const groupsByStore = new Map(
-          groupedProducts.map((group) => [
-            group.storeId,
-            group,
-          ])
-        );
+    const normalizedQuery = searchQuery.trim();
 
-        storeResults.forEach((store) => {
-          const existing = groupsByStore.get(store.storeId);
+    if (normalizedQuery.length < 2) {
+      setLoading(false);
+      setResults([]);
+      setGroups([]);
+      return;
+    }
 
-          if (existing) {
-            existing.matchesStore = true;
+    /*
+     * Set loading before the debounce window and while marketplace pricing is
+     * still loading. Otherwise SearchResults receives an empty array first
+     * and flashes "No results found" before a real search has even started.
+     */
+    setLoading(true);
+
+    if (!marketplacePolicy) {
+      return;
+    }
+
+    let active = true;
+
+    const timer = setTimeout(() => {
+      const runSearch = async () => {
+        try {
+          // Search both products and stores.
+          const [productResults, storeResults] = await Promise.all([
+            performSearch(normalizedQuery, userLocation, marketplacePolicy),
+            searchStoresByName(normalizedQuery, userLocation, marketplacePolicy),
+          ]);
+
+          if (!active) {
             return;
           }
 
-          groupsByStore.set(store.storeId, {
-            storeId: store.storeId,
-            storeName: store.storeName,
-            storeRating: store.storeRating,
-            storeDistance: store.storeDistance,
-            deliveryFee: store.deliveryFee,
-            estimatedTime: store.estimatedTime,
-            storeLogo: store.storeLogo,
-            isOpen: store.storeIsOpen === true,
-            storeAddress: store.storeAddress || "",
-            storePhone: store.storePhone || "",
-            storeLatitude: store.storeLatitude || 0,
-            storeLongitude: store.storeLongitude || 0,
-            matchesStore: true,
-            products: [],
-          });
-        });
+          // Product matches are grouped under their store. A direct store
+          // match is added as a store-only group instead of a fake product.
+          const combinedResults = [...productResults, ...storeResults];
+          const groupedProducts = groupResultsByStore(productResults);
+          const groupsByStore = new Map(
+            groupedProducts.map((group) => [
+              group.storeId,
+              group,
+            ])
+          );
 
-        setResults(combinedResults);
-        setGroups(Array.from(groupsByStore.values()));
-        setLoading(false);
-      } else {
-        setResults([]);
-        setGroups([]);
-      }
+          storeResults.forEach((store) => {
+            const existing = groupsByStore.get(store.storeId);
+
+            if (existing) {
+              existing.matchesStore = true;
+              return;
+            }
+
+            groupsByStore.set(store.storeId, {
+              storeId: store.storeId,
+              storeName: store.storeName,
+              storeRating: store.storeRating,
+              storeDistance: store.storeDistance,
+              deliveryFee: store.deliveryFee,
+              estimatedTime: store.estimatedTime,
+              storeLogo: store.storeLogo,
+              isOpen: store.storeIsOpen === true,
+              storeAddress: store.storeAddress || "",
+              storePhone: store.storePhone || "",
+              storeLatitude: store.storeLatitude || 0,
+              storeLongitude: store.storeLongitude || 0,
+              matchesStore: true,
+              products: [],
+            });
+          });
+
+          setResults(combinedResults);
+          setGroups(Array.from(groupsByStore.values()));
+        } catch (error) {
+          console.error("Unable to search the marketplace:", error);
+
+          if (active) {
+            setResults([]);
+            setGroups([]);
+          }
+        } finally {
+          if (active) {
+            setLoading(false);
+          }
+        }
+      };
+
+      void runSearch();
     }, 300);
-    return () => clearTimeout(timer);
+
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
   }, [searchQuery, userLocation, marketplacePolicy]);
 
   const handleClear = () => {

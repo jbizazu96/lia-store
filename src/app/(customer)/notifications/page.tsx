@@ -35,7 +35,10 @@ import { useConfirmation } from "@/context/ConfirmationContext";
 import { useSuccessToast } from "@/context/SuccessToastContext";
 
 export default function NotificationsPage() {
-  const { user } = useAuth();
+  const {
+    user,
+    loading: authLoading,
+  } = useAuth();
   const router = useRouter();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
@@ -85,9 +88,17 @@ export default function NotificationsPage() {
 
 
   useEffect(() => {
+    if (authLoading) {
+      /* Keep the branded loader visible until Firebase resolves the session. */
+      setLoading(true);
+      return;
+    }
+
     if (!user) {
       setNotifications([]);
-      setLoading(false);
+      /* RoleGuard will redirect unauthenticated visitors. Do not flash an
+       * empty notification page while that redirect is in progress. */
+      setLoading(true);
       return;
     }
 
@@ -108,7 +119,7 @@ export default function NotificationsPage() {
     );
 
     return unsubscribe;
-  }, [user]);
+  }, [authLoading, user]);
 
   if (loading) {
     return <BrandedLoader message="Loading Notifications" />;

@@ -228,13 +228,26 @@ export function useCustomerStore({
     */
 
     const loadStoreData = async () => {
+      /*
+      - The store view needs the trusted pricing policy to calculate delivery
+      - details. Do not finish loading while that independent policy request
+      - is still pending: otherwise pages briefly render their empty-store
+      - error state before this effect reruns with the policy.
+       */
+      if (!marketplacePolicy) {
+        /*
+         * This also covers a route change while the policy cache is being
+         * refreshed. Keep the existing screen behind the loader rather than
+         * briefly rendering the page's "store not found" fallback.
+         */
+        setLoading(true);
+        setError(null);
+        return;
+      }
+
       try {
         setLoading(true);
         setError(null);
-
-        if (!marketplacePolicy) {
-          return;
-        }
 
         /*
          * The customer address is needed only when Home did not already pass
