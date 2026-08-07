@@ -1,5 +1,5 @@
 "use client";
-import {BrandedLoader} from "@/components/ui/BrandedLoader";
+import {PageContentSkeleton} from "@/components/ui/PageContentSkeleton";
 import {useState, useEffect} from "react";
 import {motion} from "framer-motion";
 import {
@@ -9,20 +9,16 @@ import {
   Calendar,
   Download,
   Eye,
-  ChevronRight
+  ChevronRight,
 } from "lucide-react";
 import {
   storeWorkspaceClientService,
+  type StoreWorkspacePayout,
 } from "@/services/store/storeWorkspaceClientService";
+import {
+  PayoutDetailModal,
+} from "@/components/store/earnings/PayoutDetailModal";
 import Link from "next/link";
-
-interface Payout {
-  id: string;
-  amount: number;
-  status: "pending" | "completed" | "failed";
-  date: string;
-  method: string;
-}
 
 export default function EarningsPage() {
   const [stats, setStats] = useState({
@@ -32,7 +28,8 @@ export default function EarningsPage() {
     weeklyEarnings: 0,
     monthlyEarnings: 0,
   });
-  const [payouts, setPayouts] = useState<Payout[]>([]);
+  const [payouts, setPayouts] = useState<StoreWorkspacePayout[]>([]);
+  const [selectedPayout, setSelectedPayout] = useState<StoreWorkspacePayout | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -66,7 +63,7 @@ export default function EarningsPage() {
   ========================================== */
 
     if (loading) {
-  return <BrandedLoader message="Loading Earnings" />;
+  return <PageContentSkeleton />;
 }
 
   return (
@@ -107,8 +104,8 @@ export default function EarningsPage() {
             textColor: "text-blue-600",
           },
           {
-            title: "Available Balance",
-            value: `$${stats.availableBalance.toFixed(2)}`,
+            title: "This Week",
+            value: `$${stats.weeklyEarnings.toFixed(2)}`,
             icon: TrendingUp,
             color: "bg-green-500",
             bgColor: "bg-green-50",
@@ -164,8 +161,14 @@ export default function EarningsPage() {
         </div>
 
         <div className="space-y-3">
-          {payouts.map((payout) => (
-            <div key={payout.id} className="flex items-center justify-between p-3 hover:bg-gray-50 rounded-xl transition">
+          {payouts.slice(0, 10).map((payout) => (
+            <button
+              key={payout.id}
+              type="button"
+              onClick={() => setSelectedPayout(payout)}
+              className="flex w-full items-center justify-between rounded-xl p-3 text-left transition hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
+              aria-label={`View payout details for $${payout.amount.toFixed(2)}`}
+            >
               <div>
                 <p className="font-medium text-gray-800">${payout.amount.toFixed(2)}</p>
                 <p className="text-sm text-gray-500">{payout.date} • {payout.method}</p>
@@ -180,17 +183,21 @@ export default function EarningsPage() {
                 }`}>
                   {payout.status.charAt(0).toUpperCase() + payout.status.slice(1)}
                 </span>
-                <button 
-                  className="p-1 hover:bg-gray-100 rounded-lg transition"
-                  aria-label={`View details for payout of $${payout.amount.toFixed(2)}`}
-                >
+                <span className="rounded-lg p-1" aria-hidden="true">
                   <Eye className="w-4 h-4 text-gray-400" />
-                </button>
+                </span>
               </div>
-            </div>
+            </button>
           ))}
         </div>
       </div>
+
+      {selectedPayout && (
+        <PayoutDetailModal
+          payout={selectedPayout}
+          onClose={() => setSelectedPayout(null)}
+        />
+      )}
 
       {/* Stripe Connect Status */}
       <div className="bg-gradient-to-r from-blue-50 to-blue-100 rounded-2xl p-6 border border-blue-200">
@@ -204,12 +211,13 @@ export default function EarningsPage() {
               Your account is connected and ready to receive payments.
               Payouts are processed every Monday.
             </p>
-            <button 
-              className="mt-3 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition"
+            <Link
+              href="/store/settings?section=payment"
+              className="mt-3 inline-flex px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition"
               aria-label="Manage Stripe payment settings"
             >
               Manage Payment Settings
-            </button>
+            </Link>
           </div>
         </div>
       </div>

@@ -21,6 +21,7 @@ import {
   MapPin,
 } from "lucide-react";
 import Link from "next/link";
+import { CustomerBottomNavigation } from "@/components/customer/navigation/CustomerBottomNavigation";
 
 export default function OrdersPage() {
   const router = useRouter();
@@ -162,9 +163,9 @@ export default function OrdersPage() {
 }
 
   return (
-    <main className="min-h-screen bg-gray-50">
+    <main className="min-h-screen bg-gray-50 pb-28">
       {/* Header with Back Button and Order Count */}
-      <div className="bg-white border-b border-gray-100 sticky top-0 z-20">
+      <div className="sticky top-0 z-20 border-b border-gray-200/70 bg-gray-50/95 backdrop-blur-xl">
         <div className="flex items-center gap-3 px-4 py-4 max-w-2xl mx-auto">
           <button
             onClick={() => router.back()}
@@ -332,6 +333,8 @@ export default function OrdersPage() {
           </div>
         )}
       </div>
+
+      <CustomerBottomNavigation />
     </main>
   );
 }

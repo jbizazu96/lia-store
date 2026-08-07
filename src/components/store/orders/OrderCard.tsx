@@ -21,6 +21,7 @@ import {motion} from "framer-motion";
 import Link from "next/link";
 import {Eye, MapPin, User, DollarSign, Package} from "lucide-react";
 import {StatusBadge} from "./StatusBadge";
+import {OrderInvestigationNotice} from "./OrderInvestigationNotice";
 
 interface OrderCardProps {
   order: Order;
@@ -52,6 +53,10 @@ export function OrderCard({order, index}: OrderCardProps) {
               #{order.id.slice(0, 8).toUpperCase()}
             </span>
             <StatusBadge status={order.status} size="sm" />
+            <OrderInvestigationNotice
+              investigation={order.liaInvestigation}
+              compact
+            />
             <span className="text-sm text-gray-400">
               {formatOrderDate(order.createdAt)}
             </span>

@@ -26,6 +26,7 @@ import {
 import {
   grantStoreUploadClaim,
 } from "../services/store/storeUploadClaimService";
+import {PLATFORM_REPORTING_TIME_ZONE} from "../payment/pricing/paymentPricingConfig";
 
 if (admin.apps.length === 0) {
   admin.initializeApp();
@@ -128,6 +129,177 @@ function serialize(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(serialize);
   if (isRecord(value)) return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, serialize(entry)]));
   return value;
+}
+
+type StorePayoutTransfer = {
+  id: string;
+  data: FirebaseFirestore.DocumentData;
+};
+
+/*
+ * A payment transfer keeps only the order ID. Resolve the store-owned order
+ * server-side so payout detail never exposes another store's order data.
+ */
+async function buildStorePayoutDetails(
+  storeId: string,
+  transfers: StorePayoutTransfer[],
+) {
+  const orderReferences = [
+    ...new Map(
+      transfers
+        .map((transfer) => text(transfer.data.orderId))
+        .filter(Boolean)
+        .map((orderId) => [orderId, db.collection("orders").doc(orderId)]),
+    ).values(),
+  ];
+  const orders = orderReferences.length > 0
+    ? await db.getAll(...orderReferences)
+    : [];
+  const pricingByOrderId = new Map(
+    orders
+      .filter((order) => order.exists && order.data()?.store?.id === storeId)
+      .map((order) => [order.id, order.data()?.pricing]),
+  );
+
+  return transfers.map((transfer) => {
+    const data = transfer.data;
+    const orderId = text(data.orderId);
+    const pricing = pricingByOrderId.get(orderId);
+    const merchandiseSubtotal = nonNegativeCentAmount(pricing?.subtotalAmount);
+    const salesTax = nonNegativeCentAmount(pricing?.taxAmount);
+    const grossStoreOrderAmount = merchandiseSubtotal + salesTax;
+    const transferAmount = nonNegativeCentAmount(data.amount);
+
+    return {
+      id: transfer.id,
+      orderId,
+      amount: transferAmount / 100,
+      merchandiseSubtotal: merchandiseSubtotal / 100,
+      salesTax: salesTax / 100,
+      grossStoreOrderAmount: grossStoreOrderAmount / 100,
+      liaCommission: Math.max(0, grossStoreOrderAmount - transferAmount) / 100,
+      status: text(data.status) === "completed" ? "completed" : text(data.status) === "failed" ? "failed" : "pending",
+      date: String(serialize(data.completedAt ?? data.updatedAt ?? data.createdAt) ?? ""),
+      createdAt: String(serialize(data.createdAt) ?? ""),
+      completedAt: String(serialize(data.completedAt) ?? ""),
+      method: "Stripe Transfer",
+    };
+  });
+}
+
+/*
+ * Convert the current date into a local calendar date for the configured
+ * marketplace time zone. Earnings periods must not depend on the UTC time
+ * zone of the Cloud Functions runtime.
+ */
+function datePartsInTimeZone(
+  date: Date,
+  timeZone: string,
+): { year: number; month: number; day: number; weekday: string } {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    weekday: "short",
+  }).formatToParts(date);
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+
+  return {
+    year: Number(values.year),
+    month: Number(values.month),
+    day: Number(values.day),
+    weekday: values.weekday,
+  };
+}
+
+function timeZoneOffsetMilliseconds(
+  date: Date,
+  timeZone: string,
+): number {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    hour: "numeric",
+    minute: "numeric",
+    second: "numeric",
+    hourCycle: "h23",
+  }).formatToParts(date);
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+
+  return Date.UTC(
+    Number(values.year),
+    Number(values.month) - 1,
+    Number(values.day),
+    Number(values.hour),
+    Number(values.minute),
+    Number(values.second),
+  ) - date.getTime();
+}
+
+function startOfDayInTimeZone(
+  year: number,
+  month: number,
+  day: number,
+  timeZone: string,
+): Date {
+  const localMidnightAsUtc = Date.UTC(year, month - 1, day);
+  let candidate = new Date(localMidnightAsUtc);
+
+  /* Resolve the correct Central offset, including daylight-saving changes. */
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    candidate = new Date(
+      localMidnightAsUtc - timeZoneOffsetMilliseconds(candidate, timeZone),
+    );
+  }
+
+  return candidate;
+}
+
+function currentEarningsPeriodStarts(): {
+  weekStart: Date;
+  monthStart: Date;
+} {
+  const timeZone = PLATFORM_REPORTING_TIME_ZONE;
+  const now = datePartsInTimeZone(new Date(), timeZone);
+  const weekdayOffset: Record<string, number> = {
+    Mon: 0,
+    Tue: 1,
+    Wed: 2,
+    Thu: 3,
+    Fri: 4,
+    Sat: 5,
+    Sun: 6,
+  };
+  const localToday = new Date(Date.UTC(now.year, now.month - 1, now.day));
+  localToday.setUTCDate(
+    localToday.getUTCDate() - (weekdayOffset[now.weekday] ?? 0),
+  );
+
+  return {
+    weekStart: startOfDayInTimeZone(
+      localToday.getUTCFullYear(),
+      localToday.getUTCMonth() + 1,
+      localToday.getUTCDate(),
+      timeZone,
+    ),
+    monthStart: startOfDayInTimeZone(
+      now.year,
+      now.month,
+      1,
+      timeZone,
+    ),
+  };
+}
+
+function nonNegativeCentAmount(value: unknown): number {
+  return typeof value === "number" &&
+    Number.isSafeInteger(value) &&
+    value >= 0
+    ? value
+    : 0;
 }
 
 function settingsStore(data: Record<string, unknown>, id: string) {
@@ -360,17 +532,30 @@ export const getStoreWorkspaceFinancials = onCall({ region: "us-central1" }, asy
   const confirmedOrders = db.collection("orders")
     .where("store.id", "==", store.id)
     .where("checkoutStatus", "==", "confirmed");
+  const completedStoreTransfers = transfers.where("status", "==", "completed");
+  const { weekStart, monthStart } = currentEarningsPeriodStarts();
 
   const [
     completedTransfers,
     pendingTransfers,
+    weeklyTransfers,
+    monthlyTransfers,
     transferHistory,
     orderCount,
     recentOrders,
   ] = await Promise.all([
-    transfers.where("status", "==", "completed").aggregate({ total: AggregateField.sum("amount") }).get(),
+    completedStoreTransfers.aggregate({ total: AggregateField.sum("amount") }).get(),
     transfers.where("status", "in", ["pending", "eligible", "processing"]).aggregate({ total: AggregateField.sum("amount") }).get(),
-    transfers.orderBy("updatedAt", "desc").limit(25).get(),
+    completedStoreTransfers
+      .where("completedAt", ">=", weekStart.toISOString())
+      .aggregate({ total: AggregateField.sum("amount") })
+      .get(),
+    completedStoreTransfers
+      .where("completedAt", ">=", monthStart.toISOString())
+      .aggregate({ total: AggregateField.sum("amount") })
+      .get(),
+    /* The earnings dashboard previews only the ten most recent payouts. */
+    transfers.orderBy("updatedAt", "desc").limit(10).get(),
     confirmedOrders.count().get(),
     confirmedOrders.orderBy("createdAt", "desc").limit(100).get(),
   ]);
@@ -379,6 +564,11 @@ export const getStoreWorkspaceFinancials = onCall({ region: "us-central1" }, asy
   const pendingBalance = (pendingTransfers.data().total ?? 0) / 100;
   const recent = recentOrders.docs.map((order) => order.data());
   const customers = new Set(recent.map((order) => text(isRecord(order.customer) ? order.customer.uid : "")).filter(Boolean));
+  const transferRows = transferHistory.docs.map((transfer) => ({
+    id: transfer.id,
+    data: transfer.data(),
+  }));
+  const payouts = await buildStorePayoutDetails(store.id, transferRows);
 
   return {
     analytics: {
@@ -394,19 +584,57 @@ export const getStoreWorkspaceFinancials = onCall({ region: "us-central1" }, asy
       /* Completed transfers have already left LIA's balance for the store. */
       availableBalance: 0,
       pendingBalance,
-      weeklyEarnings: 0,
-      monthlyEarnings: 0,
-      payouts: transferHistory.docs.map((transfer) => {
-        const data = transfer.data();
-        return {
-          id: transfer.id,
-          amount: typeof data.amount === "number" ? data.amount / 100 : 0,
-          status: text(data.status) === "completed" ? "completed" : text(data.status) === "failed" ? "failed" : "pending",
-          date: String(serialize(data.completedAt ?? data.updatedAt ?? data.createdAt) ?? ""),
-          method: "Stripe Transfer",
-        };
-      }),
+      weeklyEarnings: (weeklyTransfers.data().total ?? 0) / 100,
+      monthlyEarnings: (monthlyTransfers.data().total ?? 0) / 100,
+      payouts,
     },
+  };
+});
+
+/*
+ * Payout history is paginated so a long-running store account does not load
+ * every transfer when it opens its earnings page. The cursor is verified
+ * against the authenticated owner's store before it is used.
+ */
+export const getStoreWorkspacePayouts = onCall({ region: "us-central1" }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Sign in to view store payouts.");
+
+  const input = isRecord(request.data) ? request.data : {};
+  const requestedPageSize = Number(input.pageSize);
+  const pageSize = Number.isInteger(requestedPageSize)
+    ? Math.min(Math.max(requestedPageSize, 1), 50)
+    : 25;
+  const cursor = text(input.cursor);
+  const store = await requireOwnedStore(request.auth.uid);
+  let query = db.collection("paymentTransfers")
+    .where("recipient.id", "==", store.id)
+    .where("recipient.type", "==", "store")
+    .orderBy("updatedAt", "desc")
+    .limit(pageSize);
+
+  if (cursor) {
+    const cursorTransfer = await db.collection("paymentTransfers").doc(cursor).get();
+    if (
+      !cursorTransfer.exists ||
+      cursorTransfer.data()?.recipient?.id !== store.id ||
+      cursorTransfer.data()?.recipient?.type !== "store"
+    ) {
+      throw new HttpsError("invalid-argument", "The payout history cursor is invalid.");
+    }
+    query = query.startAfter(cursorTransfer);
+  }
+
+  const result = await query.get();
+  const payouts = await buildStorePayoutDetails(
+    store.id,
+    result.docs.map((transfer) => ({ id: transfer.id, data: transfer.data() })),
+  );
+
+  return {
+    payouts,
+    nextCursor: result.size === pageSize
+      ? result.docs.at(-1)?.id ?? null
+      : null,
   };
 });
 

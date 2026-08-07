@@ -19,7 +19,6 @@
 import {
   getStoreStatus,
 } from "@/services/store/storeSchedule";
-import { DELIVERY_CONFIG } from "@/config/delivery";
 
 import {
   useState,
@@ -37,6 +36,7 @@ import {
   orderService,
 } from "@/services/order/orderService";
 import { useSuccessToast } from "@/context/SuccessToastContext";
+import {useMarketplacePricingPolicy} from "@/hooks/useMarketplacePricingPolicy";
 
 import type {
   Store,
@@ -117,6 +117,7 @@ export function usePlaceOrder({
   totals,
   clearCart,
 }: UsePlaceOrderParams): UsePlaceOrderResult {
+  const marketplacePolicy = useMarketplacePricingPolicy();
   const { showSuccess } = useSuccessToast();
   const [
     loading,
@@ -186,7 +187,12 @@ export function usePlaceOrder({
           return false;
         }
 
-      if (distanceMiles > DELIVERY_CONFIG.MAX_RADIUS_MILES) {
+      if (!marketplacePolicy) {
+        setError("Marketplace pricing is still loading. Please try again in a moment.");
+        return false;
+      }
+
+      if (distanceMiles > marketplacePolicy.maxRadiusMiles) {
         setError(
           "This store is outside your delivery radius. Choose a closer store or use a different delivery address."
         );

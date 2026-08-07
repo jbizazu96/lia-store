@@ -17,6 +17,9 @@ import {
 } from "firebase/firestore";
 
 import { db } from "@/lib/firebase";
+import {
+  loadCached,
+} from "@/services/cache/clientDataCache";
 
 /*
 |--------------------------------------------------------------------------
@@ -121,42 +124,38 @@ export const userService = {
   async getDefaultLocation(
     userId: string
   ): Promise<UserLocation | null> {
-    const userReference = doc(
-      db,
-      "users",
-      userId
+    return loadCached(
+      `customer-default-location:${userId}`,
+      async () => {
+        const userReference = doc(
+          db,
+          "users",
+          userId
+        );
+
+        const userSnapshot =
+          await getDoc(userReference);
+
+        const userLocation = userSnapshot.exists()
+          ? toUserLocation(userSnapshot.data().defaultAddress)
+          : null;
+
+        if (userLocation) return userLocation;
+
+        // Older customer accounts may store their default address only in this
+        // subcollection. Checkout already supports it; customer home must too.
+        const addressSnapshots = await getDocs(
+          collection(db, "users", userId, "addresses")
+        );
+
+        const defaultAddress = addressSnapshots.docs.find(
+          (address) => address.data().isDefault === true
+        ) ?? addressSnapshots.docs[0];
+
+        return toUserLocation(defaultAddress?.data());
+      },
+      { ttlMs: 30_000 },
     );
-
-    const userSnapshot =
-      await getDoc(userReference);
-
-    const userLocation = userSnapshot.exists()
-      ? toUserLocation(userSnapshot.data().defaultAddress)
-      : null;
-
-    if (userLocation) {
-      return userLocation;
-    }
-
-    // Older customer accounts may store their default address only in this
-    // subcollection. Checkout already supports it; customer home must too.
-    const addressSnapshots = await getDocs(
-      collection(db, "users", userId, "addresses")
-    );
-
-    const defaultAddress = addressSnapshots.docs.find(
-      (address) => address.data().isDefault === true
-    ) ?? addressSnapshots.docs[0];
-
-    const subcollectionLocation = toUserLocation(
-      defaultAddress?.data()
-    );
-
-    if (subcollectionLocation) {
-      return subcollectionLocation;
-    }
-
-    return null;
   },
 
   

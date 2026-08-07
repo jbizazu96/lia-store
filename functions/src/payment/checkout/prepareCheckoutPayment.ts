@@ -51,6 +51,10 @@ import {
 } from "firebase-functions/v2/https";
 
 import Stripe from "stripe";
+import * as admin from "firebase-admin";
+import {
+  getFirestore,
+} from "firebase-admin/firestore";
 
 import {
   checkoutDataService,
@@ -80,6 +84,9 @@ import {
 import {
   calculatePaymentPricing,
 } from "../pricing/paymentPricingCalculator";
+import {
+  getMarketplacePricingPolicy,
+} from "../pricing/marketplacePricingPolicy";
 
 import {
   isStripeCustomerServiceError,
@@ -121,6 +128,12 @@ const googleMapsApiKey =
   defineSecret(
     "GOOGLE_MAPS_API_KEY"
   );
+
+if (admin.apps.length === 0) {
+  admin.initializeApp();
+}
+
+const db = getFirestore("default");
 
 
 /*
@@ -173,6 +186,53 @@ function buildTrustedCustomer(
     phone:
       contactPhone,
   };
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Minimum Order Enforcement
+|--------------------------------------------------------------------------
+|
+| The merchandise subtotal is rebuilt from live product records. Delivery,
+| tax, service fee, and tip never count toward the minimum purchase amount.
+|
+| The current marketplace policy is the one source of truth. A store-specific
+| override can be introduced later only with a separately reviewed admin
+| setting; legacy store.minimumOrder values must not override this policy.
+|
+*/
+
+function requireMinimumOrder(
+  input: {
+    storeName: string;
+    subtotalAmount: number;
+    defaultMinimumOrderAmount: number;
+  }
+): void {
+  const minimumOrderAmount =
+    input.defaultMinimumOrderAmount;
+
+  if (
+    input.subtotalAmount >=
+    minimumOrderAmount
+  ) {
+    return;
+  }
+
+  const currency = (amount: number) =>
+    `$${(amount / 100).toFixed(2)}`;
+
+  const remainingAmount =
+    minimumOrderAmount -
+    input.subtotalAmount;
+
+  throw new HttpsError(
+    "failed-precondition",
+    `${input.storeName} requires a minimum merchandise order of ${
+      currency(minimumOrderAmount)
+    }. Add ${currency(remainingAmount)} more to continue.`
+  );
 }
 
 
@@ -525,6 +585,31 @@ export const prepareCheckoutPayment =
       }
 
       /*
+       * Account suspension is a server-enforced customer lifecycle control.
+       * A browser cannot bypass it by calling checkout directly.
+       */
+      const customerProfile = await db.collection("users")
+        .doc(request.auth.uid)
+        .get();
+
+      if (
+        !customerProfile.exists ||
+        customerProfile.data()?.accountType !== "customer"
+      ) {
+        throw new HttpsError(
+          "permission-denied",
+          "This account is not authorized to complete customer checkout."
+        );
+      }
+
+      if (customerProfile.data()?.isActive === false) {
+        throw new HttpsError(
+          "permission-denied",
+          "This customer account is currently suspended. Contact support for help."
+        );
+      }
+
+      /*
         These references are populated only for a newly created session.
 
         A reused session must never be marked failed merely because a
@@ -638,6 +723,22 @@ export const prepareCheckoutPayment =
         |--------------------------------------------------------------------------
         */
 
+        const marketplacePricingPolicy =
+          await getMarketplacePricingPolicy();
+
+        requireMinimumOrder({
+          storeName:
+            checkoutData.store.name,
+
+          subtotalAmount:
+            checkoutData
+              .subtotalAmount,
+
+          defaultMinimumOrderAmount:
+            marketplacePricingPolicy
+              .defaultMinimumOrderCents,
+        });
+
         const pricing =
           calculatePaymentPricing({
             subtotalAmount:
@@ -652,6 +753,9 @@ export const prepareCheckoutPayment =
 
             isPeakTime:
               false,
+
+            policy:
+              marketplacePricingPolicy,
           });
 
 
@@ -953,6 +1057,9 @@ export const prepareCheckoutPayment =
               checkoutData,
 
               pricing,
+
+              pricingPolicy:
+                marketplacePricingPolicy,
 
               distanceMiles,
 

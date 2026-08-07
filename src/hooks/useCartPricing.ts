@@ -25,12 +25,11 @@ import {
 } from "@/lib/firebase";
 
 import {
-  PRICING_CONFIG,
-} from "@/config/pricing";
-
-import {
   calculateDeliveryFee,
 } from "@/services/delivery/deliveryPricing";
+import {
+  useMarketplacePricingPolicy,
+} from "@/hooks/useMarketplacePricingPolicy";
 import {
   getStoreDeliveryRoute,
 } from "@/services/delivery/deliveryRoutesClientService";
@@ -96,6 +95,8 @@ export function useCartPricing({
   subtotal,
   storeId,
 }: UseCartPricingParams): UseCartPricingResult {
+  const marketplacePolicy =
+    useMarketplacePricingPolicy();
   const [
     distanceMiles,
     setDistanceMiles,
@@ -221,14 +222,12 @@ export function useCartPricing({
     |
     */
 
-    const deliveryPricing =
-      calculateDeliveryFee(
-        distanceMiles ?? 0,
-        subtotal
-      );
+    const deliveryPricing = marketplacePolicy
+      ? calculateDeliveryFee(distanceMiles ?? 0, subtotal, marketplacePolicy)
+      : null;
 
     const deliveryFee =
-      deliveryPricing.deliveryFee;
+      deliveryPricing?.deliveryFee ?? 0;
 
     /*
       Keep the pre-promotion price for the cart UI. When delivery is free,
@@ -236,8 +235,8 @@ export function useCartPricing({
     */
     const originalDeliveryFee = Math.round(
       (
-        deliveryPricing.breakdown.distanceFee +
-        deliveryPricing.breakdown.peakSurcharge
+        (deliveryPricing?.breakdown.distanceFee ?? 0) +
+        (deliveryPricing?.breakdown.peakSurcharge ?? 0)
       ) * 100
     ) / 100;
 
@@ -258,7 +257,7 @@ export function useCartPricing({
       */
 
       const serviceFee =
-        deliveryPricing.serviceFee;
+        deliveryPricing?.serviceFee ?? 0;
     /*
     |--------------------------------------------------------------------------
     | Tax
@@ -268,7 +267,7 @@ export function useCartPricing({
     const tax =
       Math.round(
         subtotal *
-          PRICING_CONFIG.SALES_TAX_RATE *
+          (marketplacePolicy?.salesTaxRate ?? 0) *
           100
       ) / 100;
 
@@ -293,8 +292,7 @@ export function useCartPricing({
     const amountUntilFreeDelivery =
       Math.max(
         0,
-        PRICING_CONFIG
-          .FREE_DELIVERY_MINIMUM -
+        ((marketplacePolicy?.freeDeliveryMinimumCents ?? 0) / 100) -
           subtotal
       );
 
@@ -314,7 +312,7 @@ export function useCartPricing({
       amountUntilFreeDelivery,
 
       hasFreeDelivery:
-        deliveryPricing.isFreeDelivery &&
+        deliveryPricing?.isFreeDelivery === true &&
         subtotal > 0,
 
       distanceMiles,
@@ -328,5 +326,6 @@ export function useCartPricing({
     distanceMiles,
     isCalculatingDelivery,
     deliveryError,
-  ]);
+    marketplacePolicy,
+      ]);
 }

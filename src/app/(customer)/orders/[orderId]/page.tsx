@@ -31,6 +31,7 @@ import {
   Receipt,
 } from "lucide-react";
 import { BrandedLoader } from "@/components/ui/BrandedLoader";
+import { OrderHelpSection } from "@/components/customer/orders/OrderHelpSection";
 
 
 interface OrderPageProps {
@@ -180,6 +181,13 @@ export default function OrderDetailPage({params}: OrderPageProps) {
               </div>
             </div>
           </div>
+        )}
+
+        {!isCancelled && (
+          <OrderHelpSection
+            orderId={orderId}
+            canRequestRefund={order.status === "completed"}
+          />
         )}
 
         {/* ✅ Full Order Timeline with Server Timestamps */}

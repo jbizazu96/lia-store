@@ -22,6 +22,11 @@ import {
   ref,
   uploadBytes,
 } from "firebase/storage";
+import {
+  invalidateCached,
+  loadCached,
+  writeCached,
+} from "@/services/cache/clientDataCache";
 
 export interface CustomerProfileAddress {
   street: string;
@@ -57,8 +62,22 @@ async function call<T>(name: string, data?: unknown): Promise<T> {
 }
 
 export const customerProfileClientService = {
-  async getProfile(): Promise<CustomerProfile> {
-    return call<CustomerProfile>("getCustomerProfile");
+  async getProfile(
+    forceRefresh = false,
+  ): Promise<CustomerProfile> {
+    if (forceRefresh) {
+      return writeCached(
+        "customer-profile",
+        await call<CustomerProfile>("getCustomerProfile"),
+        { ttlMs: 30_000 },
+      );
+    }
+
+    return loadCached(
+      "customer-profile",
+      () => call<CustomerProfile>("getCustomerProfile"),
+      { ttlMs: 30_000 },
+    );
   },
 
   async updateProfile(input: {
@@ -66,7 +85,8 @@ export const customerProfileClientService = {
     phone: string;
     language?: string;
   }): Promise<CustomerProfile> {
-    return call<CustomerProfile>("updateCustomerProfile", input);
+    const profile = await call<CustomerProfile>("updateCustomerProfile", input);
+    return writeCached("customer-profile", profile, { ttlMs: 30_000 });
   },
 
   async saveDefaultAddress(
@@ -76,11 +96,19 @@ export const customerProfileClientService = {
       defaultAddress: CustomerProfileAddress;
     }>("saveCustomerDefaultAddress", input);
 
+    invalidateCached("customer-profile");
+    invalidateCached(
+      `customer-default-location:${auth.currentUser?.uid ?? ""}`,
+    );
     return payload.defaultAddress;
   },
 
   async deleteDefaultAddress(): Promise<void> {
     await call("deleteCustomerDefaultAddress");
+    invalidateCached("customer-profile");
+    invalidateCached(
+      `customer-default-location:${auth.currentUser?.uid ?? ""}`,
+    );
   },
 
   async uploadProfileImage(file: File): Promise<void> {
@@ -102,9 +130,27 @@ export const customerProfileClientService = {
         processingType: "customer-profile-image-original",
       },
     });
+
+    invalidateCached("customer-profile");
   },
 
-  async deleteProfileData(): Promise<void> {
-    await call("deleteCustomerProfileData");
+  /*
+   * A customer account is never deleted by the browser. This starts the
+   * protected request workflow, which notifies administrators and waits for
+   * their approval before the deletion engine can run.
+   */
+  async requestAccountDeletion(): Promise<{
+    requestId: string;
+    status: "pending_review";
+    alreadyPending: boolean;
+  }> {
+    return call(
+      "requestAccountDeletion",
+      {
+        ownerType: "customer",
+        reasonCode: "no_longer_needed",
+        reasonDetails: null,
+      },
+    );
   },
 };

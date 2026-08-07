@@ -22,6 +22,11 @@ export interface SearchResult {
   deliveryFee: number;
   estimatedTime: number;
   storeLogo?: string;
+  storeIsOpen?: boolean;
+  storeAddress?: string;
+  storePhone?: string;
+  storeLatitude?: number;
+  storeLongitude?: number;
   promotion?: {
     type: string;
     description: string;
@@ -40,6 +45,8 @@ export interface StoreData {
   rating: number;
   latitude: number;
   longitude: number;
+  address: string;
+  phone: string;
   deliveryFee: number;
   estimatedPrepTime: number;
   isOpen: boolean;
@@ -53,5 +60,12 @@ export interface StoreGroup {
   deliveryFee: number;
   estimatedTime: number;
   storeLogo?: string;
+  isOpen: boolean;
+  storeAddress: string;
+  storePhone: string;
+  storeLatitude: number;
+  storeLongitude: number;
+  /* True when the store itself matched the customer's query. */
+  matchesStore?: boolean;
   products: SearchResult[];
 }

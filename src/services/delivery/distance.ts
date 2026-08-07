@@ -21,10 +21,7 @@
 */
 
 import { DELIVERY_CONFIG } from "@/config/delivery";
-import {
-  calculateDeliveryFee,
-  getDeliveryFeeDisplay,
-} from "./deliveryPricing";
+import type {OrderDeliveryPolicy} from "@/services/delivery/orderDeliveryPolicyClientService";
 
 export interface Coordinates {
   latitude: number;
@@ -71,27 +68,19 @@ export function formatDistance(distance: number): string {
  * Get delivery fee based on distance
  * Updated fee structure
  */
-export function getDeliveryFee(distance: number): string {
-  return getDeliveryFeeDisplay(distance);
-}
-
-/**
- * Get delivery fee as a number (for calculations)
- */
-export function getDeliveryFeeNumber(distance: number): number {
-  return calculateDeliveryFee(distance, 0).deliveryFee;
-}
 
 /**
  * Get estimated delivery time based on distance
  * 2 min per mile + 5 min prep time
  */
-export function getEstimatedTime(distance: number): string {
+export function getEstimatedTime(distance: number, policy?: OrderDeliveryPolicy | null): string {
+  const preparationMinutes = policy?.defaultPreparationMinutes ?? DELIVERY_CONFIG.DEFAULT_PREP_MINUTES;
+  const minutesPerMile = policy?.minutesPerMile ?? DELIVERY_CONFIG.MINUTES_PER_MILE;
   if (!distance || distance === 0) {
-  return `${DELIVERY_CONFIG.DEFAULT_PREP_MINUTES} min`;
+  return `${preparationMinutes} min`;
 }
   const totalMinutes = Math.round(
-  distance * DELIVERY_CONFIG.MINUTES_PER_MILE + DELIVERY_CONFIG.DEFAULT_PREP_MINUTES
+  distance * minutesPerMile + preparationMinutes
 );
   
   if (totalMinutes < 60) {
@@ -106,10 +95,12 @@ export function getEstimatedTime(distance: number): string {
 /**
  * Get estimated time as a number (for calculations)
  */
-export function getEstimatedTimeNumber(distance: number): number {
-  if (!distance || distance === 0) return DELIVERY_CONFIG.DEFAULT_PREP_MINUTES;
+export function getEstimatedTimeNumber(distance: number, policy?: OrderDeliveryPolicy | null): number {
+  const preparationMinutes = policy?.defaultPreparationMinutes ?? DELIVERY_CONFIG.DEFAULT_PREP_MINUTES;
+  const minutesPerMile = policy?.minutesPerMile ?? DELIVERY_CONFIG.MINUTES_PER_MILE;
+  if (!distance || distance === 0) return preparationMinutes;
   return Math.round(
-  distance * DELIVERY_CONFIG.MINUTES_PER_MILE + DELIVERY_CONFIG.DEFAULT_PREP_MINUTES
+  distance * minutesPerMile + preparationMinutes
 );
 }
 
@@ -118,7 +109,7 @@ export function getEstimatedTimeNumber(distance: number): number {
  */
 export function isWithinDeliveryRadius(
   distance: number,
-  maxRadius: number = DELIVERY_CONFIG.MAX_RADIUS_MILES
+  maxRadius: number,
 ): boolean {
   return distance <= maxRadius;
 }
@@ -126,13 +117,14 @@ export function isWithinDeliveryRadius(
 /**
  * Get delivery status message
  */
-export function getDeliveryStatusMessage(distance: number): {
+export function getDeliveryStatusMessage(
+  distance: number,
+  maxRadius: number,
+): {
   canDeliver: boolean;
   message: string;
   title: string;
 } {
-  const maxRadius = DELIVERY_CONFIG.MAX_RADIUS_MILES;
-
   const canDeliver = isWithinDeliveryRadius(
     distance,
     maxRadius

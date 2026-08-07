@@ -207,5 +207,6 @@ export function mapDriverOnboardingDraft(
       data?.stripePayoutsEnabled === true ||
       data?.stripeConnect?.payoutsEnabled === true,
     stripeRequiresAction: data?.stripeRequiresAction,
+    applicationPolicy: data?.applicationPolicy,
   };
 }

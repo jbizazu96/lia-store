@@ -1,202 +1,341 @@
 /*
-  Search service for querying Firestore.
-  Only shows products that match the search query, not all products from the store.
+|--------------------------------------------------------------------------
+| Customer Global Search
+|--------------------------------------------------------------------------
+|
+| Searches only the server-managed public catalog projections. New catalog
+| documents use searchTokens for an indexed Firestore lookup. The small
+| legacy fallback lets existing projections work until their next sync adds
+| those tokens; it is deliberately capped and never reads private records.
+|
 */
 
 import {
   collection,
-  query as firestoreQuery,
-  where,
-  getDocs,
-  or,
   doc,
   getDoc,
+  getDocs,
+  limit,
+  query,
+  where,
 } from "firebase/firestore";
-import {db} from "@/lib/firebase";
-import {SearchResult, StoreData, StoreGroup} from "../types";
-import {calculateDistance, getDeliveryFeeNumber, getEstimatedTimeNumber} from "@/services/delivery/distance";
+import {
+  db,
+} from "@/lib/firebase";
+import {
+  calculateDistance,
+  getEstimatedTimeNumber,
+} from "@/services/delivery/distance";
+import {
+  calculateDeliveryFee,
+} from "@/services/delivery/deliveryPricing";
+import {
+  getStoreStatus,
+  type ScheduleDay,
+} from "@/services/store/storeSchedule";
+import type {
+  MarketplacePricingPolicy,
+} from "@/services/pricing/marketplacePricingClientService";
+import type {
+  SearchResult,
+  StoreData,
+  StoreGroup,
+} from "../types";
 
-export async function performSearch(
+const MAXIMUM_INDEXED_RESULTS = 60;
+const MAXIMUM_LEGACY_SCAN = 150;
+
+type Data = Record<string, unknown>;
+
+function text(value: unknown): string {
+  return typeof value === "string"
+    ? value.trim()
+    : "";
+}
+
+function number(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value)
+    ? value
+    : 0;
+}
+
+function normalize(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function matchesLegacySearch(
+  data: Data,
   searchTerm: string,
-  userLocation: {lat: number; lng: number} | null
-): Promise<SearchResult[]> {
-  if (!searchTerm.trim() || searchTerm.trim().length < 2) {
+  fields: string[]
+): boolean {
+  return fields.some((field) =>
+    normalize(text(data[field])).includes(searchTerm)
+  );
+}
+
+function schedule(value: unknown): ScheduleDay[] {
+  if (!Array.isArray(value)) {
     return [];
   }
 
-  const term = searchTerm.trim().toLowerCase();
+  return value.flatMap((item) => {
+    if (!item || typeof item !== "object") {
+      return [];
+    }
+
+    const data = item as Data;
+    const day = text(data.day);
+    const open = text(data.open);
+    const close = text(data.close);
+
+    if (!day || !open || !close) {
+      return [];
+    }
+
+    return [{
+      day,
+      open,
+      close,
+      isClosed: data.isClosed === true,
+    }];
+  });
+}
+
+function isCustomerVisibleStore(
+  data: Data
+): boolean {
+  return data.isApproved === true &&
+    data.isActive === true;
+}
+
+function storeData(
+  id: string,
+  data: Data,
+  userLocation: {lat: number; lng: number} | null,
+  marketplacePolicy: MarketplacePricingPolicy
+): StoreData {
+  const latitude = number(data.latitude);
+  const longitude = number(data.longitude);
+  const distance = userLocation && latitude && longitude
+    ? calculateDistance(
+      userLocation.lat,
+      userLocation.lng,
+      latitude,
+      longitude
+    )
+    : 0;
+  const isOpen = getStoreStatus(
+    schedule(data.schedule),
+    data.isOpen === true
+  ).isOpen;
+
+  return {
+    id,
+    name: text(data.name) || "Store",
+    logoUrl: text(data.logoUrl),
+    /*
+    - Keep search consistent with the store page: show only the rating
+    - stored for this store. A new store without reviews remains 0 rather
+    - than receiving an invented rating.
+     */
+    rating: number(data.rating),
+    latitude,
+    longitude,
+    address: text(data.formattedAddress) || text(data.address),
+    phone: text(data.phone),
+    deliveryFee: number(data.deliveryFee) ||
+      calculateDeliveryFee(
+        distance,
+        0,
+        marketplacePolicy
+      ).deliveryFee,
+    estimatedPrepTime: number(data.estimatedPrepTime) ||
+      getEstimatedTimeNumber(distance),
+    isOpen,
+  };
+}
+
+async function matchingProductDocuments(
+  searchTerm: string
+) {
+  const reference = collection(
+    db,
+    "productPublicProfiles"
+  );
+  const indexed = await getDocs(
+    query(
+      reference,
+      where("searchTokens", "array-contains", searchTerm),
+      limit(MAXIMUM_INDEXED_RESULTS)
+    )
+  );
+
+  if (!indexed.empty) {
+    return indexed.docs;
+  }
+
+  /* Temporary compatibility for catalog profiles written before searchTokens. */
+  const legacy = await getDocs(
+    query(reference, limit(MAXIMUM_LEGACY_SCAN))
+  );
+
+  return legacy.docs.filter((document) =>
+    matchesLegacySearch(
+      document.data() as Data,
+      searchTerm,
+      ["name", "description", "category", "brand"]
+    )
+  );
+}
+
+async function matchingStoreDocuments(
+  searchTerm: string
+) {
+  const reference = collection(
+    db,
+    "storePublicProfiles"
+  );
+  const indexed = await getDocs(
+    query(
+      reference,
+      where("searchTokens", "array-contains", searchTerm),
+      limit(MAXIMUM_INDEXED_RESULTS)
+    )
+  );
+
+  if (!indexed.empty) {
+    return indexed.docs;
+  }
+
+  const legacy = await getDocs(
+    query(reference, limit(MAXIMUM_LEGACY_SCAN))
+  );
+
+  return legacy.docs.filter((document) =>
+    matchesLegacySearch(
+      document.data() as Data,
+      searchTerm,
+      ["name", "description", "city", "state", "category"]
+    )
+  );
+}
+
+export async function performSearch(
+  searchTerm: string,
+  userLocation: {lat: number; lng: number} | null,
+  marketplacePolicy: MarketplacePricingPolicy
+): Promise<SearchResult[]> {
+  const term = normalize(searchTerm);
+
+  if (term.length < 2) {
+    return [];
+  }
 
   try {
-    // 1. Search products by name, description, or category
-    /* Customer search reads only the server-managed public catalog. */
-    const productsRef = collection(
-      db,
-      "productPublicProfiles"
-    );
-    
-    const productQuery = firestoreQuery(
-      productsRef,
-      or(
-        where("name", ">=", term),
-        where("name", "<=", term + "\uf8ff"),
-        where("description", ">=", term),
-        where("description", "<=", term + "\uf8ff"),
-        where("category", ">=", term),
-        where("category", "<=", term + "\uf8ff")
+    const productDocuments = await matchingProductDocuments(term);
+    const products = productDocuments.filter((document) => {
+      const data = document.data() as Data;
+
+      return data.isAvailable !== false &&
+        number(data.stock) > 0;
+    });
+    const storeIds = Array.from(
+      new Set(
+        products.map((document) =>
+          text((document.data() as Data).storeId)
+        ).filter(Boolean)
       )
     );
+    const stores = await Promise.all(
+      storeIds.map(async (storeId) => {
+        const snapshot = await getDoc(
+          doc(db, "storePublicProfiles", storeId)
+        );
 
-    const productsSnapshot = await getDocs(productQuery);
-    
-    // ✅ Get ONLY the products that match the search
-    const matchingProducts: any[] = [];
-    const storeIds = new Set<string>();
-
-    productsSnapshot.forEach((doc) => {
-      const data = doc.data();
-      const storeId = data.storeId;
-      if (storeId) {
-        // ✅ Only add matching products
-        matchingProducts.push({
-          id: doc.id,
-          ...data,
-        });
-        storeIds.add(storeId);
-      }
-    });
-
-    // 2. If no products found, try searching stores directly
-    if (storeIds.size === 0) {
-      const storesRef = collection(
-        db,
-        "storePublicProfiles"
-      );
-      const storeQuery = firestoreQuery(
-        storesRef,
-        or(
-          where("name", ">=", term),
-          where("name", "<=", term + "\uf8ff"),
-          where("city", ">=", term),
-          where("city", "<=", term + "\uf8ff")
-        )
-      );
-      const storesSnapshot = await getDocs(storeQuery);
-      
-      storesSnapshot.forEach((doc) => {
-        const data = doc.data();
-        if (
-          data.isApproved === true &&
-          data.isActive === true &&
-          data.isOpen
-        ) {
-          storeIds.add(doc.id);
+        if (!snapshot.exists()) {
+          return null;
         }
-      });
-    }
 
-    // 3. Get store details for each store ID
-    const storeDataMap = new Map<string, StoreData>();
-    for (const storeId of storeIds) {
-      const storeRef = doc(
-        db,
-        "storePublicProfiles",
-        storeId
-      );
-      const storeDoc = await getDoc(storeRef);
-      if (storeDoc.exists()) {
-        const data = storeDoc.data();
-        if (
-          data.isApproved === true &&
-          data.isActive === true &&
-          data.isOpen
-        ) {
-          let distance = 0;
-          if (userLocation && data.latitude && data.longitude) {
-            distance = calculateDistance(
-              userLocation.lat,
-              userLocation.lng,
-              data.latitude,
-              data.longitude
-            );
-          }
-          
-          storeDataMap.set(storeId, {
-            id: storeDoc.id,
-            name: data.name || "Store",
-            logoUrl: data.logoUrl || "",
-            rating: data.rating || 4.5,
-            latitude: data.latitude || 0,
-            longitude: data.longitude || 0,
-            deliveryFee: data.deliveryFee || getDeliveryFeeNumber(distance),
-            estimatedPrepTime: data.estimatedPrepTime || getEstimatedTimeNumber(distance),
-            isOpen: data.isOpen !== false,
-          });
-        }
-      }
-    }
+        const data = snapshot.data() as Data;
 
-    // 4. ✅ Build search results using ONLY matching products
-    const searchResults: SearchResult[] = [];
-    
-    // Group matching products by store
-    const productMap = new Map<string, any[]>();
-    matchingProducts.forEach((product) => {
-      const storeId = product.storeId;
-      if (!productMap.has(storeId)) {
-        productMap.set(storeId, []);
-      }
-      productMap.get(storeId)!.push(product);
-    });
-
-    // Build results for each store with its matching products
-    for (const [storeId, products] of productMap) {
-      const storeData = storeDataMap.get(storeId);
-      if (!storeData) continue;
-
-      const distance = userLocation && storeData.latitude && storeData.longitude
-        ? calculateDistance(
-            userLocation.lat,
-            userLocation.lng,
-            storeData.latitude,
-            storeData.longitude
+        return isCustomerVisibleStore(data)
+          ? storeData(
+            snapshot.id,
+            data,
+            userLocation,
+            marketplacePolicy
           )
+          : null;
+      })
+    );
+    const storesById = new Map(
+      stores.filter(
+        (store): store is StoreData => store !== null
+      ).map((store) => [store.id, store])
+    );
+
+    return products.flatMap((document) => {
+      const product = document.data() as Data;
+      const storeId = text(product.storeId);
+      const store = storesById.get(storeId);
+
+      if (!store) {
+        return [];
+      }
+
+      const distance = userLocation &&
+        store.latitude &&
+        store.longitude
+        ? calculateDistance(
+          userLocation.lat,
+          userLocation.lng,
+          store.latitude,
+          store.longitude
+        )
         : 0;
 
-      // ✅ Only add the matching products, not all products from the store
-      products.forEach((product: any) => {
-        searchResults.push({
-          id: product.id,
-          name: product.name || "Unnamed Product",
-          description: product.description || "",
-          price: product.price || 0,
-          imageUrl: product.imageUrl || "",
-          imageVariants: product.imageVariants,
-          category: product.category || "Uncategorized",
-          stock: product.stock || 0,
-          storeId: storeId,
-          storeName: storeData.name,
-          storeRating: storeData.rating,
-          storeDistance: distance,
-          deliveryFee: storeData.deliveryFee,
-          estimatedTime: storeData.estimatedPrepTime,
-          storeLogo: storeData.logoUrl,
-          promotion: product.promotion || null,
-          size: product.size || null,
-        });
-      });
-    }
-
-    return searchResults;
-
+      return [{
+        id: document.id,
+        name: text(product.name) || "Unnamed Product",
+        description: text(product.description),
+        price: number(product.price),
+        imageUrl: text(product.imageUrl),
+        imageVariants: product.imageVariants as SearchResult["imageVariants"],
+        category: text(product.category) || "Uncategorized",
+        stock: number(product.stock),
+        storeId,
+        storeName: store.name,
+        storeRating: store.rating,
+        storeDistance: distance,
+        deliveryFee: store.deliveryFee,
+        estimatedTime: store.estimatedPrepTime,
+        storeLogo: store.logoUrl,
+        storeIsOpen: store.isOpen,
+        storeAddress: store.address,
+        storePhone: store.phone,
+        storeLatitude: store.latitude,
+        storeLongitude: store.longitude,
+        promotion: product.promotion as SearchResult["promotion"],
+        size: product.size as SearchResult["size"],
+      }];
+    });
   } catch (error) {
-    console.error("Error searching:", error);
+    console.error("Customer product search failed.", error);
     return [];
   }
 }
 
-export function groupResultsByStore(results: SearchResult[]): StoreGroup[] {
+export function groupResultsByStore(
+  results: SearchResult[]
+): StoreGroup[] {
   const groups = new Map<string, StoreGroup>();
-  
+
   results.forEach((item) => {
     if (!groups.has(item.storeId)) {
       groups.set(item.storeId, {
@@ -207,90 +346,83 @@ export function groupResultsByStore(results: SearchResult[]): StoreGroup[] {
         deliveryFee: item.deliveryFee,
         estimatedTime: item.estimatedTime,
         storeLogo: item.storeLogo,
+        isOpen: item.storeIsOpen === true,
+        storeAddress: item.storeAddress || "",
+        storePhone: item.storePhone || "",
+        storeLatitude: item.storeLatitude || 0,
+        storeLongitude: item.storeLongitude || 0,
         products: [],
       });
     }
-    groups.get(item.storeId)!.products.push(item);
+
+    groups.get(item.storeId)?.products.push(item);
   });
-  
+
   return Array.from(groups.values());
 }
 
-// ✅ New function: Search stores directly by name
 export async function searchStoresByName(
   searchTerm: string,
-  userLocation: {lat: number; lng: number} | null
+  userLocation: {lat: number; lng: number} | null,
+  marketplacePolicy: MarketplacePricingPolicy
 ): Promise<SearchResult[]> {
-  if (!searchTerm.trim() || searchTerm.trim().length < 2) {
+  const term = normalize(searchTerm);
+
+  if (term.length < 2) {
     return [];
   }
 
-  const term = searchTerm.trim().toLowerCase();
-
   try {
-    const storesRef = collection(
-      db,
-      "storePublicProfiles"
-    );
-    const storeQuery = firestoreQuery(
-      storesRef,
-      or(
-        where("name", ">=", term),
-        where("name", "<=", term + "\uf8ff"),
-        where("city", ">=", term),
-        where("city", "<=", term + "\uf8ff")
-      )
-    );
-    
-    const storesSnapshot = await getDocs(storeQuery);
-    const results: SearchResult[] = [];
+    const stores = await matchingStoreDocuments(term);
 
-    for (const doc of storesSnapshot.docs) {
-      const data = doc.data();
-      if (
-        data.isApproved === true &&
-        data.isActive === true &&
-        data.isOpen
-      ) {
-        let distance = 0;
-        if (userLocation && data.latitude && data.longitude) {
-          distance = calculateDistance(
-            userLocation.lat,
-            userLocation.lng,
-            data.latitude,
-            data.longitude
-          );
-        }
+    return stores.flatMap((document) => {
+      const data = document.data() as Data;
 
-        // Add store as a result with empty products array
-        // This will show the store even if it has no matching products
-        results.push({
-          id: doc.id,
-          name: data.name || "Store",
-          description: "Store",
-          price: 0,
-          imageUrl: data.logoUrl || "",
-          category: "Store",
-          stock: 0,
-          storeId: doc.id,
-          storeName: data.name || "Store",
-          storeRating: data.rating || 4.5,
-          storeDistance: distance,
-          deliveryFee:
-            data.deliveryFee ||
-            getDeliveryFeeNumber(distance),
-          estimatedTime:
-            data.estimatedPrepTime ||
-            getEstimatedTimeNumber(distance),
-          storeLogo:
-            data.logoUrl || "",
-        });
+      if (!isCustomerVisibleStore(data)) {
+        return [];
       }
-    }
 
-    return results;
+      const store = storeData(
+        document.id,
+        data,
+        userLocation,
+        marketplacePolicy
+      );
+      const distance = userLocation &&
+        store.latitude &&
+        store.longitude
+        ? calculateDistance(
+          userLocation.lat,
+          userLocation.lng,
+          store.latitude,
+          store.longitude
+        )
+        : 0;
+
+      return [{
+        id: store.id,
+        name: store.name,
+        description: "Store",
+        price: 0,
+        imageUrl: store.logoUrl || "",
+        category: "Store",
+        stock: 0,
+        storeId: store.id,
+        storeName: store.name,
+        storeRating: store.rating,
+        storeDistance: distance,
+        deliveryFee: store.deliveryFee,
+        estimatedTime: store.estimatedPrepTime,
+        storeLogo: store.logoUrl,
+        storeIsOpen: store.isOpen,
+        storeAddress: store.address,
+        storePhone: store.phone,
+        storeLatitude: store.latitude,
+        storeLongitude: store.longitude,
+      }];
+    });
   } catch (error) {
-    console.error("Error searching stores:", error);
+    console.error("Customer store search failed.", error);
     return [];
   }
 }

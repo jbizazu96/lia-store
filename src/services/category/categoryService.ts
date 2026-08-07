@@ -21,6 +21,9 @@ import {
 import {
   db,
 } from "@/lib/firebase";
+import {
+  loadCached,
+} from "@/services/cache/clientDataCache";
 
 import type {
   Category,
@@ -78,25 +81,31 @@ export const categoryService = {
   */
 
   async getCategories(): Promise<Category[]> {
-    const snapshot =
-      await getDocs(
-        query(
-          collection(
-            db,
-            "categories"
-          ),
-          orderBy(
-            "name"
-          )
-        )
-      );
+    return loadCached(
+      "customer-categories",
+      async () => {
+        const snapshot =
+          await getDocs(
+            query(
+              collection(
+                db,
+                "categories"
+              ),
+              orderBy(
+                "name"
+              )
+            )
+          );
 
-    return snapshot.docs.map(
-      (document) =>
-        mapCategoryDocument(
-          document.id,
-          document.data()
-        )
+        return snapshot.docs.map(
+          (document) =>
+            mapCategoryDocument(
+              document.id,
+              document.data()
+            )
+        );
+      },
+      { ttlMs: 5 * 60_000, scope: "public" },
     );
   },
 

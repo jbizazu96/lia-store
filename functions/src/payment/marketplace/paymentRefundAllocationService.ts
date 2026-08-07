@@ -58,6 +58,18 @@ export interface PaymentRefundAllocationInput {
   };
 
   /*
+   * Immutable values captured with the original order/settlement. Refunds
+   * must never use the marketplace policy that happens to be active today.
+   */
+  allocationPolicy: {
+    storeCommissionBasisPoints: number;
+    driverCommissionBasisPoints: number;
+    freeDeliveryMinimumCents: number;
+    freeDeliveryDriverIncentiveWithoutTipCents: number;
+    freeDeliveryDriverIncentiveWithTipCents: number;
+  };
+
+  /*
    * Required for partial refunds.
    *
    * Omitted component amounts default to zero.
@@ -436,6 +448,7 @@ export function calculatePaymentRefundAllocation(
    */
   const refundedAllocation =
     calculatePaymentAllocation({
+      ...input.allocationPolicy,
       merchandiseSubtotal:
         refundComponents
           .merchandiseAmount,

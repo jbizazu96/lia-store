@@ -44,6 +44,33 @@ async function getStoreCustomerUids(
 }
 
 export class CustomerStoreEvents {
+  private async notifyAllCustomers(
+    input: Omit<StoreCustomerNotification, "storeId">
+  ): Promise<void> {
+    const customers = await getFirestore("default")
+      .collection("users")
+      .where("accountType", "==", "customer")
+      .get();
+
+    await Promise.allSettled(
+      customers.docs.map(async (customer) => {
+        await notificationStore.createNotification({
+          uid: customer.id,
+          title: input.title,
+          body: input.body,
+          type: "promotion",
+          icon: input.icon,
+          color: input.color,
+          navigationPath: input.deepLink,
+        });
+        await notificationService.sendToUser(
+          customer.id,
+          input.title,
+          input.body,
+        );
+      }),
+    );
+  }
   private async notifyPreviousCustomers(
     input: StoreCustomerNotification
   ): Promise<void> {
@@ -94,19 +121,31 @@ export class CustomerStoreEvents {
   }
 
   async newPromotion(
-    storeId: string,
     productId: string,
     productName: string,
     storeName: string,
     promotionLabel: string
   ): Promise<void> {
-    await this.notifyPreviousCustomers({
-      storeId,
+    await this.notifyAllCustomers({
       title: "New store promotion",
       body: `${promotionLabel} on ${productName} at ${storeName}.`,
       icon: "tag",
       color: "orange",
       deepLink: `/product/${productId}`,
+    });
+  }
+
+  async newPlatformPromotion(
+    title: string,
+    body: string,
+    deepLink: string,
+  ): Promise<void> {
+    await this.notifyAllCustomers({
+      title,
+      body,
+      icon: "tag",
+      color: "orange",
+      deepLink,
     });
   }
 }

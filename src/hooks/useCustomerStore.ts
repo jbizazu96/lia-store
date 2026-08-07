@@ -32,8 +32,6 @@ import {
 } from "@/services/category/categoryService";
 import { storeMapper } from "@/mappers/storeMapper";
 
-import { DELIVERY_CONFIG } from "@/config/delivery";
-
 import { productService } from "@/services/product/productService";
 import { promotionService } from "@/services/promotion/promotionService";
 import { storeService } from "@/services/store/storeService";
@@ -55,6 +53,10 @@ import {
   calculateDeliveryFee,
   getDeliveryFeeDisplay,
 } from "@/services/delivery/deliveryPricing";
+import {
+  useMarketplacePricingPolicy,
+} from "@/hooks/useMarketplacePricingPolicy";
+import {useOrderDeliveryPolicy} from "@/hooks/useOrderDeliveryPolicy";
 
 import type { Category } from "@/types/category";
 import type { Product } from "@/types/product";
@@ -189,6 +191,8 @@ export function useCustomerStore({
 
   skipDistanceWarning = false,
 }: UseCustomerStoreParams): UseCustomerStoreResult {
+  const orderDeliveryPolicy = useOrderDeliveryPolicy();
+  const marketplacePolicy = useMarketplacePricingPolicy();
   const [store, setStore] =
     useState<CustomerStore | null>(null);
 
@@ -228,6 +232,20 @@ export function useCustomerStore({
         setLoading(true);
         setError(null);
 
+        if (!marketplacePolicy) {
+          return;
+        }
+
+        /*
+         * The customer address is needed only when Home did not already pass
+         * a route. Start this independent request immediately so it overlaps
+         * with the public store/profile reads below.
+         */
+        const initialDistance = parseNumber(distanceParam);
+        const customerLocationRequest = initialDistance > 0 || !auth.currentUser
+          ? Promise.resolve(null)
+          : userService.getDefaultLocation(auth.currentUser.uid);
+
         /*
         |--------------------------------------------------------------------------
         | Load Domain Store
@@ -264,11 +282,13 @@ export function useCustomerStore({
         const [
           storeProducts,
           categoryDefinitions,
+          customerLocation,
         ] = await Promise.all([
           productService.getStoreProducts(
             storeId
           ),
           categoryService.getCategories(),
+          customerLocationRequest,
         ]);
 
         const customerProducts =
@@ -312,10 +332,7 @@ export function useCustomerStore({
             auth.currentUser;
 
           if (currentUser) {
-            const userLocation =
-              await userService.getDefaultLocation(
-                currentUser.uid
-              );
+            const userLocation = customerLocation;
 
             const hasUserLocation =
               userLocation !== null &&
@@ -361,7 +378,8 @@ export function useCustomerStore({
               const deliveryPricing =
                 calculateDeliveryFee(
                   distance,
-                  0
+                  0,
+                  marketplacePolicy,
                 );
 
               deliveryFee =
@@ -369,7 +387,8 @@ export function useCustomerStore({
 
               estimatedTime =
                 getEstimatedTimeNumber(
-                  distance
+                  distance,
+                  orderDeliveryPolicy,
                 );
             }
           }
@@ -391,15 +410,19 @@ export function useCustomerStore({
 
               deliveryFeeDisplay:
                 getDeliveryFeeDisplay(
-                  distance
+                  distance,
+                  marketplacePolicy,
                 ),
 
               estimatedPrepTime:
-                estimatedTime || 15,
+                estimatedTime ||
+                orderDeliveryPolicy?.defaultPreparationMinutes ||
+                0,
 
               estimatedDeliveryTime:
                 getEstimatedTime(
-                  distance
+                  distance,
+                  orderDeliveryPolicy,
                 ),
 
               reviewCount: 0,
@@ -482,7 +505,7 @@ export function useCustomerStore({
 
         const exceedsDeliveryRadius =
           distance >
-          DELIVERY_CONFIG.MAX_RADIUS_MILES;
+          marketplacePolicy.maxRadiusMiles;
 
         setDistanceValue(distance);
 
@@ -575,6 +598,8 @@ export function useCustomerStore({
     deliveryFeeParam,
     estimatedTimeParam,
     skipDistanceWarning,
+    marketplacePolicy,
+    orderDeliveryPolicy,
   ]);
 
   /*
@@ -601,7 +626,7 @@ export function useCustomerStore({
     distanceValue,
     isOutsideDeliveryRadius:
       distanceValue >
-      DELIVERY_CONFIG.MAX_RADIUS_MILES,
+      (marketplacePolicy?.maxRadiusMiles ?? Infinity),
     closeDistanceWarning,
     openDistanceWarning,
   };

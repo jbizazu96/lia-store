@@ -8,6 +8,8 @@ import {motion} from "framer-motion";
 import {X, MapPin, AlertCircle, Truck, Clock} from "lucide-react";
 import type { CustomerStore } from "@/types/view-models/customerStore";
 import {formatDistance, getEstimatedTime} from "@/services/delivery/distance";
+import {useMarketplacePricingPolicy} from "@/hooks/useMarketplacePricingPolicy";
+import {useOrderDeliveryPolicy} from "@/hooks/useOrderDeliveryPolicy";
 
 interface DistanceWarningModalProps {
   store: CustomerStore;
@@ -22,9 +24,11 @@ export function DistanceWarningModal({
   onClose,
   onContinue,
 }: DistanceWarningModalProps) {
-  const maxRadius = 25;
+  const marketplacePolicy = useMarketplacePricingPolicy();
+  const orderDeliveryPolicy = useOrderDeliveryPolicy();
+  const maxRadius = marketplacePolicy?.maxRadiusMiles ?? 0;
   const formattedDistance = formatDistance(distance);
-  const estimatedTime = getEstimatedTime(distance);
+  const estimatedTime = getEstimatedTime(distance, orderDeliveryPolicy);
 
   // Format delivery fee
   const formatDeliveryFee = (fee: number) => {

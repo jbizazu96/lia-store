@@ -41,6 +41,9 @@ import {
   calculatePaymentAllocation,
   type PaymentAllocation,
 } from "./paymentAllocationService";
+import {
+  parseMarketplacePricingPolicy,
+} from "../pricing/marketplacePricingPolicy";
 
 import {
   createLedgerEntry,
@@ -180,12 +183,21 @@ interface TrustedStorePayout {
   storeId: string;
 
   stripeAccountId: string;
+  storeCommissionBasisPoints: number;
 }
 
 interface TrustedDriverPayout {
   driverId: string;
 
   stripeAccountId: string;
+}
+
+async function getConfiguredDriverCommissionBasisPoints(): Promise<number> {
+  const value = (await db.collection("settings").doc("marketplacePayment").get())
+    .data()?.defaultDriverCommissionBasisPoints;
+  return typeof value === "number" && Number.isInteger(value) && value >= 0 && value <= 5_000
+    ? value
+    : 3_000;
 }
 
 /*
@@ -580,6 +592,16 @@ async function getTrustedStorePayout(
     );
   }
 
+  const marketplaceSettings =
+    await db
+      .collection("settings")
+      .doc("marketplacePayment")
+      .get();
+  const configuredDefault =
+    marketplaceSettings.data()?.defaultStoreCommissionBasisPoints;
+  const storeOverride =
+    storeDocument.data()?.paymentSettings?.storeCommissionBasisPoints;
+
   /*
    * The paid order snapshots its intended connected account. A later account
    * change must not redirect or block an amount already earned. Stripe will
@@ -592,6 +614,18 @@ async function getTrustedStorePayout(
 
     stripeAccountId:
       orderStripeAccountId,
+    storeCommissionBasisPoints:
+      typeof storeOverride === "number" &&
+      Number.isInteger(storeOverride) &&
+      storeOverride >= 0 &&
+      storeOverride <= 5_000
+        ? storeOverride
+        : typeof configuredDefault === "number" &&
+          Number.isInteger(configuredDefault) &&
+          configuredDefault >= 0 &&
+          configuredDefault <= 5_000
+          ? configuredDefault
+          : 1_000,
   };
 }
 
@@ -840,6 +874,7 @@ async function activate(
     const [
       storePayout,
       driverPayout,
+      driverCommissionBasisPoints,
     ] =
       await Promise.all([
         getTrustedStorePayout(
@@ -849,6 +884,7 @@ async function activate(
         getTrustedDriverPayout(
           order
         ),
+        getConfiguredDriverCommissionBasisPoints(),
       ]);
 
     /*
@@ -857,7 +893,17 @@ async function activate(
     |--------------------------------------------------------------------------
     */
 
-    const allocation =
+      let orderPricingPolicy;
+      try {
+        orderPricingPolicy = parseMarketplacePricingPolicy(order.pricingPolicy ?? {});
+      } catch {
+        throw new MarketplaceSettlementActivationError(
+          "INVALID_ORDER",
+          "The order is missing its immutable marketplace pricing policy.",
+        );
+      }
+
+      const allocation =
       calculatePaymentAllocation({
         merchandiseSubtotal:
           pricing.subtotalAmount,
@@ -873,6 +919,14 @@ async function activate(
 
         serviceFee:
           pricing.serviceFeeAmount,
+        storeCommissionBasisPoints:
+          storePayout.storeCommissionBasisPoints,
+        driverCommissionBasisPoints,
+        freeDeliveryMinimumCents: orderPricingPolicy.freeDeliveryMinimumCents,
+        freeDeliveryDriverIncentiveWithoutTipCents:
+          orderPricingPolicy.freeDeliveryDriverIncentiveWithoutTipCents,
+        freeDeliveryDriverIncentiveWithTipCents:
+          orderPricingPolicy.freeDeliveryDriverIncentiveWithTipCents,
       });
 
     validateAllocationConservation(
@@ -956,6 +1010,9 @@ async function activate(
               platformRevenue:
                 allocation.platform
                   .totalRevenue,
+              storeCommissionBasisPoints:
+                storePayout.storeCommissionBasisPoints,
+              driverCommissionBasisPoints,
 
               salesTax:
                 allocation.store

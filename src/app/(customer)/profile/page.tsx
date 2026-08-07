@@ -25,7 +25,8 @@ import {LanguageModal} from "@/components/customer/profile/LanguageModal";
 import {SecurityModal} from "@/components/customer/profile/SecurityModal";
 import {LogoutModal} from "@/components/customer/profile/LogoutModal";
 import {DeleteAccountModal} from "@/components/customer/profile/DeleteAccountModal";
-import { BrandedLoader } from "@/components/ui/BrandedLoader";
+import { PageContentSkeleton } from "@/components/ui/PageContentSkeleton";
+import { CustomerBottomNavigation } from "@/components/customer/navigation/CustomerBottomNavigation";
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -80,7 +81,7 @@ export default function ProfilePage() {
       /* The Function writes the optimized URL asynchronously after resize. */
       for (let attempt = 0; attempt < 12; attempt += 1) {
         await new Promise((resolve) => setTimeout(resolve, 1500));
-        const updatedProfile = await customerProfileClientService.getProfile();
+        const updatedProfile = await customerProfileClientService.getProfile(true);
 
         if (updatedProfile.profileImageStatus === "ready") {
           setUserData(updatedProfile);
@@ -133,7 +134,7 @@ export default function ProfilePage() {
   ];
 
   if (loading) {
-    return <BrandedLoader message="Loading Profile" />;
+    return <main className="min-h-screen bg-white p-4"><PageContentSkeleton cards={1} rows={5} /></main>;
   }
 
   const profileData: CustomerProfile = {
@@ -151,9 +152,9 @@ export default function ProfilePage() {
   };
 
   return (
-    <main className="min-h-screen bg-white">
+    <main className="min-h-screen bg-gray-50 pb-28">
       {/* Header with Back Button */}
-      <div className="bg-white border-b border-gray-100 sticky top-0 z-20">
+      <div className="sticky top-0 z-20 border-b border-gray-200/70 bg-gray-50/95 backdrop-blur-xl">
         <div className="flex items-center gap-3 px-4 py-4 max-w-lg mx-auto">
           <button
             onClick={() => router.back()}
@@ -270,6 +271,8 @@ export default function ProfilePage() {
           />
         )}
       </AnimatePresence>
+
+      <CustomerBottomNavigation />
     </main>
   );
 }

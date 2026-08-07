@@ -18,6 +18,9 @@ import {
 import {
   onDocumentWritten,
 } from "firebase-functions/v2/firestore";
+import {
+  createCatalogSearchTokens,
+} from "../services/catalog/catalogSearchTokens";
 
 type Data = Record<string, unknown>;
 
@@ -50,6 +53,12 @@ function publicProduct(data: Data, productId: string) {
     reviewCount: Math.max(0, Math.floor(number(data.reviewCount))),
     soldCount: Math.max(0, Math.floor(number(data.soldCount))),
     promotion: data.promotion ?? null,
+    searchTokens: createCatalogSearchTokens([
+      data.name,
+      data.description,
+      data.category,
+      data.brand,
+    ]),
     createdAt: data.createdAt ?? FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
   };

@@ -64,6 +64,102 @@ export {
   updateDriverWorkspaceProfile,
 } from "./callable/driverWorkspace";
 export {
+  getAdminWorkspaceEntry,
+  getAdminWorkspaceOverview,
+  getAdminStoreApplications,
+  getAdminDriverApplications,
+  getAdminStoreApplication,
+  getAdminDriverApplication,
+  decideAdminApplicationDocument,
+  decideAdminApplication,
+  setAdminDriverApprovedRadius,
+  setAdminStoreApproval,
+  setAdminDriverApproval,
+  setAdminStoreSuspension,
+  setAdminDriverSuspension,
+  activateAdminStore,
+} from "./callable/adminWorkspace";
+export {
+  clearAdminNotifications,
+  getAdminNotifications,
+  markAdminNotificationRead,
+} from "./callable/adminNotifications";
+export {
+  decideAdminAccountDeletionRequest,
+  getAdminAccountDeletionRequest,
+  getAdminAccountDeletionRequests,
+} from "./callable/adminAccountDeletion";
+export {
+  getAdminOrder,
+  getAdminOrders,
+} from "./callable/adminOrderOperations";
+export {
+  getAdminFinanceOverview,
+  getAdminLiaFinanceReport,
+} from "./callable/adminFinancialOperations";
+export {
+  getAdminCommissionSettings,
+  getAdminMarketplacePricingPolicy,
+  saveAdminDefaultDriverCommission,
+  saveAdminMarketplacePricingPolicy,
+  saveAdminDefaultStoreCommission,
+  saveAdminStoreCommissionOverride,
+} from "./callable/adminCommissionSettings";
+export {
+  getAdminStoreApplicationPolicy,
+  saveAdminStoreApplicationPolicy,
+} from "./callable/adminStoreApplicationSettings";
+export {
+  getAdminDriverApplicationPolicy,
+  saveAdminDriverApplicationPolicy,
+} from "./callable/adminDriverApplicationSettings";
+export {
+  getAdminOrderDeliveryPolicy,
+  getOrderDeliveryPolicyForClient,
+  saveAdminOrderDeliveryPolicy,
+} from "./callable/adminOrderDeliverySettings";
+export {
+  getAdminCustomer,
+  getAdminCustomers,
+  setAdminCustomerSuspension,
+} from "./callable/adminCustomerManagement";
+export {
+  getAdminPlatformReport,
+} from "./callable/adminPlatformReports";
+export {
+  backfillAdminPlatformDailyReports,
+} from "./callable/adminPlatformReportBackfill";
+export {
+  getAdminAuditLogs,
+} from "./callable/adminAuditLogs";
+export {getMarketplacePricing} from "./callable/marketplacePricing";
+export {
+  deleteAdminHomePromotion,
+  getAdminHomePromotions,
+  getCustomerHomePromotions,
+  saveAdminHomePromotion,
+} from "./callable/homePromotions";
+export {
+  adminAccountDeletionRequested,
+  adminCustomerPaymentFailed,
+  adminCustomerRefundClaimSubmitted,
+  adminDriverApplicationSubmitted,
+  adminLowStockProduct,
+  adminNewCustomerCreated,
+  adminPaymentTransferFailed,
+  adminProductAdded,
+  adminRefundRequested,
+  adminRefundStatusChanged,
+  adminStoreApplicationSubmitted,
+  remindAdminDocumentExpirations,
+  remindAdminDocumentReviews,
+} from "./triggers/adminNotifications";
+export {homePromotionCustomerNotifications} from "./triggers/homePromotionCustomerNotifications";
+export {
+  customerRefundClaimDecisionNotification,
+  customerRefundClaimPaymentNotification,
+} from "./triggers/refundClaimNotifications";
+export {
   clearCustomerCart,
   getCustomerCart,
   saveCustomerCart,
@@ -89,8 +185,10 @@ export {
   beginCustomerProfileImageUpload,
   deleteCustomerDefaultAddress,
   deleteCustomerProfileData,
+  getCustomerFavoriteStores,
   getCustomerProfile,
   saveCustomerDefaultAddress,
+  setCustomerStoreFavorite,
   updateCustomerProfile,
 } from "./callable/customerProfile";
 export {
@@ -111,12 +209,16 @@ export {
   getStoreWorkspaceEntry,
   getStoreWorkspaceDashboard,
   getStoreWorkspaceFinancials,
+  getStoreWorkspacePayouts,
   getStoreWorkspaceOrder,
   getStoreWorkspaceOrders,
   getStoreWorkspaceSettings,
   saveStoreWorkspaceSchedule,
   saveStoreWorkspaceSettings,
 } from "./callable/storeWorkspace";
+export {
+  uploadAdminStoreBrandingImage,
+} from "./callable/adminStoreBranding";
 export { processStoreImage } from "./images/processStoreImage";
 export {
   storePublicProfileSync,
@@ -133,6 +235,10 @@ export {
 export {
   marketplaceSettlementOnOrderCompleted,
 } from "./triggers/marketplaceSettlementOnOrderCompleted";
+export {
+  platformCustomerDailyReport,
+  platformOrderDailyReport,
+} from "./triggers/platformDailyReports";
 
 export {
   reconcileMarketplaceSettlements,
@@ -145,6 +251,10 @@ export {
 export {
   processMarketplaceRefunds,
 } from "./scheduler/processMarketplaceRefunds";
+
+export {
+  processEligibleMarketplaceRefund,
+} from "./triggers/processEligibleMarketplaceRefund";
 
 /*
   Initialize the Firebase Admin SDK once.
@@ -361,68 +471,7 @@ export const resendVerificationEmail = onCall(
 );
 
 /*
-  FUNCTION 4: setEmailVerifiedManually (Admin Only)
-
-  This is an admin function to manually set emailVerified status.
-  Use this for testing or support purposes only.
-*/
-export const setEmailVerifiedManually = onCall(
-  {
-    region: "us-central1",
-  },
-  async (request) => {
-    // Only allow admins to use this function
-    if (!request.auth) {
-      throw new HttpsError("unauthenticated", "You must be logged in.");
-    }
-
-    // Check if user is admin (you'll need to implement this check)
-    // For now, we'll skip the admin check, but you should add it
-    const {uid, emailVerified} = request.data;
-
-    if (!uid) {
-      throw new HttpsError(
-        "invalid-argument",
-        "User UID is required."
-      );
-    }
-
-    try {
-      // Update Firestore
-      const updateData: {
-        emailVerified: boolean;
-        emailVerifiedAt: admin.firestore.FieldValue | null;
-      } = {
-        emailVerified: emailVerified || false,
-        emailVerifiedAt: emailVerified
-          ? admin.firestore.FieldValue.serverTimestamp()
-          : null,
-      };
-
-      await db.collection("users").doc(uid).update(updateData);
-
-      console.log(
-        `🔧 Manual update: emailVerified=${emailVerified} for user: ${uid}`
-      );
-
-      return {
-        success: true,
-        uid: uid,
-        emailVerified: emailVerified || false,
-      };
-    } catch (error) {
-      console.error("❌ Error in manual update:", error);
-      const err = error as {message?: string};
-      throw new HttpsError(
-        "internal",
-        err.message || "Failed to update verification status."
-      );
-    }
-  }
-);
-
-/*
-  FUNCTION 5: cleanupExpiredCarts (Scheduled Function - v2)
+  FUNCTION 4: cleanupExpiredCarts (Scheduled Function - v2)
 
   Automatically deletes expired carts from Firestore.
   Runs every 6 hours to clean up carts older than 48 hours.
@@ -521,6 +570,32 @@ export {
 export {
   requestAccountDeletion,
 };
+export {
+  createCustomerRefundClaim,
+  getCustomerRefundClaim,
+} from "./callable/refundClaims";
+export {
+  decideAdminRefundClaim,
+  getAdminRefundClaim,
+  getAdminRefundClaims,
+} from "./callable/adminRefundClaims";
+export {
+  createCustomerOrderSupportRequest,
+  getCustomerOrderSupportRequest,
+} from "./callable/orderSupport";
+export {
+  getAdminOrderSupportRequest,
+  respondAdminOrderSupportRequest,
+} from "./callable/adminOrderSupport";
+export {
+  orderSupportRequestCreated,
+  orderSupportResponseNotification,
+} from "./triggers/orderSupportNotifications";
+export {
+  orderSupportOrderInvestigationSync,
+  paymentRefundOrderInvestigationSync,
+  refundClaimOrderInvestigationSync,
+} from "./triggers/orderInvestigationSync";
 export {
   initializeUserProfile,
 };

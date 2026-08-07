@@ -48,8 +48,8 @@ import {
 } from "@/hooks/useStoreDashboard";
 
 import {
-  BrandedLoader,
-} from "@/components/ui/BrandedLoader";
+  PageContentSkeleton,
+} from "@/components/ui/PageContentSkeleton";
 
 import {
   ORDER_STATUS_CONFIG,
@@ -114,11 +114,7 @@ export default function DashboardPage() {
   */
 
   if (loading) {
-    return (
-      <BrandedLoader
-        message="Loading Dashboard"
-      />
-    );
+    return <PageContentSkeleton />;
   }
 
   /*

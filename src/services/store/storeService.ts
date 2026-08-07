@@ -27,6 +27,9 @@ import {
 import { isStoreActive, isStoreApproved } from "./storeAvailability";
 
 import { db } from "@/lib/firebase";
+import {
+  loadCached,
+} from "@/services/cache/clientDataCache";
 import type { Store } from "@/types/store";
 
 type PublicStoreDocument = Record<string, unknown>;
@@ -146,15 +149,21 @@ export const storeService = {
    * projection. No private stores/{storeId} data is available to the browser.
    */
   async getStores(): Promise<Store[]> {
-    const snapshot = await getDocs(
-      collection(db, "storePublicProfiles")
-    );
+    return loadCached(
+      "customer-store-catalog",
+      async () => {
+        const snapshot = await getDocs(
+          collection(db, "storePublicProfiles")
+        );
 
-    return snapshot.docs.map((storeDocument) =>
-      mapStoreDocument(
-        storeDocument.id,
-        storeDocument.data()
-      )
+        return snapshot.docs.map((storeDocument) =>
+          mapStoreDocument(
+            storeDocument.id,
+            storeDocument.data()
+          )
+        );
+      },
+      { ttlMs: 15_000, scope: "public" },
     );
   },
 
@@ -193,17 +202,23 @@ export const storeService = {
   async getStore(
     storeId: string
   ): Promise<Store | null> {
-    const snapshot = await getDoc(
-      doc(db, "storePublicProfiles", storeId)
-    );
+    if (!storeId.trim()) return null;
 
-    if (!snapshot.exists()) {
-      return null;
-    }
+    return loadCached(
+      `customer-store:${storeId}`,
+      async () => {
+        const snapshot = await getDoc(
+          doc(db, "storePublicProfiles", storeId)
+        );
 
-    return mapStoreDocument(
-      snapshot.id,
-      snapshot.data()
+        if (!snapshot.exists()) return null;
+
+        return mapStoreDocument(
+          snapshot.id,
+          snapshot.data()
+        );
+      },
+      { ttlMs: 30_000, scope: "public" },
     );
   },
 

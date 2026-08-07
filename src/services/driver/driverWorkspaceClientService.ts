@@ -14,6 +14,11 @@ import {
 import {
   functions,
 } from "@/lib/firebase";
+import {
+  invalidateCached,
+  loadCached,
+  writeCached,
+} from "@/services/cache/clientDataCache";
 import type {
   DriverNotification,
   DriverPayment,
@@ -66,29 +71,42 @@ async function call<T>(
 }
 
 export const driverWorkspaceClientService = {
-  getEntry: () => call<{
-    hasApplication: boolean;
-    onboardingCompleted: boolean;
-    onboardingStep: string;
-    isApproved: boolean;
-  }>("getDriverWorkspaceEntry"),
+  getEntry: () => loadCached(
+    "driver-workspace-entry",
+    () => call<{
+      hasApplication: boolean;
+      onboardingCompleted: boolean;
+      onboardingStep: string;
+      isApproved: boolean;
+      status: "draft" | "pending_review" | "approved" | "rejected" | "suspended";
+    }>("getDriverWorkspaceEntry"),
+    { ttlMs: 15_000 },
+  ),
 
-  getSummary: () =>
-    call<DriverWorkspaceSummary>(
+  getSummary: () => loadCached(
+    "driver-workspace-summary",
+    () => call<DriverWorkspaceSummary>(
       "getDriverWorkspaceSummary"
     ),
+    { ttlMs: 15_000 },
+  ),
 
-  updateProfile: (profile: DriverProfile) =>
-    call<DriverWorkspaceSummary>(
+  updateProfile: async (profile: DriverProfile) => {
+    const summary = await call<DriverWorkspaceSummary>(
       "updateDriverWorkspaceProfile",
       {profile}
-    ),
+    );
+    return writeCached("driver-workspace-summary", summary, { ttlMs: 15_000 });
+  },
 
-  getPayments: () =>
-    call<{
+  getPayments: () => loadCached(
+    "driver-workspace-payments",
+    () => call<{
       payments: DriverPayment[];
       totals: DriverPaymentTotals;
     }>("getDriverWorkspacePayments"),
+    { ttlMs: 30_000 },
+  ),
 
   getNotifications: () =>
     call<{notifications: DriverNotification[]}>(
@@ -104,7 +122,7 @@ export const driverWorkspaceClientService = {
   clearNotifications: () =>
     call("clearDriverWorkspaceNotifications"),
 
-  submitDocumentReplacement: (input: {
+  submitDocumentReplacement: async (input: {
     field:
       | "drivers-license-front"
       | "drivers-license-back"
@@ -113,9 +131,12 @@ export const driverWorkspaceClientService = {
     expirationDate: string;
     issuingState?: string;
     provider?: string;
-  }) =>
-    call(
+  }) => {
+    const response = await call(
       "submitDriverDocumentReplacement",
       input
-    ),
+    );
+    invalidateCached("driver-workspace-summary");
+    return response;
+  },
 };

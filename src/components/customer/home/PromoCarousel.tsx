@@ -1,139 +1,71 @@
 "use client";
 
-import {useState, useEffect, useRef} from "react";
+import {useEffect, useRef, useState} from "react";
+import {useRouter} from "next/navigation";
 import {motion, AnimatePresence} from "framer-motion";
-import {Tag, Gift, Truck, Percent} from "lucide-react";
+import {Gift, Percent, Tag, Truck} from "lucide-react";
+import {homePromotionClientService} from "@/services/promotion/homePromotionClientService";
+import type {HomePromotion} from "@/types/homePromotion";
 
-const promos = [
-  {
-    id: 1,
-    title: "Free Delivery",
-    subtitle: "Free delivery for any order over $150",
-    color: "from-orange-500 to-orange-600",
-    icon: Truck,
-  },
-  {
-    id: 2,
-    title: "Summer Special",
-    subtitle: "Get 20% off on all African groceries",
-    color: "from-green-500 to-green-600",
-    icon: Percent,
-  },
-  {
-    id: 3,
-    title: "New Store Alert",
-    subtitle: "Discover new African stores in your area",
-    color: "from-blue-500 to-blue-600",
-    icon: Gift,
-  },
-  {
-    id: 4,
-    title: "Refer a Friend",
-    subtitle: "Get $10 credit for each referral",
-    color: "from-purple-500 to-purple-600",
-    icon: Tag,
-  },
-];
+const THEME = {
+  orange: {color: "from-orange-500 to-orange-600", icon: Truck},
+  green: {color: "from-green-500 to-green-600", icon: Percent},
+  blue: {color: "from-blue-500 to-blue-600", icon: Gift},
+  purple: {color: "from-purple-500 to-purple-600", icon: Tag},
+} as const;
 
 export function PromoCarousel() {
+  const router = useRouter();
+  const [promotions, setPromotions] = useState<HomePromotion[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const [startX, setStartX] = useState(0);
   const [offset, setOffset] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Auto-play
   useEffect(() => {
-    if (isDragging) return;
-    const interval = setInterval(() => {
-      setCurrentIndex((prev) => (prev + 1) % promos.length);
-    }, 5000);
-    return () => clearInterval(interval);
-  }, [isDragging]);
+    let active = true;
+    const load = async () => {
+      try {
+        const result = await homePromotionClientService.getActive();
+        if (active) {
+          setPromotions(result);
+          setCurrentIndex((current) => Math.min(current, Math.max(result.length - 1, 0)));
+        }
+      } catch {
+        if (active) setPromotions([]);
+      }
+    };
+    void load();
+    const interval = window.setInterval(() => { void load(); }, 60_000);
+    return () => { active = false; window.clearInterval(interval); };
+  }, []);
 
-  // Touch handlers for swipe
-  const handleTouchStart = (e: React.TouchEvent) => {
-    setStartX(e.touches[0].clientX);
-    setIsDragging(true);
-  };
+  useEffect(() => {
+    if (isDragging || promotions.length < 2) return;
+    const interval = window.setInterval(() => {
+      setCurrentIndex((current) => (current + 1) % promotions.length);
+    }, 5_000);
+    return () => window.clearInterval(interval);
+  }, [isDragging, promotions.length]);
 
-  const handleTouchMove = (e: React.TouchEvent) => {
-    if (!isDragging) return;
-    const delta = e.touches[0].clientX - startX;
-    setOffset(delta);
-  };
+  if (promotions.length === 0) return null;
+  const currentPromotion = promotions[currentIndex];
+  const theme = THEME[currentPromotion.theme];
+  const Icon = theme.icon;
 
-  const handleTouchEnd = () => {
+  const finishSwipe = () => {
     if (!isDragging) return;
     setIsDragging(false);
-    
-    const threshold = 50;
-    if (offset > threshold) {
-      setCurrentIndex((prev) => (prev - 1 + promos.length) % promos.length);
-    } else if (offset < -threshold) {
-      setCurrentIndex((prev) => (prev + 1) % promos.length);
-    }
+    if (offset > 50) setCurrentIndex((current) => (current - 1 + promotions.length) % promotions.length);
+    if (offset < -50) setCurrentIndex((current) => (current + 1) % promotions.length);
     setOffset(0);
   };
 
-  const handleDotClick = (index: number) => {
-    setCurrentIndex(index);
-  };
-
-  // ✅ Get the current promo
-  const currentPromo = promos[currentIndex];
-  const IconComponent = currentPromo.icon;
-
-  return (
-    <div 
-      ref={containerRef}
-      className="relative overflow-hidden rounded-2xl touch-pan-y"
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={handleTouchEnd}
-    >
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={currentIndex}
-          initial={{opacity: 0, x: 100}}
-          animate={{opacity: 1, x: offset}}
-          exit={{opacity: 0, x: -100}}
-          transition={{duration: 0.4}}
-          className={`bg-gradient-to-r ${currentPromo.color} p-6 rounded-2xl min-h-[120px] flex items-center`}
-        >
-          <div className="flex items-center gap-4 w-full">
-            <div className="w-14 h-14 bg-white/20 rounded-full flex items-center justify-center flex-shrink-0">
-              {/* ✅ Use IconComponent correctly */}
-              <IconComponent className="w-7 h-7 text-white" />
-            </div>
-            <div className="flex-1">
-              <h3 className="text-white font-bold text-lg">
-                {currentPromo.title}
-              </h3>
-              <p className="text-white/90 text-sm">
-                {currentPromo.subtitle}
-              </p>
-            </div>
-            <button className="px-4 py-2 bg-white/20 text-white text-sm font-semibold rounded-full hover:bg-white/30 transition">
-              Shop now
-            </button>
-          </div>
-        </motion.div>
-      </AnimatePresence>
-
-      {/* Dots */}
-      <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
-        {promos.map((_, index) => (
-          <button
-            key={index}
-            onClick={() => handleDotClick(index)}
-            className={`w-2 h-2 rounded-full transition ${
-              index === currentIndex ? "bg-white w-4" : "bg-white/50"
-            }`}
-            aria-label={`Go to slide ${index + 1}`}
-          />
-        ))}
-      </div>
-    </div>
-  );
+  return <div ref={containerRef} className="relative overflow-hidden rounded-2xl touch-pan-y" onTouchStart={(event) => { setStartX(event.touches[0].clientX); setIsDragging(true); }} onTouchMove={(event) => { if (isDragging) setOffset(event.touches[0].clientX - startX); }} onTouchEnd={finishSwipe}>
+    <AnimatePresence mode="wait"><motion.div key={currentPromotion.id} initial={{opacity: 0, x: 100}} animate={{opacity: 1, x: offset}} exit={{opacity: 0, x: -100}} transition={{duration: 0.4}} className={`flex min-h-[120px] items-center rounded-2xl bg-gradient-to-r p-6 ${theme.color}`}>
+      <div className="flex w-full items-center gap-4"><div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-white/20"><Icon className="h-7 w-7 text-white"/></div><div className="flex-1"><h3 className="text-lg font-bold text-white">{currentPromotion.title}</h3><p className="text-sm text-white/90">{currentPromotion.subtitle}</p></div>{currentPromotion.targetPath && <button type="button" onClick={() => router.push(currentPromotion.targetPath!)} className="rounded-full bg-white/20 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/30">{currentPromotion.ctaLabel}</button>}</div>
+    </motion.div></AnimatePresence>
+    {promotions.length > 1 && <div className="absolute bottom-3 left-1/2 flex -translate-x-1/2 gap-1.5">{promotions.map((promotion, index) => <button key={promotion.id} type="button" onClick={() => setCurrentIndex(index)} className={`h-2 rounded-full transition ${index === currentIndex ? "w-4 bg-white" : "w-2 bg-white/50"}`} aria-label={`Go to slide ${index + 1}`}/>)}</div>}
+  </div>;
 }

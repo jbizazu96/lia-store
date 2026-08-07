@@ -65,9 +65,6 @@ import {
   ShieldCheck,
 } from "lucide-react";
 
-import {
-  DELIVERY_CONFIG,
-} from "@/config/delivery";
 
 import {
   getStoreStatus,
@@ -88,6 +85,7 @@ import {
 import {
   useCheckoutPricing,
 } from "@/hooks/useCheckoutPricing";
+import {useMarketplacePricingPolicy} from "@/hooks/useMarketplacePricingPolicy";
 
 import {
   usePrepareCheckoutPayment,
@@ -166,6 +164,7 @@ function formatCurrencyFromCents(
 */
 
 export default function CheckoutPage() {
+  const marketplacePolicy = useMarketplacePricingPolicy();
   const router =
     useRouter();
 
@@ -370,8 +369,7 @@ export default function CheckoutPage() {
   const isOutsideDeliveryRadius =
     address !== null &&
     distanceMiles >
-      DELIVERY_CONFIG
-        .MAX_RADIUS_MILES;
+      (marketplacePolicy?.maxRadiusMiles ?? Infinity);
 
   const isDeliveryDistanceUnavailable =
     address !== null &&
@@ -1286,8 +1284,7 @@ const handleViewOrder =
             <p className="text-sm font-medium text-red-700">
               Delivery is unavailable because this store is outside your{" "}
               {
-                DELIVERY_CONFIG
-                  .MAX_RADIUS_MILES
+                marketplacePolicy?.maxRadiusMiles
               }
               -mile delivery radius.
             </p>

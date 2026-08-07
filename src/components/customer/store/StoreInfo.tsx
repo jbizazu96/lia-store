@@ -14,11 +14,10 @@ import { motion } from "framer-motion";
 import { Clock, MapPin, Truck, Star, ChevronRight, AlertCircle } from "lucide-react";
 import {
   formatDistance,
-  getDeliveryFee,
   getEstimatedTime,
 } from "@/services/delivery/distance";
-import { PRICING_CONFIG } from "@/config/pricing";
-import { DELIVERY_CONFIG } from "@/config/delivery";
+import {useMarketplacePricingPolicy} from "@/hooks/useMarketplacePricingPolicy";
+import {useOrderDeliveryPolicy} from "@/hooks/useOrderDeliveryPolicy";
 
 interface ScheduleDay {
   day: string;
@@ -51,6 +50,8 @@ export function StoreInfo({
   schedule,
   onViewMore,
 }: StoreInfoProps) {
+  const marketplacePolicy = useMarketplacePricingPolicy();
+  const orderDeliveryPolicy = useOrderDeliveryPolicy();
   // Debug: Log schedule data
   console.log("StoreInfo - schedule received:", schedule);
   console.log("StoreInfo - schedule type:", typeof schedule);
@@ -61,13 +62,16 @@ export function StoreInfo({
   const formattedDistance = formatDistance(distance);
   
   const isWithinDeliveryRadius =
-    distance <= DELIVERY_CONFIG.MAX_RADIUS_MILES;
+    distance <= (marketplacePolicy?.maxRadiusMiles ?? Infinity);
+
+  const displayedMinimumOrder =
+    (marketplacePolicy?.defaultMinimumOrderCents ?? 0) / 100;
 
   // Get delivery fee from the service (uses the same logic as home page)
-  const deliveryFeeDisplay = getDeliveryFee(distance);
+  const deliveryFeeDisplay = `$${deliveryFee.toFixed(2)}`;
   
   // Get estimated time from the service
-  const formattedTime = getEstimatedTime(distance || estimatedPrepTime / 2);
+  const formattedTime = getEstimatedTime(distance || estimatedPrepTime / 2, orderDeliveryPolicy);
 
 
       const status = getStoreStatus(
@@ -152,7 +156,7 @@ export function StoreInfo({
 
       {/* Minimum Order */}
       <div className="mt-2 text-xs text-gray-400">
-        Minimum order: ${PRICING_CONFIG.DEFAULT_MINIMUM_ORDER.toFixed(2)}
+        Minimum order: ${displayedMinimumOrder.toFixed(2)}
       </div>
     </motion.div>
   );

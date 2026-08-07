@@ -49,7 +49,17 @@ export function useStoreDashboard(): UseStoreDashboardResult {
     if (showLoading) setLoading(true);
 
     try {
-      const entry = await storeWorkspaceClientService.getEntry();
+      /* Both callables independently verify the owner, so start them together. */
+      const [entryResult, dashboardResult] = await Promise.allSettled([
+        storeWorkspaceClientService.getEntry(),
+        storeWorkspaceClientService.getDashboard(),
+      ]);
+
+      if (entryResult.status === "rejected") {
+        throw entryResult.reason;
+      }
+
+      const entry = entryResult.value;
       if (!entry.hasStore || !entry.store) {
         setData(null);
         setNeedsStoreSetup(true);
@@ -57,8 +67,11 @@ export function useStoreDashboard(): UseStoreDashboardResult {
         return;
       }
 
-      const dashboard = await storeWorkspaceClientService.getDashboard();
-      setData(dashboard);
+      if (dashboardResult.status === "rejected") {
+        throw dashboardResult.reason;
+      }
+
+      setData(dashboardResult.value);
       setNeedsStoreSetup(false);
       setError(null);
     } catch (loadError) {

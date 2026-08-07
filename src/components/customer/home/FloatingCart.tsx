@@ -20,7 +20,7 @@ export function FloatingCart({ itemCount, totalPrice, onClick }: FloatingCartPro
   if (itemCount === 0) return null;
 
   return (
-    <div className="fixed bottom-4 left-4 right-4 z-40 max-w-lg mx-auto">
+    <div className="fixed bottom-24 left-4 right-4 z-40 mx-auto max-w-lg">
       <AnimatePresence>
         <motion.button
           initial={{ opacity: 0, y: 20, scale: 0.95 }}

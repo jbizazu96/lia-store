@@ -13,6 +13,9 @@ import {
   FieldValue,
   getFirestore,
 } from "firebase-admin/firestore";
+import {
+  createCatalogSearchTokens,
+} from "../catalog/catalogSearchTokens";
 
 export interface StorePublicProfileSource {
   name?: unknown;
@@ -99,6 +102,13 @@ export async function syncStorePublicProfile(
       logoUrl: publicText(store.logoUrl),
       bannerUrl: publicText(store.bannerUrl),
       category: publicText(store.category),
+      searchTokens: createCatalogSearchTokens([
+        store.name,
+        store.description,
+        store.city,
+        store.state,
+        store.category,
+      ]),
       rating: publicNumber(store.rating),
       minimumOrder: publicNumber(
         store.minimumOrder,

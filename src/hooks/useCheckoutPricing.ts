@@ -31,10 +31,10 @@ import {
 import {
   calculateDeliveryFee,
 } from "@/services/delivery/deliveryPricing";
-
 import {
-  PRICING_CONFIG,
-} from "@/config/pricing";
+  useMarketplacePricingPolicy,
+} from "@/hooks/useMarketplacePricingPolicy";
+import {useOrderDeliveryPolicy} from "@/hooks/useOrderDeliveryPolicy";
 
 import type {
   Store,
@@ -102,6 +102,9 @@ export function useCheckoutPricing({
   store,
   address,
 }: UseCheckoutPricingParams): UseCheckoutPricingResult {
+  const marketplacePolicy =
+    useMarketplacePricingPolicy();
+  const orderDeliveryPolicy = useOrderDeliveryPolicy();
   const [distanceMiles, setDistanceMiles] = useState(0);
   const [isCalculatingDistance, setIsCalculatingDistance] = useState(false);
   const [distanceError, setDistanceError] = useState<string | null>(null);
@@ -183,19 +186,17 @@ export function useCheckoutPricing({
   }, [store, address?.latitude, address?.longitude]);
 
   return useMemo(() => {
-    const pricing =
-      calculateDeliveryFee(
-        distanceMiles,
-        subtotal
-      );
+    const pricing = marketplacePolicy
+      ? calculateDeliveryFee(distanceMiles, subtotal, marketplacePolicy)
+      : null;
 
     const deliveryFee =
-      pricing.deliveryFee;
+      pricing?.deliveryFee ?? 0;
 
     const originalDeliveryFee = Math.round(
       (
-        pricing.breakdown.distanceFee +
-        pricing.breakdown.peakSurcharge
+        (pricing?.breakdown.distanceFee ?? 0) +
+        (pricing?.breakdown.peakSurcharge ?? 0)
       ) * 100
     ) / 100;
     
@@ -216,12 +217,12 @@ export function useCheckoutPricing({
     */
 
     const serviceFee =
-      pricing.serviceFee;
+      pricing?.serviceFee ?? 0;
 
     const tax =
       Math.round(
         subtotal *
-          PRICING_CONFIG.SALES_TAX_RATE *
+          (marketplacePolicy?.salesTaxRate ?? 0) *
           100
       ) / 100;
 
@@ -242,6 +243,7 @@ export function useCheckoutPricing({
       estimatedDeliveryMinutes:
         getEstimatedTimeNumber(
           distanceMiles
+          , orderDeliveryPolicy
         ),
 
       deliveryFee,
@@ -268,5 +270,7 @@ export function useCheckoutPricing({
     distanceMiles,
     isCalculatingDistance,
     distanceError,
+    marketplacePolicy,
+    orderDeliveryPolicy,
   ]);
 }

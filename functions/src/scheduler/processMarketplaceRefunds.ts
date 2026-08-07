@@ -284,6 +284,42 @@ async function findExpiredProcessingRefunds(): Promise<
 
 /*
 |--------------------------------------------------------------------------
+| Isolated Work Discovery
+|--------------------------------------------------------------------------
+|
+| A failed retry or lease-recovery query must never prevent a newly approved
+| refund from reaching Stripe. Each query is independent, so record the
+| affected source and let the remaining sources continue.
+|
+*/
+
+async function findRefundWorkSafely(
+  source: RefundWorkSource,
+  findWork: () => Promise<RefundWorkItem[]>
+): Promise<RefundWorkItem[]> {
+  try {
+    return await findWork();
+  } catch (
+    error: unknown
+  ) {
+    console.error(
+      "Marketplace refund work discovery failed.",
+      {
+        source,
+
+        error:
+          getSafeErrorMessage(
+            error
+          ),
+      }
+    );
+
+    return [];
+  }
+}
+
+/*
+|--------------------------------------------------------------------------
 | Duplicate Protection
 |--------------------------------------------------------------------------
 |
@@ -406,11 +442,20 @@ export const processMarketplaceRefunds =
         expiredProcessingRefunds,
       ] =
         await Promise.all([
-          findEligibleRefunds(),
+          findRefundWorkSafely(
+            "eligible",
+            findEligibleRefunds
+          ),
 
-          findRetryableRefunds(),
+          findRefundWorkSafely(
+            "retry",
+            findRetryableRefunds
+          ),
 
-          findExpiredProcessingRefunds(),
+          findRefundWorkSafely(
+            "expired_processing",
+            findExpiredProcessingRefunds
+          ),
         ]);
 
       const workItems =

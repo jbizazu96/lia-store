@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { auth, db } from "@/lib/firebase";
@@ -11,7 +11,6 @@ import {
 import { onAuthStateChanged } from "firebase/auth";
 import type { CustomerStore } from "@/types/view-models/customerStore";
 import type { Store } from "@/types/store";
-import { DELIVERY_CONFIG } from "@/config/delivery";
 import { storeMapper } from "@/mappers/storeMapper";
 import { storeService } from "@/services/store/storeService";
 import { isStoreCustomerVisible } from "@/services/store/storeAvailability";
@@ -36,10 +35,17 @@ import { PromoCarousel } from "@/components/customer/home/PromoCarousel";
 import { StoreCard } from "@/components/customer/home/StoreCard";
 import { DistanceWarningModal } from "@/components/customer/home/DistanceWarningModal";
 import { FloatingCart } from "@/components/customer/home/FloatingCart";
+import { CustomerBottomNavigation } from "@/components/customer/navigation/CustomerBottomNavigation";
 import { useCart } from "@/context/CartContext";
-import { BrandedLoader } from "@/components/ui/BrandedLoader";
+import { PageContentSkeleton } from "@/components/ui/PageContentSkeleton";
+import {useMarketplacePricingPolicy} from "@/hooks/useMarketplacePricingPolicy";
+import {useOrderDeliveryPolicy} from "@/hooks/useOrderDeliveryPolicy";
+import { useCustomerFavoriteStores } from "@/hooks/useCustomerFavoriteStores";
+import { Heart } from "lucide-react";
 
 export default function CustomerHomePage() {
+  const marketplacePolicy = useMarketplacePricingPolicy();
+  const orderDeliveryPolicy = useOrderDeliveryPolicy();
   const router = useRouter();
   const { itemCount, totalPrice } = useCart();
   const [userName, setUserName] = useState("Guest");
@@ -48,15 +54,56 @@ export default function CustomerHomePage() {
   const [distanceError, setDistanceError] = useState<string | null>(null);
   const [nearbyStores, setNearbyStores] = useState<CustomerStore[]>([]);
   const [farStores, setFarStores] = useState<CustomerStore[]>([]);
-  const [filteredNearby, setFilteredNearby] = useState<CustomerStore[]>([]);
+  const [storeFilter, setStoreFilter] = useState<"all" | "favorites">("all");
   const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState("");
   const endOfListRef = useRef<HTMLDivElement>(null);
 
   // Distance warning modal state
   const [selectedStore, setSelectedStore] = useState<CustomerStore | null>(null);
   const [selectedDistance, setSelectedDistance] = useState(0);
   const [showDistanceWarning, setShowDistanceWarning] = useState(false);
+  const {
+    storeIds: favoriteStoreIds,
+    isFavorite,
+    setFavorite,
+  } = useCustomerFavoriteStores();
+
+  const favoriteStoreIdSet = useMemo(
+    () => new Set(favoriteStoreIds),
+    [favoriteStoreIds]
+  );
+
+  const displayedNearbyStores = useMemo(
+    () => nearbyStores
+      .map((store) => ({
+        ...store,
+        isFavorite: favoriteStoreIdSet.has(store.id),
+      }))
+      .filter((store) =>
+        storeFilter === "all" || store.isFavorite
+      ),
+    [
+      favoriteStoreIdSet,
+      nearbyStores,
+      storeFilter,
+    ]
+  );
+
+  const displayedFarStores = useMemo(
+    () => farStores
+      .map((store) => ({
+        ...store,
+        isFavorite: favoriteStoreIdSet.has(store.id),
+      }))
+      .filter((store) =>
+        storeFilter === "all" || store.isFavorite
+      ),
+    [
+      favoriteStoreIdSet,
+      farStores,
+      storeFilter,
+    ]
+  );
 
   // Get current user
   useEffect(() => {
@@ -102,14 +149,13 @@ export default function CustomerHomePage() {
     let latestRequest = 0;
 
     const updateStores = async (storesData: Store[]) => {
-      if (!locationReady) {
+      if (!locationReady || !marketplacePolicy) {
         return;
       }
 
       if (!userLocation) {
         setNearbyStores([]);
         setFarStores([]);
-        setFilteredNearby([]);
         setLoading(false);
         return;
       }
@@ -162,14 +208,14 @@ export default function CustomerHomePage() {
               return null;
             }
 
-            const pricing = calculateDeliveryFee(distance, 0);
+            const pricing = calculateDeliveryFee(distance, 0, marketplacePolicy);
 
             return storeMapper.toCustomerStore(store, {
               distance,
               deliveryFee: pricing.deliveryFee,
-              deliveryFeeDisplay: getDeliveryFeeDisplay(distance),
-              estimatedPrepTime: getEstimatedTimeNumber(distance),
-              estimatedDeliveryTime: getEstimatedTime(distance),
+              deliveryFeeDisplay: getDeliveryFeeDisplay(distance, marketplacePolicy),
+              estimatedPrepTime: getEstimatedTimeNumber(distance, orderDeliveryPolicy),
+              estimatedDeliveryTime: getEstimatedTime(distance, orderDeliveryPolicy),
               reviewCount: 0,
               categories: [],
               promotions: [],
@@ -204,18 +250,17 @@ export default function CustomerHomePage() {
         // Split stores into nearby (≤25mi) and far (>25mi)
         const nearby = activeStores.filter(
           (store) =>
-            store.distance <= DELIVERY_CONFIG.MAX_RADIUS_MILES
+            store.distance <= marketplacePolicy.maxRadiusMiles
         );
 
         const far = activeStores.filter(
           (store) =>
-            store.distance > DELIVERY_CONFIG.MAX_RADIUS_MILES
+            store.distance > marketplacePolicy.maxRadiusMiles
         );
         
         if (isMounted && requestId === latestRequest) {
           setNearbyStores(nearby);
           setFarStores(far);
-          setFilteredNearby(nearby);
         }
       } catch (error) {
         console.error("Error fetching stores:", error);
@@ -249,28 +294,12 @@ export default function CustomerHomePage() {
       isMounted = false;
       unsubscribe();
     };
-  }, [locationReady, userLocation]);
-
-  // Handle search
-  useEffect(() => {
-    if (searchQuery.trim() === "") {
-      setFilteredNearby(nearbyStores);
-    } else {
-      const query = searchQuery.toLowerCase();
-      const filtered = nearbyStores.filter(store =>
-        store.name.toLowerCase().includes(query) ||
-        store.description?.toLowerCase().includes(query) ||
-        store.city?.toLowerCase().includes(query) ||
-        store.category?.toLowerCase().includes(query)
-      );
-      setFilteredNearby(filtered);
-    }
-  }, [searchQuery, nearbyStores]);
+  }, [locationReady, userLocation, marketplacePolicy, orderDeliveryPolicy]);
 
   // Handle store click
   const handleStoreClick = (store: CustomerStore) => {
     const distance = store.distance;
-    const maxRadius = DELIVERY_CONFIG.MAX_RADIUS_MILES;
+    const maxRadius = marketplacePolicy?.maxRadiusMiles ?? 0;
     
     if (distance > maxRadius) {
       setSelectedStore(store);
@@ -302,13 +331,13 @@ export default function CustomerHomePage() {
   };
 
   if (loading) {
-    return <BrandedLoader message="Loading Home" />;
+    return <main className="min-h-screen bg-gray-50 p-4"><PageContentSkeleton cards={3} rows={4} /></main>;
   }
 
   return (
-    <main className="min-h-screen bg-gray-50 pb-20">
+    <main className="min-h-screen bg-gray-50 pb-28">
       {/* Top Navigation */}
-      <TopNavigation userName={userName} showSearch={false} />
+      <TopNavigation />
 
       {/* Welcome Section */}
       <div className="px-4 pt-4 pb-2">
@@ -316,12 +345,11 @@ export default function CustomerHomePage() {
         <h1 className="text-2xl font-bold text-gray-800">{userName}</h1>
       </div>
 
-      {/* Search Bar */}
-      <div className="px-4 mt-2">
-        <SearchBar 
-          value={searchQuery} 
-          onChange={setSearchQuery} 
-          placeholder="Search stores..."
+      {/* Sticky global search remains in its original place below welcome. */}
+      <div className="sticky top-[65px] z-30 mt-2 bg-gray-50/95 px-4 py-2 backdrop-blur-sm">
+        <SearchBar
+          onOpen={() => router.push("/search")}
+          placeholder="Search stores and products"
         />
       </div>
 
@@ -338,22 +366,60 @@ export default function CustomerHomePage() {
 
       {/* Store List */}
       <section className="px-4 mt-6">
-        {nearbyStores.length === 0 && farStores.length === 0 ? (
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-bold text-gray-800">
+              {storeFilter === "favorites"
+                ? "Saved stores"
+                : "Stores Near You"}
+            </h2>
+            <p className="text-sm text-gray-500">
+              {storeFilter === "favorites"
+                ? `${displayedNearbyStores.length + displayedFarStores.length} saved`
+                : `${nearbyStores.length + farStores.length} stores`}
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setStoreFilter((current) =>
+              current === "all" ? "favorites" : "all"
+            )}
+            className={
+              "inline-flex items-center gap-1.5 rounded-full border px-3 py-2 text-sm font-bold transition " +
+              (storeFilter === "favorites"
+                ? "border-orange-400 text-orange-600"
+                : "border-gray-200 bg-white/60 text-gray-700 hover:border-orange-200")
+            }
+          >
+            <Heart className={
+              "h-4 w-4 " +
+              (storeFilter === "favorites"
+                ? "fill-orange-500 text-orange-500"
+                : "text-gray-500")
+            } />
+            Favorites
+          </button>
+        </div>
+
+        {displayedNearbyStores.length === 0 && displayedFarStores.length === 0 ? (
           <div className="text-center py-12">
             <div className="w-16 h-16 text-gray-300 mx-auto mb-4">🏪</div>
-            <p className="text-gray-500">No stores found</p>
-            <p className="text-sm text-gray-400">Try adjusting your search</p>
+            <p className="text-gray-500">
+              {storeFilter === "favorites"
+                ? "No saved stores yet"
+                : "No stores found"}
+            </p>
+            <p className="text-sm text-gray-400">
+              {storeFilter === "favorites"
+                ? "Tap a heart on any store to save it here."
+                : "Try adjusting your search"}
+            </p>
           </div>
         ) : (
           <>
-            {/* Nearby Stores Section */}
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-bold text-gray-800">Stores Near You</h2>
-              <span className="text-sm text-gray-500">{filteredNearby.length} stores</span>
-            </div>
-
             <AnimatePresence mode="popLayout">
-              {filteredNearby.map((store, index) => (
+              {displayedNearbyStores.map((store, index) => (
                 <motion.div
                   key={store.id}
                   initial={{ opacity: 0, y: 20 }}
@@ -361,23 +427,24 @@ export default function CustomerHomePage() {
                   exit={{ opacity: 0, x: -20 }}
                   transition={{ delay: index * 0.05 }}
                 >
-                  <StoreCard 
-                    store={store} 
+                  <StoreCard
+                    store={store}
                     onClick={() => handleStoreClick(store)}
+                    onFavoriteChange={setFavorite}
                   />
                 </motion.div>
               ))}
             </AnimatePresence>
 
             {/* Divider between nearby and far stores */}
-            {farStores.length > 0 && !searchQuery && (
+            {displayedFarStores.length > 0 && (
               <div className="mt-8 mb-6">
                 <div className="flex items-center gap-3">
                   <div className="flex-1 h-px bg-gray-200" />
                   <div className="flex items-center gap-2 text-xs text-gray-400 whitespace-nowrap">
                     <span className="w-1.5 h-1.5 rounded-full bg-gray-300" />
                     <span>
-                        Stores beyond {DELIVERY_CONFIG.MAX_RADIUS_MILES} miles
+                        Stores beyond {marketplacePolicy?.maxRadiusMiles ?? "…"} miles
                       </span>
                     <span className="w-1.5 h-1.5 rounded-full bg-gray-300" />
                   </div>
@@ -390,18 +457,19 @@ export default function CustomerHomePage() {
             )}
 
             {/* Far Stores Section */}
-            {farStores.length > 0 && !searchQuery && (
+            {displayedFarStores.length > 0 && (
               <div className="space-y-4 mt-2">
-                {farStores.map((store, index) => (
+                {displayedFarStores.map((store, index) => (
                   <motion.div
                     key={store.id}
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: index * 0.03 + 0.2 }}
                   >
-                    <StoreCard 
-                      store={store} 
-                      onClick={() => handleStoreClick(store)}
+                    <StoreCard
+                      store={store}
+                    onClick={() => handleStoreClick(store)}
+                    onFavoriteChange={setFavorite}
                     />
                   </motion.div>
                 ))}
@@ -431,6 +499,8 @@ export default function CustomerHomePage() {
         totalPrice={totalPrice}
         onClick={handleCartClick}
       />
+
+      <CustomerBottomNavigation />
 
       {/* Distance Warning Modal */}
       <AnimatePresence>

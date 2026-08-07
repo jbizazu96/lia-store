@@ -45,6 +45,10 @@ import { useConfirmation } from "@/context/ConfirmationContext";
 import { userService } from "@/services/user/userService";
 import { storeWorkspaceClientService } from "@/services/store/storeWorkspaceClientService";
 import { customerProfileClientService } from "@/services/user/customerProfileClientService";
+import {
+  adminWorkspaceClientService,
+  AdminWorkspaceClientError,
+} from "@/services/admin/adminWorkspaceClientService";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -92,9 +96,27 @@ export default function LoginPage() {
   };
 
   /*
-    Handle post-login routing based on account type.
+  Handle post-login routing based on account type.
   */
   const handlePostLogin = async (uid: string) => {
+    /*
+     * Administrators are manually provisioned in admins/{uid}. Check that
+     * record before requiring a normal users/{uid} application profile, so
+     * an admin needs only a Firebase Auth account and their admin record.
+     */
+    try {
+      await adminWorkspaceClientService.getEntry();
+      router.replace("/admin");
+      return;
+    } catch (adminError) {
+      if (
+        !(adminError instanceof AdminWorkspaceClientError) ||
+        adminError.status !== 403
+      ) {
+        throw adminError;
+      }
+    }
+
     /*
       Get user data from Firestore.
     */

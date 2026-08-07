@@ -32,7 +32,15 @@ service cloud.firestore {
 
     function isAdmin() {
       return signedIn() &&
-        userAccountType(request.auth.uid) == "admin";
+        exists(
+          /databases/$(database)/documents/admins/$(request.auth.uid)
+        ) &&
+        get(
+          /databases/$(database)/documents/admins/$(request.auth.uid)
+        ).data.isActive == true &&
+        get(
+          /databases/$(database)/documents/admins/$(request.auth.uid)
+        ).data.email == request.auth.token.email;
     }
 
     function isStoreOwnerAccount() {
@@ -416,6 +424,20 @@ service cloud.firestore {
     }
 
     /*
+     * Administrator records are provisioned manually with the Firebase Auth
+     * UID as their document ID. They are never browser-readable or writable;
+     * protected Admin Functions verify them with the Admin SDK.
+     */
+    match /admins/{adminId} {
+      allow read, write: if false;
+    }
+
+    /* Immutable server-managed records for administrator mutations. */
+    match /adminAuditLogs/{auditLogId} {
+      allow read, write: if false;
+    }
+
+    /*
     |----------------------------------------------------------------------
     | Customer-Owned Documents
     |----------------------------------------------------------------------
@@ -617,11 +639,13 @@ service cloud.firestore {
     }
 
     /*
-     * No browser access is granted to undeclared collections. Add a
-     * collection-specific rule when a new feature needs one.
+     * No browser access is granted to undeclared collections. This is also
+     * important for admins/{uid} and adminAuditLogs/{id}: Firestore matches
+     * overlapping rules as an OR, so an admin-wide fallback would otherwise
+     * accidentally expose those private server-managed collections.
      */
     match /{document=**} {
-      allow read, write: if isAdmin();
+      allow read, write: if false;
     }
   }
 }

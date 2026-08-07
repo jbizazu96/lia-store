@@ -3,38 +3,13 @@
 | Delivery Configuration
 |--------------------------------------------------------------------------
 |
-| Central place for all delivery-related business rules and constants.
-| All services and UI components should read from here instead of
-| hardcoding values.
+| Technical constants used for distance and time formatting only.
+| Marketplace pricing and the operational delivery radius are stored in
+| settings/marketplacePayment and loaded through the pricing policy.
 |
 */
 
 export const DELIVERY_CONFIG = {
-  /**
-   * Maximum delivery radius.
-   */
-  MAX_RADIUS_MILES: 25,
-
-  /**
-   * Base delivery fee.
-   */
-  BASE_DELIVERY_FEE: 7.99,
-
-  /**
-   * Additional cost per mile after the base distance.
-   */
-  COST_PER_MILE: 1.75,
-
-  /**
-   * Base distance included in the base fee.
-   */
-  BASE_DISTANCE_MILES: 5,
-
-  /**
-   * Minimum delivery fee.
-   */
-  MIN_DELIVERY_FEE: 5.99,
-
   /**
    * Minutes per mile.
    */
@@ -55,8 +30,4 @@ export const DELIVERY_CONFIG = {
    */
   METERS_PER_MILE: 1609.34,
 
-  /**
-   * Peak delivery surcharge.
-   */
-  PEAK_SURCHARGE: 1.99,
 } as const;

@@ -25,14 +25,7 @@
 
 import {
     BASIS_POINTS,
-    STORE_COMMISSION_BASIS_POINTS,
-    DRIVER_COMMISSION_BASIS_POINTS,
 } from "./marketplaceConfiguration";
-import {
-} from "./marketplaceConfiguration";
-import {
-    PAYMENT_PRICING_CONFIG,
-} from "../pricing/paymentPricingConfig";
 
 /**
  * Input required to calculate marketplace allocations.
@@ -41,6 +34,15 @@ import {
  * (USD cents).
  */
 export interface PaymentAllocationInput {
+    /*
+     * Trusted Admin-configured store commission captured for this settlement.
+     * When absent, the marketplace policy default applies.
+     */
+    storeCommissionBasisPoints: number;
+    driverCommissionBasisPoints: number;
+    freeDeliveryMinimumCents: number;
+    freeDeliveryDriverIncentiveWithoutTipCents: number;
+    freeDeliveryDriverIncentiveWithTipCents: number;
 
     /**
      * Product subtotal before taxes.
@@ -144,23 +146,23 @@ export function calculatePaymentAllocation(
 
     const storeCommission = Math.round(
         input.merchandiseSubtotal *
-        STORE_COMMISSION_BASIS_POINTS /
+        input.storeCommissionBasisPoints /
         BASIS_POINTS
     );
 
     const driverCommission = Math.round(
         input.deliveryFee *
-        DRIVER_COMMISSION_BASIS_POINTS /
+        input.driverCommissionBasisPoints /
         BASIS_POINTS
     );
 
     const freeDeliveryIncentive =
         input.deliveryFee === 0 &&
         input.merchandiseSubtotal >=
-            PAYMENT_PRICING_CONFIG.freeDeliveryMinimumCents
+            input.freeDeliveryMinimumCents
             ? input.driverTip > 0
-                ? PAYMENT_PRICING_CONFIG.freeDeliveryDriverIncentiveWithTipCents
-                : PAYMENT_PRICING_CONFIG.freeDeliveryDriverIncentiveWithoutTipCents
+                ? input.freeDeliveryDriverIncentiveWithTipCents
+                : input.freeDeliveryDriverIncentiveWithoutTipCents
             : 0;
 
     return {

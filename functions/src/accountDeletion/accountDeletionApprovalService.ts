@@ -79,9 +79,14 @@ export const accountDeletionApprovalService = {
     const request =
       snapshot.data();
 
+    /*
+     * A request awaiting more information remains reviewable after the
+     * account holder responds through support. All other terminal or
+     * processing states remain immutable.
+     */
     if (
-      request?.status !==
-      "pending_review"
+      request?.status !== "pending_review" &&
+      request?.status !== "more_information_required"
     ) {
       throw new AccountDeletionApprovalError(
         "Only pending requests may be reviewed.",

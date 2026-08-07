@@ -40,6 +40,20 @@ export interface StoreDocumentReview {
   reviewedBy: string | null;
 }
 
+/* Application requirements are read from the Admin-controlled policy. */
+export interface StoreOnboardingApplicationPolicy {
+  requiredDocuments: {
+    ownerPhotoId: boolean;
+    logo: boolean;
+    banner: boolean;
+    storeFront: boolean;
+    storeInside: boolean;
+  };
+  requireStripeAccount: boolean;
+  allowWorkspaceApprovalBeforeDocumentReview: boolean;
+  requireApprovedDocumentsForActivation: boolean;
+}
+
 /* Private owner information saved inside the pending store document. */
 export interface StoreOwnerOnboardingInfo {
   firstName: string;
@@ -99,6 +113,7 @@ export interface StoreOnboardingDraft {
   stripeTransfersEnabled?: boolean;
   stripePayoutsEnabled?: boolean;
   stripeRequiresAction?: boolean;
+  applicationPolicy?: StoreOnboardingApplicationPolicy;
 }
 
 /* Canonical order used by navigation and the progress indicator. */

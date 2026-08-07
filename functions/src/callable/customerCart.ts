@@ -217,6 +217,13 @@ async function requireCustomer(uid: string): Promise<void> {
       "This account is not authorized to manage a customer cart."
     );
   }
+
+  if (data.isActive === false) {
+    throw new HttpsError(
+      "permission-denied",
+      "This customer account is currently suspended. Contact support for help."
+    );
+  }
 }
 
 function createCartExpiration(): Timestamp {

@@ -3,8 +3,7 @@
 import {useState} from "react";
 import {motion} from "framer-motion";
 import {X, Trash2} from "lucide-react";
-import {useRouter} from "next/navigation";
-import {deleteUser, reauthenticateWithCredential, EmailAuthProvider} from "firebase/auth";
+import {reauthenticateWithCredential, EmailAuthProvider} from "firebase/auth";
 import {auth} from "@/lib/firebase";
 import {
   customerProfileClientService,
@@ -15,8 +14,7 @@ interface DeleteAccountModalProps {
 }
 
 export function DeleteAccountModal({onClose}: DeleteAccountModalProps) {
-  const router = useRouter();
-  const [step, setStep] = useState<"confirm" | "password">("confirm");
+  const [step, setStep] = useState<"confirm" | "password" | "requested">("confirm");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -34,11 +32,16 @@ export function DeleteAccountModal({onClose}: DeleteAccountModalProps) {
       const credential = EmailAuthProvider.credential(user.email, password);
       await reauthenticateWithCredential(user, credential);
 
-      /* Server-side cleanup deletes only data owned by this verified user. */
-      await customerProfileClientService.deleteProfileData();
-      await deleteUser(user);
+      /*
+       * Reauthentication proves the customer intentionally submitted this
+       * sensitive request. The callable creates an admin-reviewed request;
+       * it does not remove the customer profile or Firebase Auth account.
+       */
+      await customerProfileClientService
+        .requestAccountDeletion();
 
-      router.push("/");
+      setPassword("");
+      setStep("requested");
 
     } catch (error: any) {
       console.error("Error deleting account:", error);
@@ -48,7 +51,7 @@ export function DeleteAccountModal({onClose}: DeleteAccountModalProps) {
       } else if (error.code === "auth/too-many-requests") {
         setError("Too many failed attempts. Please try again later.");
       } else {
-        setError("Failed to delete account. Please try again.");
+        setError("Unable to submit the deletion request. Please try again.");
       }
       
       setStep("password");
@@ -76,7 +79,24 @@ export function DeleteAccountModal({onClose}: DeleteAccountModalProps) {
           </button>
         </div>
 
-        {step === "confirm" ? (
+        {step === "requested" ? (
+          <div className="text-center">
+            <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Trash2 className="w-8 h-8 text-amber-700" />
+            </div>
+            <p className="text-gray-600 text-sm mb-6">
+              Your account deletion request was sent for administrator review.
+              Your account remains available until the request is approved and
+              the deletion is scheduled.
+            </p>
+            <button
+              onClick={onClose}
+              className="w-full py-3 bg-gray-900 text-white rounded-xl font-semibold hover:bg-gray-800 transition"
+            >
+              Close
+            </button>
+          </div>
+        ) : step === "confirm" ? (
           <div className="text-center">
             <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <Trash2 className="w-8 h-8 text-red-600" />

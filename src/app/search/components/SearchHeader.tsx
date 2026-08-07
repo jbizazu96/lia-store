@@ -18,18 +18,18 @@ export function SearchHeader({
   onSubmit,
 }: SearchHeaderProps) {
   return (
-    <div className="bg-white border-b border-gray-100 sticky top-0 z-20">
-      <div className="flex items-center gap-2 px-4 py-3 max-w-lg mx-auto">
+    <div className="sticky top-0 z-20 bg-gray-50/95 px-4 py-3 backdrop-blur">
+      <div className="mx-auto flex max-w-lg items-center gap-2">
         <button
           onClick={onBack}
-          className="p-2 hover:bg-gray-100 rounded-full transition flex-shrink-0"
+          className="flex h-10 w-10 flex-none items-center justify-center rounded-full bg-gray-50 shadow-sm ring-1 ring-gray-200 transition hover:bg-gray-100"
           aria-label="Go back"
         >
           <ArrowLeft className="w-5 h-5 text-gray-700" />
         </button>
 
-        <div className="flex-1 relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+        <div className="relative flex-1 rounded-full bg-white shadow-lg ring-1 ring-gray-200">
+          <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-500" />
           <input
             type="text"
             value={value}
@@ -40,13 +40,13 @@ export function SearchHeader({
               }
             }}
             placeholder="Search products, stores..."
-            className="w-full pl-9 pr-10 py-2.5 bg-gray-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-400 text-base sm:text-sm"
+            className="w-full rounded-full bg-transparent py-3 pl-11 pr-11 text-base text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-400 sm:text-sm"
             autoFocus
           />
           {value && (
             <button
               onClick={onClear}
-              className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-gray-200 rounded-full transition"
+              className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-2 transition hover:bg-gray-100"
               aria-label="Clear search"
             >
               <X className="w-4 h-4 text-gray-400" />

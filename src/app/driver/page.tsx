@@ -32,6 +32,13 @@ function DriverPageContent() {
       .then((entry) => {
         if (!entry.hasApplication || !entry.onboardingCompleted) {
           router.replace(`/driver/onboarding/${entry.onboardingStep}`);
+        } else if (entry.status === "suspended") {
+          /*
+           * A suspended driver may view their status and account documents,
+           * but cannot be used for delivery because suspension revokes
+           * isApproved on the protected driver record.
+           */
+          router.replace("/driver/dashboard");
         } else if (!entry.isApproved) {
           router.replace("/driver/pending-approval");
         } else {

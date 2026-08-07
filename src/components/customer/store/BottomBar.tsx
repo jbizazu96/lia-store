@@ -11,6 +11,10 @@ import {Search, ShoppingBag, ChevronRight} from "lucide-react";
 interface BottomBarProps {
   searchQuery: string;
   onSearchChange: (query: string) => void;
+  /** Opens the dedicated, store-scoped product search when provided. */
+  onSearchClick?: () => void;
+  /** Search result pages keep only the cart control in this bar. */
+  showSearch?: boolean;
   itemCount: number;
   totalPrice: number;
   storeId: string;
@@ -20,6 +24,8 @@ interface BottomBarProps {
 export function BottomBar({
   searchQuery,
   onSearchChange,
+  onSearchClick,
+  showSearch = true,
   itemCount,
   totalPrice,
   storeId,
@@ -29,16 +35,20 @@ export function BottomBar({
     <div className="fixed bottom-4 left-4 right-4 z-40 max-w-lg mx-auto">
       <div className="flex items-center gap-3">
         {/* Search Bar - Floating with shadow */}
-        <div className="flex-1 relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => onSearchChange(e.target.value)}
-            placeholder="Search this store..."
-            className="w-full pl-9 pr-4 py-3 bg-white/90 backdrop-blur-sm border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-orange-400 focus:border-transparent text-base placeholder-gray-400 shadow-lg sm:text-sm"
-          />
-        </div>
+        {showSearch && (
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => onSearchChange(e.target.value)}
+              onClick={onSearchClick}
+              readOnly={onSearchClick !== undefined}
+              placeholder="Search this store..."
+              className="w-full rounded-full border border-gray-200 bg-white/90 py-3 pl-9 pr-4 text-base placeholder-gray-400 shadow-lg backdrop-blur-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-orange-400 sm:text-sm"
+            />
+          </div>
+        )}
 
         {/* Cart Summary - Floating with shadow */}
         <AnimatePresence>

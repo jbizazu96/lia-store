@@ -108,6 +108,20 @@ export interface DriverRegistrationDocument extends DriverDocumentReview {
   expirationDate: string;
 }
 
+/* Application requirements are read from the Admin-controlled policy. */
+export interface DriverOnboardingApplicationPolicy {
+  minimumAge: number;
+  maximumPreferredRadiusMiles: number;
+  requiredDocuments: {
+    driversLicenseFront: boolean;
+    driversLicenseBack: boolean;
+    vehicleInsurance: boolean;
+    vehicleRegistration: boolean;
+  };
+  requireStripeAccount: boolean;
+  requireApprovedDocumentsForApproval: boolean;
+}
+
 export interface DriverOnboardingDraft {
   driverId: string;
   isApproved: boolean;
@@ -144,6 +158,7 @@ export interface DriverOnboardingDraft {
   stripeTransfersEnabled?: boolean;
   stripePayoutsEnabled?: boolean;
   stripeRequiresAction?: boolean;
+  applicationPolicy?: DriverOnboardingApplicationPolicy;
 }
 
 export const DRIVER_ONBOARDING_STEPS: DriverOnboardingStep[] = [

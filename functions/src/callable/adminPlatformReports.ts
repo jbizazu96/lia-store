@@ -1,0 +1,133 @@
+/*
+|--------------------------------------------------------------------------
+| Admin Platform Reports
+|--------------------------------------------------------------------------
+|
+| A protected operational report for the Admin workspace. It intentionally
+| returns aggregates and daily buckets only; individual customer, payment,
+| and delivery records stay behind their dedicated callables.
+|
+*/
+
+import * as admin from "firebase-admin";
+import {
+  getFirestore,
+} from "firebase-admin/firestore";
+import {
+  HttpsError,
+  onCall,
+} from "firebase-functions/v2/https";
+import {
+  requireActiveAdmin,
+} from "../admin/adminAuthorizationService";
+
+if (admin.apps.length === 0) {
+  admin.initializeApp();
+}
+
+const db = getFirestore("default");
+const PERIODS = new Set([7, 30, 90]);
+
+function record(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}
+
+function number(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+function text(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function dayKey(value: Date): string {
+  return value.toISOString().slice(0, 10);
+}
+
+function requestedPeriod(value: unknown): number {
+  const period = number(value) || 30;
+
+  if (!PERIODS.has(period)) {
+    throw new HttpsError("invalid-argument", "Choose a 7, 30, or 90 day report.");
+  }
+
+  return period;
+}
+
+export const getAdminPlatformReport = onCall(
+  { region: "us-central1" },
+  async (request) => {
+    await requireActiveAdmin(request);
+    const periodDays = requestedPeriod(record(request.data).periodDays);
+    const beginning = new Date();
+    beginning.setUTCHours(0, 0, 0, 0);
+    beginning.setUTCDate(beginning.getUTCDate() - (periodDays - 1));
+
+    const endingDay = dayKey(new Date());
+    const [dailyReports, activeStores, approvedDrivers] = await Promise.all([
+      db.collection("platformDailyReports")
+        .where("date", ">=", dayKey(beginning))
+        .where("date", "<=", endingDay)
+        .orderBy("date", "asc")
+        .get(),
+      db.collection("stores")
+        .where("isApproved", "==", true)
+        .where("isActive", "==", true)
+        .count()
+        .get(),
+      db.collection("drivers")
+        .where("status", "==", "approved")
+        .count()
+        .get(),
+    ]);
+
+    const days = Array.from({ length: periodDays }, (_, index) => {
+      const date = new Date(beginning);
+      date.setUTCDate(beginning.getUTCDate() + index);
+      return {
+        date: dayKey(date),
+        orders: 0,
+        customers: 0,
+        grossSalesAmount: 0,
+      };
+    });
+    const byDay = new Map(days.map((item) => [item.date, item]));
+    dailyReports.docs.forEach((document) => {
+      const data = document.data();
+      const bucket = byDay.get(text(data.date) || document.id);
+      if (!bucket) return;
+      bucket.orders = Math.max(0, number(data.confirmedOrders));
+      bucket.customers = Math.max(0, number(data.newCustomers));
+      bucket.grossSalesAmount = Math.max(0, number(data.grossCustomerPayments));
+    });
+    const deliveredOrders = dailyReports.docs.reduce(
+      (total, document) => total + Math.max(0, number(document.data().deliveredOrders)),
+      0,
+    );
+    const cancelledOrders = dailyReports.docs.reduce(
+      (total, document) => total + Math.max(0, number(document.data().cancelledOrders)),
+      0,
+    );
+    const grossSalesAmount = days.reduce(
+      (total, item) => total + item.grossSalesAmount,
+      0,
+    );
+
+    return {
+      periodDays,
+      limited: false,
+      metrics: {
+        confirmedOrders: days.reduce((total, item) => total + item.orders, 0),
+        deliveredOrders,
+        cancelledOrders,
+        grossSalesAmount,
+        newCustomers: days.reduce((total, item) => total + item.customers, 0),
+        activeStores: activeStores.data().count,
+        approvedDrivers: approvedDrivers.data().count,
+      },
+      daily: days,
+    };
+  }
+);

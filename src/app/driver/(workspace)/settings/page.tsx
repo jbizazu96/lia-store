@@ -15,7 +15,7 @@ import { useEffect, useRef, useState } from "react";
 import { AlertCircle, BadgeDollarSign, Camera, FileUp, HelpCircle, Mail, ShieldCheck, Trash2, UserRound } from "lucide-react";
 import { httpsCallable } from "firebase/functions";
 import { auth, functions } from "@/lib/firebase";
-import { BrandedLoader } from "@/components/ui/BrandedLoader";
+import { PageContentSkeleton } from "@/components/ui/PageContentSkeleton";
 import { DriverDocumentReplaceModal } from "@/components/driver/DriverDocumentReplaceModal";
 import { DriverPasswordSection } from "@/components/driver/DriverPasswordSection";
 import { DriverProfileEditModal } from "@/components/driver/DriverProfileEditModal";
@@ -52,7 +52,7 @@ export default function DriverSettingsPage() {
   const profileImageInput = useRef<HTMLInputElement>(null);
   const refresh = () => driverWorkspaceClientService.getSummary().then(setSummary).catch(() => setSummary(null));
   useEffect(() => { void refresh(); }, []);
-  if (!summary) return <BrandedLoader message="Loading driver settings" />;
+  if (!summary) return <PageContentSkeleton cards={2} rows={5} />;
 
   const uploadProfilePhoto = async (file: File) => {
     const user = auth.currentUser;

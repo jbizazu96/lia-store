@@ -32,6 +32,10 @@ import {
 import {
   grantStoreUploadClaim,
 } from "../services/store/storeUploadClaimService";
+import {
+  getStoreApplicationPolicy,
+  type StoreApplicationPolicy,
+} from "../admin/storeApplicationPolicy";
 
 if (admin.apps.length === 0) {
   admin.initializeApp();
@@ -284,11 +288,14 @@ function scheduleError(value: unknown): string | null {
   return null;
 }
 
-function requireCompleteApplication(draft: ReturnType<typeof mapDraft>) {
+function requireCompleteApplication(
+  draft: ReturnType<typeof mapDraft>,
+  policy: StoreApplicationPolicy,
+) {
   const missing: string[] = [];
-  if (!draft.owner.firstName || !draft.owner.lastName || !draft.owner.email || !draft.owner.phone || !draft.owner.address || !draft.owner.city || !draft.owner.state || !draft.owner.zip || !draft.owner.formattedAddress || !draft.owner.photoIdUrl) missing.push("owner information");
-  if (!draft.name || !draft.email || !draft.phone || !draft.description || !draft.address || !draft.city || !draft.state || !draft.zip || !draft.formattedAddress || !draft.logoUrl) missing.push("store information");
-  if (!draft.businessType || !draft.registeredName || !draft.businessStructure || !draft.storeFrontUrl || !draft.storeInsideUrl) missing.push("business information");
+  if (!draft.owner.firstName || !draft.owner.lastName || !draft.owner.email || !draft.owner.phone || !draft.owner.address || !draft.owner.city || !draft.owner.state || !draft.owner.zip || !draft.owner.formattedAddress || (policy.requiredDocuments.ownerPhotoId && !draft.owner.photoIdUrl)) missing.push("owner information");
+  if (!draft.name || !draft.email || !draft.phone || !draft.description || !draft.address || !draft.city || !draft.state || !draft.zip || !draft.formattedAddress || (policy.requiredDocuments.logo && !draft.logoUrl) || (policy.requiredDocuments.banner && !draft.bannerUrl)) missing.push("store information");
+  if (!draft.businessType || !draft.registeredName || !draft.businessStructure || (policy.requiredDocuments.storeFront && !draft.storeFrontUrl) || (policy.requiredDocuments.storeInside && !draft.storeInsideUrl)) missing.push("business information");
   if (scheduleError(draft.schedule)) missing.push("business schedule");
   /*
    * Stripe may take time to verify the submitted payout details. A store can
@@ -296,7 +303,7 @@ function requireCompleteApplication(draft: ReturnType<typeof mapDraft>) {
    * form and has a connected account; approval and marketplace activation
    * remain separate administrative decisions.
    */
-  if (!draft.stripeAccountId) missing.push("Stripe payment setup");
+  if (policy.requireStripeAccount && !draft.stripeAccountId) missing.push("Stripe payment setup");
   if (missing.length > 0) throw new HttpsError("failed-precondition", `Complete the following before submitting your store: ${missing.join(", ")}.`);
 }
 
@@ -317,7 +324,10 @@ export const getStoreOnboardingDraft = onCall({ region: "us-central1" }, async (
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in to open store onboarding.");
   await requireStoreOwner(request.auth.uid);
   const store = await ownedStore(request.auth.uid);
-  return mapDraft(store?.id ?? null, request.auth.uid, store?.data());
+  return {
+    ...mapDraft(store?.id ?? null, request.auth.uid, store?.data()),
+    applicationPolicy: await getStoreApplicationPolicy(),
+  };
 });
 
 export const ensureStoreOnboardingDraft = onCall({ region: "us-central1" }, async (request) => {
@@ -355,7 +365,8 @@ export const saveStoreOnboardingOwner = onCall({ region: "us-central1", secrets:
   const store = await requireOwnedStore(request.auth.uid);
   const data = store.data() ?? {};
   const owner = isRecord(data.owner) ? data.owner : {};
-  if (!(await hasUploadedImage(store.id, "owner-photo-id")) && !text(owner.photoIdUrl)) throw new HttpsError("failed-precondition", "Upload a photo ID.");
+  const policy = await getStoreApplicationPolicy();
+  if (policy.requiredDocuments.ownerPhotoId && !(await hasUploadedImage(store.id, "owner-photo-id")) && !text(owner.photoIdUrl)) throw new HttpsError("failed-precondition", "Upload a photo ID.");
   const location = await geocodeAddress(fullAddress({ ...input, state }));
   if (!location) throw new HttpsError("invalid-argument", "We couldn't verify your home address. Check the street, city, state, and ZIP code.");
   const photoChanged = requireRecord(request.data).photoIdUploaded === true;
@@ -386,7 +397,9 @@ export const saveStoreOnboardingStoreInformation = onCall({ region: "us-central1
   if (!text(input.name).trim() || !text(input.email).trim() || !text(input.phone).trim() || !text(input.description).trim() || !text(input.address).trim() || !text(input.city).trim() || !state || !text(input.zip).trim()) throw new HttpsError("invalid-argument", "Complete every required store field with a valid two-letter state.");
   const store = await requireOwnedStore(request.auth.uid);
   const data = store.data() ?? {};
-  if (!(await hasUploadedImage(store.id, "logo")) && !text(data.logoUrl)) throw new HttpsError("failed-precondition", "Upload a store logo.");
+  const policy = await getStoreApplicationPolicy();
+  if (policy.requiredDocuments.logo && !(await hasUploadedImage(store.id, "logo")) && !text(data.logoUrl)) throw new HttpsError("failed-precondition", "Upload a store logo.");
+  if (policy.requiredDocuments.banner && !(await hasUploadedImage(store.id, "banner")) && !text(data.bannerUrl)) throw new HttpsError("failed-precondition", "Upload a store banner.");
   const location = await geocodeAddress(fullAddress({ ...input, state }));
   if (!location) throw new HttpsError("invalid-argument", "We couldn't verify the store address. Check the street, city, state, and ZIP code.");
   const logoChanged = input.logoUploaded === true;
@@ -411,7 +424,10 @@ export const saveStoreOnboardingBusinessInformation = onCall({ region: "us-centr
   if (!text(input.businessType) || !text(input.registeredName).trim() || !text(input.businessStructure)) throw new HttpsError("invalid-argument", "Complete every required business field.");
   const store = await requireOwnedStore(request.auth.uid);
   const data = store.data() ?? {};
-  if (!(await hasUploadedImage(store.id, "front")) && !text(data.storeFrontUrl) || !(await hasUploadedImage(store.id, "inside")) && !text(data.storeInsideUrl)) throw new HttpsError("failed-precondition", "Upload store front and inside photos.");
+  const policy = await getStoreApplicationPolicy();
+  const missingStoreFront = policy.requiredDocuments.storeFront && !(await hasUploadedImage(store.id, "front")) && !text(data.storeFrontUrl);
+  const missingStoreInside = policy.requiredDocuments.storeInside && !(await hasUploadedImage(store.id, "inside")) && !text(data.storeInsideUrl);
+  if (missingStoreFront || missingStoreInside) throw new HttpsError("failed-precondition", "Upload every required store photo.");
   const frontChanged = input.storeFrontUploaded === true;
   const insideChanged = input.storeInsideUploaded === true;
   const structure = text(input.businessStructure);
@@ -445,7 +461,10 @@ export const completeStoreOnboarding = onCall({ region: "us-central1" }, async (
   await requireStoreOwner(request.auth.uid);
   const store = await requireOwnedStore(request.auth.uid);
   const data = store.data() ?? {};
-  requireCompleteApplication(mapDraft(store.id, request.auth.uid, data));
+  requireCompleteApplication(
+    mapDraft(store.id, request.auth.uid, data),
+    await getStoreApplicationPolicy(),
+  );
   await store.ref.update({
     onboardingCompleted: true,
     onboardingStep: "stripe" as StoreOnboardingStep,

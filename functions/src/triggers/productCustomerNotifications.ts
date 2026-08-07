@@ -240,7 +240,6 @@ export const productCustomerNotifications = onDocumentWritten(
         }
 
         await customerStoreEvents.newPromotion(
-          storeId,
           productId,
           productName,
           storeName,

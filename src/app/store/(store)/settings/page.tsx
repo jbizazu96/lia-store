@@ -6,7 +6,7 @@
   ✅ Fetches store data by ownerId instead of document ID.
 */
 
-import { BrandedLoader } from "@/components/ui/BrandedLoader";
+import { PageContentSkeleton } from "@/components/ui/PageContentSkeleton";
 import { useState, useEffect, useRef } from "react";
 import {
   useRouter,
@@ -85,6 +85,46 @@ function isSettingsSection(
   );
 }
 
+/*
+  The payment section refreshes Stripe-owned status fields in local state so
+  the screen reflects the current account. Those server-owned fields must
+  never make the page look dirty. Only compare fields this settings UI can
+  actually edit and save through saveStoreWorkspaceSettings().
+*/
+function settingsEditFingerprint(
+  storeData: object | null,
+  userData: object | null,
+): string {
+  const store = (storeData ?? {}) as Record<string, unknown>;
+  const user = (userData ?? {}) as Record<string, unknown>;
+
+  return JSON.stringify({
+    store: {
+      name: store.name ?? "",
+      email: store.email ?? "",
+      phone: store.phone ?? "",
+      description: store.description ?? "",
+      address: store.address ?? "",
+      city: store.city ?? "",
+      state: store.state ?? "",
+      zip: store.zip ?? "",
+      businessType: store.businessType ?? "",
+      registeredName: store.registeredName ?? "",
+      ein: store.ein ?? "",
+      businessStructure: store.businessStructure ?? "",
+      orderNotifications: store.orderNotifications !== false,
+      emailNotifications: store.emailNotifications !== false,
+      marketingEmails: store.marketingEmails !== false,
+      pushNotifications: store.pushNotifications !== false,
+    },
+    user: {
+      displayName: user.displayName ?? "",
+      phone: user.phone ?? "",
+      language: user.language ?? "",
+    },
+  });
+}
+
 export default function SettingsPage() {
   const { showSuccess } = useSuccessToast();
   const router = useRouter();
@@ -107,14 +147,12 @@ export default function SettingsPage() {
   const [activeSection, setActiveSection] = useState<SettingsSection>("profile");
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
-  const initialStoreData = useRef<string | null>(null);
-  const initialUserData = useRef<string | null>(null);
+  const initialSettingsFingerprint = useRef<string | null>(null);
 
   const hasUnsavedChanges =
-    (initialStoreData.current !== null &&
-      JSON.stringify(storeData) !== initialStoreData.current) ||
-    (initialUserData.current !== null &&
-      JSON.stringify(userData) !== initialUserData.current);
+    initialSettingsFingerprint.current !== null &&
+    settingsEditFingerprint(storeData, userData) !==
+      initialSettingsFingerprint.current;
 
   useUnsavedChanges(hasUnsavedChanges);
   const { confirm } = useConfirmation();
@@ -132,13 +170,17 @@ export default function SettingsPage() {
         /* The callable verifies the signed-in owner before returning data. */
         const workspace =
           await storeWorkspaceClientService
-            .getSettings();
+            .getSettings(
+              searchParams.get("stripe") === "return"
+            );
 
         setStoreId(workspace.store.id);
         setStoreData(workspace.store);
         setUserData(workspace.user);
-        initialStoreData.current = JSON.stringify(workspace.store);
-        initialUserData.current = JSON.stringify(workspace.user);
+        initialSettingsFingerprint.current = settingsEditFingerprint(
+          workspace.store,
+          workspace.user,
+        );
 
       } catch (error) {
         console.error("Error fetching settings:", error);
@@ -148,7 +190,7 @@ export default function SettingsPage() {
     };
 
     fetchData();
-  }, [router]);
+  }, [router, searchParams]);
 
   /*
     Open the settings section requested by the URL.
@@ -195,8 +237,10 @@ export default function SettingsPage() {
       setStoreId(workspace.store.id);
       setStoreData(workspace.store);
       setUserData(workspace.user);
-      initialStoreData.current = JSON.stringify(workspace.store);
-      initialUserData.current = JSON.stringify(workspace.user);
+      initialSettingsFingerprint.current = settingsEditFingerprint(
+        workspace.store,
+        workspace.user,
+      );
 
       setSaveMessage("Settings saved successfully! ✅");
       showSuccess("Store settings saved successfully.");
@@ -215,7 +259,7 @@ export default function SettingsPage() {
   ========================================== */
   if (loading) {
     return (
-      <BrandedLoader message="Loading Settings" />
+      <PageContentSkeleton cards={2} rows={4} />
     );
   }
 

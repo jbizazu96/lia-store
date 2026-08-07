@@ -4,7 +4,6 @@
   Store card component with proper spacing and padding.
 */
 
-import { DELIVERY_CONFIG } from "@/config/delivery";
 import type { CustomerStore } from "@/types/view-models/customerStore";
 import { getStoreStatus } from "@/services/store/storeSchedule";
 import {useState} from "react";
@@ -15,18 +14,25 @@ import { formatDistance } from "@/services/delivery/distance";
 import {
   formatStoreName,
 } from "@/utils/productDisplay";
+import {useMarketplacePricingPolicy} from "@/hooks/useMarketplacePricingPolicy";
 
 interface StoreCardProps {
   store: CustomerStore;
   onClick: () => void;
+  onFavoriteChange: (
+    storeId: string,
+    isFavorite: boolean
+  ) => Promise<void>;
 }
 
 export function StoreCard({
   store,
   onClick,
+  onFavoriteChange,
 }: StoreCardProps) {
-  const [isFavorite, setIsFavorite] = useState(store.isFavorite);
-  const maxRadius = DELIVERY_CONFIG.MAX_RADIUS_MILES;
+  const marketplacePolicy = useMarketplacePricingPolicy();
+  const [isSavingFavorite, setIsSavingFavorite] = useState(false);
+  const maxRadius = marketplacePolicy?.maxRadiusMiles ?? Infinity;
   const distance = store.distance || 0;
   const isTooFar = distance > maxRadius;
 
@@ -77,15 +83,26 @@ export function StoreCard({
 
         {/* Favorite Button */}
         <button
+          type="button"
+          disabled={isSavingFavorite}
           onClick={(e) => {
             e.stopPropagation();
-            setIsFavorite(!isFavorite);
+            const nextFavorite = !store.isFavorite;
+
+            setIsSavingFavorite(true);
+            void onFavoriteChange(store.id, nextFavorite)
+              .catch((error) => {
+                console.error("Unable to update saved store:", error);
+              })
+              .finally(() => {
+                setIsSavingFavorite(false);
+              });
           }}
-          className="absolute top-3 right-3 w-10 h-10 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-white transition"
-          aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
+          className="absolute top-3 right-3 flex h-10 w-10 items-center justify-center rounded-full bg-white/90 backdrop-blur-sm transition hover:bg-white disabled:cursor-wait disabled:opacity-60"
+          aria-label={store.isFavorite ? "Remove from favorites" : "Add to favorites"}
         >
           <Heart 
-            className={`w-5 h-5 transition ${isFavorite ? "fill-orange-500 text-orange-500" : "text-gray-600"}`}
+            className={`w-5 h-5 transition ${store.isFavorite ? "fill-orange-500 text-orange-500" : "text-gray-600"}`}
           />
         </button>
       

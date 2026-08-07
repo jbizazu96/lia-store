@@ -46,6 +46,9 @@ import { BrandedLoader } from "@/components/ui/BrandedLoader";
 import {
   formatProductName,
 } from "@/utils/productDisplay";
+import {
+  OrderInvestigationNotice,
+} from "@/components/store/orders/OrderInvestigationNotice";
 
 interface OrderDetailsPageProps {
   params: Promise<{
@@ -193,6 +196,10 @@ export default function OrderDetailsPage({params}: OrderDetailsPageProps) {
       </div>
 
       {/* ✅ Full Timeline - Store can see all statuses */}
+      <OrderInvestigationNotice
+        investigation={order.liaInvestigation}
+      />
+
       <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
         <div className="flex items-center justify-between">
           {ORDER_STATUS_STEPS.map((step, index) => {

@@ -14,7 +14,10 @@ interface StoreHeaderProps {
   name: string;
   rating: number;
   reviewCount: number;
+  isFavorite: boolean;
   onBack: () => void;
+  onFavoriteChange: () => void;
+  favoriteSaving?: boolean;
 }
 
 export function StoreHeader({
@@ -23,7 +26,10 @@ export function StoreHeader({
   name,
   rating,
   reviewCount,
+  isFavorite,
   onBack,
+  onFavoriteChange,
+  favoriteSaving = false,
 }: StoreHeaderProps) {
   return (
     <div className="relative">
@@ -61,10 +67,17 @@ export function StoreHeader({
         </button>
         <button
           type="button"
-          className="w-10 h-10 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-white transition shadow-lg"
-          aria-label="Add to favorites"
+          disabled={favoriteSaving}
+          onClick={onFavoriteChange}
+          className="flex h-10 w-10 items-center justify-center rounded-full bg-white/90 shadow-lg backdrop-blur-sm transition hover:bg-white disabled:cursor-wait disabled:opacity-60"
+          aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
         >
-          <Heart className="w-5 h-5 text-gray-700 hover:text-red-500 transition" />
+          <Heart className={
+            "h-5 w-5 transition " +
+            (isFavorite
+              ? "fill-orange-500 text-orange-500"
+              : "text-gray-700 hover:text-orange-500")
+          } />
         </button>
       </div>
 

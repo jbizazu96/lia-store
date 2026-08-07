@@ -22,6 +22,9 @@ import {
 import { db } from "@/lib/firebase";
 import { functions } from "@/lib/firebase";
 import { httpsCallable } from "firebase/functions";
+import {
+  loadCached,
+} from "@/services/cache/clientDataCache";
 import type {
   Product,
   ProductGalleryImage,
@@ -418,17 +421,21 @@ export const productService = {
       );
     }
 
-    const snapshot = await getDoc(
-      doc(db, "productPublicProfiles", productId)
-    );
+    return loadCached(
+      `customer-product:${productId}`,
+      async () => {
+        const snapshot = await getDoc(
+          doc(db, "productPublicProfiles", productId)
+        );
 
-    if (!snapshot.exists()) {
-      return null;
-    }
+        if (!snapshot.exists()) return null;
 
-    return mapProductDocument(
-      snapshot.id,
-      snapshot.data()
+        return mapProductDocument(
+          snapshot.id,
+          snapshot.data()
+        );
+      },
+      { ttlMs: 30_000, scope: "public" },
     );
   },
 
@@ -436,28 +443,41 @@ export const productService = {
    * Get every product belonging to one store.
    */
   async getStoreProducts(
-    storeId: string
+    storeId: string,
+    forceRefresh = false,
   ): Promise<Product[]> {
     if (!storeId.trim()) {
       return [];
     }
 
-    const result = await httpsCallable<
-      { storeId: string },
-      CustomerStoreProductsResponse
-    >(
-      functions,
-      "getCustomerStoreProducts"
-    )({ storeId });
+    const loadProducts = async () => {
+        const result = await httpsCallable<
+          { storeId: string },
+          CustomerStoreProductsResponse
+        >(
+          functions,
+          "getCustomerStoreProducts"
+        )({ storeId });
 
-    return result.data.products.map(
-      (productDocument) =>
-        mapProductDocument(
-          typeof productDocument.id === "string"
-            ? productDocument.id
-            : "",
-          productDocument
-        )
+        return result.data.products.map(
+          (productDocument) =>
+            mapProductDocument(
+              typeof productDocument.id === "string"
+                ? productDocument.id
+                : "",
+              productDocument
+            )
+        );
+    };
+
+    if (forceRefresh) {
+      return loadProducts();
+    }
+
+    return loadCached(
+      `customer-store-products:${storeId}`,
+      loadProducts,
+      { ttlMs: 20_000, scope: "public" },
     );
   },
 
@@ -491,7 +511,7 @@ export const productService = {
       loading = true;
 
       try {
-        const products = await this.getStoreProducts(storeId);
+        const products = await this.getStoreProducts(storeId, true);
 
         if (active) {
           onProducts(products);

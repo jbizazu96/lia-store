@@ -1,6 +1,6 @@
 "use client";
 
-import {Search, Package} from "lucide-react";
+import {Search} from "lucide-react";
 import {SearchResult} from "../types";
 import {StoreGroup} from "../types";
 import {StoreResult} from "./StoreResult";
@@ -9,7 +9,6 @@ interface SearchResultsProps {
   loading: boolean;
   results: SearchResult[];
   groups: StoreGroup[];
-  onResultClick: (result: SearchResult) => void;
   onStoreClick: (storeId: string) => void;
 }
 
@@ -17,7 +16,6 @@ export function SearchResults({
   loading,
   results,
   groups,
-  onResultClick,
   onStoreClick,
 }: SearchResultsProps) {
   if (loading) {
@@ -45,7 +43,6 @@ export function SearchResults({
           key={group.storeId}
           group={group}
           onStoreClick={onStoreClick}
-          onProductClick={onResultClick}
         />
       ))}
     </div>

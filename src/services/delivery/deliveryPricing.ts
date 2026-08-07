@@ -1,45 +1,19 @@
-
 /*
 |--------------------------------------------------------------------------
 | Delivery Pricing Service
 |--------------------------------------------------------------------------
 |
-| Responsible for:
-|
-| • Delivery fee calculation
-| • Service fee calculation
-| • Store commission calculation
-| • Free delivery logic
-|
-| Does NOT:
-|
-| • Calculate distance
-| • Format distance
-| • Geocode addresses
-| • Calculate ETA
+| Browser estimates receive their complete policy from the trusted
+| marketplace-pricing callable. This module deliberately contains no live
+| business pricing defaults.
 |
 */
 
-import { DELIVERY_CONFIG } from "@/config/delivery";
-import { PRICING_CONFIG } from "@/config/pricing";
-
-
-function roundMoney(value: number): number {
-  return Math.round(value * 100) / 100;
-}
-
-export interface DeliveryPricingConfig {
-  baseFee: number;          // Base fee for first 5 miles (e.g., $4.99)
-  perMileRate: number;      // $0.75 per mile after base
-  maxDistance: number;      // 20 miles maximum
-  commissionRate: number;   // 0.10 - 0.15 (10-15%)
-  freeDeliveryThreshold: number; // Free delivery over this amount (e.g., $30)
-}
+import type {MarketplacePricingPolicy} from "@/services/pricing/marketplacePricingClientService";
 
 export interface DeliveryPricingResult {
   deliveryFee: number;
   serviceFee: number;
-  commission: number;
   totalFees: number;
   isFreeDelivery: boolean;
   breakdown: {
@@ -47,120 +21,55 @@ export interface DeliveryPricingResult {
     distanceFee: number;
     serviceFee: number;
     peakSurcharge: number;
-    commission: number;
   };
 }
 
-// Default configuration (can be overridden from admin panel)
-const DEFAULT_CONFIG: DeliveryPricingConfig = {
-  baseFee: DELIVERY_CONFIG.BASE_DELIVERY_FEE,
-  perMileRate: DELIVERY_CONFIG.COST_PER_MILE,
-  maxDistance: DELIVERY_CONFIG.MAX_RADIUS_MILES,
-  commissionRate: PRICING_CONFIG.DEFAULT_COMMISSION_RATE,
-  freeDeliveryThreshold: PRICING_CONFIG.FREE_DELIVERY_MINIMUM,
-};
-
-// Admin config (fetched from Firestore in production)
-let adminConfig: DeliveryPricingConfig = Object.freeze({
-  ...DEFAULT_CONFIG,
-});
-
-export function setDeliveryConfig(config: Partial<DeliveryPricingConfig>) {
-  adminConfig = Object.freeze({
-  ...adminConfig,
-  ...config,
-});
-}
-
-export function getDeliveryConfig(): DeliveryPricingConfig {
-  return adminConfig;
+function roundMoney(value: number): number {
+  return Math.round(value * 100) / 100;
 }
 
 export function calculateDeliveryFee(
   distanceMiles: number,
   subtotal: number,
-  isPeakTime: boolean = false,
+  policy: MarketplacePricingPolicy,
+  isPeakTime = false,
 ): DeliveryPricingResult {
-  const config = adminConfig;
-
-  // 1. Calculate distance-based fee
-  let distanceFee = 0;
-  
- if (distanceMiles <= DELIVERY_CONFIG.BASE_DISTANCE_MILES) {
-    // Base fee for up to 5 miles
-    distanceFee = config.baseFee;
-  } else if (distanceMiles <= config.maxDistance) {
-    // Base fee + $0.75 per mile over 5
-    const extraMiles = distanceMiles - DELIVERY_CONFIG.BASE_DISTANCE_MILES;
-    distanceFee = config.baseFee + (extraMiles * config.perMileRate);
-  } else {
-    // Maximum distance reached
-    distanceFee =
-  config.baseFee +
-  ((config.maxDistance - DELIVERY_CONFIG.BASE_DISTANCE_MILES) *
-    config.perMileRate);
-  }
-
-  // Round to 2 decimal places
- distanceFee = roundMoney(distanceFee);
-
-  // 2. Check if delivery is free (orders over threshold)
-  const isFreeDelivery = subtotal >= config.freeDeliveryThreshold;
-
-  // 3. Calculate service fee (10% of subtotal)
-let serviceFee =
-  subtotal * PRICING_CONFIG.SERVICE_FEE_PERCENTAGE;
-
-serviceFee = Math.max(
-  PRICING_CONFIG.MIN_SERVICE_FEE,
-  Math.min(
-    serviceFee,
-    PRICING_CONFIG.MAX_SERVICE_FEE
-  )
-);
-
-  // 4. Peak time surcharge (if enabled)
-  let peakSurcharge = 0;
-  if (isPeakTime) {
-    peakSurcharge = DELIVERY_CONFIG.PEAK_SURCHARGE;
-  }
-
-  // 5. Calculate commission (for store owner)
-const commission = roundMoney(
-  subtotal * config.commissionRate
-);
-
-  // 6. Calculate final delivery fee
-let deliveryFee = isFreeDelivery ? 0 : distanceFee + peakSurcharge;
-
-deliveryFee = roundMoney(deliveryFee);
-  
-  // Add service fee even if delivery is free
-  const totalFees = roundMoney(
-  deliveryFee + serviceFee
-);
+  const baseFee = policy.baseDeliveryFeeCents / 100;
+  const baseDistanceMiles = policy.baseDistanceMiles;
+  const perMileRate = policy.costPerMileCents / 100;
+  const peakSurcharge = isPeakTime ? policy.peakSurchargeCents / 100 : 0;
+  const isFreeDelivery = subtotal >= policy.freeDeliveryMinimumCents / 100;
+  const cappedDistance = Math.min(
+    Math.max(distanceMiles, 0),
+    policy.maxRadiusMiles,
+  );
+  const distanceFee = roundMoney(
+    baseFee + Math.max(cappedDistance - baseDistanceMiles, 0) * perMileRate,
+  );
+  const serviceFee = roundMoney(Math.max(
+    policy.minimumServiceFeeCents / 100,
+    Math.min(
+      subtotal * policy.serviceFeeRate,
+      policy.maximumServiceFeeCents / 100,
+    ),
+  ));
+  const deliveryFee = isFreeDelivery
+    ? 0
+    : roundMoney(distanceFee + peakSurcharge);
 
   return {
     deliveryFee,
     serviceFee,
-    commission,
-    totalFees,
+    totalFees: roundMoney(deliveryFee + serviceFee),
     isFreeDelivery,
-    breakdown: {
-      baseFee: roundMoney(config.baseFee),
-      distanceFee,
-      serviceFee,
-      peakSurcharge,
-      commission,
-    },
+    breakdown: {baseFee, distanceFee, serviceFee, peakSurcharge},
   };
 }
 
-// Helper to format distance-based fee for display
-export function getDeliveryFeeDisplay(distanceMiles: number): string {
-  const { deliveryFee } = calculateDeliveryFee(distanceMiles, 0);
-
-  return deliveryFee === 0
-    ? "Free"
-    : `$${deliveryFee.toFixed(2)}`;
+export function getDeliveryFeeDisplay(
+  distanceMiles: number,
+  policy: MarketplacePricingPolicy,
+): string {
+  const {deliveryFee} = calculateDeliveryFee(distanceMiles, 0, policy);
+  return deliveryFee === 0 ? "Free" : `$${deliveryFee.toFixed(2)}`;
 }

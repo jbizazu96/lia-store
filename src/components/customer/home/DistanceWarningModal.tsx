@@ -2,11 +2,11 @@
 
 import {motion} from "framer-motion";
 import {X, MapPin, AlertCircle, Truck} from "lucide-react";
-import { DELIVERY_CONFIG } from "@/config/delivery";
 import {
   formatDistance,
   getDeliveryStatusMessage,
 } from "@/services/delivery/distance";
+import {useMarketplacePricingPolicy} from "@/hooks/useMarketplacePricingPolicy";
 
 interface DistanceWarningModalProps {
   distance: number;
@@ -19,7 +19,9 @@ export function DistanceWarningModal({
   onClose,
   onContinue,
 }: DistanceWarningModalProps) {
-const deliveryStatus = getDeliveryStatusMessage(distance);
+const marketplacePolicy = useMarketplacePricingPolicy();
+const maxRadius = marketplacePolicy?.maxRadiusMiles ?? 0;
+const deliveryStatus = getDeliveryStatusMessage(distance, maxRadius);
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
@@ -62,7 +64,7 @@ const deliveryStatus = getDeliveryStatusMessage(distance);
               <Truck className="w-5 h-5 text-gray-500" />
               <span className="text-gray-600">Max Delivery:</span>
             </div>
-            <span className="font-bold text-gray-800">{DELIVERY_CONFIG.MAX_RADIUS_MILES} miles</span>
+            <span className="font-bold text-gray-800">{maxRadius} miles</span>
           </div>
         </div>
 

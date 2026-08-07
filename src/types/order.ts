@@ -253,6 +253,24 @@ export interface StatusHistory {
 }
 
 /* ==========================================================================
+   LIA INVESTIGATION
+   ========================================================================== */
+
+/**
+ * Store-safe summary of an order claim or report. Private customer and admin
+ * notes remain in their protected case records.
+ */
+export interface OrderInvestigation {
+  active: boolean;
+  hasRefundClaim: boolean;
+  refundClaimStatus?: string | null;
+  refundStatus?: string | null;
+  hasSupportReport: boolean;
+  supportRequestStatus?: string | null;
+  updatedAt?: Date;
+}
+
+/* ==========================================================================
    MAIN ORDER
    ========================================================================== */
 
@@ -304,6 +322,9 @@ export interface Order {
    * Reason supplied by the store when it cancels an order.
    */
   cancellationReason?: string;
+
+  /** Non-sensitive LIA claim/report status visible to the owning store. */
+  liaInvestigation?: OrderInvestigation;
 
   /**
    * Timeline of status changes.

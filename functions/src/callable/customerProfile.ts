@@ -35,6 +35,7 @@ const supportedImageTypes = new Set([
   "image/webp",
   "image/avif",
 ]);
+const maximumFavoriteStores = 100;
 
 function text(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -63,6 +64,13 @@ async function requireCustomer(uid: string) {
     throw new HttpsError(
       "permission-denied",
       "This account is not authorized to manage a customer profile."
+    );
+  }
+
+  if (data.isActive === false) {
+    throw new HttpsError(
+      "permission-denied",
+      "This customer account is currently suspended. Contact support for help."
     );
   }
 
@@ -226,6 +234,109 @@ export const deleteCustomerDefaultAddress = onCall(
   }
 );
 
+/*
+|--------------------------------------------------------------------------
+| Saved Stores
+|--------------------------------------------------------------------------
+|
+| A customer may save only publicly visible stores. The browser never writes
+| this list itself; the callable derives the customer from Firebase Auth and
+| validates the requested store against the public catalog projection.
+|
+*/
+
+function favoriteStoreIds(
+  value: unknown
+): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return [...new Set(
+    value.filter((item): item is string =>
+      typeof item === "string" &&
+      /^[A-Za-z0-9_-]{1,128}$/.test(item)
+    )
+  )].slice(0, maximumFavoriteStores);
+}
+
+export const getCustomerFavoriteStores = onCall(
+  { region: "us-central1" },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError(
+        "unauthenticated",
+        "Sign in to view your saved stores."
+      );
+    }
+
+    const { data } = await requireCustomer(request.auth.uid);
+
+    return {
+      storeIds: favoriteStoreIds(data.favoriteStoreIds),
+    };
+  }
+);
+
+export const setCustomerStoreFavorite = onCall(
+  { region: "us-central1" },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError(
+        "unauthenticated",
+        "Sign in to manage saved stores."
+      );
+    }
+
+    const { reference, data } = await requireCustomer(request.auth.uid);
+    const input = isRecord(request.data) ? request.data : {};
+    const storeId = text(input.storeId);
+    const shouldSave = input.isFavorite === true;
+
+    if (!/^[A-Za-z0-9_-]{1,128}$/.test(storeId)) {
+      throw new HttpsError(
+        "invalid-argument",
+        "A valid store is required."
+      );
+    }
+
+    const currentStoreIds = favoriteStoreIds(data.favoriteStoreIds);
+
+    if (shouldSave) {
+      const storeProfile = await db
+        .collection("storePublicProfiles")
+        .doc(storeId)
+        .get();
+
+      if (!storeProfile.exists) {
+        throw new HttpsError(
+          "not-found",
+          "This store is not currently available to save."
+        );
+      }
+
+      if (!currentStoreIds.includes(storeId) &&
+        currentStoreIds.length >= maximumFavoriteStores) {
+        throw new HttpsError(
+          "resource-exhausted",
+          `You can save up to ${maximumFavoriteStores} stores.`
+        );
+      }
+    }
+
+    const storeIds = shouldSave
+      ? [...new Set([...currentStoreIds, storeId])]
+      : currentStoreIds.filter((id) => id !== storeId);
+
+    await reference.update({
+      favoriteStoreIds: storeIds,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    return { storeIds };
+  }
+);
+
 export const beginCustomerProfileImageUpload = onCall(
   { region: "us-central1" },
   async (request) => {
@@ -257,14 +368,21 @@ export const beginCustomerProfileImageUpload = onCall(
 export const deleteCustomerProfileData = onCall(
   { region: "us-central1" },
   async (request) => {
-    if (!request.auth) throw new HttpsError("unauthenticated", "Sign in to delete your account data.");
-    const { reference } = await requireCustomer(request.auth.uid);
-    const addresses = await reference.collection("addresses").get();
-    await admin.storage().bucket().deleteFiles({ prefix: `users/${request.auth.uid}/images/`, force: true });
-    const batch = db.batch();
-    addresses.docs.forEach((address) => batch.delete(address.ref));
-    batch.delete(reference);
-    await batch.commit();
-    return { success: true };
+    if (!request.auth) {
+      throw new HttpsError(
+        "unauthenticated",
+        "Sign in to manage your account.",
+      );
+    }
+
+    /*
+     * Kept only as a safe compatibility boundary for an already deployed
+     * callable name. Account data must be removed exclusively by the
+     * administrator-approved deletion engine.
+     */
+    throw new HttpsError(
+      "failed-precondition",
+      "Account deletion requires administrator approval. Submit a deletion request from your profile.",
+    );
   }
 );

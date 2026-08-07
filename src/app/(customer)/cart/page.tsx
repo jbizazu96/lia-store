@@ -12,7 +12,6 @@ import {
 import {
   useCartStoreStatus,
 } from "@/hooks/useCartStoreStatus";
-import { PRICING_CONFIG } from "@/config/pricing";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
@@ -44,8 +43,10 @@ import {
   FeeInfoSheet,
   type FeeInfoType,
 } from "@/components/customer/cart/FeeInfoSheet";
+import {useMarketplacePricingPolicy} from "@/hooks/useMarketplacePricingPolicy";
 
 export default function CartPage() {
+  const marketplacePolicy = useMarketplacePricingPolicy();
   const router = useRouter();
   const { items, itemCount, totalPrice, updateQuantity, removeItem, clearCart, isLoading } = useCart();
   const storeId = items[0]?.storeId;
@@ -78,6 +79,23 @@ export default function CartPage() {
       subtotal: totalPrice,
       storeId,
     });
+
+  /*
+   * This is an early customer-facing check. The checkout callable repeats
+   * the comparison with trusted product prices, so it cannot be bypassed by
+   * stale cart data or a modified browser request.
+   */
+  const minimumOrder =
+    (marketplacePolicy?.defaultMinimumOrderCents ?? 0) / 100;
+
+  const amountUntilMinimumOrder =
+    Math.max(
+      0,
+      minimumOrder - subtotal,
+    );
+
+  const meetsMinimumOrder =
+    amountUntilMinimumOrder === 0;
 
   // Go back to previous page
   const goBack = () => {
@@ -193,7 +211,7 @@ export default function CartPage() {
               <Truck className="w-4 h-4" />
               <span>
                 Free delivery on orders of $
-                {PRICING_CONFIG.FREE_DELIVERY_MINIMUM.toFixed(2)}
+                {((marketplacePolicy?.freeDeliveryMinimumCents ?? 0) / 100).toFixed(2)}
                 {" "}or more
               </span>
             </div>
@@ -439,13 +457,24 @@ export default function CartPage() {
             </div>
           )}
 
+          {!storeError &&
+            isStoreOpen &&
+            !meetsMinimumOrder && (
+              <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-center">
+                <p className="text-sm font-medium text-amber-800">
+                  This store requires a ${minimumOrder.toFixed(2)} minimum merchandise order. Add ${amountUntilMinimumOrder.toFixed(2)} more to continue.
+                </p>
+              </div>
+            )}
+
           <button
             type="button"
             onClick={handleCheckout}
             disabled={
               !isStoreOpen ||
               Boolean(storeError) ||
-              Boolean(deliveryError)
+              Boolean(deliveryError) ||
+              !meetsMinimumOrder
             }
             className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-orange-500 to-orange-600 py-3 font-semibold text-white transition hover:from-orange-600 hover:to-orange-700 hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-50"
           >
@@ -457,7 +486,9 @@ export default function CartPage() {
                 ? "Store Unavailable"
                 : deliveryError
                   ? "Delivery Unavailable"
-                : "Proceed to Checkout"}
+                  : !meetsMinimumOrder
+                    ? "Minimum Order Not Met"
+                    : "Proceed to Checkout"}
           </button>
 
          {hasFreeDelivery && (

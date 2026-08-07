@@ -23,6 +23,7 @@
 import type {
   Order,
   OrderItem,
+  OrderInvestigation,
   OrderStatus,
   StatusHistory,
 } from "@/types/order";
@@ -217,6 +218,33 @@ export function mapFirestoreOrder(
     timestamp: toDate(history.timestamp),
   }));
 
+  const investigation = data.liaInvestigation &&
+    typeof data.liaInvestigation === "object" &&
+    !Array.isArray(data.liaInvestigation)
+    ? data.liaInvestigation as DocumentData
+    : null;
+
+  const liaInvestigation: OrderInvestigation | undefined = investigation
+    ? {
+      active: investigation.active === true,
+      hasRefundClaim: investigation.hasRefundClaim === true,
+      refundClaimStatus:
+        typeof investigation.refundClaimStatus === "string"
+          ? investigation.refundClaimStatus
+          : null,
+      refundStatus:
+        typeof investigation.refundStatus === "string"
+          ? investigation.refundStatus
+          : null,
+      hasSupportReport: investigation.hasSupportReport === true,
+      supportRequestStatus:
+        typeof investigation.supportRequestStatus === "string"
+          ? investigation.supportRequestStatus
+          : null,
+      updatedAt: toOptionalDate(investigation.updatedAt),
+    }
+    : undefined;
+
   return {
     id: document.id,
 
@@ -235,6 +263,8 @@ export function mapFirestoreOrder(
     status: data.status as OrderStatus,
 
     cancellationReason: data.cancellationReason ?? undefined,
+
+    liaInvestigation,
 
     payment: data.payment
       ? {

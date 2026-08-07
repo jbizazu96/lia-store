@@ -68,6 +68,9 @@ import {
 import {
   storeEvents,
 } from "../events/storeEvents";
+import {
+  recordStripeProcessingFee,
+} from "../payment/stripe/stripeProcessingFeeService";
 
 
 
@@ -536,6 +539,32 @@ export const stripePaymentWebhook =
               .activatePaidOrder(
                 paymentEvent
               );
+
+          /*
+           * Record Stripe's actual processing fee separately from LIA's
+           * marketplace allocation. This is informational accounting only:
+           * a delayed Stripe balance transaction must never undo a paid
+           * order or cause Stripe to retry fulfillment.
+           */
+          try {
+            if (
+              paymentEvent.stripeChargeId
+            ) {
+              await recordStripeProcessingFee({
+                stripe,
+                orderId: activation.orderId,
+                stripeChargeId: paymentEvent.stripeChargeId,
+              });
+            }
+          } catch (processingFeeError) {
+            console.error(
+              "Unable to record the Stripe processing fee:",
+              {
+                orderId: activation.orderId,
+                error: getFailureReason(processingFeeError),
+              },
+            );
+          }
 
 
           /*

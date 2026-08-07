@@ -41,6 +41,9 @@ import { User, onAuthStateChanged } from "firebase/auth";
 */
 import { auth } from "@/lib/firebase";
 import { firebaseMessaging } from "@/services/notification/firebaseMessaging";
+import {
+  clearClientDataCache,
+} from "@/services/cache/clientDataCache";
 /*
   This interface describes what data
   our AuthContext will provide.
@@ -128,6 +131,11 @@ export function AuthProvider({
             - null
           */
           setUser(firebaseUser);
+
+            /* Never retain an account's in-memory view models after logout. */
+            if (!firebaseUser) {
+              clearClientDataCache();
+            }
 
             if (firebaseUser) {
 

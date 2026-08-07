@@ -18,6 +18,7 @@ import { getFirestore, Timestamp } from "firebase-admin/firestore";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 
 import { storeEvents } from "../events/storeEvents";
+import {getOrderDeliveryPolicy} from "../admin/orderDeliveryPolicy";
 
 type ReminderStatus = "pending" | "accepted" | "preparing";
 
@@ -26,12 +27,6 @@ interface ReminderState {
   lastSentAt?: unknown;
   count?: unknown;
 }
-
-const REMINDER_INTERVALS_MS: Record<ReminderStatus, number> = {
-  pending: 5 * 60 * 1000,
-  accepted: 5 * 60 * 1000,
-  preparing: 10 * 60 * 1000,
-};
 
 function isReminderStatus(value: unknown): value is ReminderStatus {
   return (
@@ -122,6 +117,12 @@ export const remindStoreOrders = onSchedule(
   async () => {
     const db = getFirestore("default");
     const now = Date.now();
+    const policy = await getOrderDeliveryPolicy();
+    const reminderIntervalsMs: Record<ReminderStatus, number> = {
+      pending: policy.reminderIntervalsMinutes.pending * 60 * 1000,
+      accepted: policy.reminderIntervalsMinutes.accepted * 60 * 1000,
+      preparing: policy.reminderIntervalsMinutes.preparing * 60 * 1000,
+    };
 
     const ordersSnapshot = await db
       .collection("orders")
@@ -178,7 +179,7 @@ export const remindStoreOrders = onSchedule(
 
           if (
             statusStartedAt === null ||
-            now - statusStartedAt < REMINDER_INTERVALS_MS[status]
+            now - statusStartedAt < reminderIntervalsMs[status]
           ) {
             return null;
           }
@@ -191,7 +192,7 @@ export const remindStoreOrders = onSchedule(
 
           if (
             lastSentAt !== null &&
-            now - lastSentAt < REMINDER_INTERVALS_MS[status]
+            now - lastSentAt < reminderIntervalsMs[status]
           ) {
             return null;
           }

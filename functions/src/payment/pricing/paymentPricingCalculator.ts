@@ -17,11 +17,10 @@
 | cent amounts suitable for Stripe PaymentIntents.
 */
 
-import {
-  PAYMENT_CURRENCY,
-  PAYMENT_DELIVERY_CONFIG,
-  PAYMENT_PRICING_CONFIG,
-} from "./paymentPricingConfig";
+import {PAYMENT_CURRENCY} from "./paymentPricingConfig";
+import type {
+  MarketplacePricingPolicy,
+} from "./marketplacePricingPolicy";
 
 
 /*
@@ -31,6 +30,7 @@ import {
   Firestore product prices.
 */
 export interface CalculatePaymentPricingInput {
+  policy: MarketplacePricingPolicy;
   /*
     Trusted merchandise subtotal in cents.
 
@@ -107,7 +107,8 @@ function requireValidCentAmount(
   Validate the trusted driving distance.
 */
 function requireValidDistance(
-  distanceMiles: number
+  distanceMiles: number,
+  policy: MarketplacePricingPolicy,
 ): number {
   if (
     !Number.isFinite(distanceMiles) ||
@@ -120,10 +121,12 @@ function requireValidDistance(
 
   if (
     distanceMiles >
-    PAYMENT_DELIVERY_CONFIG.maxRadiusMiles
+    policy.maxRadiusMiles
   ) {
     throw new Error(
-      `Delivery is unavailable beyond ${PAYMENT_DELIVERY_CONFIG.maxRadiusMiles} miles.`
+      `Delivery is unavailable beyond ${
+        policy.maxRadiusMiles
+      } miles.`
     );
   }
 
@@ -144,7 +147,8 @@ function requireValidDistance(
   - $9.99 maximum
 */
 function calculateServiceFeeAmount(
-  subtotalAmount: number
+  subtotalAmount: number,
+  policy: MarketplacePricingPolicy
 ): number {
   /*
     Math.round() keeps the percentage result in whole cents.
@@ -152,14 +156,14 @@ function calculateServiceFeeAmount(
   const percentageAmount =
     Math.round(
       subtotalAmount *
-      PAYMENT_PRICING_CONFIG.serviceFeeRate
+      policy.serviceFeeRate
     );
 
   return Math.max(
-    PAYMENT_PRICING_CONFIG.minimumServiceFeeCents,
+    policy.minimumServiceFeeCents,
     Math.min(
       percentageAmount,
-      PAYMENT_PRICING_CONFIG.maximumServiceFeeCents
+      policy.maximumServiceFeeCents
     )
   );
 }
@@ -178,14 +182,15 @@ function calculateServiceFeeAmount(
 function calculateDeliveryFeeAmount(
   subtotalAmount: number,
   distanceMiles: number,
-  isPeakTime: boolean
+  isPeakTime: boolean,
+  policy: MarketplacePricingPolicy
 ): {
   deliveryFeeAmount: number;
   isFreeDelivery: boolean;
 } {
   const isFreeDelivery =
     subtotalAmount >=
-    PAYMENT_PRICING_CONFIG.freeDeliveryMinimumCents;
+    policy.freeDeliveryMinimumCents;
 
   if (isFreeDelivery) {
     return {
@@ -195,15 +200,15 @@ function calculateDeliveryFeeAmount(
   }
 
   let deliveryFeeAmount =
-    PAYMENT_DELIVERY_CONFIG.baseDeliveryFeeCents;
+    policy.baseDeliveryFeeCents;
 
   if (
     distanceMiles >
-    PAYMENT_DELIVERY_CONFIG.baseDistanceMiles
+    policy.baseDistanceMiles
   ) {
     const extraMiles =
       distanceMiles -
-      PAYMENT_DELIVERY_CONFIG.baseDistanceMiles;
+      policy.baseDistanceMiles;
 
     /*
       The frontend currently permits fractional route miles.
@@ -213,13 +218,13 @@ function calculateDeliveryFeeAmount(
     */
     deliveryFeeAmount += Math.round(
       extraMiles *
-      PAYMENT_DELIVERY_CONFIG.costPerMileCents
+      policy.costPerMileCents
     );
   }
 
   if (isPeakTime) {
     deliveryFeeAmount +=
-      PAYMENT_DELIVERY_CONFIG.peakSurchargeCents;
+      policy.peakSurchargeCents;
   }
 
   return {
@@ -240,11 +245,12 @@ function calculateDeliveryFeeAmount(
   taxable base.
 */
 function calculateTaxAmount(
-  subtotalAmount: number
+  subtotalAmount: number,
+  policy: MarketplacePricingPolicy
 ): number {
   return Math.round(
     subtotalAmount *
-    PAYMENT_PRICING_CONFIG.salesTaxRate
+      policy.salesTaxRate
   );
 }
 
@@ -269,7 +275,8 @@ export function calculatePaymentPricing(
 
   const distanceMiles =
     requireValidDistance(
-      input.distanceMiles
+      input.distanceMiles,
+      input.policy,
     );
 
   const {
@@ -278,17 +285,20 @@ export function calculatePaymentPricing(
   } = calculateDeliveryFeeAmount(
     subtotalAmount,
     distanceMiles,
-    input.isPeakTime ?? false
+    input.isPeakTime ?? false,
+    input.policy
   );
 
   const serviceFeeAmount =
     calculateServiceFeeAmount(
-      subtotalAmount
+      subtotalAmount,
+      input.policy
     );
 
   const taxAmount =
     calculateTaxAmount(
-      subtotalAmount
+      subtotalAmount,
+      input.policy
     );
 
   const totalAmount =

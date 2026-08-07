@@ -35,6 +35,7 @@ import { promotionService } from "@/services/promotion/promotionService";
 import { storeService } from "@/services/store/storeService";
 import { isStoreCustomerVisible } from "@/services/store/storeAvailability";
 import { formatProductName } from "@/utils/productDisplay";
+import { PageContentSkeleton } from "@/components/ui/PageContentSkeleton";
 
 import type {
   Product,
@@ -141,28 +142,29 @@ export default function ProductPage({ params }: ProductPageProps) {
          * the exact projection path: the product document or its gallery.
          * This is especially useful while validating the public-catalog rules.
          */
-        let productData: Product | null;
-        let imageData: ProductGalleryImage[];
+        const [productResult, galleryResult] = await Promise.allSettled([
+          productService.getProduct(productId),
+          productGalleryService.getProductImages(productId),
+        ]);
 
-        try {
-          productData = await productService.getProduct(productId);
-        } catch (productError) {
+        if (productResult.status === "rejected") {
           console.error(
             "Error loading customer product profile:",
-            productError
+            productResult.reason
           );
-          throw productError;
+          throw productResult.reason;
         }
 
-        try {
-          imageData = await productGalleryService.getProductImages(productId);
-        } catch (galleryError) {
+        if (galleryResult.status === "rejected") {
           console.error(
             "Error loading customer product gallery:",
-            galleryError
+            galleryResult.reason
           );
-          throw galleryError;
+          throw galleryResult.reason;
         }
+
+        const productData = productResult.value;
+        const imageData = galleryResult.value;
 
         if (!productData) {
           if (active) setError("Product not found.");
@@ -357,11 +359,7 @@ export default function ProductPage({ params }: ProductPageProps) {
   };
 
   if (loading) {
-    return (
-      <main className="flex min-h-screen items-center justify-center bg-white">
-        <div className="h-10 w-10 animate-spin rounded-full border-4 border-orange-100 border-t-orange-500" />
-      </main>
-    );
+    return <main className="min-h-screen bg-white p-4"><PageContentSkeleton cards={2} rows={2} /></main>;
   }
 
   if (error || !product) {

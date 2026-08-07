@@ -30,6 +30,9 @@ import {
   db,
   functions,
 } from "@/lib/firebase";
+import {
+  loadCached,
+} from "@/services/cache/clientDataCache";
 
 import type {
   ProductGalleryImage,
@@ -164,38 +167,44 @@ export const productGalleryService = {
       return [];
     }
 
-    const imagesQuery =
-      query(
-        collection(
-          db,
-          "productPublicProfiles",
-          productId,
-          "images"
-        ),
+    return loadCached(
+      `customer-product-images:${productId}`,
+      async () => {
+        const imagesQuery =
+          query(
+            collection(
+              db,
+              "productPublicProfiles",
+              productId,
+              "images"
+            ),
 
-        where(
-          "status",
-          "==",
-          "ready"
-        ),
+            where(
+              "status",
+              "==",
+              "ready"
+            ),
 
-        orderBy(
-          "position",
-          "asc"
-        )
-      );
+            orderBy(
+              "position",
+              "asc"
+            )
+          );
 
-    const snapshot =
-      await getDocs(
-        imagesQuery
-      );
+        const snapshot =
+          await getDocs(
+            imagesQuery
+          );
 
-    return snapshot.docs.map(
-      (imageDocument) =>
-        mapGalleryImage(
-          imageDocument.id,
-          imageDocument.data()
-        )
+        return snapshot.docs.map(
+          (imageDocument) =>
+            mapGalleryImage(
+              imageDocument.id,
+              imageDocument.data()
+            )
+        );
+      },
+      { ttlMs: 30_000, scope: "public" },
     );
   },
 

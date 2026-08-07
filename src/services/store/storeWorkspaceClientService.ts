@@ -16,6 +16,11 @@ import {
 import {
   functions,
 } from "@/lib/firebase";
+import {
+  invalidateCached,
+  loadCached,
+  writeCached,
+} from "@/services/cache/clientDataCache";
 
 export interface StoreWorkspaceStore {
   id: string;
@@ -60,6 +65,21 @@ export interface StoreWorkspaceUser {
   language: string;
 }
 
+export interface StoreWorkspacePayout {
+  id: string;
+  orderId: string;
+  amount: number;
+  merchandiseSubtotal: number;
+  salesTax: number;
+  grossStoreOrderAmount: number;
+  liaCommission: number;
+  status: "pending" | "completed" | "failed";
+  date: string;
+  createdAt: string;
+  completedAt: string;
+  method: string;
+}
+
 interface SettingsResponse {
   store: StoreWorkspaceStore;
   user: StoreWorkspaceUser;
@@ -78,16 +98,22 @@ async function call<T>(
 }
 
 export const storeWorkspaceClientService = {
-  getEntry: () => call<{
-    hasStore: boolean;
-    store: (Pick<StoreWorkspaceStore, "id" | "name" | "logoUrl" | "isApproved" | "isActive"> & {
-      onboardingCompleted: boolean;
-      onboardingStep: string;
-    }) | null;
-    pendingOrderCount: number;
-  }>("getStoreWorkspaceEntry"),
+  getEntry: () => loadCached(
+    "store-workspace-entry",
+    () => call<{
+      hasStore: boolean;
+      store: (Pick<StoreWorkspaceStore, "id" | "name" | "logoUrl" | "isApproved" | "isActive"> & {
+        onboardingCompleted: boolean;
+        onboardingStep: string;
+      }) | null;
+      pendingOrderCount: number;
+    }>("getStoreWorkspaceEntry"),
+    { ttlMs: 15_000 },
+  ),
 
-  getFinancials: () => call<{
+  getFinancials: () => loadCached(
+    "store-workspace-financials",
+    () => call<{
     analytics: {
       totalOrders: number; totalRevenue: number; averageOrderValue: number;
       totalCustomers: number; averageRating: number; peakHours: number[];
@@ -97,9 +123,22 @@ export const storeWorkspaceClientService = {
     earnings: {
       totalEarnings: number; availableBalance: number; pendingBalance: number;
       weeklyEarnings: number; monthlyEarnings: number;
-      payouts: Array<{id: string; amount: number; status: "pending" | "completed" | "failed"; date: string; method: string}>;
+      payouts: StoreWorkspacePayout[];
     };
-  }>("getStoreWorkspaceFinancials"),
+    }>("getStoreWorkspaceFinancials"),
+    { ttlMs: 30_000 },
+  ),
+
+  getPayouts: (
+    pageSize = 25,
+    cursor?: string,
+  ) => call<{
+    payouts: StoreWorkspacePayout[];
+    nextCursor: string | null;
+  }>("getStoreWorkspacePayouts", {
+    pageSize,
+    ...(cursor ? { cursor } : {}),
+  }),
 
   getOrders: () => call<{
     orders: Array<Record<string, unknown> & { id: string }>;
@@ -111,7 +150,9 @@ export const storeWorkspaceClientService = {
     order: Record<string, unknown> & { id: string };
   }>("getStoreWorkspaceOrder", { orderId }),
 
-  getDashboard: () => call<{
+  getDashboard: () => loadCached(
+    "store-workspace-dashboard",
+    () => call<{
     storeName: string;
     stats: {
       totalOrders: number;
@@ -131,12 +172,29 @@ export const storeWorkspaceClientService = {
       createdAt: string;
       itemCount: number;
     }>;
-  }>("getStoreWorkspaceDashboard"),
+    }>("getStoreWorkspaceDashboard"),
+    { ttlMs: 15_000 },
+  ),
 
-  getSettings: () =>
-    call<SettingsResponse>(
+  getSettings: async (forceRefresh = false) => {
+    if (forceRefresh) {
+      return writeCached(
+        "store-workspace-settings",
+        await call<SettingsResponse>(
+          "getStoreWorkspaceSettings"
+        ),
+        { ttlMs: 30_000 },
+      );
+    }
+
+    return loadCached(
+    "store-workspace-settings",
+    () => call<SettingsResponse>(
       "getStoreWorkspaceSettings"
     ),
+    { ttlMs: 30_000 },
+    );
+  },
 
   saveSettings: (
     store: Partial<StoreWorkspaceStore>,
@@ -144,7 +202,11 @@ export const storeWorkspaceClientService = {
   ) => call<SettingsResponse>(
     "saveStoreWorkspaceSettings",
     { store, user }
-  ),
+  ).then((workspace) => {
+    invalidateCached("store-workspace-entry");
+    invalidateCached("store-workspace-dashboard");
+    return writeCached("store-workspace-settings", workspace, { ttlMs: 30_000 });
+  }),
 
   saveSchedule: (
     schedule: StoreWorkspaceStore["schedule"]
@@ -153,5 +215,8 @@ export const storeWorkspaceClientService = {
   }>(
     "saveStoreWorkspaceSchedule",
     { schedule }
-  ),
+  ).then((response) => {
+    invalidateCached("store-workspace-settings");
+    return response;
+  }),
 };

@@ -18,8 +18,10 @@
 |
 */
 
-import { useProductFilter } from "@/hooks/useProductFilter";
-import { use } from "react";
+import {
+  use,
+  useState,
+} from "react";
 
 import {
   useRouter,
@@ -37,12 +39,12 @@ import {
 
 import { useCart } from "@/context/CartContext";
 import { useCustomerStore } from "@/hooks/useCustomerStore";
+import { useCustomerFavoriteStores } from "@/hooks/useCustomerFavoriteStores";
 import { promotionService } from "@/services/promotion/promotionService";
 
 import { BottomBar } from "@/components/customer/store/BottomBar";
 import { CategoryScroll } from "@/components/customer/store/CategoryScroll";
 import { DistanceWarningModal } from "@/components/customer/store/DistanceWarningModal";
-import { ProductCard } from "@/components/customer/store/ProductCard";
 import { ProductSection } from "@/components/customer/store/ProductSection";
 import { PromoBanner } from "@/components/customer/store/PromoBanner";
 import { StoreHeader } from "@/components/customer/store/StoreHeader";
@@ -120,7 +122,6 @@ export default function StorePage({
   const {
     store,
     categories,
-    products: allProducts,
     loading,
     error,
     showDistanceWarning,
@@ -137,17 +138,11 @@ export default function StorePage({
   });
 
   const {
-  searchQuery,
-  selectedCategory,
-  displayProducts,
-  selectedCategoryData,
-  isSearching,
-  isFilteringByCategory,
-  setSearchQuery,
-} = useProductFilter({
-  products: allProducts,
-  categories,
-});
+    isFavorite,
+    setFavorite,
+  } = useCustomerFavoriteStores();
+  const [favoriteSaving, setFavoriteSaving] = useState(false);
+
   /*
   |--------------------------------------------------------------------------
   | Cart Summary
@@ -279,6 +274,21 @@ export default function StorePage({
   const handleGoBack = () => {
     closeDistanceWarning();
     router.push("/home");
+  };
+
+  const handleFavoriteChange = () => {
+    if (!store) {
+      return;
+    }
+
+    setFavoriteSaving(true);
+    void setFavorite(store.id, !isFavorite(store.id))
+      .catch((favoriteError) => {
+        console.error("Unable to update saved store:", favoriteError);
+      })
+      .finally(() => {
+        setFavoriteSaving(false);
+      });
   };
 
   /*
@@ -449,9 +459,12 @@ export default function StorePage({
         name={store.name}
         rating={store.rating ?? 0}
         reviewCount={store.reviewCount}
+        isFavorite={isFavorite(store.id)}
         onBack={() =>
           router.push("/home")
         }
+        onFavoriteChange={handleFavoriteChange}
+        favoriteSaving={favoriteSaving}
       />
 
       <StoreInfo
@@ -518,85 +531,7 @@ export default function StorePage({
         </div>
       )}
 
-      {isSearching ? (
-        <div className="mt-4 px-4 pb-24">
-          <h3 className="mb-3 font-bold text-gray-800">
-            Search Results (
-            {displayProducts.length})
-          </h3>
-
-          {displayProducts.length === 0 ? (
-            <div className="py-8 text-center">
-              <p className="text-gray-500">
-                No products found
-              </p>
-
-              <p className="text-sm text-gray-400">
-                Try adjusting your search
-              </p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 gap-3">
-              {displayProducts.map(
-                (product) => (
-                  <ProductCard
-                    key={product.id}
-                    product={product}
-                    onAddToCart={
-                      handleAddToCart
-                    }
-                    onQuantityChange={
-                      handleQuantityChange
-                    }
-                    quantity={getItemQuantity(
-                      product.id
-                    )}
-                  />
-                )
-              )}
-            </div>
-          )}
-        </div>
-     ) : isFilteringByCategory ? (
-        <div className="mt-4 px-4 pb-24">
-          <h3 className="mb-3 font-bold text-gray-800">
-            {selectedCategory === "deals"
-              ? "Deals"
-              : selectedCategoryData?.name}
-          </h3>
-
-          {displayProducts.length === 0 ? (
-            <div className="py-8 text-center">
-              <p className="text-gray-500">
-                {selectedCategory === "deals"
-                  ? "No deals are available right now"
-                  : "No products in this category"}
-              </p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 gap-3">
-              {displayProducts.map(
-                (product) => (
-                  <ProductCard
-                    key={product.id}
-                    product={product}
-                    onAddToCart={
-                      handleAddToCart
-                    }
-                    onQuantityChange={
-                      handleQuantityChange
-                    }
-                    quantity={getItemQuantity(
-                      product.id
-                    )}
-                  />
-                )
-              )}
-            </div>
-          )}
-        </div>
-      ) : (
-        categories.map((category) => (
+      {categories.map((category) => (
           <ProductSection
             key={category.id}
             category={category}
@@ -619,12 +554,16 @@ export default function StorePage({
               )
             }
           />
-        ))
-      )}
+        ))}
 
       <BottomBar
-        searchQuery={searchQuery}
-        onSearchChange={setSearchQuery}
+        searchQuery=""
+        onSearchChange={() => undefined}
+        onSearchClick={() =>
+          router.push(
+            "/store/" + store.id + "/search"
+          )
+        }
         itemCount={storeItemCount}
         totalPrice={storeTotalPrice}
         storeId={store.id}

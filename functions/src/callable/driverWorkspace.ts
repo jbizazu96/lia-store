@@ -21,6 +21,9 @@ import {
 import {
   defineSecret,
 } from "firebase-functions/params";
+import {
+  getDriverApplicationPolicy,
+} from "../admin/driverApplicationPolicy";
 
 /*
  * Callable modules can be evaluated before index.ts reaches its shared
@@ -33,7 +36,6 @@ if (admin.apps.length === 0) {
 
 const db = getFirestore("default");
 const googleMapsApiKey = defineSecret("GOOGLE_MAPS_API_KEY");
-const MAXIMUM_PREFERRED_RADIUS_MILES = 50;
 
 type DriverDocumentField =
   | "drivers-license-front"
@@ -207,9 +209,18 @@ export const getDriverWorkspaceEntry = onCall({ region: "us-central1" }, async (
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in to open the driver app.");
   const [user, driver] = await Promise.all([db.collection("users").doc(request.auth.uid).get(), db.collection("drivers").doc(request.auth.uid).get()]);
   if (user.data()?.accountType !== "driver") throw new HttpsError("permission-denied", "You do not have access to the driver app.");
-  if (!driver.exists || driver.data()?.ownerUid !== request.auth.uid) return { hasApplication: false, onboardingCompleted: false, onboardingStep: "personal-information", isApproved: false };
+  if (!driver.exists || driver.data()?.ownerUid !== request.auth.uid) return { hasApplication: false, onboardingCompleted: false, onboardingStep: "personal-information", isApproved: false, status: "draft" };
   const data = driver.data() ?? {};
-  return { hasApplication: true, onboardingCompleted: data.onboardingCompleted === true, onboardingStep: valueString(data.onboardingStep) || "personal-information", isApproved: data.isApproved === true };
+  const status = valueString(data.status);
+  return {
+    hasApplication: true,
+    onboardingCompleted: data.onboardingCompleted === true,
+    onboardingStep: valueString(data.onboardingStep) || "personal-information",
+    isApproved: data.isApproved === true,
+    status: status === "suspended" ? "suspended" : status === "approved"
+      ? "approved"
+      : status === "rejected" ? "rejected" : "pending_review",
+  };
 });
 
 export const getDriverWorkspaceSummary = onCall({ region: "us-central1" }, async (request) => {
@@ -290,9 +301,10 @@ export const updateDriverWorkspaceProfile = onCall({ region: "us-central1", secr
   const serviceAreaState = normalizeState(valueString(serviceArea.state));
   const registrationState = normalizeState(valueString(vehicle.registrationState));
   const radius = typeof serviceArea.preferredRadiusMiles === "number" ? serviceArea.preferredRadiusMiles : null;
+  const policy = await getDriverApplicationPolicy();
   const year = typeof vehicle.year === "number" ? vehicle.year : null;
   const currentYear = new Date().getFullYear() + 1;
-  if (!firstName || !lastName || !/^\(\d{3}\) \d{3} - \d{4}$/.test(phone) || !valueString(address.street).trim() || !valueString(address.city).trim() || !addressState || !valueString(address.zip).trim() || !valueString(serviceArea.city).trim() || !serviceAreaState || !radius || radius <= 0 || radius > MAXIMUM_PREFERRED_RADIUS_MILES || !valueString(vehicle.make).trim() || !valueString(vehicle.model).trim() || !year || year < 1900 || year > currentYear || !valueString(vehicle.color).trim() || !valueString(vehicle.licensePlate).trim() || !registrationState) throw new HttpsError("invalid-argument", "Complete your profile, address, service area, and vehicle information using valid values.");
+  if (!firstName || !lastName || !/^\(\d{3}\) \d{3} - \d{4}$/.test(phone) || !valueString(address.street).trim() || !valueString(address.city).trim() || !addressState || !valueString(address.zip).trim() || !valueString(serviceArea.city).trim() || !serviceAreaState || !radius || radius <= 0 || radius > policy.maximumPreferredRadiusMiles || !valueString(vehicle.make).trim() || !valueString(vehicle.model).trim() || !year || year < 1900 || year > currentYear || !valueString(vehicle.color).trim() || !valueString(vehicle.licensePlate).trim() || !registrationState) throw new HttpsError("invalid-argument", `Complete your profile, address, service area, and vehicle information using valid values. Requested radius must be at most ${policy.maximumPreferredRadiusMiles} miles.`);
   const rawAddress = valueString(address.street) + (valueString(address.apartment).trim() ? ", " + valueString(address.apartment) : "") + ", " + valueString(address.city) + ", " + addressState + " " + valueString(address.zip);
   const location = await geocodeAddress(rawAddress);
   if (!location) throw new HttpsError("invalid-argument", "We could not verify your home address. Check the street, city, state, and ZIP code.");

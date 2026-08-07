@@ -20,8 +20,10 @@ import {SearchResult, StoreGroup} from "./types";
 // Services
 import {performSearch, groupResultsByStore, searchStoresByName} from "./services/searchService";
 import {loadRecentSearches, saveRecentSearch} from "./services/recentSearchService";
+import {useMarketplacePricingPolicy} from "@/hooks/useMarketplacePricingPolicy";
 
 export default function SearchPage() {
+  const marketplacePolicy = useMarketplacePricingPolicy();
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
@@ -64,19 +66,55 @@ export default function SearchPage() {
   // Handle search
   useEffect(() => {
     const timer = setTimeout(async () => {
-      if (searchQuery.trim().length >= 2) {
+      if (searchQuery.trim().length >= 2 && marketplacePolicy) {
         setLoading(true);
         
         // ✅ Search both products and stores
         const [productResults, storeResults] = await Promise.all([
-          performSearch(searchQuery, userLocation),
-          searchStoresByName(searchQuery, userLocation),
+          performSearch(searchQuery, userLocation, marketplacePolicy),
+          searchStoresByName(searchQuery, userLocation, marketplacePolicy),
         ]);
         
-        // Combine results, but prioritize products
+        // Product matches are grouped under their store. A direct store match
+        // is added as a store-only group instead of being rendered as a fake
+        // product card.
         const combinedResults = [...productResults, ...storeResults];
+        const groupedProducts = groupResultsByStore(productResults);
+        const groupsByStore = new Map(
+          groupedProducts.map((group) => [
+            group.storeId,
+            group,
+          ])
+        );
+
+        storeResults.forEach((store) => {
+          const existing = groupsByStore.get(store.storeId);
+
+          if (existing) {
+            existing.matchesStore = true;
+            return;
+          }
+
+          groupsByStore.set(store.storeId, {
+            storeId: store.storeId,
+            storeName: store.storeName,
+            storeRating: store.storeRating,
+            storeDistance: store.storeDistance,
+            deliveryFee: store.deliveryFee,
+            estimatedTime: store.estimatedTime,
+            storeLogo: store.storeLogo,
+            isOpen: store.storeIsOpen === true,
+            storeAddress: store.storeAddress || "",
+            storePhone: store.storePhone || "",
+            storeLatitude: store.storeLatitude || 0,
+            storeLongitude: store.storeLongitude || 0,
+            matchesStore: true,
+            products: [],
+          });
+        });
+
         setResults(combinedResults);
-        setGroups(groupResultsByStore(combinedResults));
+        setGroups(Array.from(groupsByStore.values()));
         setLoading(false);
       } else {
         setResults([]);
@@ -84,7 +122,7 @@ export default function SearchPage() {
       }
     }, 300);
     return () => clearTimeout(timer);
-  }, [searchQuery, userLocation]);
+  }, [searchQuery, userLocation, marketplacePolicy]);
 
   const handleClear = () => {
     setSearchQuery("");
@@ -101,10 +139,6 @@ export default function SearchPage() {
   const handleRecentClick = (query: string) => {
     setSearchQuery(query);
     saveRecentSearch(query);
-  };
-
-  const handleResultClick = (result: SearchResult) => {
-    router.push(`/store/${result.storeId}?product=${result.id}`);
   };
 
   const handleStoreClick = (storeId: string) => {
@@ -141,7 +175,6 @@ export default function SearchPage() {
             loading={loading}
             results={results}
             groups={groups}
-            onResultClick={handleResultClick}
             onStoreClick={handleStoreClick}
           />
         )}

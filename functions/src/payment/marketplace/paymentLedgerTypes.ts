@@ -16,6 +16,7 @@
  */
 export type PaymentLedgerEventType =
     | "payment_received"
+    | "stripe_processing_fee_recorded"
     | "allocation_created"
     | "settlement_created"
     | "settlement_completed"

@@ -51,6 +51,9 @@ import type {
 import type {
   PaymentPricingResult,
 } from "./pricing/paymentPricingCalculator";
+import type {
+  MarketplacePricingPolicy,
+} from "./pricing/marketplacePricingPolicy";
 
 
 const db =
@@ -101,6 +104,9 @@ export interface CreatePaymentPendingOrderInput {
 
   pricing:
     PaymentPricingResult;
+
+  pricingPolicy:
+    MarketplacePricingPolicy;
 
   distanceMiles: number;
 
@@ -474,6 +480,13 @@ async function createPaymentPendingOrder(
           input.pricing
             .totalAmount,
       },
+
+      /*
+       * Immutable policy snapshot used for this customer payment. Future
+       * Admin pricing changes cannot alter settlement or refund accounting.
+       */
+      pricingPolicy:
+        input.pricingPolicy,
 
       delivery: {
         instructions:
