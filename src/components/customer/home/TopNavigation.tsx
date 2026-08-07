@@ -32,7 +32,7 @@ export function TopNavigation() {
           {/* Main navigation lives in the floating bottom bar. */}
           <div className="flex items-center gap-1">
             <Link
-              href="/help"
+              href="/help?from=customer"
               className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-200/80 transition hover:bg-gray-300"
               aria-label="Help and support"
             >

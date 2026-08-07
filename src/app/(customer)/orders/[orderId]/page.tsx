@@ -53,6 +53,34 @@ export default function OrderDetailPage({params}: OrderPageProps) {
       orderId,
     });
 
+  /*
+  - A report is displayed inside this order page. Notifications and direct
+  - links may open it without a previous in-app history entry, so a plain
+  - router.back() can leave the customer at a login page or outside LIA.
+   */
+  const handleReturn = () => {
+    if (typeof window === "undefined") {
+      router.push("/home");
+      return;
+    }
+
+    const referrer = document.referrer;
+
+    try {
+      if (
+        referrer &&
+        new URL(referrer).origin === window.location.origin
+      ) {
+        router.back();
+        return;
+      }
+    } catch {
+      /* A malformed referrer falls back to the customer home page. */
+    }
+
+    router.push("/home");
+  };
+
   // Get status config
   const getStatusConfig = (
       status: string
@@ -138,7 +166,7 @@ export default function OrderDetailPage({params}: OrderPageProps) {
       <div className="bg-white border-b border-gray-100 sticky top-0 z-20">
         <div className="flex items-center gap-3 px-4 py-4 max-w-lg mx-auto">
           <button
-            onClick={() => router.back()}
+            onClick={handleReturn}
             className="p-2 hover:bg-gray-100 rounded-full transition"
             aria-label="Go back"
           >
