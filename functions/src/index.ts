@@ -588,6 +588,12 @@ export {
   getCustomerOrderSupportRequest,
 } from "./callable/orderSupport";
 export {
+  getCustomerDeliveryProof,
+} from "./callable/customerDeliveryProof";
+export {
+  registerNotificationDevice,
+} from "./callable/notificationDevice";
+export {
   getAdminOrderSupportRequest,
   respondAdminOrderSupportRequest,
 } from "./callable/adminOrderSupport";

@@ -25,6 +25,9 @@ import {
   FieldValue,
   getFirestore,
 } from "firebase-admin/firestore";
+import {
+  getStorage,
+} from "firebase-admin/storage";
 
 import {
   mapShipdayStatus,
@@ -64,7 +67,208 @@ interface ShipdayOrderDetails {
     orderState: string;
   };
 
+  proofOfDelivery?: {
+    signaturePath?: string | null;
+    imageUrls?: unknown;
+  } | null;
+
   [key: string]: unknown;
+}
+
+interface DeliveryProofFile {
+  storagePath: string;
+  contentType: string;
+}
+
+interface DeliveryProof {
+  signature: DeliveryProofFile | null;
+  images: DeliveryProofFile[];
+}
+
+const MAXIMUM_PROOF_FILE_BYTES =
+  10 * 1024 * 1024;
+
+function text(value: unknown): string {
+  return typeof value === "string"
+    ? value.trim()
+    : "";
+}
+
+function shipdayProofUrls(
+  proof: ShipdayOrderDetails["proofOfDelivery"],
+): {
+  signatureUrl: string | null;
+  imageUrls: string[];
+} {
+  const signatureUrl = text(proof?.signaturePath) || null;
+  const candidateImageUrls = proof?.imageUrls;
+  const imageUrls = Array.isArray(candidateImageUrls)
+    ? candidateImageUrls
+      .map(text)
+      .filter(Boolean)
+    : [];
+
+  return {
+    signatureUrl,
+    imageUrls,
+  };
+}
+
+function isSafeShipdayProofUrl(
+  value: string,
+): boolean {
+  try {
+    const url = new URL(value);
+
+    /*
+     * Shipday currently returns its proof files from Amazon S3. Do not let
+     * an external provider response turn this server into a general-purpose
+     * URL fetcher.
+     */
+    return url.protocol === "https:" &&
+      url.hostname.endsWith("amazonaws.com");
+  } catch {
+    return false;
+  }
+}
+
+function extensionForContentType(
+  contentType: string,
+): string {
+  if (contentType === "image/png") {
+    return "png";
+  }
+
+  if (contentType === "image/webp") {
+    return "webp";
+  }
+
+  return "jpg";
+}
+
+async function copyShipdayProofFile(
+  sourceUrl: string,
+  destinationBasePath: string,
+): Promise<DeliveryProofFile> {
+  if (!isSafeShipdayProofUrl(sourceUrl)) {
+    throw new Error("Shipday returned an unsupported proof URL.");
+  }
+
+  const response = await fetch(sourceUrl);
+
+  if (!response.ok) {
+    throw new Error(
+      `Unable to download Shipday delivery proof (${response.status}).`,
+    );
+  }
+
+  const contentType = text(
+    response.headers.get("content-type"),
+  ).toLowerCase().split(";")[0];
+
+  if (!["image/jpeg", "image/png", "image/webp"].includes(contentType)) {
+    throw new Error("Shipday delivery proof is not a supported image.");
+  }
+
+  const contentLength = Number(
+    response.headers.get("content-length") ?? 0,
+  );
+
+  if (
+    Number.isFinite(contentLength) &&
+    contentLength > MAXIMUM_PROOF_FILE_BYTES
+  ) {
+    throw new Error("Shipday delivery proof exceeds the file-size limit.");
+  }
+
+  const bytes = Buffer.from(
+    await response.arrayBuffer(),
+  );
+
+  if (
+    bytes.length === 0 ||
+    bytes.length > MAXIMUM_PROOF_FILE_BYTES
+  ) {
+    throw new Error("Shipday delivery proof has an invalid file size.");
+  }
+
+  const destinationPath =
+    `${destinationBasePath}.${extensionForContentType(contentType)}`;
+
+  await getStorage()
+    .bucket()
+    .file(destinationPath)
+    .save(bytes, {
+      metadata: {
+        contentType,
+        cacheControl: "private, no-store",
+      },
+    });
+
+  return {
+    storagePath: destinationPath,
+    contentType,
+  };
+}
+
+async function synchronizeDeliveryProof(
+  orderId: string,
+  shipdayOrder: ShipdayOrderDetails,
+  existingProof: unknown,
+): Promise<DeliveryProof | null> {
+  const source = shipdayProofUrls(
+    shipdayOrder.proofOfDelivery,
+  );
+
+  if (!source.signatureUrl && source.imageUrls.length === 0) {
+    return null;
+  }
+
+  const previous = existingProof &&
+    typeof existingProof === "object"
+    ? existingProof as {
+      signature?: DeliveryProofFile | null;
+      images?: DeliveryProofFile[];
+    }
+    : {};
+  const currentImages = Array.isArray(previous.images)
+    ? previous.images.filter((image) =>
+      typeof image?.storagePath === "string" &&
+      typeof image?.contentType === "string",
+    )
+    : [];
+  let signature = previous.signature &&
+    typeof previous.signature.storagePath === "string" &&
+    typeof previous.signature.contentType === "string"
+    ? previous.signature
+    : null;
+
+  if (source.signatureUrl && !signature) {
+    signature = await copyShipdayProofFile(
+      source.signatureUrl,
+      `orders/${orderId}/delivery-proof/signature`,
+    );
+  }
+
+  const images = [...currentImages];
+
+  for (
+    let index = currentImages.length;
+    index < source.imageUrls.length;
+    index += 1
+  ) {
+    const sourceUrl = source.imageUrls[index];
+    const image = await copyShipdayProofFile(
+      sourceUrl,
+      `orders/${orderId}/delivery-proof/photo-${index + 1}`,
+    );
+    images.push(image);
+  }
+
+  return {
+    signature,
+    images,
+  };
 }
 
 
@@ -585,13 +789,21 @@ export class DeliverySyncService {
         .trim();
 
     console.log(
-      "Latest Shipday delivery:",
-      shipdayOrder
-    );
-
-    console.log(
-      "Shipday order state:",
-      shipdayOrderState
+      "Latest Shipday delivery received.",
+      {
+        orderNumber: order.orderNumber,
+        orderState: shipdayOrderState,
+        hasSignature:
+          Boolean(
+            shipdayProofUrls(
+              shipdayOrder.proofOfDelivery,
+            ).signatureUrl,
+          ),
+        proofImageCount:
+          shipdayProofUrls(
+            shipdayOrder.proofOfDelivery,
+          ).imageUrls.length,
+      },
     );
 
     /*
@@ -607,6 +819,43 @@ export class DeliverySyncService {
       "Mapped Shipday status:",
       mappedStatus
     );
+
+    /*
+     * Shipday proof URLs are copied into LIA private Storage before the
+     * terminal order stops polling. Proof is optional: a missing or failed
+     * copy must never delay delivery completion, settlement, or any other
+     * order-processing step.
+     */
+    let deliveryProof: DeliveryProof | null = null;
+
+    try {
+      deliveryProof = await synchronizeDeliveryProof(
+        orderId,
+        shipdayOrder,
+        order.delivery?.proofOfDelivery,
+      );
+    } catch (error) {
+      console.error(
+        "Unable to synchronize Shipday delivery proof.",
+        {
+          orderNumber: order.orderNumber,
+          error: error instanceof Error
+            ? error.message
+            : "Unknown delivery-proof error.",
+        },
+      );
+    }
+
+    const currentProof = order.delivery?.proofOfDelivery;
+    const proofAlreadySynchronized =
+      deliveryProof === null ||
+      (
+        currentProof?.signature?.storagePath ===
+          deliveryProof.signature?.storagePath &&
+        Array.isArray(currentProof?.images) &&
+        currentProof.images.length ===
+          deliveryProof.images.length
+      );
 
     /*
       Step 5:
@@ -629,7 +878,8 @@ export class DeliverySyncService {
         mappedStatus.shipdayStatus &&
       order.status ===
         mappedStatus.orderStatus &&
-      driverAlreadySynchronized
+      driverAlreadySynchronized &&
+      proofAlreadySynchronized
     ) {
       console.log(
         "Order already synchronized."
@@ -656,6 +906,19 @@ export class DeliverySyncService {
         "shipday.lastSyncAt":
           now,
       };
+
+    if (deliveryProof) {
+      updateData[
+        "delivery.proofOfDelivery"
+      ] = {
+        signature:
+          deliveryProof.signature,
+        images:
+          deliveryProof.images,
+        receivedAt:
+          now,
+      };
+    }
 
     if (resolvedDriver) {
       updateData[

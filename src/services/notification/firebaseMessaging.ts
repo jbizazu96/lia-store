@@ -6,17 +6,73 @@
 | Handles Firebase Cloud Messaging (FCM) initialization.
 |
 */
+import { auth, functions } from "@/lib/firebase";
 import {
-  doc,
-  setDoc,
-  serverTimestamp,
-} from "firebase/firestore";
-
-import { auth, db } from "@/lib/firebase";
-import { getToken } from "firebase/messaging";
+  getToken,
+  onMessage,
+  type Unsubscribe,
+} from "firebase/messaging";
+import { httpsCallable } from "firebase/functions";
 import { getFirebaseMessaging } from "@/lib/firebase";
 
 export class FirebaseMessaging {
+  private foregroundMessageUnsubscribe: Unsubscribe | null = null;
+
+  private deviceId(): string {
+    const key = "lia.notification-device-id";
+    const existing = window.localStorage.getItem(key);
+
+    if (existing && /^[A-Za-z0-9_-]{16,128}$/.test(existing)) {
+      return existing;
+    }
+
+    const created = globalThis.crypto?.randomUUID?.() ??
+      Date.now().toString() + "-" + Math.random().toString(36).slice(2);
+    window.localStorage.setItem(key, created);
+    return created;
+  }
+
+  private startForegroundMessageListener(): void {
+    if (this.foregroundMessageUnsubscribe) {
+      return;
+    }
+
+    void getFirebaseMessaging().then((messaging) => {
+      if (!messaging || this.foregroundMessageUnsubscribe) {
+        return;
+      }
+
+      this.foregroundMessageUnsubscribe = onMessage(
+        messaging,
+        (payload) => {
+          if (Notification.permission !== "granted") {
+            return;
+          }
+
+          const title = payload.notification?.title ?? "LIA";
+          const body = payload.notification?.body ??
+            "You have a new update.";
+          const candidate = payload.data?.deepLink;
+          const deepLink = typeof candidate === "string" &&
+            candidate.startsWith("/") &&
+            !candidate.startsWith("//")
+            ? candidate
+            : "/home";
+          const notification = new Notification(title, {
+            body,
+            icon: "/icon/icon-192.png",
+            badge: "/icon/icon-192.png",
+          });
+
+          notification.onclick = () => {
+            window.focus();
+            window.location.assign(deepLink);
+            notification.close();
+          };
+        },
+      );
+    });
+  }
 
   /**
    * Requests notification permission.
@@ -88,13 +144,23 @@ export class FirebaseMessaging {
 
   }
 
-    /**
-   * Registers the current device in Firestore.
+  /**
+   * Registers one stable browser installation through a trusted Function.
    */
   async registerDevice(): Promise<void> {
+    if (typeof window === "undefined" || !("Notification" in window)) {
+      return;
+    }
 
-    const permission =
-      await this.requestPermission();
+    const user = auth.currentUser;
+
+    if (!user) {
+      return;
+    }
+
+    const permission = Notification.permission === "granted"
+      ? true
+      : await this.requestPermission();
 
     if (!permission) {
 
@@ -113,54 +179,35 @@ export class FirebaseMessaging {
       return;
     }
 
-    const user =
-      auth.currentUser;
+    const deviceId = this.deviceId();
+    const cacheKey = "lia.notification-device:" + user.uid;
+    const registrationValue = deviceId + ":" + token;
 
-    if (!user) {
+    this.startForegroundMessageListener();
+
+    if (window.localStorage.getItem(cacheKey) === registrationValue) {
       return;
     }
 
-  await setDoc(
+    const register = httpsCallable<
+      {
+        token: string;
+        deviceId: string;
+        platform: string;
+        userAgent: string;
+      },
+      {registered: boolean; tokenChanged: boolean}
+    >(functions, "registerNotificationDevice");
 
-    doc(
-      db,
-      "notificationDevices",
-      token
-    ),
-
-    {
-
-      uid: user.uid,
-
+    await register({
       token,
-
-      active: true,
-
-      createdAt: serverTimestamp(),
-
-      updatedAt: serverTimestamp(),
-
-      lastSeen: serverTimestamp(),
-
+      deviceId,
       platform: navigator.platform,
-
       userAgent: navigator.userAgent,
+    });
 
-    },
-
-    {
-
-      merge: true,
-
-    }
-
-  );
-
-  console.log(
-    "Device successfully registered."
-  );
-
-}
+    window.localStorage.setItem(cacheKey, registrationValue);
+  }
 
 }
 

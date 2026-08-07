@@ -82,7 +82,8 @@ async function notifyCustomer(
     await notificationService.sendToUser(
       customerId,
       title,
-      body
+      body,
+      "/orders/" + orderId,
     );
   } catch (error) {
     console.error(

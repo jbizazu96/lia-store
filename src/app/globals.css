@@ -42,6 +42,27 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
+/*
+|--------------------------------------------------------------------------
+| Mobile form controls
+|--------------------------------------------------------------------------
+|
+| iOS Safari automatically zooms the page when an editable control uses a
+| font size below 16px. This makes forms feel broken because the customer
+| has to manually zoom back out after typing. Keep every editable control at
+| least 16px on phone-sized screens while preserving the existing desktop
+| typography.
+|
+*/
+@media (max-width: 767px) {
+  input,
+  textarea,
+  select,
+  [contenteditable="true"] {
+    font-size: 16px !important;
+  }
+}
+
 /* Hide scrollbar for category and product scrolls */
 .scrollbar-hide::-webkit-scrollbar {
   display: none;

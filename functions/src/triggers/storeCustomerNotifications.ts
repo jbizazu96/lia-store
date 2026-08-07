@@ -149,7 +149,8 @@ export const storeCustomerNotifications = onDocumentWritten(
           await notificationService.sendToUser(
             customer.id,
             title,
-            body
+            body,
+            "/store/" + storeId,
           );
         })
       );
@@ -184,7 +185,12 @@ export const storeCustomerNotifications = onDocumentWritten(
       });
 
       try {
-        await notificationService.sendToUser(ownerId, title, body);
+        await notificationService.sendToUser(
+          ownerId,
+          title,
+          body,
+          "/store/dashboard",
+        );
       } catch (error) {
         /* The in-app notification is saved even if no push device exists. */
         console.error(

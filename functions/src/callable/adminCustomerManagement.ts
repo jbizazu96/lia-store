@@ -24,6 +24,9 @@ import {
 import {
   writeAdminAuditLog,
 } from "../admin/adminAuditLogService";
+import {
+  notificationService,
+} from "../services/notificationService";
 
 if (admin.apps.length === 0) {
   admin.initializeApp();
@@ -267,18 +270,32 @@ export const setAdminCustomerSuspension = onCall(
       updatedAt: FieldValue.serverTimestamp(),
     });
 
+    const title = isSuspended
+      ? "Your LIA account has been suspended"
+      : "Your LIA account has been reinstated";
+    const body = isSuspended
+      ? "Your protected LIA account actions are paused. Reason: " + reason
+      : "Your LIA account is active again. You can continue using protected account features.";
+
     await reference.collection("notifications")
       .doc(isSuspended ? "account-suspended" : "account-reinstated")
       .set({
-        title: isSuspended ? "Your LIA account has been suspended" : "Your LIA account has been reinstated",
-        body: isSuspended
-          ? "Your protected LIA account actions are paused. Reason: " + reason
-          : "Your LIA account is active again. You can continue using protected account features.",
+        title,
+        body,
         type: "account",
+        deepLink: "/profile",
         read: false,
         createdAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
       }, { merge: true });
+
+    try {
+      await notificationService.sendToUser(id, title, body, "/profile");
+    } catch (error) {
+      console.error("Customer account-status push notification failed.", {
+        code: (error as {code?: unknown}).code ?? "unknown",
+      });
+    }
 
     await writeAdminAuditLog(administrator, {
       action: isSuspended ? "customer_suspended" : "customer_suspension_removed",

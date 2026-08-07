@@ -67,6 +67,7 @@ export class CustomerStoreEvents {
           customer.id,
           input.title,
           input.body,
+          input.deepLink,
         );
       }),
     );
@@ -98,7 +99,8 @@ export class CustomerStoreEvents {
         await notificationService.sendToUser(
           uid,
           input.title,
-          input.body
+          input.body,
+          input.deepLink,
         );
       })
     );

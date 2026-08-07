@@ -215,11 +215,19 @@ export const adminLowStockProduct = onDocumentUpdated(
     ) return;
 
     const productName = text(after.name) || "A product";
+    const storeId = text(after.storeId);
+    const store = storeId
+      ? await db.collection("stores").doc(storeId).get()
+      : null;
+    const name = store?.exists
+      ? storeName(store.data() as Data)
+      : "an unknown store";
+
     await notifyActiveAdministrators({
       title: currentStock === 0 ? "Product out of stock" : "Low product stock",
       body: currentStock === 0
-        ? productName + " is out of stock."
-        : productName + " now has " + String(currentStock) + " in stock.",
+        ? productName + " at " + name + " is out of stock."
+        : productName + " at " + name + " now has " + String(currentStock) + " in stock.",
       type: "inventory",
       subject: {type: "product", id: event.params.productId},
       dedupeKey: "low-stock-" + event.params.productId + "-" + String(currentStock),
@@ -278,10 +286,24 @@ export const adminCustomerPaymentFailed = onDocumentUpdated(
 export const adminRefundRequested = onDocumentCreated(
   {document: "paymentRefunds/{refundId}", region: "us-central1", database: "default"},
   async (event) => {
+    const refund = event.data?.data() as Data | undefined;
+    const sourceClaimId = text(refund?.sourceClaimId);
+    const claims = sourceClaimId
+      ? null
+      : await db
+        .collection("refundClaims")
+        .where("refundId", "==", event.params.refundId)
+        .limit(1)
+        .get();
+    const claimId = sourceClaimId || claims?.docs[0]?.id || null;
+
     await notifyActiveAdministrators({
       title: "Customer refund claim",
       body: "A refund record was created and should be reviewed.",
       type: "refund",
+      ...(claimId
+        ? {deepLink: "/admin/refund-claims?claim=" + claimId}
+        : {deepLink: "/admin/finance"}),
       subject: {type: "payment-refund", id: event.params.refundId},
       dedupeKey: "refund-requested-" + event.params.refundId,
     });

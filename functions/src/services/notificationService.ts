@@ -23,7 +23,8 @@ export class NotificationService {
   async sendToDevice(
     token: string,
     title: string,
-    body: string
+    body: string,
+    deepLink?: string,
   ): Promise<void> {
 
     await getMessaging().send({
@@ -38,11 +39,15 @@ export class NotificationService {
 
       },
 
-    });
+      ...(deepLink
+        ? {
+          data: {
+            deepLink,
+          },
+        }
+        : {}),
 
-    console.log(
-      "Push notification sent."
-    );
+    });
 
   }
 
@@ -53,15 +58,10 @@ export class NotificationService {
 async sendToUser(
   uid: string,
   title: string,
-  body: string
+  body: string,
+  deepLink?: string,
 ): Promise<void> {
-
-  console.log("Looking up notification devices...");
-  console.log("UID:", uid);
-
   const db = getFirestore("default");
-
-  console.log("Firestore initialized.");
 
   const snapshot = await db
     .collection("notificationDevices")
@@ -69,31 +69,51 @@ async sendToUser(
     .where("active", "==", true)
     .get();
 
-  console.log(
-    `Found ${snapshot.size} notification devices.`
-  );
-
   if (snapshot.empty) {
-
-    console.log(
-      `No notification devices found for ${uid}`
-    );
-
     return;
-
   }
 
-  for (const document of snapshot.docs) {
+  const devicesByToken = new Map<string, FirebaseFirestore.QueryDocumentSnapshot[]>();
 
-    const device = document.data();
+  snapshot.docs.forEach((document) => {
+    const token = typeof document.data().token === "string"
+      ? document.data().token.trim()
+      : "";
 
-    await this.sendToDevice(
-      device.token,
-      title,
-      body
+    if (!token) {
+      return;
+    }
+
+    devicesByToken.set(
+      token,
+      [...(devicesByToken.get(token) ?? []), document],
     );
+  });
 
-  }
+  await Promise.allSettled(
+    Array.from(devicesByToken.entries()).map(
+      async ([token, documents]) => {
+        try {
+          await this.sendToDevice(token, title, body, deepLink);
+        } catch (error) {
+          const code = (error as {code?: unknown}).code;
+          const invalidToken = code ===
+            "messaging/registration-token-not-registered" ||
+            code === "messaging/invalid-registration-token";
+
+          if (invalidToken) {
+            const batch = db.batch();
+            documents.forEach((document) => batch.delete(document.ref));
+            await batch.commit();
+          }
+
+          console.error("Push notification delivery failed.", {
+            code: typeof code === "string" ? code : "unknown",
+          });
+        }
+      },
+    ),
+  );
 
 }
 

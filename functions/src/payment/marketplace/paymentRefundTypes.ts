@@ -196,6 +196,11 @@ export interface MarketplacePaymentRefund {
   orderId: string;
 
   /*
+   * Customer claim that authorized this refund, when applicable.
+   */
+  sourceClaimId?: string;
+
+  /*
    * Original marketplace settlement, when one exists.
    *
    * An order cancelled before delivery may not yet have a settlement.

@@ -57,8 +57,8 @@ await notificationStore.createNotification({
       storeOwnerUid,
 
       "New Order",
-
-      "You have received a new customer order."
+      "You have received a new customer order.",
+      "/store/store-orders/" + orderId,
 
     );
 
@@ -103,7 +103,8 @@ await notificationStore.createNotification({
     await notificationService.sendToUser(
       storeOwnerUid,
       title,
-      body
+      body,
+      "/store/store-orders/" + orderId,
     );
   }
 
@@ -139,7 +140,8 @@ await notificationStore.createNotification({
     await notificationService.sendToUser(
       storeOwnerUid,
       title,
-      body
+      body,
+      "/store/products/" + productId,
     );
   }
 

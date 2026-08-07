@@ -44,7 +44,8 @@ export class OrderEvents {
       await notificationService.sendToUser(
         customerUid,
         "Order Accepted",
-        "The store has accepted your order."
+        "The store has accepted your order.",
+        "/orders/" + orderId,
       );
 
   }
@@ -71,7 +72,8 @@ export class OrderEvents {
     await notificationService.sendToUser(
       customerUid,
       "Preparing Your Order",
-      "The store is preparing your order."
+      "The store is preparing your order.",
+      "/orders/" + orderId,
     );
 
   }
@@ -100,7 +102,8 @@ export class OrderEvents {
     await notificationService.sendToUser(
       customerUid,
       "Ready For Pickup",
-      "A driver will be assigned shortly."
+      "A driver will be assigned shortly.",
+      "/orders/" + orderId,
     );
 
   }
@@ -127,7 +130,8 @@ export class OrderEvents {
     await notificationService.sendToUser(
       customerUid,
       "Out For Delivery",
-      "Your order is on the way."
+      "Your order is on the way.",
+      "/orders/" + orderId,
     );
 
   }
@@ -154,7 +158,8 @@ export class OrderEvents {
     await notificationService.sendToUser(
       customerUid,
       "Order Delivered",
-      "Your order has been delivered. Share your verified store review in LIA."
+      "Your order has been delivered. Share your verified store review in LIA.",
+      "/orders/" + orderId,
     );
 
   }
@@ -181,7 +186,8 @@ export class OrderEvents {
     await notificationService.sendToUser(
       customerUid,
       "Order Cancelled",
-      "Your order has been cancelled."
+      "Your order has been cancelled.",
+      "/orders/" + orderId,
     );
 
   }

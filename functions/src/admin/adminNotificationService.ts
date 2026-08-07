@@ -13,6 +13,9 @@ import {
   FieldValue,
   getFirestore,
 } from "firebase-admin/firestore";
+import {
+  notificationService,
+} from "../services/notificationService";
 
 if (admin.apps.length === 0) {
   admin.initializeApp();
@@ -84,14 +87,30 @@ export async function notifyActiveAdministrators(
 
     if (!input.dedupeKey) {
       await notifications.add(data);
-      return;
+    } else {
+      try {
+        await notifications.doc(safeId(input.dedupeKey)).create(data);
+      } catch (error) {
+        const code = (error as {code?: unknown}).code;
+        if (code === 6 || code === "already-exists") {
+          return;
+        }
+
+        throw error;
+      }
     }
 
     try {
-      await notifications.doc(safeId(input.dedupeKey)).create(data);
+      await notificationService.sendToUser(
+        administratorId,
+        input.title,
+        input.body,
+        input.deepLink,
+      );
     } catch (error) {
-      const code = (error as {code?: unknown}).code;
-      if (code !== 6 && code !== "already-exists") throw error;
+      console.error("Admin push notification failed.", {
+        code: (error as {code?: unknown}).code ?? "unknown",
+      });
     }
   }));
 }

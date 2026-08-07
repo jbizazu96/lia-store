@@ -34,6 +34,7 @@ import {
 import { BrandedLoader } from "@/components/ui/BrandedLoader";
 import { OrderHelpSection } from "@/components/customer/orders/OrderHelpSection";
 import { StoreReviewPrompt } from "@/components/customer/orders/StoreReviewPrompt";
+import { DeliveryProofCard } from "@/components/customer/orders/DeliveryProofCard";
 
 
 interface OrderPageProps {
@@ -352,6 +353,12 @@ export default function OrderDetailPage({params}: OrderPageProps) {
             </p>
           </div>
         </div>
+
+        {order.status === "completed" && (
+          <DeliveryProofCard
+            orderId={order.id}
+          />
+        )}
 
         {/* Order Items */}
         <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">

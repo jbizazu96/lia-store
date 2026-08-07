@@ -1,7 +1,7 @@
 "use client";
 
 import {
-  useEffect,
+  useLayoutEffect,
   useRef,
 } from "react";
 import {ArrowLeft, Search, X} from "lucide-react";
@@ -23,19 +23,24 @@ export function SearchHeader({
 }: SearchHeaderProps) {
   const inputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     /*
      * autoFocus is occasionally lost during an App Router transition on
      * mobile. Explicitly restoring focus keeps the keyboard open after the
      * customer taps the search field on Home.
      */
-    const frame = window.requestAnimationFrame(() => {
+    const focusInput = () => {
       inputRef.current?.focus({
         preventScroll: true,
       });
-    });
+    };
+    const frame = window.requestAnimationFrame(focusInput);
+    const retry = window.setTimeout(focusInput, 120);
 
-    return () => window.cancelAnimationFrame(frame);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.clearTimeout(retry);
+    };
   }, []);
 
   return (

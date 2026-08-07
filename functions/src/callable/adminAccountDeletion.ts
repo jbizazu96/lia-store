@@ -31,6 +31,9 @@ import {
 import {
   writeAdminAuditLog,
 } from "../admin/adminAuditLogService";
+import {
+  notificationService,
+} from "../services/notificationService";
 
 if (admin.apps.length === 0) {
   admin.initializeApp();
@@ -216,6 +219,20 @@ async function notifyOwner(
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     }, {merge: true});
+
+  try {
+    await notificationService.sendToUser(
+      ownerId,
+      input.title,
+      input.body,
+      "/profile",
+    );
+  } catch (error) {
+    console.error("Account deletion push notification failed.", {
+      requestId: input.requestId,
+      message: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
 }
 
 function deletionListItem(document: FirebaseFirestore.QueryDocumentSnapshot) {

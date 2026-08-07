@@ -37,12 +37,49 @@ self.addEventListener("activate", (event) => {
 
 messaging.onBackgroundMessage((payload) => {
   const notificationTitle = payload.notification?.title ?? "LIA";
+  const candidate = payload.data?.deepLink;
+  const deepLink = typeof candidate === "string" &&
+    candidate.startsWith("/") &&
+    !candidate.startsWith("//")
+    ? candidate
+    : "/home";
 
   self.registration.showNotification(notificationTitle, {
     body: payload.notification?.body,
     icon: "/icon/icon-192.png",
     badge: "/icon/icon-192.png",
+    data: {deepLink},
   });
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+
+  const candidate = event.notification.data?.deepLink;
+  const deepLink = typeof candidate === "string" &&
+    candidate.startsWith("/") &&
+    !candidate.startsWith("//")
+    ? candidate
+    : "/home";
+  const destination = new URL(deepLink, self.location.origin).href;
+
+  event.waitUntil((async () => {
+    const windows = await self.clients.matchAll({
+      type: "window",
+      includeUncontrolled: true,
+    });
+    const existing = windows.find((client) =>
+      client.url.startsWith(self.location.origin),
+    );
+
+    if (existing) {
+      await existing.focus();
+      await existing.navigate(destination);
+      return;
+    }
+
+    await self.clients.openWindow(destination);
+  })());
 });`;
 
   return new Response(worker, {

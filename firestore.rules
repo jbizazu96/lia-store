@@ -470,18 +470,11 @@ service cloud.firestore {
     }
 
     match /notificationDevices/{deviceId} {
-      allow get, list, delete: if signedIn() &&
-        (
-          resource.data.uid == request.auth.uid ||
-          isAdmin()
-        );
-
-      allow create: if signedIn() &&
-        request.resource.data.uid == request.auth.uid;
-
-      allow update: if signedIn() &&
-        resource.data.uid == request.auth.uid &&
-        request.resource.data.uid == request.auth.uid;
+      /*
+       * Device tokens are sensitive credentials. Registration, de-duplication,
+       * and stale-token cleanup run only through Cloud Functions.
+       */
+      allow read, write: if false;
     }
 
     /*

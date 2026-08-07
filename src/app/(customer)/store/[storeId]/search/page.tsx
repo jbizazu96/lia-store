@@ -13,7 +13,7 @@
 
 import {
   use,
-  useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -98,22 +98,23 @@ export default function StoreSearchPage({
     skipDistanceWarning: true,
   });
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     /* See the global search header: App Router transitions can drop the
      * browser's native focus handoff on mobile. This page first renders its
      * store loader, so wait until the actual search input is mounted. */
-    if (loading || resolvedStoreId !== storeId) {
-      return;
-    }
-
-    const frame = window.requestAnimationFrame(() => {
+    const focusInput = () => {
       searchInputRef.current?.focus({
         preventScroll: true,
       });
-    });
+    };
+    const frame = window.requestAnimationFrame(focusInput);
+    const retry = window.setTimeout(focusInput, 120);
 
-    return () => window.cancelAnimationFrame(frame);
-  }, [loading, resolvedStoreId, storeId]);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.clearTimeout(retry);
+    };
+  }, [storeId]);
 
   const {
     addItem,
@@ -204,7 +205,35 @@ export default function StoreSearchPage({
   };
 
   if (loading || resolvedStoreId !== storeId) {
-    return <BrandedLoader message="Loading store search" />;
+    return (
+      <main className="min-h-screen bg-gray-50 px-4 pt-5 sm:px-6">
+        <header className="sticky top-0 z-30 -mx-4 bg-gray-50/95 px-4 pb-5 backdrop-blur sm:-mx-6 sm:px-6">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => router.back()}
+              className="flex h-11 w-11 flex-none items-center justify-center rounded-full bg-white text-gray-900 shadow-sm ring-1 ring-black/5 transition hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-orange-500"
+              aria-label="Go back"
+            >
+              <ArrowLeft className="h-6 w-6" strokeWidth={2.5} />
+            </button>
+            <div className="relative min-w-0 flex-1">
+              <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-500" />
+              <input
+                ref={searchInputRef}
+                autoFocus
+                type="search"
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="Search store products"
+                className="h-12 w-full rounded-full border border-gray-200 bg-white py-3 pl-12 pr-11 text-base font-medium text-gray-950 shadow-sm outline-none placeholder:font-normal placeholder:text-gray-500 focus:border-orange-400 focus:ring-2 focus:ring-orange-200"
+              />
+            </div>
+          </div>
+        </header>
+        <BrandedLoader message="Loading store search" />
+      </main>
+    );
   }
 
   if (error || !store) {

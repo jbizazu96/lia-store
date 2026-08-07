@@ -69,6 +69,8 @@ const COLLECTION =
 export interface CreateMarketplaceRefundInput {
   orderId: string;
 
+  sourceClaimId?: string;
+
   /*
    * Stable identity for this refund within the order.
    */
@@ -798,6 +800,12 @@ export async function createRefund(
       "Settlement ID"
     );
 
+  const sourceClaimId =
+    requireOptionalIdentifier(
+      input.sourceClaimId,
+      "Source claim ID"
+    );
+
   const stripePaymentIntentId =
     requireStripePaymentIntentId(
       input
@@ -847,6 +855,12 @@ export async function createRefund(
       refundId,
 
     orderId,
+
+    ...(sourceClaimId
+      ? {
+          sourceClaimId,
+        }
+      : {}),
 
     ...(settlementId
       ? {

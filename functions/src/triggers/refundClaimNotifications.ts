@@ -17,6 +17,9 @@ import {
 import {
   onDocumentUpdated,
 } from "firebase-functions/v2/firestore";
+import {
+  notificationService,
+} from "../services/notificationService";
 
 if (admin.apps.length === 0) {
   admin.initializeApp();
@@ -74,6 +77,22 @@ async function notifyCustomer(
     }, {
       merge: true,
     });
+
+  try {
+    await notificationService.sendToUser(
+      customerId,
+      title,
+      body,
+      "/orders/" + orderId,
+    );
+  } catch (error) {
+    console.error("Customer refund push notification failed.", {
+      claimId,
+      message: error instanceof Error
+        ? error.message
+        : "Unknown error",
+    });
+  }
 }
 
 export const customerRefundClaimDecisionNotification =

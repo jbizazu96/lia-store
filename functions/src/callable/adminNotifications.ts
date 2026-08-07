@@ -61,12 +61,36 @@ export const getAdminNotifications = onCall(
     const snapshot = await db.collection("admins").doc(administrator.uid)
       .collection("notifications").orderBy("createdAt", "desc").limit(100).get();
 
-    return {
-      notifications: snapshot.docs.map((document) => {
+    const notifications = await Promise.all(
+      snapshot.docs.map(async (document) => {
         const data = document.data();
         const subject = data.subject && typeof data.subject === "object"
           ? data.subject as Record<string, unknown>
           : {};
+        const subjectType = text(subject.type);
+        const subjectId = text(subject.id);
+        let deepLink = text(data.deepLink) || null;
+
+        /*
+         * Old refund notifications were created before they carried their
+         * claim deep link. Resolve those records at read time so they remain
+         * actionable instead of becoming read-only history.
+         */
+        if (
+          !deepLink &&
+          subjectType === "payment-refund" &&
+          subjectId
+        ) {
+          const claim = await db
+            .collection("refundClaims")
+            .where("refundId", "==", subjectId)
+            .limit(1)
+            .get();
+
+          deepLink = claim.docs[0]
+            ? "/admin/refund-claims?claim=" + claim.docs[0].id
+            : "/admin/finance";
+        }
 
         return {
           id: document.id,
@@ -75,13 +99,17 @@ export const getAdminNotifications = onCall(
           type: text(data.type) || "account",
           read: data.read === true,
           createdAt: timestamp(data.createdAt),
-          deepLink: text(data.deepLink) || null,
+          deepLink,
           subject: {
-            type: text(subject.type) || null,
-            id: text(subject.id) || null,
+            type: subjectType || null,
+            id: subjectId || null,
           },
         };
       }),
+    );
+
+    return {
+      notifications,
     };
   }
 );

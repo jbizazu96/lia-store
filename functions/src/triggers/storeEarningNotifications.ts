@@ -104,7 +104,12 @@ async function createStoreNotification(input: {
   }
 
   try {
-    await notificationService.sendToUser(ownerId, title, body);
+    await notificationService.sendToUser(
+      ownerId,
+      title,
+      body,
+      "/store/earnings",
+    );
   } catch (error) {
     /* The in-app notification remains available if a push device fails. */
     console.error("Unable to send store earning push notification.", {
