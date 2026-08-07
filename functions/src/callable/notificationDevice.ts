@@ -145,6 +145,31 @@ export const registerNotificationDevice = onCall(
       await batch.commit();
     }
 
+    /*
+     * A browser installation can sign in to only one LIA account at a time.
+     * When it switches roles/accounts, stop the previous account from
+     * receiving its private push notifications on this same device.
+     */
+    const registrationsForDevice = await db
+      .collection("notificationDevices")
+      .where("deviceId", "==", deviceId)
+      .get();
+    const previousAccounts = registrationsForDevice.docs.filter((document) =>
+      document.id !== deviceReference.id &&
+      document.data().active === true,
+    );
+
+    if (previousAccounts.length > 0) {
+      const batch = db.batch();
+      previousAccounts.forEach((document) => {
+        batch.update(document.ref, {
+          active: false,
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+      });
+      await batch.commit();
+    }
+
     return {
       registered: !current.exists,
       tokenChanged,
