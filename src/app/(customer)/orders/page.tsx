@@ -30,6 +30,9 @@ export default function OrdersPage() {
       const {
       orders,
       loading,
+      loadingMore,
+      hasMore,
+      loadMore,
       error,
       isAuthenticated,
     } = useCustomerOrders();
@@ -160,11 +163,8 @@ export default function OrdersPage() {
     <main className="min-h-screen bg-white pb-28">
       {/* Header */}
       <div className="sticky top-0 z-20 bg-white/95 backdrop-blur-xl">
-        <div className="relative flex items-center justify-end px-4 py-4 max-w-2xl mx-auto">
+        <div className="relative flex items-center justify-center px-4 py-4 max-w-2xl mx-auto">
           <h1 className="pointer-events-none absolute inset-x-0 text-center text-xl font-extrabold tracking-tight text-gray-900">Orders</h1>
-          <span className="relative rounded-full border border-orange-200 bg-orange-50 px-3 py-1.5 text-xs font-bold text-orange-700">
-            {orders.length} total
-          </span>
         </div>
       </div>
 
@@ -320,6 +320,18 @@ export default function OrdersPage() {
                );
               })}
             </AnimatePresence>
+            {hasMore && (
+              <div className="pt-3 text-center">
+                <button
+                  type="button"
+                  onClick={() => void loadMore()}
+                  disabled={loadingMore}
+                  className="rounded-full border border-orange-200 bg-orange-50 px-5 py-2.5 text-sm font-bold text-orange-700 transition hover:bg-orange-100 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {loadingMore ? "Loading more orders…" : "Load more orders"}
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>

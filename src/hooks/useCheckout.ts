@@ -29,18 +29,15 @@ import {
 } from "firebase/auth";
 
 import {
-  doc,
-  getDoc,
-} from "firebase/firestore";
-
-import {
   auth,
-  db,
 } from "@/lib/firebase";
 
 import {
   storeService,
 } from "@/services/store/storeService";
+import {
+  customerProfileClientService,
+} from "@/services/user/customerProfileClientService";
 
 import type {
   Store,
@@ -142,38 +139,6 @@ CheckoutAddressFormData = {
   name: "",
   phone: "",
 };
-
-function toCheckoutAddress(
-  value: Record<string, unknown>
-): CheckoutAddress | null {
-  if (
-    typeof value.street !== "string" ||
-    typeof value.city !== "string" ||
-    typeof value.state !== "string" ||
-    typeof value.zip !== "string"
-  ) {
-    return null;
-  }
-
-  return {
-    street: value.street,
-    city: value.city,
-    state: value.state,
-    zip: value.zip,
-    latitude:
-      typeof value.latitude === "number"
-        ? value.latitude
-        : undefined,
-    longitude:
-      typeof value.longitude === "number"
-        ? value.longitude
-        : undefined,
-    formattedAddress:
-      typeof value.formattedAddress === "string"
-        ? value.formattedAddress
-        : "",
-  };
-}
 
 /*
 |--------------------------------------------------------------------------
@@ -279,97 +244,30 @@ export function useCheckout({
             |--------------------------------------------------------------------------
             */
 
-            const userSnapshot =
-              await getDoc(
-                doc(
-                  db,
-                  "users",
-                  user.uid
-                )
-              );
+            const profile =
+              await customerProfileClientService.getProfile();
 
-            let resolvedName =
-              user.email?.split("@")[0] ??
+            const resolvedName =
+              profile.displayName ||
+              user.email?.split("@")[0] ||
               "Customer";
 
             const resolvedEmail =
-              user.email?.trim() ?? "";
+              profile.email ||
+              user.email?.trim() ||
+              "";
 
-            let resolvedPhone = "";
-
-            let defaultAddress:
-              | CheckoutAddress
-              | null = null;
-
-            if (userSnapshot.exists()) {
-              const userData =
-                userSnapshot.data();
-
-              if (
-                typeof userData.displayName ===
-                  "string" &&
-                userData.displayName.trim()
-              ) {
-                resolvedName =
-                  userData.displayName;
-              }
-
-              if (
-                typeof userData.phone ===
-                "string"
-              ) {
-                resolvedPhone =
-                  userData.phone;
-              }
-
-              if (
-                userData.defaultAddress &&
-                typeof userData.defaultAddress === "object"
-              ) {
-                defaultAddress = toCheckoutAddress(
-                  userData.defaultAddress as Record<string, unknown>
-                );
-              }
-            }
+            const resolvedPhone =
+              profile.phone ||
+              "";
 
             /*
-             * Addresses have historically been saved in three locations.
-             * Prefer the profile address, then use either legacy location so
-             * existing customers do not have to re-enter a valid address.
+             * The authenticated callable is the one source of truth for
+             * customer profile and delivery-address data. Legacy address
+             * documents are intentionally not read from the browser.
              */
-            if (!defaultAddress) {
-              const [subcollectionAddress, legacyAddress] =
-                await Promise.all([
-                  getDoc(
-                    doc(
-                      db,
-                      "users",
-                      user.uid,
-                      "addresses",
-                      "default"
-                    )
-                  ),
-                  getDoc(
-                    doc(
-                      db,
-                      "addresses",
-                      user.uid
-                    )
-                  ),
-                ]);
-
-              if (subcollectionAddress.exists()) {
-                defaultAddress = toCheckoutAddress(
-                  subcollectionAddress.data()
-                );
-              }
-
-              if (!defaultAddress && legacyAddress.exists()) {
-                defaultAddress = toCheckoutAddress(
-                  legacyAddress.data()
-                );
-              }
-            }
+            const defaultAddress: CheckoutAddress | null =
+              profile.defaultAddress;
 
             /*
             |--------------------------------------------------------------------------

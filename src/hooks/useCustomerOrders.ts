@@ -1,8 +1,8 @@
 /*
- * Compatibility hook for customer screens. The actual real-time listener is
- * owned once by CustomerOrdersProvider in the customer route layout.
+ * Compatibility hook for the customer Orders screen. The screen owns its
+ * paginated history read; shared navigation state lives in the context.
  */
 
 export {
-  useCustomerOrdersContext as useCustomerOrders,
-} from "@/context/CustomerOrdersContext";
+  useCustomerOrderHistory as useCustomerOrders,
+} from "@/hooks/useCustomerOrderHistory";

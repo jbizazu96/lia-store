@@ -60,7 +60,7 @@ interface StoreInfoPageProps {params: Promise<{storeId: string;}>;}export defaul
           <h2 className="text-xl font-bold text-gray-800 mb-2">Store Not Found</h2>
           <p className="text-gray-500 text-sm mb-4">{error || "This store doesn't exist"}</p>
           <button
-            onClick={() => router.back()}
+            onClick={() => router.push(`/store/${storeId}`)}
             className="px-6 py-2.5 bg-orange-500 text-white rounded-xl font-medium hover:bg-orange-600 transition"
           >
             Go Back
@@ -133,7 +133,7 @@ const phoneUrl =
       <div className="sticky top-0 z-20 bg-white/95 backdrop-blur-xl">
         <div className="relative flex items-center px-4 py-4">
           <button
-            onClick={() => router.back()}
+            onClick={() => router.push(`/store/${storeId}`)}
             className="p-2 hover:bg-gray-100 rounded-full transition"
             aria-label="Go back"
           >

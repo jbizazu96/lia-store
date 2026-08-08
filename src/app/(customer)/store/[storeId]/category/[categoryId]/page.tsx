@@ -214,7 +214,7 @@ export default function StoreCategoryPage({
     <main className="min-h-screen bg-white px-4 pb-28 pt-5 sm:px-6">
       <button
         type="button"
-        onClick={() => router.back()}
+        onClick={() => router.push(`/store/${storeId}`)}
         className="flex h-11 w-11 items-center justify-center rounded-full bg-white text-gray-900 shadow-md ring-1 ring-black/5 transition hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-orange-500"
         aria-label={"Back to " + store.name}
       >

@@ -13,6 +13,10 @@ import {
   getFunctions,
   httpsCallable,
 } from "firebase/functions";
+import {
+  readCached,
+  writeCached,
+} from "@/services/cache/clientDataCache";
 
 export interface DeliveryRouteCoordinates {
   latitude: number;
@@ -22,6 +26,17 @@ export interface DeliveryRouteCoordinates {
 export interface StoreDeliveryRoute {
   storeId: string;
   distanceMiles: number;
+}
+
+/*
+ * Store coordinates are only used to version a client cache entry. The
+ * callable remains the source of truth for the actual store location and
+ * driving distance, so the browser never submits a store coordinate to it.
+ */
+export interface DeliveryRouteStore {
+  id: string;
+  latitude: number;
+  longitude: number;
 }
 
 interface GetStoreDeliveryRoutesResponse {
@@ -34,6 +49,44 @@ const functions = getFunctions(
 );
 
 const MAX_STORES_PER_REQUEST = 50;
+const ROUTE_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
+const inFlightRouteRequests = new Map<
+  string,
+  Promise<StoreDeliveryRoute[]>
+>();
+
+interface CachedRoute {
+  distanceMiles: number | null;
+}
+
+function coordinateKey(value: number): string {
+  return Number.isFinite(value) ? value.toFixed(6) : "invalid";
+}
+
+function routeCacheKey(
+  store: DeliveryRouteStore,
+  destination: DeliveryRouteCoordinates,
+): string {
+  return [
+    "store-delivery-route",
+    store.id,
+    coordinateKey(store.latitude),
+    coordinateKey(store.longitude),
+    coordinateKey(destination.latitude),
+    coordinateKey(destination.longitude),
+  ].join(":");
+}
+
+function routeRequestKey(
+  stores: DeliveryRouteStore[],
+  destination: DeliveryRouteCoordinates,
+): string {
+  return [
+    coordinateKey(destination.latitude),
+    coordinateKey(destination.longitude),
+    ...stores.map((store) => routeCacheKey(store, destination)).sort(),
+  ].join("|");
+}
 
 export async function getStoreDeliveryRoutes(
   storeIds: string[],
@@ -71,6 +124,71 @@ export async function getStoreDeliveryRoutes(
   }
 
   return routeBatches;
+}
+
+/**
+ * Reuse a customer-address/store-location route until either endpoint changes.
+ * This makes public catalog listener updates cheap: an edited name, image,
+ * schedule, or product count does not cause a new Google Routes request.
+ */
+export async function getCachedStoreDeliveryRoutes(
+  stores: DeliveryRouteStore[],
+  destination: DeliveryRouteCoordinates,
+): Promise<StoreDeliveryRoute[]> {
+  const cachedRoutes: StoreDeliveryRoute[] = [];
+  const missingStores: DeliveryRouteStore[] = [];
+
+  for (const store of stores) {
+    const cached = readCached<CachedRoute>(
+      routeCacheKey(store, destination),
+    );
+
+    if (cached !== null) {
+      if (cached.distanceMiles !== null) {
+        cachedRoutes.push({
+          storeId: store.id,
+          distanceMiles: cached.distanceMiles,
+        });
+      }
+      continue;
+    }
+
+    missingStores.push(store);
+  }
+
+  if (missingStores.length === 0) {
+    return cachedRoutes;
+  }
+
+  const requestKey = routeRequestKey(missingStores, destination);
+  let freshRoutesRequest = inFlightRouteRequests.get(requestKey);
+
+  if (!freshRoutesRequest) {
+    freshRoutesRequest = getStoreDeliveryRoutes(
+      missingStores.map((store) => store.id),
+      destination,
+    ).finally(() => {
+      inFlightRouteRequests.delete(requestKey);
+    });
+    inFlightRouteRequests.set(requestKey, freshRoutesRequest);
+  }
+
+  const freshRoutes = await freshRoutesRequest;
+  const freshRouteByStoreId = new Map(
+    freshRoutes.map((route) => [route.storeId, route.distanceMiles]),
+  );
+
+  missingStores.forEach((store) => {
+    writeCached<CachedRoute>(
+      routeCacheKey(store, destination),
+      {
+        distanceMiles: freshRouteByStoreId.get(store.id) ?? null,
+      },
+      { ttlMs: ROUTE_CACHE_TTL_MS },
+    );
+  });
+
+  return [...cachedRoutes, ...freshRoutes];
 }
 
 export async function getStoreDeliveryRoute(

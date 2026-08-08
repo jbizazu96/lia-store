@@ -221,7 +221,7 @@ export default function StoreSearchPage({
           <div className="flex items-center gap-3">
             <button
               type="button"
-              onClick={() => router.back()}
+              onClick={() => router.push(`/store/${storeId}`)}
               className="flex h-11 w-11 flex-none items-center justify-center rounded-full bg-white text-gray-900 shadow-sm ring-1 ring-black/5 transition hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-orange-500"
               aria-label="Go back"
             >
@@ -271,7 +271,7 @@ export default function StoreSearchPage({
         <div className="flex items-center gap-3">
           <button
             type="button"
-            onClick={() => router.back()}
+            onClick={() => router.push(`/store/${storeId}`)}
             className="flex h-11 w-11 flex-none items-center justify-center rounded-full bg-white text-gray-900 shadow-sm ring-1 ring-black/5 transition hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-orange-500"
             aria-label={"Back to " + store.name}
           >

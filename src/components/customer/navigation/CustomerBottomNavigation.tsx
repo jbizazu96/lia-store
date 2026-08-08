@@ -22,8 +22,8 @@ import {
   usePathname,
 } from "next/navigation";
 import {
-  useCustomerOrders,
-} from "@/hooks/useCustomerOrders";
+  useCustomerOrdersContext,
+} from "@/context/CustomerOrdersContext";
 
 const navigationItems = [
   {
@@ -55,14 +55,8 @@ const navigationItems = [
 export function CustomerBottomNavigation() {
   const pathname = usePathname();
   const {
-    orders,
-  } = useCustomerOrders();
-
-  const openOrderCount = orders.filter(
-    (order) =>
-      order.status !== "completed" &&
-      order.status !== "cancelled"
-  ).length;
+    openOrderCount,
+  } = useCustomerOrdersContext();
 
   return (
     <nav

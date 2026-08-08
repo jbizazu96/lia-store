@@ -22,7 +22,8 @@ import {
   createCatalogSearchTokens,
 } from "../services/catalog/catalogSearchTokens";
 
-type Data = Record<string, unknown>;
+export type PublicCatalogData = Record<string, unknown>;
+type Data = PublicCatalogData;
 
 function text(value: unknown): string {
   return typeof value === "string" ? value : "";
@@ -32,10 +33,40 @@ function number(value: unknown, fallback = 0): number {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }
 
-function publicProduct(data: Data, productId: string) {
+function publicStoreSearchSummary(
+  storeId: string,
+  store: Data,
+) {
+  return {
+    id: storeId,
+    name: text(store.name),
+    logoUrl: text(store.logoUrl),
+    rating: number(store.rating),
+    latitude: number(store.latitude),
+    longitude: number(store.longitude),
+    address: text(store.address),
+    formattedAddress: text(store.formattedAddress),
+    phone: text(store.phone),
+    isApproved: store.isApproved === true,
+    isActive: store.isActive === true,
+    isOpen: store.isOpen === true,
+    schedule: Array.isArray(store.schedule) ? store.schedule : [],
+  };
+}
+
+function publicProduct(
+  data: Data,
+  productId: string,
+  store: Data,
+) {
   return {
     id: productId,
     storeId: text(data.storeId),
+    /*
+     * Search must never fan out to one store read per product. Keep the
+     * customer-safe store card data with every public product projection.
+     */
+    storeSummary: publicStoreSearchSummary(text(data.storeId), store),
     name: text(data.name),
     description: text(data.description),
     category: text(data.category),
@@ -64,10 +95,14 @@ function publicProduct(data: Data, productId: string) {
   };
 }
 
-async function storeIsPublic(storeId: string): Promise<boolean> {
-  if (!storeId) return false;
+async function publicStoreSource(storeId: string): Promise<Data | null> {
+  if (!storeId) return null;
   const store = await getFirestore("default").collection("stores").doc(storeId).get();
-  return store.exists && store.data()?.isApproved === true && store.data()?.isActive === true;
+  const data = store.data() as Data | undefined;
+
+  return store.exists && data?.isApproved === true && data.isActive === true
+    ? data
+    : null;
 }
 
 async function deletePublicProductProfile(productId: string): Promise<void> {
@@ -97,12 +132,14 @@ export const productPublicProfileSync = onDocumentWritten(
     const product = after.data() as Data;
     const storeId = text(product.storeId);
 
-    if (!(await storeIsPublic(storeId))) {
+    const store = await publicStoreSource(storeId);
+
+    if (!store) {
       await deletePublicProductProfile(event.params.productId);
       return;
     }
 
-    await profile.set(publicProduct(product, event.params.productId));
+    await profile.set(publicProduct(product, event.params.productId, store));
   },
 );
 
@@ -164,7 +201,15 @@ async function deleteProfilesForStore(storeId: string): Promise<void> {
   }
 }
 
-async function publishProfilesForStore(storeId: string): Promise<void> {
+export async function synchronizeStoreProductPublicProfiles(
+  storeId: string,
+  store: Data | undefined,
+): Promise<void> {
+  if (store?.isApproved !== true || store.isActive !== true) {
+    await deleteProfilesForStore(storeId);
+    return;
+  }
+
   const db = getFirestore("default");
   let lastId: string | undefined;
 
@@ -178,7 +223,7 @@ async function publishProfilesForStore(storeId: string): Promise<void> {
     for (const document of snapshot.docs) {
       batch.set(
         db.collection("productPublicProfiles").doc(document.id),
-        publicProduct(document.data() as Data, document.id),
+        publicProduct(document.data() as Data, document.id, store),
       );
 
       /* A store may be activated after its images finished processing. */
@@ -209,6 +254,31 @@ async function publishProfilesForStore(storeId: string): Promise<void> {
   }
 }
 
+function storeSearchSummaryChanged(
+  before: Data | undefined,
+  after: Data | undefined,
+): boolean {
+  const fields = [
+    "name",
+    "logoUrl",
+    "rating",
+    "latitude",
+    "longitude",
+    "address",
+    "formattedAddress",
+    "phone",
+    "isOpen",
+    "schedule",
+    "isApproved",
+    "isActive",
+  ];
+
+  return fields.some((field) =>
+    JSON.stringify(before?.[field] ?? null) !==
+    JSON.stringify(after?.[field] ?? null),
+  );
+}
+
 /* Publish or remove catalog documents only when marketplace visibility changes. */
 export const storeProductPublicVisibilitySync = onDocumentWritten(
   {
@@ -222,13 +292,22 @@ export const storeProductPublicVisibilitySync = onDocumentWritten(
     const beforePublic = before?.isApproved === true && before?.isActive === true;
     const afterPublic = after?.isApproved === true && after?.isActive === true;
 
-    if (beforePublic === afterPublic) return;
-
-    if (afterPublic) {
-      await publishProfilesForStore(event.params.storeId);
+    if (afterPublic && (
+      !beforePublic ||
+      storeSearchSummaryChanged(
+        before as Data | undefined,
+        after as Data | undefined,
+      )
+    )) {
+      await synchronizeStoreProductPublicProfiles(
+        event.params.storeId,
+        after as Data,
+      );
       return;
     }
 
-    await deleteProfilesForStore(event.params.storeId);
+    if (beforePublic && !afterPublic) {
+      await synchronizeStoreProductPublicProfiles(event.params.storeId, undefined);
+    }
   },
 );

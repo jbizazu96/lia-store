@@ -97,9 +97,9 @@ export default function CartPage() {
   const meetsMinimumOrder =
     amountUntilMinimumOrder === 0;
 
-  // Go back to previous page
+  // Always stay in the customer workspace, including from direct links.
   const goBack = () => {
-    router.back();
+    router.push(storeId ? `/store/${storeId}` : "/home");
   };
 
   // Proceed to checkout

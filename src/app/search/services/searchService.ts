@@ -3,17 +3,14 @@
 | Customer Global Search
 |--------------------------------------------------------------------------
 |
-| Searches only the server-managed public catalog projections. New catalog
-| documents use searchTokens for an indexed Firestore lookup. The small
-| legacy fallback lets existing projections work until their next sync adds
-| those tokens; it is deliberately capped and never reads private records.
+| Searches only server-managed public catalog projections using indexed
+| searchTokens. Product projections carry a small safe store summary, so a
+| product result never needs a second store read.
 |
 */
 
 import {
   collection,
-  doc,
-  getDoc,
   getDocs,
   limit,
   query,
@@ -43,7 +40,6 @@ import type {
 } from "../types";
 
 const MAXIMUM_INDEXED_RESULTS = 60;
-const MAXIMUM_LEGACY_SCAN = 150;
 
 type Data = Record<string, unknown>;
 
@@ -69,14 +65,10 @@ function normalize(value: string): string {
     .trim();
 }
 
-function matchesLegacySearch(
-  data: Data,
-  searchTerm: string,
-  fields: string[]
-): boolean {
-  return fields.some((field) =>
-    normalize(text(data[field])).includes(searchTerm)
-  );
+function isRecord(value: unknown): value is Data {
+  return typeof value === "object" &&
+    value !== null &&
+    !Array.isArray(value);
 }
 
 function schedule(value: unknown): ScheduleDay[] {
@@ -176,22 +168,7 @@ async function matchingProductDocuments(
     )
   );
 
-  if (!indexed.empty) {
-    return indexed.docs;
-  }
-
-  /* Temporary compatibility for catalog profiles written before searchTokens. */
-  const legacy = await getDocs(
-    query(reference, limit(MAXIMUM_LEGACY_SCAN))
-  );
-
-  return legacy.docs.filter((document) =>
-    matchesLegacySearch(
-      document.data() as Data,
-      searchTerm,
-      ["name", "description", "category", "brand"]
-    )
-  );
+  return indexed.docs;
 }
 
 async function matchingStoreDocuments(
@@ -209,21 +186,7 @@ async function matchingStoreDocuments(
     )
   );
 
-  if (!indexed.empty) {
-    return indexed.docs;
-  }
-
-  const legacy = await getDocs(
-    query(reference, limit(MAXIMUM_LEGACY_SCAN))
-  );
-
-  return legacy.docs.filter((document) =>
-    matchesLegacySearch(
-      document.data() as Data,
-      searchTerm,
-      ["name", "description", "city", "state", "category"]
-    )
-  );
+  return indexed.docs;
 }
 
 export async function performSearch(
@@ -245,49 +208,24 @@ export async function performSearch(
       return data.isAvailable !== false &&
         number(data.stock) > 0;
     });
-    const storeIds = Array.from(
-      new Set(
-        products.map((document) =>
-          text((document.data() as Data).storeId)
-        ).filter(Boolean)
-      )
-    );
-    const stores = await Promise.all(
-      storeIds.map(async (storeId) => {
-        const snapshot = await getDoc(
-          doc(db, "storePublicProfiles", storeId)
-        );
-
-        if (!snapshot.exists()) {
-          return null;
-        }
-
-        const data = snapshot.data() as Data;
-
-        return isCustomerVisibleStore(data)
-          ? storeData(
-            snapshot.id,
-            data,
-            userLocation,
-            marketplacePolicy
-          )
-          : null;
-      })
-    );
-    const storesById = new Map(
-      stores.filter(
-        (store): store is StoreData => store !== null
-      ).map((store) => [store.id, store])
-    );
-
     return products.flatMap((document) => {
       const product = document.data() as Data;
       const storeId = text(product.storeId);
-      const store = storesById.get(storeId);
+      const storeSummary = product.storeSummary;
 
-      if (!store) {
+      if (!storeId ||
+        !isRecord(storeSummary) ||
+        !isCustomerVisibleStore(storeSummary)
+      ) {
         return [];
       }
+
+      const store = storeData(
+        storeId,
+        storeSummary,
+        userLocation,
+        marketplacePolicy,
+      );
 
       const distance = userLocation &&
         store.latitude &&

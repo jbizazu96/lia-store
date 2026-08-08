@@ -304,6 +304,11 @@ export const adminWorkspaceClientService = {
   setCustomerSuspension: (customerId: string, isSuspended: boolean, reason?: string) => call<{success: boolean}>("setAdminCustomerSuspension", {customerId, isSuspended, ...(reason ? {reason} : {})}),
   getPlatformReport: (periodDays: 7 | 30 | 90 | number) => call<AdminPlatformReport>("getAdminPlatformReport", {periodDays}),
   backfillPlatformReports: () => call<{success: boolean; ordersScanned: number; customersScanned: number; limited: boolean}>("backfillAdminPlatformDailyReports"),
+  reindexCatalogSearch: (afterStoreId?: string) => call<{
+    success: boolean;
+    storesProcessed: number;
+    nextAfterStoreId: string | null;
+  }>("reindexAdminCatalogSearch", afterStoreId ? {afterStoreId} : undefined),
   getAuditLogs: (search = "") => call<{logs: AdminAuditLog[]; limited: boolean}>("getAdminAuditLogs", {search}),
   getHomePromotions: () => call<{promotions: HomePromotion[]}>("getAdminHomePromotions"),
   saveHomePromotion: (id: string | null, promotion: Omit<HomePromotion, "id">) => call<{id: string}>("saveAdminHomePromotion", {id, promotion}),

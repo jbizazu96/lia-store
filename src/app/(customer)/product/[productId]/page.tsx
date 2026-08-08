@@ -340,7 +340,7 @@ export default function ProductPage({ params }: ProductPageProps) {
               )} added to cart.`
             );
 
-            router.back();
+            router.push(`/store/${product.storeId}`);
           };
 
   const increaseSelectedQuantity = () => {
@@ -375,7 +375,7 @@ export default function ProductPage({ params }: ProductPageProps) {
         <p className="text-gray-600">{error ?? "Product not found."}</p>
         <button
           type="button"
-          onClick={() => router.back()}
+          onClick={() => router.push("/home")}
           className="rounded-xl bg-orange-500 px-5 py-2.5 font-semibold text-white"
         >
           Go back
@@ -390,7 +390,7 @@ export default function ProductPage({ params }: ProductPageProps) {
         <header className="absolute inset-x-0 top-0 z-20 mx-auto flex max-w-5xl items-center justify-between px-4 pt-4">
           <button
             type="button"
-            onClick={() => router.back()}
+            onClick={() => router.push(`/store/${product.storeId}`)}
             className="flex h-10 w-10 items-center justify-center rounded-full bg-white/95 shadow-md transition hover:scale-105"
             aria-label="Close product details"
           >

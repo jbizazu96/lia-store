@@ -188,7 +188,7 @@ export default function SearchPage() {
   };
 
   const handleBack = () => {
-    router.back();
+    router.push("/home");
   };
 
   return (

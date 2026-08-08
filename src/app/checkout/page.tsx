@@ -1204,7 +1204,7 @@ const handleViewOrder =
     <main className="min-h-screen bg-white pb-40">
       <CheckoutHeader
         onBack={() =>
-          router.back()
+          router.push("/cart")
         }
       />
 

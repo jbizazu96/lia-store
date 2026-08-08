@@ -22,7 +22,7 @@ import {
   hasValidRouteCoordinates,
 } from "@/services/delivery/routing";
 import {
-  getStoreDeliveryRoutes,
+  getCachedStoreDeliveryRoutes,
 } from "@/services/delivery/deliveryRoutesClientService";
 import { userService } from "@/services/user/userService";
 import {
@@ -61,6 +61,7 @@ export default function CustomerHomePage() {
   const [storeFilter, setStoreFilter] = useState<"all" | "favorites">("all");
   const [loading, setLoading] = useState(true);
   const endOfListRef = useRef<HTMLDivElement>(null);
+  const hasLoadedStoresRef = useRef(false);
 
   // Distance warning modal state
   const [selectedStore, setSelectedStore] = useState<CustomerStore | null>(null);
@@ -163,7 +164,9 @@ export default function CustomerHomePage() {
       }
 
       try {
-        setLoading(true);
+        if (!hasLoadedStoresRef.current) {
+          setLoading(true);
+        }
         setDistanceError(null);
         const requestId = ++latestRequest;
 
@@ -178,10 +181,12 @@ export default function CustomerHomePage() {
 
         const routes =
           storesWithCoordinates.length > 0
-            ? await getStoreDeliveryRoutes(
-                storesWithCoordinates.map(
-                  (store) => store.id
-                ),
+            ? await getCachedStoreDeliveryRoutes(
+                storesWithCoordinates.map((store) => ({
+                  id: store.id,
+                  latitude: store.latitude,
+                  longitude: store.longitude,
+                })),
                 {
                   latitude: userLocation.lat,
                   longitude: userLocation.lng,
@@ -262,6 +267,7 @@ export default function CustomerHomePage() {
         if (isMounted && requestId === latestRequest) {
           setNearbyStores(nearby);
           setFarStores(far);
+          hasLoadedStoresRef.current = true;
         }
       } catch (error) {
         console.error("Error fetching stores:", error);

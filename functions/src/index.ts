@@ -135,6 +135,9 @@ export {
 export {
   getAdminAuditLogs,
 } from "./callable/adminAuditLogs";
+export {
+  reindexAdminCatalogSearch,
+} from "./callable/adminCatalogSearchReindex";
 export {getMarketplacePricing} from "./callable/marketplacePricing";
 export {
   deleteAdminHomePromotion,
