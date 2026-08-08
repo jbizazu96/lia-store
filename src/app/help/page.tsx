@@ -25,8 +25,8 @@ import {
 
 export default function HelpPage() {
   return (
-    <main className="min-h-screen bg-gray-50 pb-28">
-      <header className="sticky top-0 z-20 bg-gray-50/95 px-4 py-4 backdrop-blur-xl">
+    <main className="min-h-screen bg-white pb-28">
+      <header className="sticky top-0 z-20 bg-white/95 px-4 py-4 backdrop-blur-xl">
         <div className="mx-auto flex max-w-xl justify-center">
           <h1 className="text-xl font-extrabold tracking-tight text-gray-900">Help Center</h1>
         </div>
@@ -44,7 +44,7 @@ export default function HelpPage() {
           </div>
         </section>
 
-        <section className="rounded-2xl border border-orange-100 bg-white/70 p-5 shadow-sm">
+        <section className="rounded-2xl border border-orange-200 bg-white p-5 shadow-[0_4px_12px_rgba(15,23,42,0.06)]">
           <div className="flex gap-3">
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-orange-100 text-orange-600">
               <PackageSearch className="h-5 w-5" />
@@ -65,12 +65,12 @@ export default function HelpPage() {
             <p className="mt-0.5 text-xs text-gray-500">Choose the option that best fits your question.</p>
           </div>
           <div className="space-y-3">
-            <a href="mailto:support@liamarketplace.com" className="group flex items-center gap-4 rounded-2xl border border-white/80 bg-white/80 p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-orange-200 hover:bg-white">
+            <a href="mailto:support@liamarketplace.com" className="group flex items-center gap-4 rounded-2xl border border-gray-200 bg-white p-4 shadow-[0_4px_12px_rgba(15,23,42,0.06)] transition hover:-translate-y-0.5 hover:border-orange-200 hover:bg-white">
               <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-orange-50 text-orange-600"><Mail className="h-5 w-5" /></span>
               <span className="min-w-0 flex-1"><span className="block text-sm font-extrabold text-gray-900">Contact LIA Support</span><span className="mt-1 block text-xs leading-5 text-gray-500">Account questions, delivery concerns, or general help.</span></span>
               <ChevronRight className="h-5 w-5 text-orange-500 transition group-hover:translate-x-0.5" />
             </a>
-            <a href="mailto:support@liamarketplace.com?subject=Report%20an%20issue" className="group flex items-center gap-4 rounded-2xl border border-white/80 bg-white/80 p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-red-200 hover:bg-white">
+            <a href="mailto:support@liamarketplace.com?subject=Report%20an%20issue" className="group flex items-center gap-4 rounded-2xl border border-gray-200 bg-white p-4 shadow-[0_4px_12px_rgba(15,23,42,0.06)] transition hover:-translate-y-0.5 hover:border-red-200 hover:bg-white">
               <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-red-50 text-red-600"><FileWarning className="h-5 w-5" /></span>
               <span className="min-w-0 flex-1"><span className="block text-sm font-extrabold text-gray-900">Report an issue</span><span className="mt-1 block text-xs leading-5 text-gray-500">Tell us about a technical problem or something that needs attention.</span></span>
               <ChevronRight className="h-5 w-5 text-red-500 transition group-hover:translate-x-0.5" />

@@ -21,7 +21,7 @@ export function TopNavigation({
   const router = useRouter();
 
   return (
-    <header className="sticky top-0 z-40 bg-gray-50/95 backdrop-blur-xl">
+    <header className="sticky top-0 z-40 border-b border-gray-100 bg-white/95 backdrop-blur-xl">
       <div className="px-4 py-3">
         <div className="flex items-center justify-between">
           <div className="flex min-w-0 flex-1 items-center gap-2">

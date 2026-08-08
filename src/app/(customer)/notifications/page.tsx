@@ -127,7 +127,7 @@ export default function NotificationsPage() {
 
   if (listenerError) {
     return (
-      <main className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+      <main className="min-h-screen bg-white flex items-center justify-center p-4">
         <div className="max-w-sm w-full bg-white rounded-2xl border border-gray-100 p-6 text-center shadow-sm">
           <Bell className="w-12 h-12 text-orange-400 mx-auto mb-3" />
           <h1 className="text-lg font-bold text-gray-800">Notifications unavailable</h1>
@@ -157,9 +157,9 @@ export default function NotificationsPage() {
     .sort(newestFirst);
 
   return (
-    <main className="min-h-screen bg-gray-50">
+    <main className="min-h-screen bg-white">
       {/* Header with Back Button */}
-      <div className="sticky top-0 z-20 bg-gray-50/95 backdrop-blur-xl">
+      <div className="sticky top-0 z-20 bg-white/95 backdrop-blur-xl">
         <div className="relative flex items-center gap-3 px-4 py-4 max-w-2xl mx-auto">
           <button
             onClick={() => router.back()}

@@ -17,11 +17,11 @@ export function DeliveryAddressSection({
   onEdit,
 }: DeliveryAddressSectionProps) {
   return (
-    <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-      <div className="flex items-center justify-between mb-3">
+    <section className="overflow-hidden rounded-[26px] border border-gray-200 bg-transparent">
+      <div className="flex items-center justify-between gap-3 border-b border-gray-100 px-4 py-4">
         <div className="flex items-center gap-2">
           <MapPin className="w-5 h-5 text-orange-500" />
-          <h3 className="font-semibold text-gray-800">Delivery Information</h3>
+          <h3 className="font-extrabold text-gray-900">Delivery Information</h3>
         </div>
         <button
           onClick={onEdit}
@@ -32,37 +32,42 @@ export function DeliveryAddressSection({
         </button>
       </div>
 
-      {address ? (
-        <div className="bg-gray-50 rounded-xl p-3 space-y-2">
+      <div className="px-4 py-4">
+        {address ? (
+          <div className="space-y-3">
           {/* User Name */}
           {userName && (
-            <div className="flex items-center gap-2 text-sm text-gray-700">
-              <User className="w-4 h-4 text-gray-400" />
+            <div className={`flex items-center gap-2 text-sm text-gray-700 ${userPhone ? "border-b border-gray-100 pb-3" : ""}`}>
+              <User className="w-4 h-4 text-orange-500" />
               <span className="font-medium">{userName}</span>
             </div>
           )}
           {/* User Phone */}
           {userPhone && (
             <div className="flex items-center gap-2 text-sm text-gray-700">
-              <Phone className="w-4 h-4 text-gray-400" />
+              <Phone className="w-4 h-4 text-orange-500" />
               <span>{userPhone}</span>
             </div>
           )}
           {/* Address */}
-          <div className="text-sm text-gray-600 pt-1 border-t border-gray-200">
-            <p>{address.street}</p>
-            <p>{address.city}, {address.state} {address.zip}</p>
-            {address.formattedAddress && (
-              <p className="text-xs text-gray-400 mt-0.5"></p>
-            )}
+          <div className="flex gap-2 border-t border-gray-100 pt-3 text-sm text-gray-600">
+            <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-orange-500" />
+            <div>
+              <p>{address.street}</p>
+              <p>{address.city}, {address.state} {address.zip}</p>
+              {address.formattedAddress && (
+                <p className="text-xs text-gray-400 mt-0.5"></p>
+              )}
+            </div>
           </div>
         </div>
-      ) : (
-        <div className="text-center py-4">
-          <p className="text-sm text-gray-500">No delivery information set</p>
-          <p className="text-xs text-gray-400">Please add your delivery details</p>
-        </div>
-      )}
-    </div>
+        ) : (
+          <div className="py-2 text-center">
+            <p className="text-sm text-gray-500">No delivery information set</p>
+            <p className="text-xs text-gray-400">Please add your delivery details</p>
+          </div>
+        )}
+      </div>
+    </section>
   );
 }

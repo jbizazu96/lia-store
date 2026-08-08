@@ -356,7 +356,7 @@ export default function CustomerHomePage() {
   }
 
   return (
-    <main className="min-h-screen bg-gray-50 pb-28">
+    <main className="min-h-screen bg-white pb-28">
       {/* Top Navigation */}
       <TopNavigation
         deliveryAddress={deliveryAddress?.street}
@@ -370,7 +370,7 @@ export default function CustomerHomePage() {
       </div>
 
       {/* Sticky global search remains in its original place below welcome. */}
-      <div className="sticky top-[65px] z-30 mt-2 bg-gray-50/95 px-4 py-2 backdrop-blur-sm">
+      <div className="sticky top-[65px] z-30 mt-2 bg-white/95 px-4 py-2 backdrop-blur-sm">
         <SearchBar
           onOpen={() => router.push("/search")}
           placeholder="Search stores and products"

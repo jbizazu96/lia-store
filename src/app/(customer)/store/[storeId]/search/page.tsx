@@ -100,19 +100,31 @@ export default function StoreSearchPage({
     /* See the global search header: App Router transitions can drop the
      * browser's native focus handoff on mobile. This page first renders its
      * store loader, so wait until the actual search input is mounted. */
+    if (loading || resolvedStoreId !== storeId) {
+      return;
+    }
+
     const focusInput = () => {
-      searchInputRef.current?.focus({
+      const input = searchInputRef.current;
+      if (!input) {
+        return;
+      }
+
+      input.focus({
         preventScroll: true,
       });
+      input.setSelectionRange(input.value.length, input.value.length);
     };
     const frame = window.requestAnimationFrame(focusInput);
-    const retry = window.setTimeout(focusInput, 120);
+    const firstRetry = window.setTimeout(focusInput, 160);
+    const secondRetry = window.setTimeout(focusInput, 360);
 
     return () => {
       window.cancelAnimationFrame(frame);
-      window.clearTimeout(retry);
+      window.clearTimeout(firstRetry);
+      window.clearTimeout(secondRetry);
     };
-  }, [storeId]);
+  }, [loading, resolvedStoreId, storeId]);
 
   const {
     addItem,
@@ -204,8 +216,8 @@ export default function StoreSearchPage({
 
   if (loading || resolvedStoreId !== storeId) {
     return (
-      <main className="min-h-screen bg-gray-50 px-4 pt-5 sm:px-6">
-        <header className="sticky top-0 z-30 -mx-4 bg-gray-50/95 px-4 pb-5 backdrop-blur sm:-mx-6 sm:px-6">
+      <main className="min-h-screen bg-white px-4 pt-5 sm:px-6">
+        <header className="sticky top-0 z-30 -mx-4 bg-white/95 px-4 pb-5 backdrop-blur sm:-mx-6 sm:px-6">
           <div className="flex items-center gap-3">
             <button
               type="button"
@@ -221,6 +233,8 @@ export default function StoreSearchPage({
                 ref={searchInputRef}
                 autoFocus
                 type="search"
+                inputMode="search"
+                enterKeyHint="search"
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
                 placeholder="Search store products"
@@ -252,8 +266,8 @@ export default function StoreSearchPage({
   }
 
   return (
-    <main className="min-h-screen bg-gray-50 px-4 pb-28 pt-5 sm:px-6">
-      <header className="sticky top-0 z-30 -mx-4 bg-gray-50/95 px-4 pb-5 backdrop-blur sm:-mx-6 sm:px-6">
+    <main className="min-h-screen bg-white px-4 pb-28 pt-5 sm:px-6">
+      <header className="sticky top-0 z-30 -mx-4 bg-white/95 px-4 pb-5 backdrop-blur sm:-mx-6 sm:px-6">
         <div className="flex items-center gap-3">
           <button
             type="button"
@@ -270,6 +284,8 @@ export default function StoreSearchPage({
               ref={searchInputRef}
               autoFocus
               type="search"
+              inputMode="search"
+              enterKeyHint="search"
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
               placeholder={"Search " + store.name}

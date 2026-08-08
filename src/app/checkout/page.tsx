@@ -237,7 +237,7 @@ export default function CheckoutPage() {
   const [
     tip,
     setTip,
-  ] = useState(0);
+  ] = useState(3);
 
   const [
     paymentConfirmationError,
@@ -969,7 +969,7 @@ const handleViewOrder =
     preparedPayment
   ) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-gray-50 p-4">
+      <main className="flex min-h-screen items-center justify-center bg-white p-4">
         <div className="w-full max-w-md rounded-3xl border border-gray-100 bg-white p-8 text-center shadow-sm">
           <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
             <ShieldCheck className="h-8 w-8 text-green-600" />
@@ -1060,7 +1060,7 @@ const handleViewOrder =
     preparedPayment
   ) {
     return (
-      <main className="min-h-screen bg-gray-50 pb-8">
+      <main className="min-h-screen bg-white pb-8">
         <CheckoutHeader
           onBack={
             handleReturnToReview
@@ -1201,7 +1201,7 @@ const handleViewOrder =
   */
 
   return (
-    <main className="min-h-screen bg-gray-50 pb-8">
+    <main className="min-h-screen bg-white pb-40">
       <CheckoutHeader
         onBack={() =>
           router.back()
@@ -1243,18 +1243,6 @@ const handleViewOrder =
           }
         />
 
-        <TipSelector
-          selectedTip={
-            tip
-          }
-          onTipChange={
-            setTip
-          }
-          subtotal={
-            totalPrice
-          }
-        />
-
         <OrderSummary
           items={
             items as
@@ -1271,6 +1259,18 @@ const handleViewOrder =
           storeAddress={
             store?.address ??
             ""
+          }
+        />
+
+        <TipSelector
+          selectedTip={
+            tip
+          }
+          onTipChange={
+            setTip
+          }
+          subtotal={
+            totalPrice
           }
         />
 
@@ -1303,48 +1303,48 @@ const handleViewOrder =
           </div>
         )}
 
-        <button
-          type="button"
-          onClick={
-            handleContinueToPayment
-          }
-          disabled={
-            loading ||
-            isCalculatingDistance ||
-            isStoreClosed ||
-            isOutsideDeliveryRadius ||
-            isDeliveryDistanceUnavailable
-          }
-          className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-orange-500 to-orange-600 py-3.5 font-semibold text-white transition hover:from-orange-600 hover:to-orange-700 hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {paymentPreparationLoading ? (
-            <>
-              <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+      </div>
 
-              Preparing secure payment...
-            </>
-          ) : isCalculatingDistance ? (
-            "Calculating delivery distance..."
-          ) : isStoreClosed ? (
-            "Store Closed"
-          ) : isOutsideDeliveryRadius ? (
-            "Delivery Unavailable"
-          ) : isDeliveryDistanceUnavailable ? (
-            "Delivery Distance Unavailable"
-          ) : (
-            <>
-              <CreditCard className="h-5 w-5" />
-
-              Continue to Payment · $
-              {total.toFixed(2)}
-            </>
-          )}
-        </button>
-
-        <p className="text-center text-xs leading-5 text-gray-400">
-          The final payment amount is recalculated securely by LIA before
-          Stripe opens.
-        </p>
+      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-gray-200/80 bg-white/95 px-4 py-3 backdrop-blur-xl">
+        <div className="mx-auto max-w-lg">
+          <button
+            type="button"
+            onClick={
+              handleContinueToPayment
+            }
+            disabled={
+              loading ||
+              isCalculatingDistance ||
+              isStoreClosed ||
+              isOutsideDeliveryRadius ||
+              isDeliveryDistanceUnavailable
+            }
+            className="flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-orange-500 to-orange-600 py-3.5 font-semibold text-white transition hover:from-orange-600 hover:to-orange-700 hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {paymentPreparationLoading ? (
+              <>
+                <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                Preparing secure payment...
+              </>
+            ) : isCalculatingDistance ? (
+              "Calculating delivery distance..."
+            ) : isStoreClosed ? (
+              "Store Closed"
+            ) : isOutsideDeliveryRadius ? (
+              "Delivery Unavailable"
+            ) : isDeliveryDistanceUnavailable ? (
+              "Delivery Distance Unavailable"
+            ) : (
+              <>
+                <CreditCard className="h-5 w-5" />
+                Continue to Payment · ${total.toFixed(2)}
+              </>
+            )}
+          </button>
+          <p className="mt-2 text-center text-xs leading-5 text-gray-400">
+            The final payment amount is recalculated securely by LIA before Stripe opens.
+          </p>
+        </div>
       </div>
 
       <AnimatePresence>

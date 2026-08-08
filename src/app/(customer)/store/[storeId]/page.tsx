@@ -301,7 +301,7 @@ export default function StorePage({
 
   if (loading || resolvedStoreId !== storeId) {
     return (
-      <div className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-gray-50">
+      <div className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-white">
         <div className="pointer-events-none absolute right-0 top-0 h-[500px] w-[500px] rounded-full bg-yellow-400/5 blur-[120px]" />
 
         <div className="pointer-events-none absolute bottom-0 left-0 h-[400px] w-[400px] rounded-full bg-blue-500/5 blur-[100px]" />
@@ -429,7 +429,7 @@ export default function StorePage({
 
   if (error || !store) {
     return (
-      <main className="min-h-screen bg-gray-50">
+      <main className="min-h-screen bg-white">
         <CustomerPageState
           kind="error"
           title="This store is unavailable"
@@ -450,7 +450,7 @@ export default function StorePage({
   */
 
   return (
-    <main className="min-h-screen bg-gray-50 pb-20">
+    <main className="min-h-screen bg-white pb-20">
       <StoreHeader
         bannerUrl={store.bannerUrl}
         logoUrl={store.logoUrl}

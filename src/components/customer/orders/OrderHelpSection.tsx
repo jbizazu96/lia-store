@@ -3,6 +3,7 @@
 /* One customer-facing entry point for private LIA order support and claims. */
 
 import {
+  ChevronRight,
   Headphones,
   RotateCcw,
 } from "lucide-react";
@@ -29,7 +30,7 @@ export function OrderHelpSection({
     useState<HelpView>(null);
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
+    <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-[0_6px_18px_rgba(15,23,42,0.08)]">
       <div className="border-b border-gray-100 p-5">
         <p className="text-xs font-bold uppercase tracking-wide text-orange-600">
           Order help
@@ -46,14 +47,16 @@ export function OrderHelpSection({
           <button
             type="button"
             onClick={() => setActiveView("support")}
-            className={`flex items-start gap-3 rounded-xl border p-3 text-left transition ${
+            className={`group flex items-center gap-3 rounded-2xl border-2 p-4 text-left shadow-sm transition hover:-translate-y-0.5 ${
               activeView === "support"
-                ? "border-blue-200 bg-blue-50"
-                : "border-gray-200 bg-white hover:bg-gray-50"
+                ? "border-blue-300 bg-blue-50"
+                : "border-gray-200 bg-white hover:border-blue-200 hover:bg-blue-50/40"
             }`}
           >
-            <Headphones className="mt-0.5 h-5 w-5 flex-none text-blue-700" />
-            <span>
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-700">
+              <Headphones className="h-5 w-5" />
+            </span>
+            <span className="min-w-0 flex-1">
               <span className="block text-sm font-bold text-gray-900">
                 Get order help
               </span>
@@ -61,20 +64,23 @@ export function OrderHelpSection({
                 Late delivery, missing items, or general support.
               </span>
             </span>
+            <ChevronRight className="h-5 w-5 shrink-0 text-blue-600 transition group-hover:translate-x-0.5" />
           </button>
 
           {canRequestRefund && (
             <button
               type="button"
               onClick={() => setActiveView("claim")}
-              className={`flex items-start gap-3 rounded-xl border p-3 text-left transition ${
+              className={`group flex items-center gap-3 rounded-2xl border-2 p-4 text-left shadow-sm transition hover:-translate-y-0.5 ${
                 activeView === "claim"
-                  ? "border-orange-200 bg-orange-50"
-                  : "border-gray-200 bg-white hover:bg-gray-50"
+                  ? "border-orange-300 bg-orange-50"
+                  : "border-gray-200 bg-white hover:border-orange-200 hover:bg-orange-50/40"
               }`}
             >
-              <RotateCcw className="mt-0.5 h-5 w-5 flex-none text-orange-600" />
-              <span>
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-orange-100 text-orange-600">
+                <RotateCcw className="h-5 w-5" />
+              </span>
+              <span className="min-w-0 flex-1">
                 <span className="block text-sm font-bold text-gray-900">
                   Request a refund or return
                 </span>
@@ -82,6 +88,7 @@ export function OrderHelpSection({
                   Submit a payment-related claim for LIA Admin review.
                 </span>
               </span>
+              <ChevronRight className="h-5 w-5 shrink-0 text-orange-600 transition group-hover:translate-x-0.5" />
             </button>
           )}
         </div>

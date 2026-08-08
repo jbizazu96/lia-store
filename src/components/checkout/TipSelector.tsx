@@ -14,7 +14,7 @@ interface TipSelectorProps {
   subtotal: number;
 }
 
-const TIP_OPTIONS = [4, 4.5, 5];
+const TIP_OPTIONS = [2.5, 3, 4];
 
 export function TipSelector({selectedTip, onTipChange, subtotal}: TipSelectorProps) {
   const [showCustomTip, setShowCustomTip] = useState(false);
@@ -30,7 +30,7 @@ export function TipSelector({selectedTip, onTipChange, subtotal}: TipSelectorPro
   };
 
   return (
-    <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
+    <div className="rounded-[26px] border border-gray-200 bg-transparent p-5">
       {/* Tip Header */}
       <div className="flex items-center gap-2 mb-3">
         <Heart className="w-5 h-5 text-orange-500" />
@@ -51,10 +51,10 @@ export function TipSelector({selectedTip, onTipChange, subtotal}: TipSelectorPro
               onTipChange(amount);
               setShowCustomTip(false);
             }}
-            className={`flex-1 py-3 rounded-xl border-2 font-medium transition ${
+            className={`flex-1 rounded-full border px-2 py-3 font-medium transition ${
               selectedTip === amount
-                ? "border-orange-500 bg-orange-50 text-orange-600"
-                : "border-gray-200 text-gray-600 hover:border-orange-300 hover:bg-orange-50/50"
+                ? "border-orange-500 bg-orange-500 text-white"
+                : "border-transparent bg-gray-100 text-gray-700 hover:border-orange-200 hover:bg-orange-50"
             }`}
           >
             ${amount}
@@ -65,10 +65,10 @@ export function TipSelector({selectedTip, onTipChange, subtotal}: TipSelectorPro
             setShowCustomTip(!showCustomTip);
             if (!showCustomTip) onTipChange(0);
           }}
-          className={`flex-1 py-3 rounded-xl border-2 font-medium transition ${
+          className={`flex-1 rounded-full border px-2 py-3 font-medium transition ${
             showCustomTip
-              ? "border-orange-500 bg-orange-50 text-orange-600"
-              : "border-gray-200 text-gray-600 hover:border-orange-300 hover:bg-orange-50/50"
+              ? "border-orange-500 bg-orange-500 text-white"
+              : "border-transparent bg-gray-100 text-gray-700 hover:border-orange-200 hover:bg-orange-50"
           }`}
         >
           <Plus className="w-4 h-4 mx-auto" />

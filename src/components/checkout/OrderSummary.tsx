@@ -35,11 +35,13 @@ export function OrderSummary({
   const [feeInfoType, setFeeInfoType] = useState<FeeInfoType | null>(null);
   const hasFreeDelivery =
     totals.deliveryFee === 0 && totals.originalDeliveryFee > 0;
+  const totalBeforeTip = totals.total - totals.tip;
 
   return (
-    <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-      <h3 className="font-semibold text-gray-800 mb-3">Order Summary</h3>
-      
+    <>
+      <section className="overflow-hidden rounded-[26px] border border-gray-200 bg-transparent p-5">
+        <h3 className="mb-3 font-extrabold text-gray-900">Cart Summary</h3>
+
       {/* Store Info */}
       {storeName && (
         <div className="flex items-start gap-2 mb-3 pb-2 border-b border-gray-100">
@@ -99,9 +101,12 @@ export function OrderSummary({
           );
         })}
       </div>
+      </section>
 
       {/* Totals */}
-      <div className="mt-4 pt-3 border-t border-gray-200 space-y-2">
+      <section className="overflow-hidden rounded-[26px] border border-gray-200 bg-transparent p-5">
+        <h3 className="mb-3 font-extrabold text-gray-900">Price Summary</h3>
+      <div className="space-y-2">
         <div className="flex justify-between text-sm">
           <span className="text-gray-500">Subtotal</span>
           <span className="text-gray-800">${totals.subtotal.toFixed(2)}</span>
@@ -147,15 +152,6 @@ export function OrderSummary({
           </span>
         </div>
         
-        
-        {/* ✅ Tip - ONLY visible if greater than 0 */}
-       {totals.tip > 0 && (
-          <div className="flex justify-between text-sm">
-            <span className="text-gray-500">Driver Tip</span>
-            <span className="text-gray-800">${totals.tip.toFixed(2)}</span>
-          </div>
-        )}
-        
         <div className="flex items-center justify-between gap-4 text-sm">
           <button
             type="button"
@@ -169,9 +165,9 @@ export function OrderSummary({
           <span className="text-gray-800">${totals.tax.toFixed(2)}</span>
         </div>
         
-        <div className="flex justify-between text-lg font-bold pt-2 border-t border-gray-200">
-          <span className="text-gray-800">Total</span>
-          <span className="text-orange-600">${totals.total.toFixed(2)}</span>
+        <div className="flex justify-between border-t border-gray-200 pt-2 text-lg font-bold">
+          <span className="text-gray-800">Total before tip</span>
+          <span className="text-orange-600">${totalBeforeTip.toFixed(2)}</span>
         </div>
       </div>
 
@@ -184,6 +180,7 @@ export function OrderSummary({
           />
         )}
       </AnimatePresence>
-    </div>
+      </section>
+    </>
   );
 }

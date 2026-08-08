@@ -44,7 +44,7 @@ export default function OrdersPage() {
   ========================================== */
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex flex-col justify-center items-center relative overflow-hidden">
+      <div className="min-h-screen bg-white flex flex-col justify-center items-center relative overflow-hidden">
         
         {/* Ambient Glows (Soft Yellow accents on white background) */}
         <div className="absolute top-0 right-0 h-[500px] w-[500px] rounded-full bg-yellow-400/5 blur-[120px] pointer-events-none" />
@@ -142,7 +142,7 @@ export default function OrdersPage() {
 
   if (error) {
     return (
-      <main className="min-h-screen bg-gray-50">
+      <main className="min-h-screen bg-white">
         <CustomerPageState
           kind="error"
           title="We couldn’t load your orders"
@@ -157,9 +157,9 @@ export default function OrdersPage() {
   }
 
   return (
-    <main className="min-h-screen bg-gray-50 pb-28">
+    <main className="min-h-screen bg-white pb-28">
       {/* Header */}
-      <div className="sticky top-0 z-20 bg-gray-50/95 backdrop-blur-xl">
+      <div className="sticky top-0 z-20 bg-white/95 backdrop-blur-xl">
         <div className="relative flex items-center justify-end px-4 py-4 max-w-2xl mx-auto">
           <h1 className="pointer-events-none absolute inset-x-0 text-center text-xl font-extrabold tracking-tight text-gray-900">Orders</h1>
           <span className="relative rounded-full border border-orange-200 bg-orange-50 px-3 py-1.5 text-xs font-bold text-orange-700">
@@ -255,7 +255,7 @@ export default function OrdersPage() {
                       router.push(`/orders/${order.id}`);
                     }
                   }}
-                  className="group cursor-pointer rounded-2xl border border-white/80 bg-white/80 p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-orange-200 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2"
+                  className="group cursor-pointer rounded-2xl border border-gray-200 bg-white p-5 shadow-[0_6px_18px_rgba(15,23,42,0.08)] transition hover:-translate-y-0.5 hover:border-orange-300 hover:shadow-[0_10px_24px_rgba(15,23,42,0.12)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2"
                 >
                   {/* Order Header */}
                   <div className="mb-4 flex items-start justify-between gap-3">

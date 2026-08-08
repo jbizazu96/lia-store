@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-LIA (Local International African Marketplace) is a multi-vendor African grocery delivery platform.
+LIA is a multi-vendor African grocery delivery platform.
 
 The platform connects:
 

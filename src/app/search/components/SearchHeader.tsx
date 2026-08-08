@@ -1,7 +1,7 @@
 "use client";
 
 import {
-  useLayoutEffect,
+  useEffect,
   useRef,
 } from "react";
 import {ArrowLeft, Search, X} from "lucide-react";
@@ -23,28 +23,36 @@ export function SearchHeader({
 }: SearchHeaderProps) {
   const inputRef = useRef<HTMLInputElement>(null);
 
-  useLayoutEffect(() => {
+  useEffect(() => {
     /*
      * autoFocus is occasionally lost during an App Router transition on
      * mobile. Explicitly restoring focus keeps the keyboard open after the
      * customer taps the search field on Home.
      */
     const focusInput = () => {
-      inputRef.current?.focus({
+      const input = inputRef.current;
+      if (!input) {
+        return;
+      }
+
+      input.focus({
         preventScroll: true,
       });
+      input.setSelectionRange(input.value.length, input.value.length);
     };
     const frame = window.requestAnimationFrame(focusInput);
-    const retry = window.setTimeout(focusInput, 120);
+    const firstRetry = window.setTimeout(focusInput, 160);
+    const secondRetry = window.setTimeout(focusInput, 360);
 
     return () => {
       window.cancelAnimationFrame(frame);
-      window.clearTimeout(retry);
+      window.clearTimeout(firstRetry);
+      window.clearTimeout(secondRetry);
     };
   }, []);
 
   return (
-    <div className="sticky top-0 z-20 bg-gray-50/95 px-4 py-3 backdrop-blur">
+    <div className="sticky top-0 z-20 bg-white/95 px-4 py-3 backdrop-blur">
       <div className="mx-auto flex max-w-lg items-center gap-2">
         <button
           onClick={onBack}
@@ -59,6 +67,8 @@ export function SearchHeader({
           <input
             ref={inputRef}
             type="text"
+            inputMode="search"
+            enterKeyHint="search"
             value={value}
             onChange={(e) => onChange(e.target.value)}
             onKeyDown={(e) => {

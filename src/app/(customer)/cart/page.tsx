@@ -154,7 +154,7 @@ export default function CartPage() {
   // Empty state
   if (items.length === 0) {
     return (
-      <main className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+      <main className="min-h-screen bg-white flex items-center justify-center p-4">
         {/* Back button in empty state */}
         <button
           onClick={goBack}
@@ -226,9 +226,9 @@ export default function CartPage() {
   }
 
   return (
-    <main className="min-h-screen bg-gray-50">
+    <main className="min-h-screen bg-white">
       {/* Header with Back Button - Matching Notifications Page Style */}
-      <div className="sticky top-0 z-20 bg-gray-50/95 backdrop-blur-xl">
+      <div className="sticky top-0 z-20 bg-white/95 backdrop-blur-xl">
         <div className="relative flex items-center px-4 py-4 max-w-2xl mx-auto">
           <button
             onClick={goBack}
@@ -250,6 +250,9 @@ export default function CartPage() {
           <div className="flex items-center justify-between gap-3 border-b border-gray-100 px-4 py-4">
             <div className="min-w-0">
               <h2 className="truncate text-base font-extrabold text-gray-900">{storeName}</h2>
+              <p className="mt-0.5 text-sm font-medium text-gray-500">
+                ${subtotal.toFixed(2)} subtotal
+              </p>
             </div>
             {storeId && (
               <button
@@ -323,7 +326,7 @@ export default function CartPage() {
                       <div className="flex items-center rounded-full border border-gray-200 bg-white p-1 shadow-sm">
                         <button
                           onClick={() => handleDecreaseQuantity(item.id, item.quantity, productName)}
-                          className="flex h-8 w-8 items-center justify-center rounded-full text-gray-700 transition hover:bg-red-50 hover:text-red-600"
+                          className="flex h-8 w-8 items-center justify-center rounded-full text-red-600 transition hover:bg-red-50 hover:text-red-700"
                           aria-label={
                             item.quantity === 1
                               ? `Remove ${productName} from cart`
@@ -372,6 +375,10 @@ export default function CartPage() {
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-30">
         <div className="max-w-2xl mx-auto px-4 py-4">
           <div className="space-y-2">
+            <div className="flex items-center justify-between gap-4 text-sm">
+              <span className="text-gray-500">Subtotal</span>
+              <span className="text-gray-800">${subtotal.toFixed(2)}</span>
+            </div>
             <div className="flex items-center justify-between gap-4 text-sm">
               <button
                 type="button"
@@ -461,7 +468,7 @@ export default function CartPage() {
               Boolean(deliveryError) ||
               !meetsMinimumOrder
             }
-            className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-orange-500 to-orange-600 py-3 font-semibold text-white transition hover:from-orange-600 hover:to-orange-700 hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-orange-500 to-orange-600 py-3 font-semibold text-white transition hover:from-orange-600 hover:to-orange-700 hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-50"
           >
             <CreditCard className="h-5 w-5" />
 

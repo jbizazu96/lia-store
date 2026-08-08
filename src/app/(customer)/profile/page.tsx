@@ -164,7 +164,7 @@ export default function ProfilePage() {
 
   if (profileError && !userData) {
     return (
-      <main className="min-h-screen bg-gray-50">
+      <main className="min-h-screen bg-white">
         <CustomerPageState
           kind="error"
           title="We couldn’t load your profile"
@@ -210,14 +210,11 @@ export default function ProfilePage() {
     : "Add a delivery address";
 
   return (
-    <main className="min-h-screen bg-gray-50 pb-28">
+    <main className="min-h-screen bg-white pb-28">
       {/* Header */}
-      <div className="sticky top-0 z-20 bg-gray-50/95 backdrop-blur-xl">
-        <div className="relative flex items-center justify-end px-4 py-4 max-w-lg mx-auto">
-          <h1 className="pointer-events-none absolute inset-x-0 text-center text-xl font-extrabold tracking-tight text-gray-900">Profile</h1>
-          <span className="relative rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700">
-            Customer
-          </span>
+      <div className="sticky top-0 z-20 bg-white/95 backdrop-blur-xl">
+        <div className="mx-auto flex max-w-lg justify-center px-4 py-4">
+          <h1 className="text-xl font-extrabold tracking-tight text-gray-900">Profile</h1>
         </div>
       </div>
 

@@ -54,7 +54,7 @@ interface StoreInfoPageProps {params: Promise<{storeId: string;}>;}export defaul
 
   if (error || !store) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-white flex items-center justify-center p-4">
         <div className="text-center">
           <Store className="w-16 h-16 text-gray-300 mx-auto mb-4" />
           <h2 className="text-xl font-bold text-gray-800 mb-2">Store Not Found</h2>
@@ -128,9 +128,9 @@ interface StoreInfoPageProps {params: Promise<{storeId: string;}>;}export defaul
 const phoneUrl =
   getStorePhoneUrl(store.phone);
   return (
-    <main className="min-h-screen bg-gray-50 pb-8">
+    <main className="min-h-screen bg-white pb-8">
       {/* Header with Back Button */}
-      <div className="sticky top-0 z-20 bg-gray-50/95 backdrop-blur-xl">
+      <div className="sticky top-0 z-20 bg-white/95 backdrop-blur-xl">
         <div className="relative flex items-center px-4 py-4">
           <button
             onClick={() => router.back()}

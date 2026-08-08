@@ -370,7 +370,7 @@ export default function ProductPage({ params }: ProductPageProps) {
 
   if (error || !product) {
     return (
-      <main className="flex min-h-screen flex-col items-center justify-center gap-4 bg-gray-50 px-6 text-center">
+      <main className="flex min-h-screen flex-col items-center justify-center gap-4 bg-white px-6 text-center">
         <Package className="h-12 w-12 text-gray-300" />
         <p className="text-gray-600">{error ?? "Product not found."}</p>
         <button
@@ -385,7 +385,7 @@ export default function ProductPage({ params }: ProductPageProps) {
   }
 
   return (
-    <main className="min-h-screen bg-gray-50 pb-28 font-sans text-gray-950">
+    <main className="min-h-screen bg-white pb-28 font-sans text-gray-950">
       <div className="mx-auto max-w-5xl">
         <header className="absolute inset-x-0 top-0 z-20 mx-auto flex max-w-5xl items-center justify-between px-4 pt-4">
           <button

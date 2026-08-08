@@ -211,7 +211,7 @@ export default function StoreCategoryPage({
   }
 
   return (
-    <main className="min-h-screen bg-gray-50 px-4 pb-28 pt-5 sm:px-6">
+    <main className="min-h-screen bg-white px-4 pb-28 pt-5 sm:px-6">
       <button
         type="button"
         onClick={() => router.back()}

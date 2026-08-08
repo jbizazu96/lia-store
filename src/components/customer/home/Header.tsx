@@ -13,7 +13,7 @@ export function Header({userName}: HeaderProps) {
   const {itemCount} = useCart();
 
   return (
-    <header className="sticky top-0 z-40 bg-gray-50/95 backdrop-blur-xl">
+    <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-xl">
       <div className="px-4 py-3">
         <div className="flex items-center justify-between">
           {/* Left: Greeting */}

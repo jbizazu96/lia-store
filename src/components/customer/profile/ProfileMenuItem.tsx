@@ -29,7 +29,7 @@ export function ProfileMenuItem({
       whileTap={{scale: 0.98}}
       onClick={onClick}
       disabled={disabled}
-      className="flex w-full items-center gap-3 rounded-2xl border border-white/80 bg-white/75 px-4 py-3.5 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-orange-200 hover:bg-white disabled:cursor-default disabled:opacity-70"
+      className="flex w-full items-center gap-3 rounded-2xl border border-gray-200 bg-white px-4 py-3.5 text-left shadow-[0_4px_12px_rgba(15,23,42,0.06)] transition hover:-translate-y-0.5 hover:border-orange-200 hover:bg-white disabled:cursor-default disabled:opacity-70"
     >
       {/* Icon */}
       <div className={`w-10 h-10 rounded-full flex items-center justify-center ${

@@ -10,7 +10,6 @@ import {
   formatOrderPrice,
   getCurrentOrderStep,
   getStatusTimestamp,
-  displayOrderNumber,
 } from "@/utils/orderDisplay";
 import {
   ORDER_STATUS_CONFIG,
@@ -65,32 +64,8 @@ export default function OrderDetailPage({params}: OrderPageProps) {
       orderId,
     });
 
-  /*
-  - A report is displayed inside this order page. Notifications and direct
-  - links may open it without a previous in-app history entry, so a plain
-  - router.back() can leave the customer at a login page or outside LIA.
-   */
   const handleReturn = () => {
-    if (typeof window === "undefined") {
-      router.push("/home");
-      return;
-    }
-
-    const referrer = document.referrer;
-
-    try {
-      if (
-        referrer &&
-        new URL(referrer).origin === window.location.origin
-      ) {
-        router.back();
-        return;
-      }
-    } catch {
-      /* A malformed referrer falls back to the customer home page. */
-    }
-
-    router.push("/home");
+    router.push("/orders");
   };
 
   // Get status config
@@ -123,7 +98,7 @@ export default function OrderDetailPage({params}: OrderPageProps) {
 
   if (error || !order) {
     return (
-      <main className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+      <main className="min-h-screen bg-white flex items-center justify-center p-4">
         <div className="text-center">
           <Package className="w-16 h-16 text-gray-300 mx-auto mb-4" />
           <p className="text-gray-500 text-lg">{error || "Order not found"}</p>
@@ -210,9 +185,9 @@ export default function OrderDetailPage({params}: OrderPageProps) {
   };
 
   return (
-    <main className="min-h-screen bg-gray-50 pb-8">
+    <main className="min-h-screen bg-white pb-8">
       {/* Header */}
-      <div className="sticky top-0 z-20 bg-gray-50/95 backdrop-blur-xl">
+      <div className="sticky top-0 z-20 bg-white/95 backdrop-blur-xl">
         <div className="relative flex items-center px-4 py-4 max-w-lg mx-auto">
           <button
             onClick={handleReturn}
@@ -222,15 +197,12 @@ export default function OrderDetailPage({params}: OrderPageProps) {
             <ArrowLeft className="w-5 h-5 text-gray-700" />
           </button>
           <h1 className="pointer-events-none absolute inset-x-20 text-center text-xl font-bold text-gray-800">Order Details</h1>
-          <span className="ml-auto text-xs text-gray-400">
-            {displayOrderNumber(order.orderNumber)}
-          </span>
         </div>
       </div>
 
       <div className="max-w-lg mx-auto px-4 py-4 space-y-4">
         {/* Order Status Card */}
-        <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
+        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-[0_6px_18px_rgba(15,23,42,0.08)]">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className={`px-4 py-2 rounded-xl flex items-center gap-2 ${statusConfig.color}`}>
@@ -294,7 +266,7 @@ export default function OrderDetailPage({params}: OrderPageProps) {
         )}
 
         {/* ✅ Full Order Timeline with Server Timestamps */}
-        <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
+        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-[0_6px_18px_rgba(15,23,42,0.08)]">
           <div className="flex items-center gap-2 mb-4">
             <h3 className="font-semibold text-gray-800">Order Timeline</h3>
           </div>
@@ -390,7 +362,7 @@ export default function OrderDetailPage({params}: OrderPageProps) {
         </div>
 
         {/* Store Info */}
-        <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
+        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-[0_6px_18px_rgba(15,23,42,0.08)]">
           <div className="flex items-center gap-3 mb-3">
             <div className="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center">
               <Store className="w-5 h-5 text-orange-500" />
@@ -407,7 +379,7 @@ export default function OrderDetailPage({params}: OrderPageProps) {
         </div>
 
         {/* Delivery Address */}
-        <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
+        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-[0_6px_18px_rgba(15,23,42,0.08)]">
           <div className="flex items-center gap-2 mb-3">
             <MapPin className="w-5 h-5 text-orange-500" />
             <h3 className="font-semibold text-gray-800">Delivery Address</h3>
@@ -426,7 +398,7 @@ export default function OrderDetailPage({params}: OrderPageProps) {
         )}
 
         {/* Order Items */}
-        <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
+        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-[0_6px_18px_rgba(15,23,42,0.08)]">
           <div className="flex items-center gap-2 mb-3">
             <Receipt className="w-5 h-5 text-orange-500" />
             <h3 className="font-semibold text-gray-800">Order Items</h3>
@@ -479,7 +451,7 @@ export default function OrderDetailPage({params}: OrderPageProps) {
         </div>
 
         {/* Payment Summary */}
-        <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
+        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-[0_6px_18px_rgba(15,23,42,0.08)]">
           <div className="flex items-center gap-2 mb-3">
             <CreditCard className="w-5 h-5 text-orange-500" />
             <h3 className="font-semibold text-gray-800">Payment Summary</h3>
