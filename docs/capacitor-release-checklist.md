@@ -5,9 +5,12 @@ Complete these checks during native development and repeat them on release candi
 ## Native configuration
 
 - Choose the final unique app identifier before creating the iOS and Android projects.
+- Set `CAPACITOR_SERVER_URL` to the deployed HTTPS customer app before running Capacitor sync.
 - Register the `lia://` deep-link scheme and configure Universal Links (iOS) and App Links (Android) for the production HTTPS domain.
 - Set `NEXT_PUBLIC_APP_URL` in the native build to that HTTPS origin. Stripe redirect returns must never use `capacitor://localhost`.
 - Configure Firebase Android (`google-services.json`) and iOS (`GoogleService-Info.plist`) applications separately from the web app.
+- Enable Google as a Firebase Authentication provider. Add the Android SHA-1 fingerprint and enable the plugin's Google dependencies in `android/variables.gradle` after creating Android.
+- Add the reversed Google client ID URL scheme and the Firebase Authentication Google pod configuration after creating iOS.
 - Configure APNs credentials in Firebase for iOS, then confirm that FCM tokens can receive an APNs notification.
 
 ## Push and deep-link tests

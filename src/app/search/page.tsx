@@ -21,6 +21,7 @@ import {SearchResult, StoreGroup} from "./types";
 import {performSearch, groupResultsByStore, searchStoresByName} from "./services/searchService";
 import {loadRecentSearches, saveRecentSearch} from "./services/recentSearchService";
 import {useMarketplacePricingPolicy} from "@/hooks/useMarketplacePricingPolicy";
+import {BrandedLoader} from "@/components/ui/BrandedLoader";
 
 function SearchPageContent() {
   const marketplacePolicy = useMarketplacePricingPolicy();
@@ -234,13 +235,7 @@ function SearchPageContent() {
 }
 
 function SearchPageFallback() {
-  return (
-    <main className="min-h-screen animate-pulse bg-white">
-      <div className="border-b border-gray-100 px-4 py-4">
-        <div className="mx-auto h-11 max-w-lg rounded-full bg-gray-100" />
-      </div>
-    </main>
-  );
+  return <BrandedLoader message="Loading search" />;
 }
 
 export default function SearchPage() {

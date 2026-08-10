@@ -30,7 +30,7 @@ export function BottomBar({
   onCartClick,
 }: BottomBarProps) {
   return (
-    <div className="fixed bottom-4 left-4 right-4 z-40 mx-auto max-w-lg rounded-[26px] border border-white/75 bg-white/60 p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_18px_45px_rgba(15,23,42,0.16)] backdrop-blur-[24px] backdrop-saturate-[1.8]">
+    <div className="safe-area-fixed-bottom fixed left-4 right-4 z-40 mx-auto max-w-lg rounded-[26px] border border-white/75 bg-white/60 p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_18px_45px_rgba(15,23,42,0.16)] backdrop-blur-[24px] backdrop-saturate-[1.8]">
       <div className="flex items-center gap-2">
         {/* Search Bar - Floating with shadow */}
         {showSearch && (

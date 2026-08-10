@@ -61,7 +61,7 @@ export function CustomerBottomNavigation() {
   return (
     <nav
       aria-label="Customer navigation"
-      className="fixed inset-x-4 bottom-4 z-50 mx-auto max-w-md rounded-[30px] border border-white/70 bg-white/55 p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.85),0_16px_40px_rgba(15,23,42,0.16)] backdrop-blur-[24px] backdrop-saturate-[1.8]"
+      className="safe-area-fixed-bottom fixed inset-x-4 z-50 mx-auto max-w-md rounded-[30px] border border-white/70 bg-white/55 p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.85),0_16px_40px_rgba(15,23,42,0.16)] backdrop-blur-[24px] backdrop-saturate-[1.8]"
     >
       <div className="grid grid-cols-4 gap-1">
         {navigationItems.map((item) => {

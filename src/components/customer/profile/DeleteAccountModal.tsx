@@ -5,26 +5,24 @@ import {motion} from "framer-motion";
 import {X, Trash2} from "lucide-react";
 import {
   reauthenticateWithCredential,
-  reauthenticateWithPopup,
   EmailAuthProvider,
-  GoogleAuthProvider,
   signOut,
 } from "firebase/auth";
 import {auth} from "@/lib/firebase";
 import {
   customerProfileClientService,
 } from "@/services/user/customerProfileClientService";
+import { googleAuthenticationService } from "@/services/auth/googleAuthenticationService";
 
 interface DeleteAccountModalProps {
   onClose: () => void;
 }
 
 export function DeleteAccountModal({onClose}: DeleteAccountModalProps) {
-  const [step, setStep] = useState<"confirm" | "password" | "requested">("confirm");
+  const [step, setStep] = useState<"confirm" | "password">("confirm");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [requestId, setRequestId] = useState("");
   const usesPasswordProvider = auth.currentUser?.providerData.some(
     (provider) => provider.providerId === "password"
   ) ?? true;
@@ -43,7 +41,7 @@ export function DeleteAccountModal({onClose}: DeleteAccountModalProps) {
         const credential = EmailAuthProvider.credential(user.email, password);
         await reauthenticateWithCredential(user, credential);
       } else {
-        await reauthenticateWithPopup(user, new GoogleAuthProvider());
+        await googleAuthenticationService.reauthenticate(user);
       }
 
       /*
@@ -51,12 +49,9 @@ export function DeleteAccountModal({onClose}: DeleteAccountModalProps) {
        * sensitive request. The callable creates an admin-reviewed request;
        * it does not remove the customer profile or Firebase Auth account.
        */
-      const result = await customerProfileClientService
-        .requestAccountDeletion();
-      setRequestId(result.requestId);
+      await customerProfileClientService.requestAccountDeletion();
 
       setPassword("");
-      setStep("requested");
       await signOut(auth);
       window.location.assign("/login?accountDeletion=review");
 
@@ -75,20 +70,6 @@ export function DeleteAccountModal({onClose}: DeleteAccountModalProps) {
       }
       
       setStep("password");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function handleCancelRequest() {
-    if (!requestId) return;
-    try {
-      setLoading(true);
-      setError("");
-      await customerProfileClientService.cancelAccountDeletion(requestId);
-      onClose();
-    } catch {
-      setError("Unable to cancel the deletion request. Sign in again and try later.");
     } finally {
       setLoading(false);
     }
@@ -113,40 +94,16 @@ export function DeleteAccountModal({onClose}: DeleteAccountModalProps) {
           </button>
         </div>
 
-        {step === "requested" ? (
-          <div className="text-center">
-            <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Trash2 className="w-8 h-8 text-amber-700" />
-            </div>
-            <p className="text-gray-600 text-sm mb-6">
-              Your account deletion request was sent for administrator review.
-              Your account remains available until the request is approved and
-              the deletion is scheduled.
-            </p>
-            <button
-              onClick={onClose}
-              className="w-full py-3 bg-gray-900 text-white rounded-xl font-semibold hover:bg-gray-800 transition"
-            >
-              Close
-            </button>
-            <button
-              type="button"
-              disabled={loading || !requestId}
-              onClick={() => void handleCancelRequest()}
-              className="mt-3 w-full py-3 text-sm font-semibold text-red-700 disabled:opacity-50"
-            >
-              Cancel deletion request
-            </button>
-          </div>
-        ) : step === "confirm" ? (
+        {step === "confirm" ? (
           <div className="text-center">
             <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <Trash2 className="w-8 h-8 text-red-600" />
             </div>
             
             <p className="text-gray-600 text-sm mb-6">
-              Are you sure you want to permanently delete your account? 
-              This action cannot be undone and all your data will be lost.
+              Submitting this request immediately locks your account while an
+              administrator reviews it. If approved, your account and data will
+              be permanently deleted after the grace period.
             </p>
 
             <div className="flex gap-3">
@@ -205,12 +162,12 @@ export function DeleteAccountModal({onClose}: DeleteAccountModalProps) {
                 onClick={handleDeleteAccount}
                 disabled={loading || (usesPasswordProvider && !password)}
                 className="flex-1 py-3 bg-red-600 text-white rounded-xl font-semibold hover:bg-red-700 transition disabled:opacity-50"
-                aria-label="Permanently delete account"
+                aria-label="Submit account deletion request"
               >
                 {loading ? (
                   <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mx-auto" />
                 ) : (
-                  usesPasswordProvider ? "Delete Forever" : "Continue with Google"
+                  usesPasswordProvider ? "Submit Request" : "Continue with Google"
                 )}
               </button>
             </div>

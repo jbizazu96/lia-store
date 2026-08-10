@@ -122,6 +122,7 @@ import {
 import type {
   CheckoutItem,
 } from "./types";
+import { BrandedLoader } from "@/components/ui/BrandedLoader";
 
 
 /*
@@ -805,9 +806,7 @@ export default function CheckoutPage() {
   */
 
   const handlePaymentConfirmed =
-      (
-        _orderId: string
-      ) => {
+      () => {
         /*
           Stripe.js successfully submitted the payment.
 
@@ -944,6 +943,10 @@ const handleViewOrder =
     !isAuthenticated
   ) {
     return null;
+  }
+
+  if (checkoutLoading || addressLoading) {
+    return <BrandedLoader message="Preparing checkout" />;
   }
 
   if (
@@ -1307,7 +1310,7 @@ const handleViewOrder =
 
       </div>
 
-      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-gray-200/80 bg-white/95 px-4 py-3 backdrop-blur-xl">
+      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-gray-200/80 bg-white/95 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur-xl">
         <div className="mx-auto max-w-lg">
           <button
             type="button"

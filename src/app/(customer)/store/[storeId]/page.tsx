@@ -310,7 +310,7 @@ export default function StorePage({
 
   if (loading || resolvedStoreId !== storeId) {
     return (
-      <div className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-white">
+      <div className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-gray-50">
         <div className="pointer-events-none absolute right-0 top-0 h-[500px] w-[500px] rounded-full bg-yellow-400/5 blur-[120px]" />
 
         <div className="pointer-events-none absolute bottom-0 left-0 h-[400px] w-[400px] rounded-full bg-blue-500/5 blur-[100px]" />
@@ -339,7 +339,7 @@ export default function StorePage({
                 repeat: Infinity,
                 ease: "linear",
               }}
-              className="absolute inset-0 rounded-full border-2 border-dashed border-yellow-400/30"
+              className="absolute inset-0 rounded-full border-2 border-dashed border-orange-400/30"
             />
 
             <motion.div
@@ -351,7 +351,7 @@ export default function StorePage({
                 repeat: Infinity,
                 ease: "linear",
               }}
-              className="absolute inset-2 rounded-full border border-yellow-400/10"
+              className="absolute inset-2 rounded-full border border-orange-400/10"
             />
 
             <motion.div
@@ -365,16 +365,16 @@ export default function StorePage({
               }}
               className="absolute inset-0"
             >
-              <div className="absolute left-1/2 top-0 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-yellow-400 shadow-[0_0_15px_rgba(234,179,8,0.8)]" />
+              <div className="absolute left-1/2 top-0 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-orange-400 shadow-[0_0_15px_rgba(251,146,60,0.8)]" />
 
-              <div className="absolute bottom-0 left-1/2 h-2 w-2 -translate-x-1/2 translate-y-1/2 rounded-full bg-yellow-400/40" />
+              <div className="absolute bottom-0 left-1/2 h-2 w-2 -translate-x-1/2 translate-y-1/2 rounded-full bg-orange-400/40" />
 
-              <div className="absolute left-0 top-1/2 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-yellow-400/40" />
+              <div className="absolute left-0 top-1/2 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-orange-400/40" />
 
-              <div className="absolute right-0 top-1/2 h-2 w-2 translate-x-1/2 -translate-y-1/2 rounded-full bg-yellow-400/40" />
+              <div className="absolute right-0 top-1/2 h-2 w-2 translate-x-1/2 -translate-y-1/2 rounded-full bg-orange-400/40" />
             </motion.div>
 
-            <div className="relative z-10 flex h-16 w-16 items-center justify-center overflow-hidden rounded-full border-2 border-yellow-400/50 bg-white/80 shadow-[0_0_30px_rgba(234,179,8,0.15)] backdrop-blur-md">
+            <div className="relative z-10 flex h-16 w-16 items-center justify-center overflow-hidden rounded-full border-2 border-orange-400/50 bg-white/80 shadow-[0_0_30px_rgba(251,146,60,0.15)] backdrop-blur-md">
               <Image
                 src="/icon/icon-192.png"
                 alt="LIA Store"
@@ -421,7 +421,7 @@ export default function StorePage({
                       repeat: Infinity,
                       delay,
                     }}
-                    className="h-1.5 w-1.5 rounded-full bg-yellow-400"
+                    className="h-1.5 w-1.5 rounded-full bg-orange-400"
                   />
                 )
               )}

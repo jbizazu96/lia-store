@@ -6,6 +6,7 @@
 */
 
 import {motion} from "framer-motion";
+import Image from "next/image";
 
 interface BrandedLoaderProps {
   message?: string;
@@ -13,7 +14,7 @@ interface BrandedLoaderProps {
 
 export function BrandedLoader({message = "Loading..."}: BrandedLoaderProps) {
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col justify-center items-center relative overflow-hidden">
+    <div className="min-h-screen bg-gray-50 flex flex-col justify-center items-center relative overflow-hidden px-4 pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)]">
       {/* Ambient Glows */}
       <div className="absolute top-0 right-0 h-[500px] w-[500px] rounded-full bg-orange-400/5 blur-[120px] pointer-events-none" />
       <div className="absolute bottom-0 left-0 h-[400px] w-[400px] rounded-full bg-blue-500/5 blur-[100px] pointer-events-none" />
@@ -56,9 +57,11 @@ export function BrandedLoader({message = "Loading..."}: BrandedLoaderProps) {
 
           {/* Central Logo Image */}
           <div className="relative w-16 h-16 z-10 bg-white/80 backdrop-blur-md rounded-full border-2 border-orange-400/50 shadow-[0_0_30px_rgba(251,146,60,0.15)] flex items-center justify-center overflow-hidden">
-            <img 
+            <Image
               src="/icon/icon-192.png" 
               alt="LIA Logo" 
+              width={48}
+              height={48}
               className="w-12 h-12 object-contain" 
             />
           </div>

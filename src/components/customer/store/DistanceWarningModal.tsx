@@ -30,12 +30,6 @@ export function DistanceWarningModal({
   const formattedDistance = formatDistance(distance);
   const estimatedTime = getEstimatedTime(distance, orderDeliveryPolicy);
 
-  // Format delivery fee
-  const formatDeliveryFee = (fee: number) => {
-    if (fee === 0) return "Free";
-    return `$${fee.toFixed(2)}`;
-  };
-
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
       <motion.div

@@ -26,7 +26,7 @@ import {
 export default function HelpPage() {
   return (
     <main className="min-h-screen bg-white pb-28">
-      <header className="sticky top-0 z-20 bg-white/95 px-4 py-4 backdrop-blur-xl">
+      <header className="sticky top-0 z-20 bg-white/95 px-4 pb-4 pt-[max(1rem,env(safe-area-inset-top))] backdrop-blur-xl">
         <div className="mx-auto flex max-w-xl justify-center">
           <h1 className="text-xl font-extrabold tracking-tight text-gray-900">Help Center</h1>
         </div>

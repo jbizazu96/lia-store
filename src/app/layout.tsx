@@ -9,6 +9,7 @@ import {NotificationProvider} from "@/context/NotificationContext";
 import {CartProvider} from "@/context/CartContext";
 import {ConfirmationProvider} from "@/context/ConfirmationContext";
 import {SuccessToastProvider} from "@/context/SuccessToastContext";
+import {NativeCustomerBridge} from "@/components/customer/native/NativeCustomerBridge";
 
 const inter = Inter({subsets: ["latin"]});
 
@@ -57,6 +58,7 @@ export default function RootLayout({
             <ConfirmationProvider>
               <SuccessToastProvider>
                 <CartProvider>
+                  <NativeCustomerBridge />
                   <div className="min-h-screen flex flex-col">
                     <main className="flex-1">
                       {children}

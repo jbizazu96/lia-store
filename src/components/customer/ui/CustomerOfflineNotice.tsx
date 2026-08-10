@@ -26,7 +26,7 @@ export function CustomerOfflineNotice() {
 
   return (
     <div
-      className="fixed inset-x-4 top-3 z-[130] mx-auto flex max-w-md items-center justify-center gap-2 rounded-xl border border-amber-200 bg-amber-50/95 px-4 py-3 text-center text-sm font-semibold text-amber-900 shadow-lg backdrop-blur-md"
+      className="fixed inset-x-4 top-[max(0.75rem,env(safe-area-inset-top))] z-[130] mx-auto flex max-w-md items-center justify-center gap-2 rounded-xl border border-amber-200 bg-amber-50/95 px-4 py-3 text-center text-sm font-semibold text-amber-900 shadow-lg backdrop-blur-md"
       role="status"
       aria-live="polite"
     >

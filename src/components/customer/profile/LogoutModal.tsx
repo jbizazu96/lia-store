@@ -2,7 +2,7 @@
 
 import {useState} from "react";
 import {motion} from "framer-motion";
-import {X, LogOut} from "lucide-react";
+import {LogOut} from "lucide-react";
 import {useRouter} from "next/navigation";
 import {signOut} from "firebase/auth";
 import {auth} from "@/lib/firebase";

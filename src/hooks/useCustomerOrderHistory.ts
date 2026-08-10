@@ -133,7 +133,7 @@ export function useCustomerOrderHistory() {
         setLoading(false);
       },
     );
-  }, [authLoading, user?.uid]);
+  }, [authLoading, user]);
 
   const loadMore = useCallback(async () => {
     const cursor = paginationCursorRef.current ?? latestPageCursorRef.current;

@@ -151,7 +151,7 @@ export default function NotificationsPage() {
   return (
     <main className="min-h-screen bg-white">
       {/* Header with Back Button */}
-      <div className="sticky top-0 z-20 bg-white/95 backdrop-blur-xl">
+      <div className="sticky top-0 z-20 bg-white/95 pt-[env(safe-area-inset-top)] backdrop-blur-xl">
         <div className="relative flex items-center gap-3 px-4 py-4 max-w-2xl mx-auto">
           <button
             onClick={() => router.push("/home")}

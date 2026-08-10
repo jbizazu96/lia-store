@@ -11,7 +11,6 @@
 */
 
 import {
-  buildStoreAddress,
   getStoreMapsUrl,
   getStorePhoneUrl,
   getStoreStaticMapUrl,
@@ -117,7 +116,6 @@ interface StoreInfoPageProps {params: Promise<{storeId: string;}>;}export defaul
             };
           });
 
-      const fullAddress = buildStoreAddress(store);
       const mapsUrl = getStoreMapsUrl(store);
       const staticMapUrl = getStoreStaticMapUrl(
         store,
@@ -130,7 +128,7 @@ const phoneUrl =
   return (
     <main className="min-h-screen bg-white pb-8">
       {/* Header with Back Button */}
-      <div className="sticky top-0 z-20 bg-white/95 backdrop-blur-xl">
+      <div className="sticky top-0 z-20 bg-white/95 pt-[env(safe-area-inset-top)] backdrop-blur-xl">
         <div className="relative flex items-center px-4 py-4">
           <button
             onClick={() => router.push(`/store/${storeId}`)}
@@ -145,15 +143,16 @@ const phoneUrl =
 
       {/* Map Section */}
       <div className="relative w-full h-64 bg-gray-200">
-        {store.address ? (
+        {store.address && staticMapUrl ? (
           <>
             {/* Static Map Image */}
-            <img
+            <Image
               src={staticMapUrl}
               alt={`${store.name} location`}
+              fill
+              sizes="100vw"
               className="w-full h-full object-cover"
               onError={(event) => {
-                event.currentTarget.onerror = null;
                 event.currentTarget.src = "/images/store-map-placeholder.png";
               }}
             />

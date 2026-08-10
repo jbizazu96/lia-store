@@ -21,7 +21,7 @@ export function TopNavigation({
   const router = useRouter();
 
   return (
-    <header className="sticky top-0 z-40 border-b border-white/70 bg-white/65 shadow-[inset_0_-1px_0_rgba(255,255,255,0.5),0_8px_24px_-22px_rgba(15,23,42,0.5)] backdrop-blur-[22px] backdrop-saturate-[1.7]">
+    <header className="sticky top-0 z-40 border-b border-white/70 bg-white/65 pt-[env(safe-area-inset-top)] shadow-[inset_0_-1px_0_rgba(255,255,255,0.5),0_8px_24px_-22px_rgba(15,23,42,0.5)] backdrop-blur-[22px] backdrop-saturate-[1.7]">
       <div className="mx-auto max-w-2xl px-4 py-3">
         <div className="flex items-center justify-between">
           <div className="flex min-w-0 flex-1 items-center gap-2">

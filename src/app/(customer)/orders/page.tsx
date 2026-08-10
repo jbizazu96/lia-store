@@ -9,7 +9,7 @@ import {
   formatOrderTime,
   displayOrderNumber,
 } from "@/utils/orderDisplay";
-import { useCustomerOrders } from "@/hooks/useCustomerOrders";
+import { useCustomerOrderHistory } from "@/hooks/useCustomerOrderHistory";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
@@ -36,7 +36,7 @@ export default function OrdersPage() {
       loadMore,
       error,
       isAuthenticated,
-    } = useCustomerOrders();
+    } = useCustomerOrderHistory();
 
   if (!loading && !isAuthenticated) {
       router.push("/login");
@@ -48,7 +48,7 @@ export default function OrdersPage() {
   ========================================== */
   if (loading) {
     return (
-      <div className="min-h-screen bg-white flex flex-col justify-center items-center relative overflow-hidden">
+      <div className="min-h-screen bg-gray-50 flex flex-col justify-center items-center relative overflow-hidden">
         
         {/* Ambient Glows (Soft Yellow accents on white background) */}
         <div className="absolute top-0 right-0 h-[500px] w-[500px] rounded-full bg-yellow-400/5 blur-[120px] pointer-events-none" />
@@ -69,14 +69,14 @@ export default function OrdersPage() {
             <motion.div 
               animate={{ rotate: 360 }}
               transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
-              className="absolute inset-0 rounded-full border-2 border-dashed border-yellow-400/30"
+              className="absolute inset-0 rounded-full border-2 border-dashed border-orange-400/30"
             />
             
             {/* Inner Ring */}
             <motion.div 
               animate={{ rotate: -360 }}
               transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
-              className="absolute inset-2 rounded-full border border-yellow-400/10"
+              className="absolute inset-2 rounded-full border border-orange-400/10"
             />
             
             {/* Rotating glowing dots */}
@@ -85,14 +85,14 @@ export default function OrdersPage() {
               transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
               className="absolute inset-0"
             >
-              <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-yellow-400 shadow-[0_0_15px_rgba(234,179,8,0.8)]" />
-              <div className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 w-2 h-2 rounded-full bg-yellow-400/40" />
-              <div className="absolute left-0 top-1/2 -translate-x-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-yellow-400/40" />
-              <div className="absolute right-0 top-1/2 translate-x-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-yellow-400/40" />
+              <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-orange-400 shadow-[0_0_15px_rgba(251,146,60,0.8)]" />
+              <div className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 w-2 h-2 rounded-full bg-orange-400/40" />
+              <div className="absolute left-0 top-1/2 -translate-x-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-orange-400/40" />
+              <div className="absolute right-0 top-1/2 translate-x-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-orange-400/40" />
             </motion.div>
 
             {/* Central Logo Image */}
-            <div className="relative w-16 h-16 z-10 bg-white/80 backdrop-blur-md rounded-full border-2 border-yellow-400/50 shadow-[0_0_30px_rgba(234,179,8,0.15)] flex items-center justify-center overflow-hidden">
+            <div className="relative w-16 h-16 z-10 bg-white/80 backdrop-blur-md rounded-full border-2 border-orange-400/50 shadow-[0_0_30px_rgba(251,146,60,0.15)] flex items-center justify-center overflow-hidden">
               <Image
                 src="/icon/icon-192.png" 
                 alt="LIA Logo" 
@@ -120,7 +120,7 @@ export default function OrdersPage() {
                 initial={{ opacity: 0.5 }} 
                 animate={{ opacity: [0.5, 1, 0.5] }} 
                 transition={{ duration: 1.5, repeat: Infinity, delay: 0 }} 
-                className="w-1.5 h-1.5 rounded-full bg-yellow-400"
+                className="w-1.5 h-1.5 rounded-full bg-orange-400"
               />
               
               {/* Dot 2 */}
@@ -128,7 +128,7 @@ export default function OrdersPage() {
                 initial={{ opacity: 0.5 }} 
                 animate={{ opacity: [0.5, 1, 0.5] }} 
                 transition={{ duration: 1.5, repeat: Infinity, delay: 0.3 }} 
-                className="w-1.5 h-1.5 rounded-full bg-yellow-400"
+                className="w-1.5 h-1.5 rounded-full bg-orange-400"
               />
               
               {/* Dot 3 */}
@@ -136,7 +136,7 @@ export default function OrdersPage() {
                 initial={{ opacity: 0.5 }} 
                 animate={{ opacity: [0.5, 1, 0.5] }} 
                 transition={{ duration: 1.5, repeat: Infinity, delay: 0.6 }} 
-                className="w-1.5 h-1.5 rounded-full bg-yellow-400"
+                className="w-1.5 h-1.5 rounded-full bg-orange-400"
               />
             </div>
           </motion.div>
@@ -165,7 +165,7 @@ export default function OrdersPage() {
   return (
     <main className="min-h-screen bg-white pb-28">
       {/* Header */}
-      <div className="sticky top-0 z-20 bg-white/95 backdrop-blur-xl">
+      <div className="sticky top-0 z-20 bg-white/95 pt-[env(safe-area-inset-top)] backdrop-blur-xl">
         <div className="relative flex items-center justify-center px-4 py-4 max-w-2xl mx-auto">
           <h1 className="pointer-events-none absolute inset-x-0 text-center text-xl font-extrabold tracking-tight text-gray-900">Orders</h1>
         </div>

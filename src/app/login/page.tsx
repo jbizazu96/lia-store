@@ -12,8 +12,6 @@ import {motion} from "framer-motion";
 */
 import {
   signInWithEmailAndPassword,
-  GoogleAuthProvider,
-  signInWithPopup,
   sendEmailVerification,
   signOut,
 } from "firebase/auth";
@@ -41,6 +39,7 @@ import {
   currentAccountClientService,
   CurrentAccountClientError,
 } from "@/services/user/currentAccountClientService";
+import { googleAuthenticationService } from "@/services/auth/googleAuthenticationService";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -250,8 +249,9 @@ export default function LoginPage() {
   */
   async function handleGoogleLogin() {
     try {
-      const provider = new GoogleAuthProvider();
-      const result = await signInWithPopup(auth, provider);
+      setLoading(true);
+      setError("");
+      const result = await googleAuthenticationService.signIn();
       const user = result.user;
 
       if (!user.emailVerified) {
@@ -264,6 +264,8 @@ export default function LoginPage() {
     } catch (error) {
       console.error(error);
       setError("Google sign in failed.");
+    } finally {
+      setLoading(false);
     }
   }
 

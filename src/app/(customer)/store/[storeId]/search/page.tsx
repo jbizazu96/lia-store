@@ -217,7 +217,7 @@ export default function StoreSearchPage({
   if (loading || resolvedStoreId !== storeId) {
     return (
       <main className="min-h-screen bg-white px-4 pt-5 sm:px-6">
-        <header className="sticky top-0 z-30 -mx-4 bg-white/95 px-4 pb-5 backdrop-blur sm:-mx-6 sm:px-6">
+        <header className="sticky top-0 z-30 -mx-4 bg-white/95 px-4 pb-5 pt-[env(safe-area-inset-top)] backdrop-blur sm:-mx-6 sm:px-6">
           <div className="flex items-center gap-3">
             <button
               type="button"
@@ -267,7 +267,7 @@ export default function StoreSearchPage({
 
   return (
     <main className="min-h-screen bg-white px-4 pb-28 pt-5 sm:px-6">
-      <header className="sticky top-0 z-30 -mx-4 bg-white/95 px-4 pb-5 backdrop-blur sm:-mx-6 sm:px-6">
+      <header className="sticky top-0 z-30 -mx-4 bg-white/95 px-4 pb-5 pt-[env(safe-area-inset-top)] backdrop-blur sm:-mx-6 sm:px-6">
         <div className="flex items-center gap-3">
           <button
             type="button"

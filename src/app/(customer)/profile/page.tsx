@@ -212,7 +212,7 @@ export default function ProfilePage() {
   return (
     <main className="min-h-screen bg-white pb-28">
       {/* Header */}
-      <div className="sticky top-0 z-20 bg-white/95 backdrop-blur-xl">
+      <div className="sticky top-0 z-20 bg-white/95 pt-[env(safe-area-inset-top)] backdrop-blur-xl">
         <div className="mx-auto flex max-w-lg justify-center px-4 py-4">
           <h1 className="text-xl font-extrabold tracking-tight text-gray-900">Profile</h1>
         </div>

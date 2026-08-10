@@ -52,7 +52,7 @@ export function SearchHeader({
   }, []);
 
   return (
-    <div className="sticky top-0 z-20 bg-white/95 px-4 py-3 backdrop-blur">
+    <div className="sticky top-0 z-20 bg-white/95 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] backdrop-blur">
       <div className="mx-auto flex max-w-lg items-center gap-2">
         <button
           onClick={onBack}

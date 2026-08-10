@@ -496,14 +496,12 @@ export default function CustomerHomePage() {
         ) : (
           <>
             <div className="grid gap-8">
-              <AnimatePresence mode="popLayout">
+              <AnimatePresence initial={false} mode="popLayout">
                 {displayedNearbyStores.map((store, index) => (
                 <motion.div
                   key={store.id}
-                  initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, x: -20 }}
-                  transition={{ delay: index * 0.05 }}
                 >
                   <StoreCard
                     store={store}
@@ -542,9 +540,7 @@ export default function CustomerHomePage() {
                 {displayedFarStores.map((store, index) => (
                   <motion.div
                     key={store.id}
-                    initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: index * 0.03 + 0.2 }}
                   >
                     <StoreCard
                       store={store}

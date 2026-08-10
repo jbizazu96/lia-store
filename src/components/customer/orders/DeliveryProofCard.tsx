@@ -13,6 +13,7 @@ import {
   customerDeliveryProofClientService,
   type CustomerDeliveryProof,
 } from "@/services/order/customerDeliveryProofClientService";
+import Image from "next/image";
 
 interface DeliveryProofCardProps {
   orderId: string;
@@ -85,9 +86,11 @@ export function DeliveryProofCard({
               className="block overflow-hidden rounded-xl border border-gray-100 bg-gray-50 transition hover:border-orange-200"
               aria-label="Open delivery signature"
             >
-              <img
+              <Image
                 src={proof.signatureUrl}
                 alt="Delivery signature"
+                width={640}
+                height={144}
                 className="h-36 w-full object-contain p-3"
               />
             </a>
@@ -110,9 +113,11 @@ export function DeliveryProofCard({
                   className="overflow-hidden rounded-xl border border-gray-100 bg-gray-50 transition hover:border-orange-200"
                   aria-label={`Open delivery photo ${index + 1}`}
                 >
-                  <img
+                  <Image
                     src={url}
                     alt={`Delivery proof photo ${index + 1}`}
+                    width={600}
+                    height={600}
                     className="aspect-square w-full object-cover"
                   />
                 </a>

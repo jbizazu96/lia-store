@@ -3,7 +3,6 @@
 import {
   use,
   useEffect,
-  useMemo,
   useState,
 } from "react";
 import Image from "next/image";
@@ -387,7 +386,7 @@ export default function ProductPage({ params }: ProductPageProps) {
   return (
     <main className="min-h-screen bg-white pb-28 font-sans text-gray-950">
       <div className="mx-auto max-w-5xl">
-        <header className="absolute inset-x-0 top-0 z-20 mx-auto flex max-w-5xl items-center justify-between px-4 pt-4">
+        <header className="absolute inset-x-0 top-0 z-20 mx-auto flex max-w-5xl items-center justify-between px-4 pt-[max(1rem,env(safe-area-inset-top))]">
           <button
             type="button"
             onClick={() => router.push(`/store/${product.storeId}`)}
@@ -568,7 +567,7 @@ export default function ProductPage({ params }: ProductPageProps) {
         )}
       </div>
 
-      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-gray-200 bg-white/95 p-3 backdrop-blur">
+      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-gray-200 bg-white/95 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur">
         <div className="mx-auto flex max-w-5xl items-center gap-2.5">
           <div className="flex h-12 min-w-[8.5rem] items-center justify-between rounded-full bg-gray-100 px-1.5">
             <button

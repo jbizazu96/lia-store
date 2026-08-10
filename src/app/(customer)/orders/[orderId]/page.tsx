@@ -187,7 +187,7 @@ export default function OrderDetailPage({params}: OrderPageProps) {
   return (
     <main className="min-h-screen bg-white pb-8">
       {/* Header */}
-      <div className="sticky top-0 z-20 bg-white/95 backdrop-blur-xl">
+      <div className="sticky top-0 z-20 bg-white/95 pt-[env(safe-area-inset-top)] backdrop-blur-xl">
         <div className="relative flex items-center px-4 py-4 max-w-lg mx-auto">
           <button
             onClick={handleReturn}

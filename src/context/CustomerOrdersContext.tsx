@@ -92,7 +92,7 @@ export function CustomerOrdersProvider({
         setLoading(false);
       },
     );
-  }, [authLoading, user?.uid]);
+  }, [authLoading, user]);
 
   return (
     <CustomerOrdersContext.Provider

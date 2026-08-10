@@ -221,7 +221,7 @@ export default function CartPage() {
   return (
     <main className="min-h-screen bg-white">
       {/* Header with Back Button - Matching Notifications Page Style */}
-      <div className="sticky top-0 z-20 bg-white/95 backdrop-blur-xl">
+      <div className="sticky top-0 z-20 bg-white/95 pt-[env(safe-area-inset-top)] backdrop-blur-xl">
         <div className="relative flex items-center px-4 py-4 max-w-2xl mx-auto">
           <button
             onClick={goBack}
@@ -365,7 +365,7 @@ export default function CartPage() {
       </div>
 
       {/* Order Summary */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-30">
+      <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-gray-200 bg-white pb-[env(safe-area-inset-bottom)] shadow-lg">
         <div className="max-w-2xl mx-auto px-4 py-4">
           <div className="space-y-2">
             <div className="flex items-center justify-between gap-4 text-sm">

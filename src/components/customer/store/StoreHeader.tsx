@@ -54,7 +54,7 @@ export function StoreHeader({
       </div>
 
       {/* Action Buttons */}
-      <div className="absolute left-5 right-5 top-5 z-20 flex justify-between">
+      <div className="absolute left-5 right-5 top-[max(1.25rem,env(safe-area-inset-top))] z-20 flex justify-between">
         <button
           type="button"
           onClick={onBack}
