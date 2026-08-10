@@ -33,8 +33,9 @@ export default function HelpPage() {
       </header>
 
       <div className="mx-auto max-w-xl space-y-6 px-4 py-5">
-        <section className="relative overflow-hidden rounded-[28px] border border-orange-200/70 bg-gradient-to-br from-orange-100 via-amber-50 to-emerald-50 p-6 shadow-[0_18px_45px_rgba(249,115,22,0.10)]">
-          <div className="pointer-events-none absolute -right-10 -top-10 h-36 w-36 rounded-full bg-orange-300/30 blur-2xl" />
+        <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-orange-50 via-amber-50 to-white p-6 shadow-[0_12px_35px_rgba(249,115,22,0.08)]">
+          <div className="pointer-events-none absolute -right-8 -top-10 h-28 w-28 rounded-full bg-orange-200/35" />
+          <div className="pointer-events-none absolute -bottom-12 right-16 h-24 w-24 rounded-full bg-amber-100/70" />
           <div className="relative">
             <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-white/80 bg-white/65 text-orange-600 shadow-sm">
               <CircleHelp className="h-6 w-6" />

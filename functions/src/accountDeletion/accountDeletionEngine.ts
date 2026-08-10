@@ -8,10 +8,10 @@
 | The engine does not implement deletion logic itself. It delegates each
 | destructive operation to a specialized service.
 |
-| Current driver workflow:
+| Customer, driver, and store workflow:
 |
 | 1. Validate the approved or retryable deletion request
-| 2. Load the driver deletion context once
+| 2. Load the role-specific deletion context once
 | 3. Mark the request as processing
 | 4. Execute each workflow step
 | 5. Record the exact failed step if an operation throws
@@ -20,11 +20,15 @@
 */
 
 import Stripe from "stripe";
+import { randomUUID } from "crypto";
+import {getAuth} from "firebase-admin/auth";
+import {getStorage} from "firebase-admin/storage";
 
 import {
   DocumentReference,
   FieldValue,
   getFirestore,
+  Timestamp,
 } from "firebase-admin/firestore";
 
 import {
@@ -54,6 +58,14 @@ import {
 import {
   accountDeletionValidationService,
 } from "./accountDeletionValidationService";
+import {
+  customerAccountDeletionService,
+  type CustomerDeletionContext,
+} from "./customerAccountDeletionService";
+import {
+  storeAccountDeletionService,
+  type StoreDeletionContext,
+} from "./storeAccountDeletionService";
 
 /*
 |--------------------------------------------------------------------------
@@ -76,6 +88,12 @@ interface DeletionRequestData {
   ownerType: string;
   ownerId: string;
   status: string;
+  workflow?: {
+    attemptCount?: number;
+    retryCount?: number;
+    completedSteps?: unknown;
+    deletionContext?: unknown;
+  };
 }
 
 interface DriverDeletionData {
@@ -97,7 +115,16 @@ interface WorkflowExecutionContext {
   requestId: string;
   requestReference: DocumentReference;
   currentStep: AccountDeletionWorkflowStep;
+  completedSteps: Set<AccountDeletionWorkflowStep>;
 }
+
+const LEASE_DURATION_MS = 10 * 60 * 1000;
+const MAX_AUTOMATIC_ATTEMPTS = 5;
+const RETRY_BASE_DELAY_MS = 5 * 60 * 1000;
+const RESUMABLE_STEPS = new Set<AccountDeletionWorkflowStep>([
+  "deleting_shipday_carrier",
+  "closing_stripe_account",
+]);
 
 /*
 |--------------------------------------------------------------------------
@@ -222,12 +249,25 @@ async function executeWorkflowStep(
   currentStep: AccountDeletionWorkflowStep,
   action: () => Promise<void>
 ): Promise<void> {
+  if (
+    RESUMABLE_STEPS.has(currentStep) &&
+    context.completedSteps.has(currentStep)
+  ) {
+    return;
+  }
+
   await updateWorkflowStep(
     context,
     currentStep
   );
 
   await action();
+
+  context.completedSteps.add(currentStep);
+  await context.requestReference.update({
+    "workflow.completedSteps": FieldValue.arrayUnion(currentStep),
+    updatedAt: FieldValue.serverTimestamp(),
+  });
 }
 
 async function markWorkflowFailed(
@@ -236,6 +276,14 @@ async function markWorkflowFailed(
 ): Promise<void> {
   const errorMessage =
     getSafeErrorMessage(error);
+  const request = await context.requestReference.get();
+  const retryCount = request.data()?.workflow?.retryCount ?? 1;
+  const retryDelay = Math.min(
+    RETRY_BASE_DELAY_MS * Math.pow(2, Math.max(0, retryCount - 1)),
+    6 * 60 * 60 * 1000
+  );
+  const nextRetryAt = retryCount < MAX_AUTOMATIC_ATTEMPTS ?
+    Timestamp.fromMillis(Date.now() + retryDelay) : null;
 
   try {
     await context.requestReference.update({
@@ -254,9 +302,27 @@ async function markWorkflowFailed(
       "workflow.failedAt":
         FieldValue.serverTimestamp(),
 
+      "workflow.nextRetryAt": nextRetryAt,
+
+      "workflow.leaseExpiresAt": null,
+
+      "workflow.leaseToken": null,
+
       updatedAt:
         FieldValue.serverTimestamp(),
     });
+
+    const ownerId = request.data()?.ownerId;
+    if (typeof ownerId === "string" && ownerId) {
+      const userReference = getFirestore("default").collection("users").doc(ownerId);
+      const user = await userReference.get();
+      if (user.exists) {
+        await userReference.update({
+          accountDeletionState: "deletion_pending",
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+      }
+    }
   } catch (
     failureStateError: unknown
   ) {
@@ -305,6 +371,10 @@ async function markWorkflowCompleted(
 
     "workflow.nextRetryAt":
       null,
+
+    "workflow.leaseExpiresAt": null,
+
+    "workflow.leaseToken": null,
 
     updatedAt:
       FieldValue.serverTimestamp(),
@@ -370,6 +440,159 @@ async function createDriverDeletionContext(
   };
 }
 
+function completedSteps(value: unknown): Set<AccountDeletionWorkflowStep> {
+  return new Set(Array.isArray(value) ? value.filter((step): step is AccountDeletionWorkflowStep =>
+    typeof step === "string") : []);
+}
+
+function storedContext(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value) ?
+    value as Record<string, unknown> : null;
+}
+
+async function authenticationUserExists(uid: string): Promise<boolean> {
+  try {
+    await getAuth().getUser(uid);
+    return true;
+  } catch (error: unknown) {
+    if (error && typeof error === "object" && "code" in error &&
+      error.code === "auth/user-not-found") return false;
+    throw error;
+  }
+}
+
+async function storagePrefixHasFiles(prefix: string): Promise<boolean> {
+  const [files] = await getStorage().bucket().getFiles({prefix, maxResults: 1});
+  return files.length > 0;
+}
+
+async function verifyDeletionCompleted(input: {
+  ownerId: string;
+  driverContext: DriverDeletionContext | null;
+  customerContext: CustomerDeletionContext | null;
+  storeContext: StoreDeletionContext | null;
+}): Promise<void> {
+  const db = getFirestore("default");
+  const checks: Array<Promise<boolean>> = [
+    authenticationUserExists(input.ownerId),
+    db.collection("users").doc(input.ownerId).get().then((value) => value.exists),
+  ];
+
+  if (input.customerContext) {
+    checks.push(
+      storagePrefixHasFiles(`users/${input.ownerId}/`),
+      db.collection("carts").doc(input.ownerId).get().then((value) => value.exists),
+      db.collection("addresses").doc(input.ownerId).get().then((value) => value.exists),
+      db.collection("notificationDevices").where("uid", "==", input.ownerId)
+        .limit(1).get().then((value) => !value.empty),
+      db.collection("checkoutSessions").where("customerUid", "==", input.ownerId)
+        .limit(1).get().then((value) => !value.empty),
+    );
+  }
+
+  if (input.driverContext) {
+    checks.push(
+      storagePrefixHasFiles(`drivers/${input.ownerId}/`),
+      db.collection("drivers").doc(input.ownerId).get().then((value) => value.exists),
+      db.collection("driverWorkspaceStatuses").doc(input.ownerId)
+        .get().then((value) => value.exists),
+      db.collection("driverImageUploads").where("driverId", "==", input.ownerId)
+        .limit(1).get().then((value) => !value.empty),
+      db.collection("notificationDevices").where("uid", "==", input.ownerId)
+        .limit(1).get().then((value) => !value.empty),
+      db.collection("orders").where("delivery.driverId", "==", input.ownerId)
+        .limit(1).get().then((value) => !value.empty),
+      db.collection("paymentSettlements").where("driverId", "==", input.ownerId)
+        .limit(1).get().then((value) => !value.empty),
+      db.collection("paymentTransfers").where("recipient.id", "==", input.ownerId)
+        .limit(1).get().then((value) => !value.empty),
+    );
+  }
+
+  if (input.storeContext) {
+    checks.push(
+      db.collection("storeWorkspaceStatuses").doc(input.ownerId)
+        .get().then((value) => value.exists),
+      db.collection("notificationDevices").where("uid", "==", input.ownerId)
+        .limit(1).get().then((value) => !value.empty),
+    );
+    for (const store of input.storeContext.stores) {
+      checks.push(
+        storagePrefixHasFiles(`stores/${store.id}/`),
+        db.collection("stores").doc(store.id).get().then((value) => value.exists),
+        db.collection("storePublicProfiles").doc(store.id)
+          .get().then((value) => value.exists),
+        db.collection("products").where("storeId", "==", store.id)
+          .limit(1).get().then((value) => !value.empty),
+        db.collection("productPublicProfiles").where("storeId", "==", store.id)
+          .limit(1).get().then((value) => !value.empty),
+      );
+    }
+  }
+
+  if ((await Promise.all(checks)).some(Boolean)) {
+    throw new AccountDeletionEngineError(
+      "Account deletion verification found data that was not removed.",
+      "deletion-verification-failed"
+    );
+  }
+}
+
+async function claimRequest(requestReference: DocumentReference): Promise<void> {
+  const db = getFirestore("default");
+  await db.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(requestReference);
+    const request = snapshot.data();
+    if (!snapshot.exists || !request) {
+      throw new AccountDeletionEngineError("Deletion request not found.", "not-found");
+    }
+
+    const userReference = db.collection("users").doc(request.ownerId);
+    const userSnapshot = await transaction.get(userReference);
+
+    const status = request.status;
+    const now = Date.now();
+    const scheduledDeletionAt = request.scheduledDeletionAt;
+    const nextRetryAt = request.workflow?.nextRetryAt;
+    const leaseExpiresAt = request.workflow?.leaseExpiresAt;
+    const approvedAndDue = (status === "approved" || status === "scheduled") &&
+      scheduledDeletionAt instanceof Timestamp &&
+      scheduledDeletionAt.toMillis() <= now;
+    const failedAndDue = status === "failed" &&
+      nextRetryAt instanceof Timestamp && nextRetryAt.toMillis() <= now;
+    const expiredLease = status === "processing" &&
+      (!(leaseExpiresAt instanceof Timestamp) ||
+        leaseExpiresAt.toMillis() <= now);
+    if (!approvedAndDue && !failedAndDue && !expiredLease) {
+      throw new AccountDeletionEngineError(
+        "The deletion request is already being processed or is not retryable.",
+        "request-not-claimable"
+      );
+    }
+
+    transaction.update(requestReference, {
+      status: "processing",
+      "workflow.currentStep": "validating_account",
+      "workflow.startedAt": FieldValue.serverTimestamp(),
+      "workflow.attemptCount": FieldValue.increment(1),
+      "workflow.retryCount": FieldValue.increment(1),
+      "workflow.failedAt": null,
+      "workflow.failedStep": null,
+      "workflow.lastError": null,
+      "workflow.nextRetryAt": null,
+      "workflow.leaseToken": randomUUID(),
+      "workflow.leaseExpiresAt": Timestamp.fromMillis(now + LEASE_DURATION_MS),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    if (userSnapshot.exists) {
+      transaction.update(userReference, {
+        accountDeletionState: "deletion_processing",
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+    }
+  });
+}
+
 /*
 |--------------------------------------------------------------------------
 | Engine
@@ -404,7 +627,11 @@ export const accountDeletionEngine = {
 
         currentStep:
           "validating_account",
+
+        completedSteps: new Set(),
       };
+
+    let claimed = false;
 
     try {
       const requestSnapshot =
@@ -440,6 +667,13 @@ export const accountDeletionEngine = {
           "Deletion request owner ID"
         );
 
+      workflowContext.completedSteps = completedSteps(
+        request.workflow?.completedSteps
+      );
+
+      await claimRequest(requestReference);
+      claimed = true;
+
       /*
       |--------------------------------------------------------------------------
       | Validate Before Processing
@@ -462,15 +696,51 @@ export const accountDeletionEngine = {
       |--------------------------------------------------------------------------
       */
 
+      const savedContext = storedContext(
+        request.workflow?.deletionContext
+      );
       let driverContext:
-        DriverDeletionContext;
+        DriverDeletionContext | null = null;
+      let customerContext:
+        CustomerDeletionContext | null = null;
+      let storeContext:
+        StoreDeletionContext | null = null;
 
       if (ownerType === "driver") {
-        driverContext =
-          await createDriverDeletionContext(
-            requestId,
-            ownerId
-          );
+        driverContext = savedContext?.ownerType === "driver" ? {
+          requestId,
+          driverId: ownerId,
+          carrierId: optionalPositiveNumber(savedContext.carrierId),
+          stripeAccountId: optionalString(savedContext.stripeAccountId),
+        } : await createDriverDeletionContext(requestId, ownerId);
+      } else if (ownerType === "customer") {
+        customerContext = savedContext?.ownerType === "customer" ? {
+          customerId: ownerId,
+          anonymousId: requireString(savedContext.anonymousId, "Anonymous customer ID"),
+          stripeCustomerId: optionalString(savedContext.stripeCustomerId),
+        } : await customerAccountDeletionService.loadContext(ownerId);
+      } else if (ownerType === "store") {
+        storeContext = savedContext?.ownerType === "store" &&
+          Array.isArray(savedContext.stores) ? {
+            ownerId,
+            anonymousOwnerId: requireString(
+              savedContext.anonymousOwnerId,
+              "Anonymous store-owner ID"
+            ),
+            stores: savedContext.stores.map((value) => {
+              const store = storedContext(value);
+              if (!store) {
+                throw new AccountDeletionEngineError(
+                  "Stored deletion context contains an invalid store.",
+                  "invalid-deletion-context"
+                );
+              }
+              return {
+                id: requireString(store.id, "Stored store ID"),
+                stripeAccountId: optionalString(store.stripeAccountId),
+              };
+            }),
+          } : await storeAccountDeletionService.loadContext(ownerId);
       } else {
         throw new AccountDeletionEngineError(
           `Account deletion is not implemented for owner type: ${ownerType}.`,
@@ -480,55 +750,51 @@ export const accountDeletionEngine = {
 
       /*
       |--------------------------------------------------------------------------
-      | Mark Request as Processing
+      | Persist Resumable Context
       |--------------------------------------------------------------------------
       */
 
-      await requestReference.update({
-        status:
-          "processing",
-
-        "workflow.currentStep":
-          "validating_account",
-
-        "workflow.startedAt":
-          FieldValue.serverTimestamp(),
-
-        "workflow.attemptCount":
-          FieldValue.increment(1),
-
-        "workflow.failedAt":
-          null,
-
-        "workflow.failedStep":
-          null,
-
-        "workflow.lastError":
-          null,
-
-        "workflow.nextRetryAt":
-          null,
-
-        updatedAt:
-          FieldValue.serverTimestamp(),
-      });
+      if (!savedContext) {
+        await requestReference.update({
+          "workflow.deletionContext": driverContext ? {
+            ownerType: "driver",
+            carrierId: driverContext.carrierId,
+            stripeAccountId: driverContext.stripeAccountId,
+          } : customerContext ? {
+            ownerType: "customer",
+            anonymousId: customerContext.anonymousId,
+            stripeCustomerId: customerContext.stripeCustomerId,
+          } : {
+            ownerType: "store",
+            anonymousOwnerId: storeContext!.anonymousOwnerId,
+            stores: storeContext!.stores,
+          },
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+      }
 
       /*
       |--------------------------------------------------------------------------
       | Active Order Validation
       |--------------------------------------------------------------------------
-      |
-      | The business-rule implementation will be connected later.
-      |
       */
 
       await executeWorkflowStep(
         workflowContext,
         "checking_active_orders",
         async () => {
-          /*
-           * Placeholder for active-order validation.
-           */
+          if (driverContext) {
+            await accountDeletionValidationService
+              .validateDriverOperations(driverContext.driverId);
+          }
+          if (customerContext) {
+            await customerAccountDeletionService
+              .validateEligibility(customerContext);
+          }
+          if (storeContext) {
+            await storeAccountDeletionService
+              .validateOperations(storeContext);
+          }
         }
       );
 
@@ -536,18 +802,28 @@ export const accountDeletionEngine = {
       |--------------------------------------------------------------------------
       | Outstanding Payout Validation
       |--------------------------------------------------------------------------
-      |
-      | The business-rule implementation will be connected later.
-      |
       */
 
       await executeWorkflowStep(
         workflowContext,
         "checking_outstanding_payouts",
         async () => {
-          /*
-           * Placeholder for outstanding-payout validation.
-           */
+          if (workflowContext.completedSteps.has("closing_stripe_account")) {
+            return;
+          }
+          if (driverContext) {
+            await accountDeletionValidationService.validateDriverFinancials({
+              driverId: driverContext.driverId,
+              stripeAccountId: driverContext.stripeAccountId,
+              stripe: input.stripe,
+            });
+          }
+          if (storeContext) {
+            await storeAccountDeletionService.validateFinancials(
+              storeContext,
+              input.stripe
+            );
+          }
         }
       );
 
@@ -561,9 +837,7 @@ export const accountDeletionEngine = {
         workflowContext,
         "deleting_shipday_carrier",
         async () => {
-          if (
-            driverContext.carrierId
-          ) {
+          if (driverContext?.carrierId) {
             await shipdayCarrierService.deleteCarrier(
               driverContext.carrierId
             );
@@ -581,9 +855,17 @@ export const accountDeletionEngine = {
         workflowContext,
         "deleting_storage",
         async () => {
-          await driverStorageDeletionService.deleteDriverImages(
-            driverContext.driverId
-          );
+          if (driverContext) {
+            await driverStorageDeletionService.deleteDriverImages(
+              driverContext.driverId
+            );
+          }
+          if (customerContext) {
+            await customerAccountDeletionService.deleteStorage(customerContext);
+          }
+          if (storeContext) {
+            await storeAccountDeletionService.deleteStorage(storeContext);
+          }
         }
       );
 
@@ -597,13 +879,27 @@ export const accountDeletionEngine = {
         workflowContext,
         "closing_stripe_account",
         async () => {
-          if (
-            driverContext.stripeAccountId
-          ) {
+          if (driverContext?.stripeAccountId) {
             await stripeAccountLifecycleService.closeAccount(
               input.stripe,
               driverContext.stripeAccountId
             );
+          }
+          if (customerContext) {
+            await customerAccountDeletionService.deleteStripeCustomer(
+              input.stripe,
+              customerContext
+            );
+          }
+          if (storeContext) {
+            for (const store of storeContext.stores) {
+              if (store.stripeAccountId) {
+                await stripeAccountLifecycleService.closeAccount(
+                  input.stripe,
+                  store.stripeAccountId
+                );
+              }
+            }
           }
         }
       );
@@ -618,13 +914,18 @@ export const accountDeletionEngine = {
         workflowContext,
         "deleting_firestore",
         async () => {
-          await driverFirestoreDeletionService.deleteDriverDocuments({
-            requestId:
-              driverContext.requestId,
-
-            driverId:
-              driverContext.driverId,
-          });
+          if (driverContext) {
+            await driverFirestoreDeletionService.deleteDriverDocuments({
+              requestId: driverContext.requestId,
+              driverId: driverContext.driverId,
+            });
+          }
+          if (customerContext) {
+            await customerAccountDeletionService.deleteFirestore(customerContext);
+          }
+          if (storeContext) {
+            await storeAccountDeletionService.deleteFirestore(storeContext);
+          }
         }
       );
 
@@ -644,14 +945,30 @@ export const accountDeletionEngine = {
         workflowContext,
         "deleting_authentication",
         async () => {
-          await driverAuthDeletionService.deleteDriverAuthentication({
-            requestId:
-              driverContext.requestId,
-
-            driverId:
-              driverContext.driverId,
-          });
+          if (driverContext) {
+            await driverAuthDeletionService.deleteDriverAuthentication({
+              requestId: driverContext.requestId,
+              driverId: driverContext.driverId,
+            });
+          }
+          if (customerContext) {
+            await customerAccountDeletionService.deleteAuthentication(customerContext);
+          }
+          if (storeContext) {
+            await storeAccountDeletionService.deleteAuthentication(storeContext);
+          }
         }
+      );
+
+      await executeWorkflowStep(
+        workflowContext,
+        "verifying_deletion",
+        async () => verifyDeletionCompleted({
+          ownerId,
+          driverContext,
+          customerContext,
+          storeContext,
+        })
       );
 
       /*
@@ -666,10 +983,12 @@ export const accountDeletionEngine = {
     } catch (
       error: unknown
     ) {
-      await markWorkflowFailed(
-        workflowContext,
-        error
-      );
+      if (claimed) {
+        await markWorkflowFailed(
+          workflowContext,
+          error
+        );
+      }
 
       throw error;
     }

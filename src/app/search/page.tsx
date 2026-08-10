@@ -6,8 +6,8 @@
   Shows only matching products, not all products from the store.
 */
 
-import {useState, useEffect} from "react";
-import {useRouter} from "next/navigation";
+import {Suspense, useState, useEffect} from "react";
+import {useRouter, useSearchParams} from "next/navigation";
 import {auth} from "@/lib/firebase";
 import {customerProfileClientService} from "@/services/user/customerProfileClientService";
 
@@ -22,10 +22,11 @@ import {performSearch, groupResultsByStore, searchStoresByName} from "./services
 import {loadRecentSearches, saveRecentSearch} from "./services/recentSearchService";
 import {useMarketplacePricingPolicy} from "@/hooks/useMarketplacePricingPolicy";
 
-export default function SearchPage() {
+function SearchPageContent() {
   const marketplacePolicy = useMarketplacePricingPolicy();
   const router = useRouter();
-  const [searchQuery, setSearchQuery] = useState("");
+  const searchParams = useSearchParams();
+  const [searchQuery, setSearchQuery] = useState(() => searchParams.get("q")?.trim() ?? "");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [groups, setGroups] = useState<StoreGroup[]>([]);
   const [loading, setLoading] = useState(false);
@@ -51,8 +52,10 @@ export default function SearchPage() {
           }
         }
         const localSearches = await loadRecentSearches();
-        if (localSearches.length > 0 && recentSearches.length === 0) {
-          setRecentSearches(localSearches);
+        if (localSearches.length > 0) {
+          setRecentSearches((current) =>
+            current.length > 0 ? current : localSearches
+          );
         }
       } catch (error) {
         console.error("Error loading user data:", error);
@@ -66,10 +69,12 @@ export default function SearchPage() {
     const normalizedQuery = searchQuery.trim();
 
     if (normalizedQuery.length < 2) {
-      setLoading(false);
-      setSearchError(null);
-      setResults([]);
-      setGroups([]);
+      queueMicrotask(() => {
+        setLoading(false);
+        setSearchError(null);
+        setResults([]);
+        setGroups([]);
+      });
       return;
     }
 
@@ -78,8 +83,10 @@ export default function SearchPage() {
      * still loading. Otherwise SearchResults receives an empty array first
      * and flashes "No results found" before a real search has even started.
      */
-    setLoading(true);
-    setSearchError(null);
+    queueMicrotask(() => {
+      setLoading(true);
+      setSearchError(null);
+    });
 
     if (!marketplacePolicy) {
       return;
@@ -223,5 +230,23 @@ export default function SearchPage() {
         )}
       </div>
     </main>
+  );
+}
+
+function SearchPageFallback() {
+  return (
+    <main className="min-h-screen animate-pulse bg-white">
+      <div className="border-b border-gray-100 px-4 py-4">
+        <div className="mx-auto h-11 max-w-lg rounded-full bg-gray-100" />
+      </div>
+    </main>
+  );
+}
+
+export default function SearchPage() {
+  return (
+    <Suspense fallback={<SearchPageFallback />}>
+      <SearchPageContent />
+    </Suspense>
   );
 }

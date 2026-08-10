@@ -241,40 +241,22 @@ export function useCheckoutPaymentStatus(
     if (
       !checkoutSessionId?.trim()
     ) {
-      setCheckoutStatus(
-        "idle"
-      );
-
-      setPaymentStatus(
-        null
-      );
-
-      setStripeStatus(
-        null
-      );
-
-      setFailureMessage(
-        null
-      );
-
-      setLoading(
-        false
-      );
-
-      setError(
-        null
-      );
+      queueMicrotask(() => {
+        setCheckoutStatus("idle");
+        setPaymentStatus(null);
+        setStripeStatus(null);
+        setFailureMessage(null);
+        setLoading(false);
+        setError(null);
+      });
 
       return;
     }
 
-    setLoading(
-      true
-    );
-
-    setError(
-      null
-    );
+    queueMicrotask(() => {
+      setLoading(true);
+      setError(null);
+    });
 
     const checkoutSessionReference =
       doc(

@@ -283,7 +283,6 @@ export default function StoreCategoryPage({
         onSearchClick={() => router.push(`/store/${storeId}/search`)}
         itemCount={storeItemCount}
         totalPrice={storeTotalPrice}
-        storeId={store.id}
         onCartClick={() => router.push("/cart")}
       />
 

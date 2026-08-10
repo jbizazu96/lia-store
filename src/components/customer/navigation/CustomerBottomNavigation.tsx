@@ -61,7 +61,7 @@ export function CustomerBottomNavigation() {
   return (
     <nav
       aria-label="Customer navigation"
-      className="fixed inset-x-4 bottom-4 z-50 mx-auto max-w-md rounded-[30px] border border-gray-900/[0.08] bg-white/[0.03] p-1.5 shadow-[0_12px_30px_rgba(15,23,42,0.10)] backdrop-blur-2xl backdrop-saturate-150"
+      className="fixed inset-x-4 bottom-4 z-50 mx-auto max-w-md rounded-[30px] border border-white/70 bg-white/55 p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.85),0_16px_40px_rgba(15,23,42,0.16)] backdrop-blur-[24px] backdrop-saturate-[1.8]"
     >
       <div className="grid grid-cols-4 gap-1">
         {navigationItems.map((item) => {
@@ -79,8 +79,8 @@ export function CustomerBottomNavigation() {
               className={
                 "relative flex min-h-12 flex-col items-center justify-center gap-0.5 rounded-[23px] border px-2 py-1.5 text-[11px] font-bold transition " +
                 (active
-                  ? "border-orange-400/80 text-orange-600"
-                  : "border-transparent text-gray-700 hover:bg-white/40 hover:text-gray-950")
+                  ? "border-white/80 bg-white/65 text-orange-600 shadow-[0_4px_16px_rgba(15,23,42,0.08)]"
+                  : "border-transparent text-gray-700 hover:bg-white/45 hover:text-gray-950")
               }
             >
               <span className="relative">

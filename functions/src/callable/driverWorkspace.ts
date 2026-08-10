@@ -88,6 +88,9 @@ async function requireDriver(uid: string) {
   if (user.data()?.accountType !== "driver" || !driver.exists || driver.data()?.ownerUid !== uid) {
     throw new HttpsError("permission-denied", "You do not have access to the driver workspace.");
   }
+  if (["deletion_pending", "deletion_processing"].includes(user.data()?.accountDeletionState)) {
+    throw new HttpsError("permission-denied", "Your account deletion request is under review. Driver account access is unavailable.");
+  }
 
   return driver;
 }

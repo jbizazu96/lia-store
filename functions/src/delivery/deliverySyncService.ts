@@ -36,6 +36,7 @@ import {
 import {
   shipdayService,
 } from "../services/shipdayService";
+import {isAccountDeletionRestricted} from "../accountDeletion/accountDeletionAccessService";
 
 
 /*
@@ -421,6 +422,14 @@ async function resolveLiaDriver(
       }
     );
 
+    return null;
+  }
+
+  if (await isAccountDeletionRestricted(document.id)) {
+    console.warn(
+      "Shipday assigned a driver whose account deletion is pending.",
+      {carrierId, driverId: document.id}
+    );
     return null;
   }
 

@@ -22,6 +22,8 @@
 |
 */
 
+import {createHash} from "crypto";
+
 import {
   FieldValue,
   getFirestore,
@@ -191,6 +193,10 @@ function normalizeReasonDetails(
   return normalized;
 }
 
+function requestLockId(ownerType: AccountDeletionOwnerType, ownerId: string): string {
+  return `${ownerType}_${createHash("sha256").update(ownerId).digest("hex")}`;
+}
+
 /*
 |--------------------------------------------------------------------------
 | Request Service
@@ -251,8 +257,7 @@ export const accountDeletionRequestService = {
        *
        * If one exists, return it instead of creating a duplicate.
        */
-      const existingRequestSnapshot =
-        await requestsCollection
+      const existingRequestQuery = requestsCollection
           .where(
             "ownerType",
             "==",
@@ -268,90 +273,121 @@ export const accountDeletionRequestService = {
             "in",
             ACTIVE_REQUEST_STATUSES
           )
-          .limit(1)
-          .get();
+          .limit(1);
+      const lockReference = db.collection("accountDeletionRequestLocks")
+        .doc(requestLockId(ownerType, ownerId));
+      const newRequestReference = requestsCollection.doc();
+      let result: CreateAccountDeletionRequestResult | null = null;
 
-      if (
-        !existingRequestSnapshot.empty
-      ) {
-        const existingDocument =
-          existingRequestSnapshot.docs[0];
+      await db.runTransaction(async (transaction) => {
+        await transaction.get(lockReference);
+        const existingRequestSnapshot = await transaction.get(existingRequestQuery);
+        const userReference = db.collection("users").doc(ownerId);
+        const userSnapshot = await transaction.get(userReference);
+        if (!userSnapshot.exists) {
+          throw new AccountDeletionRequestServiceError(
+            "The account profile was not found.",
+            {code: "account-not-found"}
+          );
+        }
+        const ownedStores = ownerType === "store" ?
+          await transaction.get(db.collection("stores").where("ownerId", "==", ownerId)) :
+          null;
 
-        return {
-          requestId:
-            existingDocument.id,
-
-          ownerType,
-
-          ownerId,
-
-          status:
-            "pending_review",
-
-          alreadyPending: true,
+        const lockAccount = (requestId: string) => {
+          transaction.update(userReference, {
+            accountDeletionState: "deletion_pending",
+            accountDeletionRequestId: requestId,
+            updatedAt: FieldValue.serverTimestamp(),
+          });
+          ownedStores?.docs.forEach((store) => {
+            transaction.update(store.ref, {
+              isActive: false,
+              isApproved: false,
+              status: "pending_review",
+              accountDeletionRequestId: requestId,
+              accountDeletionDisabledAt: FieldValue.serverTimestamp(),
+              updatedAt: FieldValue.serverTimestamp(),
+            });
+          });
         };
-      }
 
-      const requestReference =
-        requestsCollection.doc();
+        if (!existingRequestSnapshot.empty) {
+          const existingDocument = existingRequestSnapshot.docs[0];
+          const existingStatus = existingDocument.data().status as
+            AccountDeletionRequestStatus;
+          transaction.set(lockReference, {
+            ownerType,
+            ownerId,
+            requestId: existingDocument.id,
+            updatedAt: FieldValue.serverTimestamp(),
+          });
+          lockAccount(existingDocument.id);
+          result = {
+            requestId: existingDocument.id,
+            ownerType,
+            ownerId,
+            status: existingStatus,
+            alreadyPending: true,
+          };
+          return;
+        }
 
-      await requestReference.set({
-        ownerType,
-        ownerId,
-        requestedBy,
-
-        reasonCode,
-        reasonDetails,
-
-        status:
-          "pending_review",
-
-        adminDecision: {
-          adminId: null,
-          decision: null,
-          notes: null,
-          decidedAt: null,
-        },
-
-        scheduledDeletionAt: null,
-
-        workflow: {
-          currentStep:
-            "not_started",
-
-          completedSteps: [],
-
-          failedStep: null,
-
-          attemptCount: 0,
-
-          lastError: null,
-
-          startedAt: null,
-
-          completedAt: null,
-        },
-
-        requestedAt:
-          FieldValue.serverTimestamp(),
-
-        updatedAt:
-          FieldValue.serverTimestamp(),
+        transaction.set(newRequestReference, {
+          ownerType,
+          ownerId,
+          requestedBy,
+          reasonCode,
+          reasonDetails,
+          status: "pending_review",
+          adminDecision: {
+            adminId: null,
+            decision: null,
+            notes: null,
+            decidedAt: null,
+          },
+          scheduledDeletionAt: null,
+          workflow: {
+            currentStep: "not_started",
+            completedSteps: [],
+            failedStep: null,
+            attemptCount: 0,
+            retryCount: 0,
+            lastError: null,
+            startedAt: null,
+            completedAt: null,
+            failedAt: null,
+            nextRetryAt: null,
+            leaseExpiresAt: null,
+            leaseToken: null,
+            deletionContext: null,
+          },
+          requestedAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+        transaction.set(lockReference, {
+          ownerType,
+          ownerId,
+          requestId: newRequestReference.id,
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+        lockAccount(newRequestReference.id);
+        result = {
+          requestId: newRequestReference.id,
+          ownerType,
+          ownerId,
+          status: "pending_review",
+          alreadyPending: false,
+        };
       });
 
-      return {
-        requestId:
-          requestReference.id,
-
-        ownerType,
-
-        ownerId,
-
-        status:
-          "pending_review",
-
-        alreadyPending: false,
-      };
+      if (!result) {
+        throw new AccountDeletionRequestServiceError(
+          "The account deletion request transaction returned no result.",
+          {code: "request-creation-failed"}
+        );
+      }
+      return result;
     } catch (error: unknown) {
       if (
         error instanceof

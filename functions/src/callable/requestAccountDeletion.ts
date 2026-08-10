@@ -1,5 +1,6 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import {
+  FieldValue,
   getFirestore,
 } from "firebase-admin/firestore";
 
@@ -12,6 +13,7 @@ import {
   AccountDeletionOwnerType,
   AccountDeletionReasonCode,
 } from "../accountDeletion/accountDeletionRequestTypes";
+import {restoreAccountDeletionAccess} from "../accountDeletion/accountDeletionAccessService";
 
 /*
 |--------------------------------------------------------------------------
@@ -25,6 +27,18 @@ interface RequestAccountDeletionData {
   reasonCode: AccountDeletionReasonCode;
 
   reasonDetails?: string | null;
+}
+
+const MAXIMUM_AUTH_AGE_SECONDS = 5 * 60;
+
+function requireRecentAuthentication(authTime: unknown): void {
+  if (typeof authTime !== "number" ||
+    Math.floor(Date.now() / 1000) - authTime > MAXIMUM_AUTH_AGE_SECONDS) {
+    throw new HttpsError(
+      "failed-precondition",
+      "Sign in again before managing account deletion."
+    );
+  }
 }
 
 /*
@@ -55,6 +69,7 @@ export const requestAccountDeletion = onCall(
     }
 
     const uid = request.auth.uid;
+    requireRecentAuthentication(request.auth.token.auth_time);
 
     const data =
       request.data as RequestAccountDeletionData;
@@ -108,6 +123,10 @@ export const requestAccountDeletion = onCall(
           result.alreadyPending,
       };
     } catch (error) {
+      if (error instanceof HttpsError) {
+        throw error;
+      }
+
       if (
         error instanceof
         AccountDeletionRequestServiceError
@@ -130,3 +149,47 @@ export const requestAccountDeletion = onCall(
     }
   }
 );
+
+export const cancelAccountDeletion = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Authentication is required.");
+  }
+  requireRecentAuthentication(request.auth.token.auth_time);
+  const uid = request.auth.uid;
+  const requestId = typeof request.data?.requestId === "string" ?
+    request.data.requestId.trim() : "";
+  if (!requestId || requestId.includes("/") || requestId.includes("\\")) {
+    throw new HttpsError("invalid-argument", "A valid deletion request is required.");
+  }
+
+  const db = getFirestore("default");
+  const reference = db.collection("accountDeletionRequests").doc(requestId);
+  await db.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(reference);
+    const data = snapshot.data();
+    if (!snapshot.exists || !data || data.ownerId !== uid) {
+      throw new HttpsError("not-found", "Deletion request not found.");
+    }
+    if (!["pending_review", "more_information_required", "approved", "scheduled"]
+      .includes(data.status)) {
+      throw new HttpsError(
+        "failed-precondition",
+        "This deletion request can no longer be cancelled."
+      );
+    }
+    transaction.update(reference, {
+      status: "cancelled",
+      cancelledAt: FieldValue.serverTimestamp(),
+      cancelledBy: uid,
+      scheduledDeletionAt: null,
+      "workflow.nextRetryAt": null,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    transaction.set(db.collection("users").doc(uid), {
+      accountDeletionState: null,
+      updatedAt: FieldValue.serverTimestamp(),
+    }, {merge: true});
+  });
+  await restoreAccountDeletionAccess(uid);
+  return {success: true};
+});

@@ -18,6 +18,7 @@ interface ProductSectionProps {
   onQuantityChange: (productId: string, quantity: number) => void;
   getQuantity: (productId: string) => number;
   onViewAll: () => void;
+  preloadFirstImage?: boolean;
 }
 
 export function ProductSection({
@@ -27,6 +28,7 @@ export function ProductSection({
   onQuantityChange,
   getQuantity,
   onViewAll,
+  preloadFirstImage = false,
 }: ProductSectionProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -37,24 +39,24 @@ export function ProductSection({
   };
 
   return (
-    <section className="mt-4 px-4">
+    <section className="mx-auto mt-7 max-w-2xl px-4">
       {/* Header */}
-      <div className="mb-2 flex items-center justify-between">
+      <div className="mb-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
           {category.icon && (
             <span className="text-xl">{category.icon}</span>
           )}
-          <h3 className="text-lg font-bold text-gray-900">
+          <h3 className="text-xl font-black tracking-[-0.02em] text-[#172217]">
             {capitalize(category.name)}
           </h3>
         </div>
         <button
           type="button"
           onClick={onViewAll}
-          className="flex h-11 w-11 items-center justify-center rounded-full bg-gray-100 text-gray-900 transition hover:bg-orange-500 hover:text-white"
+          className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-100 text-gray-700 transition hover:bg-gray-200 hover:text-gray-950"
           aria-label={`View all ${category.name} products`}
         >
-          <ArrowRight className="h-6 w-6" strokeWidth={2.5} />
+          <ArrowRight className="h-5 w-5" strokeWidth={2.5} />
         </button>
       </div>
 
@@ -77,6 +79,7 @@ export function ProductSection({
               onAddToCart={onAddToCart}
               onQuantityChange={onQuantityChange}
               quantity={getQuantity(product.id)}
+              priority={preloadFirstImage && index === 0}
             />
           </motion.div>
         ))}

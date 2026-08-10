@@ -46,9 +46,6 @@ export function NotificationProvider({
   useEffect(() => {
 
     if (!user) {
-
-      setUnreadCount(0);
-
       return;
 
     }
@@ -70,7 +67,7 @@ export function NotificationProvider({
 
     <NotificationContext.Provider
       value={{
-        unreadCount,
+        unreadCount: user ? unreadCount : 0,
       }}
     >
 

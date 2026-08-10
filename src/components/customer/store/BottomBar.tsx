@@ -17,7 +17,6 @@ interface BottomBarProps {
   showSearch?: boolean;
   itemCount: number;
   totalPrice: number;
-  storeId: string;
   onCartClick: () => void;
 }
 
@@ -28,12 +27,11 @@ export function BottomBar({
   showSearch = true,
   itemCount,
   totalPrice,
-  storeId,
   onCartClick,
 }: BottomBarProps) {
   return (
-    <div className="fixed bottom-4 left-4 right-4 z-40 max-w-lg mx-auto">
-      <div className="flex items-center gap-3">
+    <div className="fixed bottom-4 left-4 right-4 z-40 mx-auto max-w-lg rounded-[26px] border border-white/75 bg-white/60 p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_18px_45px_rgba(15,23,42,0.16)] backdrop-blur-[24px] backdrop-saturate-[1.8]">
+      <div className="flex items-center gap-2">
         {/* Search Bar - Floating with shadow */}
         {showSearch && (
           <div className="relative flex-1">
@@ -42,7 +40,7 @@ export function BottomBar({
               <button
                 type="button"
                 onClick={onSearchClick}
-                className="w-full rounded-full border border-gray-200 bg-white/90 py-3 pl-9 pr-4 text-left text-base text-gray-400 shadow-lg backdrop-blur-sm transition hover:border-orange-300 focus:outline-none focus:ring-2 focus:ring-orange-400 sm:text-sm"
+                className="w-full rounded-[20px] border border-white/80 bg-white/65 py-3 pl-9 pr-4 text-left text-base font-medium text-gray-500 transition hover:bg-white/80 focus:outline-none focus:ring-2 focus:ring-orange-400 sm:text-sm"
               >
                 Search this store...
               </button>
@@ -52,7 +50,7 @@ export function BottomBar({
                 value={searchQuery}
                 onChange={(e) => onSearchChange(e.target.value)}
                 placeholder="Search this store..."
-                className="w-full rounded-full border border-gray-200 bg-white/90 py-3 pl-9 pr-4 text-base placeholder-gray-400 shadow-lg backdrop-blur-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-orange-400 sm:text-sm"
+                className="w-full rounded-[20px] border border-white/80 bg-white/65 py-3 pl-9 pr-4 text-base placeholder-gray-400 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-orange-400 sm:text-sm"
               />
             )}
           </div>
@@ -66,7 +64,7 @@ export function BottomBar({
               animate={{ opacity: 1, scale: 1, x: 0 }}
               exit={{ opacity: 0, scale: 0.9, x: 10 }}
               onClick={onCartClick}
-              className="flex items-center gap-2 px-4 py-3 bg-orange-500 text-white rounded-3xl hover:bg-orange-600 transition flex-shrink-0 shadow-lg"
+              className="flex flex-shrink-0 items-center gap-2 rounded-[20px] bg-orange-500 px-4 py-3 text-white shadow-lg transition hover:bg-orange-600"
             >
               <div className="relative">
                 <ShoppingBag className="w-5 h-5" />

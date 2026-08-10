@@ -6,14 +6,13 @@
 */
 
 import Image from "next/image";
-import {X, Heart} from "lucide-react";
+import {ArrowLeft, Heart} from "lucide-react";
+import type {StoreImageVariants} from "@/types/store";
 
 interface StoreHeaderProps {
   bannerUrl: string;
-  logoUrl: string;
+  bannerImageVariants?: StoreImageVariants;
   name: string;
-  rating: number;
-  reviewCount: number;
   isFavorite: boolean;
   onBack: () => void;
   onFavoriteChange: () => void;
@@ -22,25 +21,23 @@ interface StoreHeaderProps {
 
 export function StoreHeader({
   bannerUrl,
-  logoUrl,
+  bannerImageVariants,
   name,
-  rating,
-  reviewCount,
   isFavorite,
   onBack,
   onFavoriteChange,
   favoriteSaving = false,
 }: StoreHeaderProps) {
   return (
-    <div className="relative">
+    <div className="relative mx-auto max-w-2xl">
       {/* Banner */}
-      <div className="relative h-30 w-full bg-gray-200">
+      <div className="relative h-32 w-full overflow-hidden bg-[#f1ece3] sm:h-36">
         {bannerUrl ? (
           <Image
-            src={bannerUrl}
+            src={bannerImageVariants?.large || bannerImageVariants?.medium || bannerUrl}
             alt={name}
             fill
-            sizes="100vw"
+            sizes="(max-width: 672px) 100vw, 640px"
             className="object-cover"
             priority
           />
@@ -53,28 +50,28 @@ export function StoreHeader({
         )}
         
         {/* Gradient overlay */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+        <div className="absolute inset-0 bg-black/5" />
       </div>
 
       {/* Action Buttons */}
-      <div className="absolute top-4 left-4 right-4 flex justify-between z-20">
+      <div className="absolute left-5 right-5 top-5 z-20 flex justify-between">
         <button
           type="button"
           onClick={onBack}
-          className="w-10 h-10 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-white transition shadow-lg"
+          className="flex h-12 w-12 items-center justify-center rounded-full bg-white text-slate-900 shadow-[0_10px_30px_rgba(15,23,42,0.15)] transition hover:scale-105"
           aria-label="Go back"
         >
-          <X className="w-5 h-5 text-gray-700" />
+          <ArrowLeft className="h-6 w-6" strokeWidth={2.4} />
         </button>
         <button
           type="button"
           disabled={favoriteSaving}
           onClick={onFavoriteChange}
-          className="flex h-10 w-10 items-center justify-center rounded-full bg-white/90 shadow-lg backdrop-blur-sm transition hover:bg-white disabled:cursor-wait disabled:opacity-60"
+          className="flex h-12 w-12 items-center justify-center rounded-full bg-white text-slate-900 shadow-[0_10px_30px_rgba(15,23,42,0.15)] transition hover:scale-105 disabled:cursor-wait disabled:opacity-60"
           aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
         >
           <Heart className={
-            "h-5 w-5 transition " +
+            "h-6 w-6 transition " +
             (isFavorite
               ? "fill-orange-500 text-orange-500"
               : "text-gray-700 hover:text-orange-500")
@@ -82,30 +79,6 @@ export function StoreHeader({
         </button>
       </div>
 
-      {/* Logo - Positioned to overlap the banner and info card */}
-      <div className="absolute -bottom-10 left-1/2 -translate-x-1/2 z-20">
-        <div className="relative w-20 h-20 rounded-full bg-white p-1 shadow-lg">
-          <div className="relative w-full h-full rounded-full overflow-hidden">
-            {logoUrl ? (
-              <Image
-                src={logoUrl}
-                alt={name}
-                fill
-                sizes="80px"
-                className="object-cover"
-              />
-            ) : (
-              <div className="w-full h-full bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center">
-                <span className="text-2xl font-bold text-white">
-                  {name.charAt(0)}
-                </span>
-              </div>
-            )}
-          </div>
-          {/* Green ring */}
-          <div className="absolute inset-0 rounded-full border-4 border-orange-500 pointer-events-none" />
-        </div>
-      </div>
     </div>
   );
 }

@@ -88,6 +88,9 @@ async function requireOwnedStore(uid: string, storeId: string) {
   if (user.data()?.accountType !== "store_owner") {
     throw new HttpsError("permission-denied", "Only store owners can manage Stripe payouts.");
   }
+  if (["deletion_pending", "deletion_processing"].includes(user.data()?.accountDeletionState)) {
+    throw new HttpsError("failed-precondition", "Payout onboarding is unavailable while account deletion is pending.");
+  }
   if (!store.exists || store.data()?.ownerId !== uid) {
     throw new HttpsError("permission-denied", "You can manage Stripe only for your own store.");
   }

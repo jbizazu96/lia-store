@@ -55,14 +55,13 @@ export function CustomerOrdersProvider({
     }
 
     if (!user) {
-      setOpenOrderCount(0);
-      setError("You must sign in.");
-      setLoading(false);
       return;
     }
 
-    setLoading(true);
-    setError(null);
+    queueMicrotask(() => {
+      setLoading(true);
+      setError(null);
+    });
 
     const ordersQuery = query(
       collection(db, "orders"),
@@ -98,9 +97,9 @@ export function CustomerOrdersProvider({
   return (
     <CustomerOrdersContext.Provider
       value={{
-        openOrderCount,
-        loading,
-        error,
+        openOrderCount: user ? openOrderCount : 0,
+        loading: authLoading || (Boolean(user) && loading),
+        error: user ? error : "You must sign in.",
         isAuthenticated: Boolean(user),
       }}
     >

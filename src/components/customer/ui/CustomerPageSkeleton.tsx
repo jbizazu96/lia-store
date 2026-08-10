@@ -41,13 +41,14 @@ function ProductGrid() {
 
 function StoreCards() {
   return (
-    <div className="space-y-4">
-      {Array.from({ length: 3 }, (_, index) => (
-        <div key={index} className="overflow-hidden rounded-2xl border border-gray-100 bg-white/70 shadow-sm">
-          <Block className="h-32 w-full rounded-none" />
-          <div className="space-y-3 p-4">
+    <div className="space-y-8">
+      {Array.from({ length: 2 }, (_, index) => (
+        <div key={index}>
+          <Block className="aspect-[16/10] w-full rounded-xl" />
+          <div className="space-y-2 pt-3">
             <Block className="h-5 w-1/2" />
-            <Block className="h-4 w-3/4" />
+            <Block className="h-4 w-2/3" />
+            <Block className="h-4 w-1/3" />
           </div>
         </div>
       ))}
@@ -65,9 +66,16 @@ export function CustomerPageSkeleton({ variant }: CustomerPageSkeletonProps) {
     return (
       <main className="min-h-screen animate-pulse bg-white pb-28">
         <HeaderSkeleton />
-        <div className="mx-auto max-w-2xl space-y-5 px-4 pt-5">
-          <div className="space-y-2"><Block className="h-4 w-16" /><Block className="h-8 w-40" /></div>
-          <Block className="h-11 w-full rounded-full" />
+        <div className="flex gap-6 overflow-hidden border-b border-gray-100 px-4 py-5">
+          {Array.from({ length: 6 }, (_, index) => (
+            <div key={index} className="shrink-0 space-y-2">
+              <Block className="mx-auto h-7 w-7 rounded-lg" />
+              <Block className="h-3 w-16" />
+            </div>
+          ))}
+        </div>
+        <div className="mx-auto max-w-2xl space-y-5 px-4 pt-3">
+          <Block className="h-14 w-full rounded-2xl" />
           <Block className="h-32 w-full rounded-2xl" />
           <Block className="h-6 w-36" />
           <StoreCards />

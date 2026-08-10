@@ -50,6 +50,13 @@ function number(value: unknown, fallback = 0): number {
     : fallback;
 }
 
+function imageVariants(value: unknown): Record<string, string> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return Object.fromEntries(Object.entries(value).filter(
+    (entry): entry is [string, string] => typeof entry[1] === "string"
+  ));
+}
+
 function schedule(value: unknown): Store["schedule"] {
   if (!Array.isArray(value)) {
     return [];
@@ -99,6 +106,8 @@ function mapStoreDocument(
 
     logoUrl: text(data.logoUrl),
     bannerUrl: text(data.bannerUrl),
+    logoImageVariants: imageVariants(data.logoImageVariants),
+    bannerImageVariants: imageVariants(data.bannerImageVariants),
 
     category: optionalText(data.category),
     rating: typeof data.rating === "number"

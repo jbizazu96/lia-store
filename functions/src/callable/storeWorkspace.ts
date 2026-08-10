@@ -84,6 +84,9 @@ async function requireOwnedStore(uid: string) {
   if (user.data()?.accountType !== "store_owner") {
     throw new HttpsError("permission-denied", "Only store owners can access this workspace.");
   }
+  if (["deletion_pending", "deletion_processing"].includes(user.data()?.accountDeletionState)) {
+    throw new HttpsError("permission-denied", "Your account deletion request is under review. Store account access is unavailable.");
+  }
 
   const storedId = text(user.data()?.storeId);
   if (storedId) {

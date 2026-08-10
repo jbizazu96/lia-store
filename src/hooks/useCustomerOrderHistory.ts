@@ -70,17 +70,21 @@ export function useCustomerOrderHistory() {
     paginationCursorRef.current = null;
 
     if (!user) {
-      setOrders([]);
-      setError("You must sign in.");
-      setHasMore(false);
-      setLoading(false);
+      queueMicrotask(() => {
+        setOrders([]);
+        setError("You must sign in.");
+        setHasMore(false);
+        setLoading(false);
+      });
       return;
     }
 
-    setLoading(true);
-    setError(null);
-    setHasMore(false);
-    setOrders([]);
+    queueMicrotask(() => {
+      setLoading(true);
+      setError(null);
+      setHasMore(false);
+      setOrders([]);
+    });
 
     const ordersQuery = query(
       collection(db, "orders"),

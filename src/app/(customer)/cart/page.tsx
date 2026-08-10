@@ -107,13 +107,6 @@ export default function CartPage() {
     router.push("/checkout");
   };
 
-  // Handle remove item with confirmation
-  const handleRemoveItem = (itemId: string, itemName: string) => {
-    setItemToRemove(itemId);
-    setItemNameToRemove(itemName);
-    setShowRemoveConfirm(true);
-  };
-
   // Confirm remove item
   const confirmRemoveItem = () => {
     if (itemToRemove) {
@@ -301,18 +294,18 @@ export default function CartPage() {
                   {/* Product Info */}
                   <div className="flex-1 min-w-0">
                     <div className="min-w-0">
-                        <h4 className="font-sans text-sm font-bold leading-5 text-gray-900">
+                        <h4 className="font-sans text-sm font-bold leading-4 text-gray-900">
                           {productName}
                         </h4>
                         {item.size && item.size.value > 0 && (
-                          <p className="mt-0.5 text-xs text-gray-500">
+                          <p className="text-xs leading-4 text-gray-500">
                             {item.size.value}{item.size.unit}
                           </p>
                         )}
                     </div>
 
                     {/* Price & Quantity Controls */}
-                    <div className="mt-0.5 grid grid-cols-[minmax(0,1fr)_auto] items-end gap-3">
+                    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
                       <div>
                         {typeof item.originalPrice === "number" &&
                           item.originalPrice > item.price && (

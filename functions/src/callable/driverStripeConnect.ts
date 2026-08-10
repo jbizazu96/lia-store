@@ -38,6 +38,7 @@ function origin() {
 async function requireDriver(uid: string) {
   const [user, driver] = await Promise.all([db.collection("users").doc(uid).get(), db.collection("drivers").doc(uid).get()]);
   if (user.data()?.accountType !== "driver" || !driver.exists || driver.data()?.ownerUid !== uid) throw new HttpsError("permission-denied", "Only the owning driver can manage this payout account.");
+  if (["deletion_pending", "deletion_processing"].includes(user.data()?.accountDeletionState)) throw new HttpsError("failed-precondition", "Payout onboarding is unavailable while account deletion is pending.");
   return driver;
 }
 function handle(error: unknown, fallback: string): never {

@@ -60,7 +60,7 @@ const db =
 | Stock Alert Thresholds
 |--------------------------------------------------------------------------
 |
-| Match the current low-stock behavior used by createOrder.
+| Thresholds used when paid checkout activation reduces inventory.
 |
 */
 

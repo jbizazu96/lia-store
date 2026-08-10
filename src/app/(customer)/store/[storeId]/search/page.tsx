@@ -355,7 +355,6 @@ export default function StoreSearchPage({
         showSearch={false}
         itemCount={getStoreItemCount(storeId)}
         totalPrice={getStoreTotalPrice(storeId)}
-        storeId={storeId}
         onCartClick={() => router.push("/cart")}
       />
 

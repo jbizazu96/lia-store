@@ -28,10 +28,51 @@
 |
 */
 
+import {createHash} from "crypto";
 import {
   DocumentReference,
+  FieldValue,
   getFirestore,
 } from "firebase-admin/firestore";
+
+async function deleteQuery(query: FirebaseFirestore.Query): Promise<void> {
+  const db = getFirestore("default");
+  const snapshot = await query.get();
+  await Promise.all(
+    snapshot.docs.map((document) => db.recursiveDelete(document.ref))
+  );
+}
+
+function anonymousDriverId(driverId: string): string {
+  return "deleted_driver_" + createHash("sha256")
+    .update(driverId)
+    .digest("hex")
+    .slice(0, 24);
+}
+
+async function anonymizeDriverBusinessRecords(driverId: string): Promise<void> {
+  const db = getFirestore("default");
+  const anonymousId = anonymousDriverId(driverId);
+  const [orders, settlements, transfers] = await Promise.all([
+    db.collection("orders").where("delivery.driverId", "==", driverId).get(),
+    db.collection("paymentSettlements").where("driverId", "==", driverId).get(),
+    db.collection("paymentTransfers").where("recipient.id", "==", driverId).get(),
+  ]);
+  const writer = db.bulkWriter();
+  orders.docs.forEach((document) => writer.update(document.ref, {
+    "delivery.driverId": anonymousId,
+    "delivery.driverName": "Deleted driver",
+    "delivery.shipdayCarrierId": FieldValue.delete(),
+    "shipday.driverName": FieldValue.delete(),
+  }));
+  settlements.docs.forEach((document) => writer.update(document.ref, {
+    driverId: anonymousId,
+  }));
+  transfers.docs.forEach((document) => writer.update(document.ref, {
+    "recipient.id": anonymousId,
+  }));
+  await writer.close();
+}
 
 /*
 |--------------------------------------------------------------------------
@@ -327,6 +368,20 @@ export const driverFirestoreDeletionService = {
           userReference
         );
       }
+
+      /* These owner records are stored outside the two account roots. */
+      await Promise.all([
+        deleteQuery(
+          db.collection("driverImageUploads").where("driverId", "==", driverId)
+        ),
+        deleteQuery(
+          db.collection("notificationDevices").where("uid", "==", driverId)
+        ),
+        db.recursiveDelete(
+          db.collection("driverWorkspaceStatuses").doc(driverId)
+        ),
+        anonymizeDriverBusinessRecords(driverId),
+      ]);
 
       return {
         requestId,

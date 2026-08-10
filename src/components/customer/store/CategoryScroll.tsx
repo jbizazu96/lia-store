@@ -74,7 +74,7 @@ export function CategoryScroll({
       aria-label="Browse product categories"
     >
       <div
-        className="flex gap-4 overflow-x-auto px-1 pb-2 pt-1 scrollbar-hide"
+        className="flex gap-3 overflow-x-auto px-0.5 pb-2 pt-1 scrollbar-hide"
         style={{
           scrollbarWidth: "none",
           msOverflowStyle: "none",
@@ -83,9 +83,9 @@ export function CategoryScroll({
         <button
           type="button"
           onClick={onDealsClick}
-          className="flex w-[76px] shrink-0 flex-col items-center gap-2 rounded-2xl px-1 py-1.5 transition hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
+          className="flex w-[78px] shrink-0 flex-col items-center gap-2 rounded-2xl py-1.5 transition hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
         >
-          <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-red-50 text-4xl shadow-sm">
+          <span className="flex h-14 w-14 items-center justify-center rounded-[18px] border border-red-100 bg-red-50 text-3xl shadow-sm">
             🏷️
           </span>
           <span className="text-center text-sm font-semibold text-gray-900">
@@ -100,9 +100,9 @@ export function CategoryScroll({
               onClick={() =>
                 onCategoryClick(category.id)
               }
-              className="flex w-[76px] shrink-0 flex-col items-center gap-2 rounded-2xl px-1 py-1.5 transition hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
+              className="flex w-[78px] shrink-0 flex-col items-center gap-2 rounded-2xl py-1.5 transition hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
             >
-              <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gray-50 text-4xl shadow-sm">
+              <span className="flex h-14 w-14 items-center justify-center rounded-[18px] border border-black/[0.04] bg-[#f5f7f2] text-3xl shadow-sm">
                 {getCategoryIcon(category)}
               </span>
               <span className="line-clamp-2 min-h-10 text-center text-sm font-semibold leading-5 text-gray-900">

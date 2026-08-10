@@ -5,7 +5,10 @@ import {
   defineSecret,
 } from "firebase-functions/params";
 import { accountDeletionScheduler } from "./accountDeletion/accountDeletionScheduler";
-import { requestAccountDeletion } from "./callable/requestAccountDeletion";
+import {
+  cancelAccountDeletion,
+  requestAccountDeletion,
+} from "./callable/requestAccountDeletion";
 import {
   initializeUserProfile,
 } from "./callable/initializeUserProfile";
@@ -26,15 +29,12 @@ import * as admin from "firebase-admin";
 import {onCall, HttpsError} from "firebase-functions/v2/https";
 import {onSchedule} from "firebase-functions/v2/scheduler"; 
 import {getFirestore} from "firebase-admin/firestore";
-import { createShipdayOrder } from "./orders/createShipdayOrder";
 import { shipdayWebhook } from "./webhooks/shipdayWebhook";
 import { stripeConnectWebhook } from "./webhooks/stripeConnectWebhook";
 import { syncCustomerOrders } from "./delivery/syncCustomerOrders";
 import { syncStoreOrders } from "./delivery/syncStoreOrders";
-import { acceptOrder } from "./orders/acceptOrder";
 import { orderStatusChanged } from "./triggers/orderStatusChanged";
 import { syncShipdayDeliveries } from "./scheduler/syncShipdayDeliveries";
-import { createOrder } from "./orders/createOrder";
 import {
   prepareCheckoutPayment,
 } from "./payment/checkout/prepareCheckoutPayment";
@@ -91,6 +91,8 @@ export {
   decideAdminAccountDeletionRequest,
   getAdminAccountDeletionRequest,
   getAdminAccountDeletionRequests,
+  retryAdminAccountDeletionRequest,
+  reinstateAdminAccountDeletionRequest,
 } from "./callable/adminAccountDeletion";
 export {
   getAdminOrder,
@@ -195,7 +197,6 @@ export {
 export {
   beginCustomerProfileImageUpload,
   deleteCustomerDefaultAddress,
-  deleteCustomerProfileData,
   getCustomerFavoriteStores,
   getCustomerProfile,
   saveCustomerRecentSearch,
@@ -536,8 +537,6 @@ export const cleanupExpiredCarts = onSchedule(
   }
 );
 
-export { createShipdayOrder };
-export { acceptOrder };
 export {
   updateOrderStatus,
 } from "./orders/updateOrderStatus";
@@ -557,7 +556,6 @@ export {
 } from "./triggers/storeCustomerNotifications";
 export { syncShipdayDeliveries };
 export { remindStoreOrders } from "./scheduler/remindStoreOrders";
-export { createOrder };
 export {
   prepareCheckoutPayment,
 };
@@ -581,9 +579,7 @@ export {
   syncShipdayCarriers,
 } from "./scheduler/syncShipdayCarriers";
 export {
-  deleteDriverAccount,
-} from "./callable/deleteDriverAccount";
-export {
+  cancelAccountDeletion,
   requestAccountDeletion,
 };
 export {

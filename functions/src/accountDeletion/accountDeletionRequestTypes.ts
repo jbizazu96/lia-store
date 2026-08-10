@@ -95,6 +95,7 @@ export type AccountDeletionWorkflowStep =
   | "closing_stripe_account"
   | "deleting_firestore"
   | "deleting_authentication"
+  | "verifying_deletion"
   | "completed";
 
 /*
@@ -149,11 +150,21 @@ export interface AccountDeletionWorkflow {
 
   attemptCount: number;
 
+  retryCount?: number;
+
   lastError: string | null;
 
   startedAt: Date | null;
 
   completedAt: Date | null;
+
+  failedAt?: Date | null;
+
+  nextRetryAt?: Date | null;
+
+  leaseExpiresAt?: Date | null;
+
+  leaseToken?: string | null;
 }
 
 /*
@@ -233,7 +244,7 @@ export interface CreateAccountDeletionRequestResult {
   ownerId: string;
 
   status:
-    "pending_review";
+    AccountDeletionRequestStatus;
 
   alreadyPending: boolean;
 }

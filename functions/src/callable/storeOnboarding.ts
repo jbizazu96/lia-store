@@ -168,6 +168,9 @@ async function requireStoreOwner(uid: string) {
   if (user.data()?.accountType !== "store_owner") {
     throw new HttpsError("permission-denied", "Only store owners can manage a store application.");
   }
+  if (["deletion_pending", "deletion_processing"].includes(user.data()?.accountDeletionState)) {
+    throw new HttpsError("failed-precondition", "Store onboarding is unavailable while account deletion is pending.");
+  }
 }
 
 async function ownedStore(uid: string) {

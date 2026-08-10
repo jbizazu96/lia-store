@@ -73,6 +73,9 @@ async function requireCustomer(uid: string) {
       "This account is not authorized to manage a customer profile."
     );
   }
+  if (["deletion_pending", "deletion_processing"].includes(data.accountDeletionState)) {
+    throw new HttpsError("permission-denied", "Your account deletion request is under review. Customer account access is unavailable.");
+  }
 
   if (data.isActive === false) {
     throw new HttpsError(
@@ -469,27 +472,5 @@ export const beginCustomerProfileImageUpload = onCall(
     });
 
     return { imageId, originalPath };
-  }
-);
-
-export const deleteCustomerProfileData = onCall(
-  { region: "us-central1" },
-  async (request) => {
-    if (!request.auth) {
-      throw new HttpsError(
-        "unauthenticated",
-        "Sign in to manage your account.",
-      );
-    }
-
-    /*
-     * Kept only as a safe compatibility boundary for an already deployed
-     * callable name. Account data must be removed exclusively by the
-     * administrator-approved deletion engine.
-     */
-    throw new HttpsError(
-      "failed-precondition",
-      "Account deletion requires administrator approval. Submit a deletion request from your profile.",
-    );
   }
 );

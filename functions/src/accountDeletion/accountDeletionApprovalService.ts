@@ -22,6 +22,7 @@ import {
   FieldValue,
   getFirestore,
 } from "firebase-admin/firestore";
+import {restoreAccountDeletionAccess} from "./accountDeletionAccessService";
 
 export type AccountDeletionDecision =
   | "approved"
@@ -113,8 +114,22 @@ export const accountDeletionApprovalService = {
           "more_information_required";
     }
 
-    await requestRef.update({
-      status: nextStatus,
+    await db.runTransaction(async (transaction) => {
+      const current = await transaction.get(requestRef);
+      const currentRequest = current.data();
+      if (!current.exists ||
+        (currentRequest?.status !== "pending_review" &&
+          currentRequest?.status !== "more_information_required")) {
+        throw new AccountDeletionApprovalError(
+          "Only pending requests may be reviewed.",
+          "invalid-status"
+        );
+      }
+      const userReference = db.collection("users").doc(currentRequest.ownerId);
+      const user = await transaction.get(userReference);
+
+      transaction.update(requestRef, {
+        status: nextStatus,
 
       adminDecision: {
         adminId: input.adminId,
@@ -135,8 +150,19 @@ export const accountDeletionApprovalService = {
             null
           : null,
 
-      updatedAt:
-        FieldValue.serverTimestamp(),
+        updatedAt:
+          FieldValue.serverTimestamp(),
+      });
+      if (user.exists) {
+        transaction.update(userReference, {
+          accountDeletionState: input.decision === "rejected" ?
+            null : "deletion_pending",
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+      }
     });
+    if (input.decision === "rejected" && typeof request?.ownerId === "string") {
+      await restoreAccountDeletionAccess(request.ownerId);
+    }
   },
 };

@@ -89,12 +89,15 @@ export function SecurityModal({onClose}: SecurityModalProps) {
         onClose();
       }, 2000);
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error updating password:", error);
-      
-      if (error.code === "auth/wrong-password") {
+      const code = error && typeof error === "object" && "code" in error
+        ? String(error.code)
+        : "";
+
+      if (code === "auth/wrong-password") {
         setError("Current password is incorrect");
-      } else if (error.code === "auth/too-many-requests") {
+      } else if (code === "auth/too-many-requests") {
         setError("Too many failed attempts. Please try again later.");
       } else {
         setError("Failed to update password. Please try again.");

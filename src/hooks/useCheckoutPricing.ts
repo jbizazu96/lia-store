@@ -111,13 +111,15 @@ export function useCheckoutPricing({
 
   useEffect(() => {
     if (!store || address?.latitude === undefined || address?.longitude === undefined) {
-      setDistanceMiles(0);
-      setIsCalculatingDistance(false);
-      setDistanceError(
-        address
-          ? "Your delivery address needs valid map coordinates. Please update it before checkout."
-          : null
-      );
+      queueMicrotask(() => {
+        setDistanceMiles(0);
+        setIsCalculatingDistance(false);
+        setDistanceError(
+          address
+            ? "Your delivery address needs valid map coordinates. Please update it before checkout."
+            : null
+        );
+      });
       return;
     }
 
@@ -125,11 +127,13 @@ export function useCheckoutPricing({
       latitude: store.latitude,
       longitude: store.longitude,
     })) {
-      setDistanceMiles(0);
-      setIsCalculatingDistance(false);
-      setDistanceError(
-        "This store address is not ready for delivery calculations."
-      );
+      queueMicrotask(() => {
+        setDistanceMiles(0);
+        setIsCalculatingDistance(false);
+        setDistanceError(
+          "This store address is not ready for delivery calculations."
+        );
+      });
       return;
     }
 
@@ -137,17 +141,22 @@ export function useCheckoutPricing({
       latitude: address.latitude,
       longitude: address.longitude,
     })) {
-      setDistanceMiles(0);
-      setIsCalculatingDistance(false);
-      setDistanceError(
-        "Your delivery address needs valid map coordinates. Please update it before checkout."
-      );
+      queueMicrotask(() => {
+        setDistanceMiles(0);
+        setIsCalculatingDistance(false);
+        setDistanceError(
+          "Your delivery address needs valid map coordinates. Please update it before checkout."
+        );
+      });
       return;
     }
 
     let isMounted = true;
-    setIsCalculatingDistance(true);
-    setDistanceError(null);
+    queueMicrotask(() => {
+      if (!isMounted) return;
+      setIsCalculatingDistance(true);
+      setDistanceError(null);
+    });
 
     getStoreDeliveryRoute(
       store.id,

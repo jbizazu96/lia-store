@@ -39,18 +39,19 @@ import { CustomerBottomNavigation } from "@/components/customer/navigation/Custo
 import { useCart } from "@/context/CartContext";
 import { CustomerPageState } from "@/components/customer/ui/CustomerPageState";
 import { CustomerPageSkeleton } from "@/components/customer/ui/CustomerPageSkeleton";
-import {useMarketplacePricingPolicy} from "@/hooks/useMarketplacePricingPolicy";
-import {useOrderDeliveryPolicy} from "@/hooks/useOrderDeliveryPolicy";
+import { useMarketplacePricingPolicy } from "@/hooks/useMarketplacePricingPolicy";
+import { useOrderDeliveryPolicy } from "@/hooks/useOrderDeliveryPolicy";
 import { useCustomerFavoriteStores } from "@/hooks/useCustomerFavoriteStores";
-import { Heart } from "lucide-react";
+import { Heart, ShoppingBag, Sparkles } from "lucide-react";
 import { AddressesModal } from "@/components/customer/profile/AddressesModal";
+import { MarketplaceCategoryNav } from "@/components/customer/home/MarketplaceCategoryNav";
 
 export default function CustomerHomePage() {
   const marketplacePolicy = useMarketplacePricingPolicy();
   const orderDeliveryPolicy = useOrderDeliveryPolicy();
   const router = useRouter();
   const { itemCount, totalPrice } = useCart();
-  const [userName, setUserName] = useState("Guest");
+  const [userName, setUserName] = useState("Customer");
   const [deliveryAddress, setDeliveryAddress] =
     useState<CustomerProfileAddress | null>(null);
   const [userLocation, setUserLocation] = useState<{lat: number; lng: number} | null>(null);
@@ -59,6 +60,7 @@ export default function CustomerHomePage() {
   const [nearbyStores, setNearbyStores] = useState<CustomerStore[]>([]);
   const [farStores, setFarStores] = useState<CustomerStore[]>([]);
   const [storeFilter, setStoreFilter] = useState<"all" | "favorites">("all");
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const endOfListRef = useRef<HTMLDivElement>(null);
   const hasLoadedStoresRef = useRef(false);
@@ -70,13 +72,21 @@ export default function CustomerHomePage() {
   const [showAddresses, setShowAddresses] = useState(false);
   const {
     storeIds: favoriteStoreIds,
-    isFavorite,
     setFavorite,
   } = useCustomerFavoriteStores();
 
   const favoriteStoreIdSet = useMemo(
     () => new Set(favoriteStoreIds),
     [favoriteStoreIds]
+  );
+
+  const storeCategories = useMemo(
+    () => Array.from(new Set(
+      [...nearbyStores, ...farStores]
+        .map((store) => store.category?.trim())
+        .filter((category): category is string => Boolean(category))
+    )).sort((first, second) => first.localeCompare(second)),
+    [farStores, nearbyStores]
   );
 
   const displayedNearbyStores = useMemo(
@@ -86,11 +96,13 @@ export default function CustomerHomePage() {
         isFavorite: favoriteStoreIdSet.has(store.id),
       }))
       .filter((store) =>
-        storeFilter === "all" || store.isFavorite
+        (storeFilter === "all" || store.isFavorite) &&
+        (selectedCategory === null || store.category === selectedCategory)
       ),
     [
       favoriteStoreIdSet,
       nearbyStores,
+      selectedCategory,
       storeFilter,
     ]
   );
@@ -102,11 +114,13 @@ export default function CustomerHomePage() {
         isFavorite: favoriteStoreIdSet.has(store.id),
       }))
       .filter((store) =>
-        storeFilter === "all" || store.isFavorite
+        (storeFilter === "all" || store.isFavorite) &&
+        (selectedCategory === null || store.category === selectedCategory)
       ),
     [
       favoriteStoreIdSet,
       farStores,
+      selectedCategory,
       storeFilter,
     ]
   );
@@ -121,7 +135,9 @@ export default function CustomerHomePage() {
 
       try {
         const profile = await customerProfileClientService.getProfile();
-        setUserName(profile.displayName || user.email?.split("@")[0] || "Customer");
+        setUserName(
+          profile.displayName || user.email?.split("@")[0] || "Customer"
+        );
         setDeliveryAddress(profile.defaultAddress);
 
         const location = await userService.getDefaultLocation(user.uid);
@@ -362,48 +378,78 @@ export default function CustomerHomePage() {
   }
 
   return (
-    <main className="min-h-screen bg-white pb-28">
+    <main className="min-h-screen bg-white pb-28 text-[#172217]">
       {/* Top Navigation */}
       <TopNavigation
         deliveryAddress={deliveryAddress?.street}
         onDeliveryAddressClick={() => setShowAddresses(true)}
       />
 
-      {/* Welcome Section */}
-      <div className="px-4 pt-4 pb-2">
-        <p className="text-sm text-gray-500">Hello,</p>
-        <h1 className="text-2xl font-bold text-gray-800">{userName}</h1>
-      </div>
+      <section className="mx-auto max-w-2xl px-4 pb-3 pt-4">
+        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-orange-50 via-amber-50 to-white px-5 py-5 shadow-[0_12px_35px_rgba(249,115,22,0.08)]">
+          <div className="pointer-events-none absolute -right-8 -top-10 h-28 w-28 rounded-full bg-orange-200/35" />
+          <div className="pointer-events-none absolute -bottom-12 right-16 h-24 w-24 rounded-full bg-amber-100/70" />
 
-      {/* Sticky global search remains in its original place below welcome. */}
-      <div className="sticky top-[65px] z-30 mt-2 bg-white/95 px-4 py-2 backdrop-blur-sm">
-        <SearchBar
-          onOpen={() => router.push("/search")}
-          placeholder="Search stores and products"
-        />
+          <div className="relative flex items-center gap-4">
+            <div className="min-w-0 flex-1">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-white/80 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-orange-700 shadow-sm">
+                <Sparkles className="h-3 w-3" />
+                Welcome back
+              </span>
+              <h1 className="mt-2 truncate text-xl font-extrabold tracking-tight text-slate-950">
+                {userName}
+              </h1>
+              <p className="mt-1 text-sm font-medium text-slate-600">
+                Your neighborhood favorites are ready.
+              </p>
+            </div>
+
+            <div className="relative flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-orange-500 text-white shadow-[0_10px_24px_rgba(249,115,22,0.28)]">
+              <ShoppingBag className="h-7 w-7" strokeWidth={2.1} />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <MarketplaceCategoryNav
+        categories={storeCategories}
+        selectedCategory={selectedCategory}
+        onSelect={setSelectedCategory}
+      />
+
+      <div className="sticky top-[65px] z-30 border-b border-black/[0.03] bg-white/90 px-4 py-2.5 backdrop-blur-xl">
+        <div className="mx-auto max-w-2xl">
+          <SearchBar
+            onOpen={() => router.push("/search")}
+            placeholder="What are you shopping for?"
+          />
+        </div>
       </div>
 
       {/* Promo Carousel */}
-      <div className="px-4 mt-4">
+      <div className="mx-auto mt-4 max-w-2xl px-4">
         <PromoCarousel />
       </div>
 
       {distanceError && (
-        <div className="mx-4 mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+        <div className="mx-auto mt-4 max-w-[640px] rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900">
           {distanceError}
         </div>
       )}
 
       {/* Store List */}
-      <section className="px-4 mt-6">
-        <div className="mb-4 flex items-center justify-between gap-3">
+      <section className="mx-auto mt-7 max-w-2xl px-4">
+        <div className="mb-5 flex items-end justify-between gap-3">
           <div>
-            <h2 className="text-lg font-bold text-gray-800">
+            <p className="mb-1 text-[11px] font-extrabold uppercase tracking-[0.15em] text-orange-600">Shop local</p>
+            <h2 className="text-2xl font-black tracking-[-0.025em] text-[#172217]">
               {storeFilter === "favorites"
                 ? "Saved stores"
-                : "Stores Near You"}
+                : selectedCategory
+                  ? `${selectedCategory.replaceAll("_", " ")} stores`
+                  : "Stores near you"}
             </h2>
-            <p className="text-sm text-gray-500">
+            <p className="mt-1 text-sm font-medium text-slate-500">
               {storeFilter === "favorites"
                 ? `${displayedNearbyStores.length + displayedFarStores.length} saved`
                 : `${nearbyStores.length + farStores.length} stores`}
@@ -416,10 +462,10 @@ export default function CustomerHomePage() {
               current === "all" ? "favorites" : "all"
             )}
             className={
-              "inline-flex items-center gap-1.5 rounded-full border px-3 py-2 text-sm font-bold transition " +
+              "inline-flex items-center gap-1.5 rounded-xl border px-3 py-2.5 text-sm font-bold shadow-sm transition " +
               (storeFilter === "favorites"
-                ? "border-orange-400 text-orange-600"
-                : "border-gray-200 bg-white/60 text-gray-700 hover:border-orange-200")
+                ? "border-orange-300 bg-orange-50 text-orange-700"
+                : "border-black/[0.06] bg-white text-slate-700 hover:border-orange-200")
             }
           >
             <Heart className={
@@ -449,8 +495,9 @@ export default function CustomerHomePage() {
           />
         ) : (
           <>
-            <AnimatePresence mode="popLayout">
-              {displayedNearbyStores.map((store, index) => (
+            <div className="grid gap-8">
+              <AnimatePresence mode="popLayout">
+                {displayedNearbyStores.map((store, index) => (
                 <motion.div
                   key={store.id}
                   initial={{ opacity: 0, y: 20 }}
@@ -462,10 +509,12 @@ export default function CustomerHomePage() {
                     store={store}
                     onClick={() => handleStoreClick(store)}
                     onFavoriteChange={setFavorite}
+                    priority={index === 0}
                   />
                 </motion.div>
-              ))}
-            </AnimatePresence>
+                ))}
+              </AnimatePresence>
+            </div>
 
             {/* Divider between nearby and far stores */}
             {displayedFarStores.length > 0 && (
@@ -489,7 +538,7 @@ export default function CustomerHomePage() {
 
             {/* Far Stores Section */}
             {displayedFarStores.length > 0 && (
-              <div className="space-y-4 mt-2">
+              <div className="mt-2 grid gap-8">
                 {displayedFarStores.map((store, index) => (
                   <motion.div
                     key={store.id}
@@ -499,8 +548,9 @@ export default function CustomerHomePage() {
                   >
                     <StoreCard
                       store={store}
-                    onClick={() => handleStoreClick(store)}
-                    onFavoriteChange={setFavorite}
+                      onClick={() => handleStoreClick(store)}
+                      onFavoriteChange={setFavorite}
+                      priority={displayedNearbyStores.length === 0 && index === 0}
                     />
                   </motion.div>
                 ))}
@@ -512,7 +562,7 @@ export default function CustomerHomePage() {
               <div ref={endOfListRef} className="mt-10 text-center">
                 <div className="flex items-center gap-3 justify-center">
                   <div className="flex-1 max-w-12 h-px bg-gray-200" />
-                  <span className="text-xs text-gray-400">— You've reached the end —</span>
+                  <span className="text-xs text-gray-400">— You&apos;ve reached the end —</span>
                   <div className="flex-1 max-w-12 h-px bg-gray-200" />
                 </div>
                 <p className="text-xs text-gray-300 mt-2">

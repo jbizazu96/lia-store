@@ -15,6 +15,7 @@ import {
 import {
   httpsCallable,
 } from "firebase/functions";
+import {signOut} from "firebase/auth";
 import {
   auth,
   functions,
@@ -48,6 +49,9 @@ export function DangerSection() {
         reasonCode: "no_longer_needed",
         reasonDetails: null,
       });
+
+      await signOut(auth);
+      window.location.assign("/login?accountDeletion=review");
 
       setShowDeleteModal(false);
       setError(

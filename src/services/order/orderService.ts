@@ -5,7 +5,6 @@
 |
 | Responsible for:
 |
-| • Creating orders through Firebase Functions
 | • Retrieving orders from Firestore
 | • Updating order statuses
 | • Triggering the Shipday workflow at the correct status
@@ -32,60 +31,7 @@ import { mapFirestoreOrder } from "@/mappers/orderMapper";
 
 const functions = getFunctions();
 
-/**
- * Expected response from the createOrder Firebase Function.
- */
-interface CreateOrderResponse {
-  success: boolean;
-  orderId: string;
-}
-
-/**
- * Expected response from workflow Firebase Functions.
- */
-interface WorkflowResponse {
-  success: boolean;
-  message?: string;
-}
-
 export class OrderService {
-  /**
-   * Create a new order through the backend.
-   *
-   * The backend is responsible for:
-   *
-   * • Generating the Firestore document
-   * • Generating the order number
-   * • Applying server timestamps
-   * • Validating the order payload
-   */
-  async createOrder(
-    order: Order
-  ): Promise<string> {
-    const createOrderFunction = httpsCallable<
-      { order: Order },
-      CreateOrderResponse
-    >(
-      functions,
-      "createOrder"
-    );
-
-    const response = await createOrderFunction({
-      order,
-    });
-
-    if (
-      !response.data.success ||
-      !response.data.orderId
-    ) {
-      throw new Error(
-        "The order could not be created."
-      );
-    }
-
-    return response.data.orderId;
-  }
-
   /**
    * Retrieve one order by its Firestore document ID.
    */
@@ -169,21 +115,6 @@ export class OrderService {
     );
   }
 
-  /**
-   * Accept an order.
-   *
-   * Accepting an order does not create the Shipday delivery.
-   * The delivery is created later when the status becomes
-   * ready_for_pickup.
-   */
-  async acceptOrder(
-    orderId: string
-  ): Promise<void> {
-    await this.updateStatus(
-      orderId,
-      "accepted"
-    );
-  }
 }
 
 /**

@@ -11,9 +11,9 @@
 | drivers/{driverId}/images/optimized/{field}/{imageId}.webp
 |
 | Instead of deleting individual files from Firestore metadata, this service
-| deletes everything beneath:
+| deletes everything beneath the driver's owner prefix:
 |
-| drivers/{driverId}/images/
+| drivers/{driverId}/
 |
 | This protects us from leaving orphaned images when:
 |
@@ -134,7 +134,7 @@ export const driverStorageDeletionService = {
       requireDriverId(driverIdInput);
 
     const prefix =
-      `drivers/${driverId}/images/`;
+      `drivers/${driverId}/`;
 
     const bucket =
       getStorage().bucket();

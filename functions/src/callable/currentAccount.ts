@@ -66,6 +66,14 @@ export const getCurrentAccount = onCall(
       );
     }
 
+    if (["deletion_pending", "deletion_processing"]
+      .includes(user.data()?.accountDeletionState)) {
+      throw new HttpsError(
+        "permission-denied",
+        "Your account deletion request is under review. Account access is unavailable unless the request is rejected or reinstated."
+      );
+    }
+
     if (user.data()?.isActive === false) {
       throw new HttpsError(
         "permission-denied",

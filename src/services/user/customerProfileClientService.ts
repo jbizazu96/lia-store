@@ -188,7 +188,7 @@ export const customerProfileClientService = {
    */
   async requestAccountDeletion(): Promise<{
     requestId: string;
-    status: "pending_review";
+    status: string;
     alreadyPending: boolean;
   }> {
     return call(
@@ -199,5 +199,9 @@ export const customerProfileClientService = {
         reasonDetails: null,
       },
     );
+  },
+
+  async cancelAccountDeletion(requestId: string): Promise<void> {
+    await call("cancelAccountDeletion", {requestId});
   },
 };

@@ -11,7 +11,7 @@ import {
 } from "@/utils/orderDisplay";
 import { useCustomerOrders } from "@/hooks/useCustomerOrders";
 import { useRouter } from "next/navigation";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import {
   Package,
   Clock,
@@ -22,6 +22,7 @@ import {
   MapPin,
 } from "lucide-react";
 import Link from "next/link";
+import Image from "next/image";
 import { CustomerBottomNavigation } from "@/components/customer/navigation/CustomerBottomNavigation";
 import { CustomerPageState } from "@/components/customer/ui/CustomerPageState";
 
@@ -92,9 +93,11 @@ export default function OrdersPage() {
 
             {/* Central Logo Image */}
             <div className="relative w-16 h-16 z-10 bg-white/80 backdrop-blur-md rounded-full border-2 border-yellow-400/50 shadow-[0_0_30px_rgba(234,179,8,0.15)] flex items-center justify-center overflow-hidden">
-              <img 
+              <Image
                 src="/icon/icon-192.png" 
                 alt="LIA Logo" 
+                width={48}
+                height={48}
                 className="w-12 h-12 object-contain" 
               />
             </div>
@@ -169,13 +172,27 @@ export default function OrdersPage() {
       </div>
 
       <div className="max-w-2xl mx-auto px-4 py-5">
+        <section className="relative mb-5 overflow-hidden rounded-2xl bg-gradient-to-br from-orange-50 via-amber-50 to-white px-4 py-3.5 shadow-[0_10px_28px_rgba(249,115,22,0.07)]">
+          <div className="pointer-events-none absolute -right-6 -top-8 h-20 w-20 rounded-full bg-orange-200/35" />
+          <div className="relative flex items-center gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-orange-500 text-white shadow-sm">
+              <Package className="h-5 w-5" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <h2 className="text-sm font-extrabold text-gray-900">Your orders</h2>
+              <p className="mt-0.5 text-xs font-medium text-gray-500">
+                Track deliveries and review previous purchases.
+              </p>
+            </div>
+            <span className="relative rounded-full bg-white/85 px-2.5 py-1 text-xs font-extrabold text-orange-700 shadow-sm">
+              {orders.length}
+            </span>
+          </div>
+        </section>
+
         {orders.length === 0 ? (
           // Beautiful Empty State
-          <motion.div
-            initial={{opacity: 0, y: 20}}
-            animate={{opacity: 1, y: 0}}
-            className="text-center py-16"
-          >
+          <div className="text-center py-16">
             {/* Empty State Illustration */}
             <div className="relative w-48 h-48 mx-auto mb-8">
               <div className="absolute inset-0 bg-orange-100 rounded-full opacity-20 scale-150" />
@@ -223,12 +240,11 @@ export default function OrdersPage() {
                 <span>Track your order in real-time</span>
               </div>
             </div>
-          </motion.div>
+          </div>
         ) : (
           // Orders List
           <div className="space-y-3">
-            <AnimatePresence mode="popLayout">
-              {orders.map((order, index) => {
+              {orders.map((order) => {
                 const statusConfig =
                   order.status in ORDER_STATUS_CONFIG
                     ? ORDER_STATUS_CONFIG[
@@ -239,12 +255,8 @@ export default function OrdersPage() {
                 const StatusIcon = statusConfig.icon;
 
                 return (
-                <motion.div
+                <div
                   key={order.id}
-                  initial={{opacity: 0, y: 20}}
-                  animate={{opacity: 1, y: 0}}
-                  exit={{opacity: 0, x: -20}}
-                  transition={{delay: index * 0.05}}
                   role="link"
                   tabIndex={0}
                   aria-label={`View details for order ${order.orderNumber || "Unavailable"}`}
@@ -316,10 +328,9 @@ export default function OrdersPage() {
                       </div>
                     )}
                   </div>
-                </motion.div>
+                </div>
                );
               })}
-            </AnimatePresence>
             {hasMore && (
               <div className="pt-3 text-center">
                 <button

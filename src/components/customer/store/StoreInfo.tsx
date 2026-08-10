@@ -10,14 +10,18 @@
 import {
   getStoreStatus,
 } from "@/services/store/storeSchedule";
+import {useState} from "react";
+import Image from "next/image";
 import { motion } from "framer-motion";
-import { Clock, MapPin, Truck, Star, ChevronRight, AlertCircle } from "lucide-react";
+import {ChevronRight, Star} from "lucide-react";
 import {
   formatDistance,
   getEstimatedTime,
 } from "@/services/delivery/distance";
 import {useMarketplacePricingPolicy} from "@/hooks/useMarketplacePricingPolicy";
 import {useOrderDeliveryPolicy} from "@/hooks/useOrderDeliveryPolicy";
+import {PricingFeesModal} from "./PricingFeesModal";
+import type {StoreImageVariants} from "@/types/store";
 
 interface ScheduleDay {
   day: string;
@@ -28,6 +32,9 @@ interface ScheduleDay {
 
 interface StoreInfoProps {
   name: string;
+  address: string;
+  logoUrl: string;
+  logoImageVariants?: StoreImageVariants;
   isOpen: boolean;
   distance: number;
   deliveryFee: number;
@@ -41,6 +48,9 @@ interface StoreInfoProps {
 
 export function StoreInfo({
   name,
+  address,
+  logoUrl,
+  logoImageVariants,
   isOpen: fallbackIsOpen,
   distance,
   deliveryFee,
@@ -52,12 +62,7 @@ export function StoreInfo({
 }: StoreInfoProps) {
   const marketplacePolicy = useMarketplacePricingPolicy();
   const orderDeliveryPolicy = useOrderDeliveryPolicy();
-  // Debug: Log schedule data
-  console.log("StoreInfo - schedule received:", schedule);
-  console.log("StoreInfo - schedule type:", typeof schedule);
-  console.log("StoreInfo - is array:", Array.isArray(schedule));
-  console.log("StoreInfo - length:", schedule?.length);
-
+  const [showPricingFees, setShowPricingFees] = useState(false);
   // Use the shared formatting functions
   const formattedDistance = formatDistance(distance);
   
@@ -83,83 +88,82 @@ export function StoreInfo({
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="relative z-10 mx-auto mt-12 w-[95%] rounded-2xl border border-gray-100 bg-white p-4 shadow-lg"
+      className="relative z-10 mx-auto max-w-2xl px-5 pb-1 pt-5"
     >
-      {/* Store Name & Rating */}
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-xl font-bold text-gray-800">{name}</h1>
+      <div className="flex items-center gap-3">
+        <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-full border border-slate-100 bg-white shadow-sm">
+          {logoUrl ? (
+            <Image
+              src={logoImageVariants?.small || logoImageVariants?.medium || logoUrl}
+              alt={`${name} logo`}
+              fill
+              sizes="44px"
+              className="object-cover"
+            />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center bg-orange-50 text-lg font-black text-orange-600">
+              {name.charAt(0)}
+            </div>
+          )}
+        </div>
+        <div className="min-w-0 flex-1">
+          <h1 className="truncate text-base font-black tracking-[-0.015em] text-slate-950">{name}</h1>
           {reviewCount > 0 && (
-            <div className="flex items-center gap-2 mt-1">
+            <div className="mt-0.5 flex items-center gap-1.5">
               <div className="flex items-center gap-0.5">
-                <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                <span className="text-sm font-medium text-gray-700">{rating.toFixed(1)}</span>
+                <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                <span className="text-xs font-bold text-gray-700">{rating.toFixed(1)}</span>
               </div>
-              <span className="text-xs text-gray-400">•</span>
-              <span className="text-sm text-gray-500">{reviewCount} {reviewCount === 1 ? "review" : "reviews"}</span>
             </div>
           )}
         </div>
         <button
-            type="button"
-            onClick={onViewMore}
-            className="flex items-center gap-1 rounded-full bg-orange-500 px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:bg-orange-600 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
-          >
-            View More
-            <ChevronRight className="w-4 h-4" />
-          </button>
+          type="button"
+          onClick={onViewMore}
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-900 transition hover:bg-slate-200"
+          aria-label="View store information"
+        >
+          <ChevronRight className="h-5 w-5" />
+        </button>
       </div>
 
-      {/* Open/Close Status */}
-      <div className="flex items-center gap-2 mt-3">
-        <div className={`w-2 h-2 rounded-full ${status.statusColor}`} />
-        <span className={`text-sm font-medium ${status.textColor}`}>
-          {status.statusText}
+      <button
+        type="button"
+        onClick={onViewMore}
+        className="mt-4 block max-w-full text-left text-xs font-medium text-slate-600"
+      >
+        <span>{formattedDistance}</span>
+        {address && <><span> · </span><span>{address}</span></>}
+      </button>
+
+      <div className="mt-1.5 flex items-end justify-between gap-4">
+        <div className="space-y-1 text-xs font-medium text-slate-600">
+          <p>{formattedTime}</p>
+          <p>{isWithinDeliveryRadius ? `${deliveryFeeDisplay} delivery fee` : "Delivery unavailable"}</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setShowPricingFees(true)}
+          className="shrink-0 text-xs font-semibold text-slate-600 underline decoration-1 underline-offset-4 transition hover:text-orange-600"
+        >
+          Pricing &amp; Fees
+        </button>
+      </div>
+
+      <div className="mt-4 flex flex-wrap items-center gap-2 text-[11px] font-semibold text-slate-500">
+        <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 ${status.isOpen ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>
+          <span className={`h-2 w-2 rounded-full ${status.statusColor}`} />
+          {status.statusText}{status.message ? ` · ${status.message}` : ""}
         </span>
-        {!status.isScheduleSet && (
-          <span className="text-xs text-gray-400 flex items-center gap-1">
-            <AlertCircle className="w-3 h-3" />
-            No schedule set
-          </span>
-        )}
-        {status.isScheduleSet && status.closingTime && (
-          <span className="text-xs text-gray-400">
-            • {status.message}
-          </span>
-        )}
-        {status.isScheduleSet && !status.isOpen && status.message && (
-          <span className="text-xs text-gray-400">
-            • {status.message}
-          </span>
-        )}
+        <span>Minimum order ${displayedMinimumOrder.toFixed(2)}</span>
       </div>
 
-      {/* Delivery Info - Using the same formatting as home page */}
-      <div className="flex flex-wrap items-center gap-4 mt-3 pt-3 border-t border-gray-100">
-        <div className="flex items-center gap-1.5 text-sm text-gray-600">
-          <MapPin className="w-4 h-4 text-gray-400" />
-          <span>{formattedDistance} away</span>
-        </div>
-        <div className="flex items-center gap-1.5 text-sm text-gray-600">
-          <Truck className="w-4 h-4 text-gray-400" />
-          <span className={isWithinDeliveryRadius ? undefined : "font-medium text-red-600"}>
-            {isWithinDeliveryRadius
-              ? `Delivery: ${deliveryFeeDisplay}`
-              : "Delivery unavailable"}
-          </span>
-        </div>
-        {isWithinDeliveryRadius && (
-          <div className="flex items-center gap-1.5 text-sm text-gray-600">
-            <Clock className="w-4 h-4 text-gray-400" />
-            <span>{formattedTime}</span>
-          </div>
-        )}
-      </div>
-
-      {/* Minimum Order */}
-      <div className="mt-2 text-xs text-gray-400">
-        Minimum order: ${displayedMinimumOrder.toFixed(2)}
-      </div>
+      <PricingFeesModal
+        open={showPricingFees}
+        onClose={() => setShowPricingFees(false)}
+        deliveryFee={deliveryFee}
+        policy={marketplacePolicy}
+      />
     </motion.div>
   );
 }

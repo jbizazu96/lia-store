@@ -48,6 +48,7 @@ import {
   isShipdayFulfillmentError,
   shipdayFulfillmentService,
 } from "./shipdayFulfillmentService";
+import {requireAccountOperational} from "../accountDeletion/accountDeletionAccessService";
 
 
 /*
@@ -376,6 +377,10 @@ export const updateOrderStatus =
           "invalid-argument",
           "The requested order status is invalid."
         );
+      }
+
+      if (requestedStatus === "accepted") {
+        await requireAccountOperational(request.auth.uid);
       }
 
       const cancellationReason =

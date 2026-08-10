@@ -73,31 +73,36 @@ export function AddressesModal({
     onClose();
   }
 
-  // Fetch address on mount
+  // Fetch the current address once when the modal mounts.
   useEffect(() => {
-    void fetchAddress();
-  }, []);
+    let active = true;
 
-  async function fetchAddress() {
-    try {
-      setLoading(true);
-      const profile = await customerProfileClientService.getProfile();
-      const savedAddress = profile.defaultAddress;
+    void customerProfileClientService.getProfile()
+      .then((profile) => {
+        if (!active) return;
+        const savedAddress = profile.defaultAddress;
 
-      setAddress(savedAddress);
-      setFormData({
-        street: savedAddress?.street ?? "",
-        city: savedAddress?.city ?? "",
-        state: savedAddress?.state ?? "",
-        zip: savedAddress?.zip ?? "",
+        setAddress(savedAddress);
+        setFormData({
+          street: savedAddress?.street ?? "",
+          city: savedAddress?.city ?? "",
+          state: savedAddress?.state ?? "",
+          zip: savedAddress?.zip ?? "",
+        });
+      })
+      .catch((loadError: unknown) => {
+        if (!active) return;
+        console.error("Error fetching address:", loadError);
+        setError("Failed to load address");
+      })
+      .finally(() => {
+        if (active) setLoading(false);
       });
-    } catch (error) {
-      console.error("Error fetching address:", error);
-      setError("Failed to load address");
-    } finally {
-      setLoading(false);
-    }
-  }
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   // Handle submit (add or update)
   async function handleSubmit(e: React.FormEvent) {

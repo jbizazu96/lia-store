@@ -3,7 +3,7 @@
 /*
   React state.
 */
-import {useState} from "react";
+import {useEffect, useState} from "react";
 import {useRouter} from "next/navigation";
 import {motion} from "framer-motion";
 
@@ -55,6 +55,16 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("accountDeletion") === "review") {
+      // Reflect the server-enforced lock after the redirect from submission.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setError(
+        "Your account deletion request is under review. Account access will remain unavailable unless the request is rejected or reinstated."
+      );
+    }
+  }, []);
+
   /*
     Modal states.
   */
@@ -97,7 +107,7 @@ export default function LoginPage() {
       accountType = (await currentAccountClientService.get()).accountType;
     } catch (accountError) {
       if (accountError instanceof CurrentAccountClientError && accountError.status === 403) {
-        setError("Your account profile is incomplete. Please contact support.");
+        setError(accountError.message);
         await signOut(auth);
         return;
       }
@@ -181,18 +191,37 @@ export default function LoginPage() {
   */
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
+    let userCredential;
+
     try {
       setLoading(true);
       setError("");
 
-      const userCredential = await signInWithEmailAndPassword(
+      userCredential = await signInWithEmailAndPassword(
         auth,
         email,
         password
       );
+    } catch (error: unknown) {
+      console.error("Email/password sign in failed:", error);
+      const code = error && typeof error === "object" && "code" in error
+        ? String(error.code)
+        : "";
+      if (code === "auth/user-not-found") {
+        setError("No account found with this email.");
+      } else if (code === "auth/wrong-password") {
+        setError("Invalid password. Please try again.");
+      } else if (code === "auth/too-many-requests") {
+        setError("Too many failed attempts. Please try again later.");
+      } else {
+        setError("Invalid email or password.");
+      }
+      return;
+    }
 
-      const user = userCredential.user;
+    const user = userCredential.user;
 
+    try {
       // Check if email is verified.
       if (!user.emailVerified) {
         await signOut(auth);
@@ -204,17 +233,13 @@ export default function LoginPage() {
       }
 
       await handlePostLogin(user.uid);
-    } catch (error: any) {
-      console.error(error);
-      if (error.code === "auth/user-not-found") {
-        setError("No account found with this email.");
-      } else if (error.code === "auth/wrong-password") {
-        setError("Invalid password. Please try again.");
-      } else if (error.code === "auth/too-many-requests") {
-        setError("Too many failed attempts. Please try again later.");
-      } else {
-        setError("Invalid email or password.");
-      }
+    } catch (error) {
+      console.error("Post-login account setup failed:", error);
+      setError(
+        error instanceof CurrentAccountClientError
+          ? "We couldn't load your account right now. Please try again."
+          : "We couldn't finish signing you in. Please try again."
+      );
     } finally {
       setLoading(false);
     }

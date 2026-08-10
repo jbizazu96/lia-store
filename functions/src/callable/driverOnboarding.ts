@@ -37,6 +37,7 @@ function ownedUser(uid: string, user: FirebaseFirestore.DocumentSnapshot) { if (
 async function driverFor(uid: string, required = true) {
   const [user, driver] = await Promise.all([db.collection("users").doc(uid).get(), db.collection("drivers").doc(uid).get()]);
   ownedUser(uid, user);
+  if (["deletion_pending", "deletion_processing"].includes(user.data()?.accountDeletionState)) throw new HttpsError("failed-precondition", "Driver onboarding is unavailable while account deletion is pending.");
   if (required && (!driver.exists || driver.data()?.ownerUid !== uid)) throw new HttpsError("permission-denied", "You do not own this driver application.");
   return { user, driver };
 }

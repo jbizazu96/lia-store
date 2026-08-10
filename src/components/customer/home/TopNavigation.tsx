@@ -21,8 +21,8 @@ export function TopNavigation({
   const router = useRouter();
 
   return (
-    <header className="sticky top-0 z-40 border-b border-gray-100 bg-white/95 backdrop-blur-xl">
-      <div className="px-4 py-3">
+    <header className="sticky top-0 z-40 border-b border-white/70 bg-white/65 shadow-[inset_0_-1px_0_rgba(255,255,255,0.5),0_8px_24px_-22px_rgba(15,23,42,0.5)] backdrop-blur-[22px] backdrop-saturate-[1.7]">
+      <div className="mx-auto max-w-2xl px-4 py-3">
         <div className="flex items-center justify-between">
           <div className="flex min-w-0 flex-1 items-center gap-2">
             {/* Logo */}
@@ -60,7 +60,7 @@ export function TopNavigation({
             {/* Notifications */}
             <button
               onClick={() => router.push("/notifications")}
-              className="relative w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200 transition"
+              className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-black/[0.05] bg-white shadow-sm transition hover:border-orange-200"
               aria-label="Notifications"
             >
               <Bell className="w-5 h-5 text-gray-600" />
@@ -77,7 +77,7 @@ export function TopNavigation({
             {/* Cart */}
             <Link 
               href="/cart" 
-              className="relative w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200 transition"
+              className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-black/[0.05] bg-white shadow-sm transition hover:border-orange-200"
               aria-label="Cart"
             >
               <ShoppingCart className="w-5 h-5 text-gray-600" />

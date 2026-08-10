@@ -251,10 +251,12 @@ export const adminWorkspaceClientService = {
 
   getAccountDeletionRequests: (
     status: AdminAccountDeletionStatus = "pending_review",
+    cursor?: string,
   ) => call<{
     requests: AdminAccountDeletionRequestListItem[];
     counts: AdminAccountDeletionRequestCounts;
-  }>("getAdminAccountDeletionRequests", {status}),
+    nextCursor: string | null;
+  }>("getAdminAccountDeletionRequests", {status, ...(cursor ? {cursor} : {})}),
 
   getAccountDeletionRequest: (requestId: string) =>
     call<AdminAccountDeletionRequestDetail>(
@@ -271,6 +273,12 @@ export const adminWorkspaceClientService = {
     success: boolean;
     scheduledDeletionAt: string | null;
   }>("decideAdminAccountDeletionRequest", input),
+
+  retryAccountDeletionRequest: (requestId: string) =>
+    call<{success: boolean}>("retryAdminAccountDeletionRequest", {requestId}),
+
+  reinstateAccountDeletionRequest: (requestId: string) =>
+    call<{success: boolean}>("reinstateAdminAccountDeletionRequest", {requestId}),
 
   getOrders: (input?: {status?: string; exception?: string}) =>
     call<{orders: AdminOrderListItem[]}>("getAdminOrders", input),

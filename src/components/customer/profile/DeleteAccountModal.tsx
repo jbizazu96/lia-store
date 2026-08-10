@@ -3,7 +3,13 @@
 import {useState} from "react";
 import {motion} from "framer-motion";
 import {X, Trash2} from "lucide-react";
-import {reauthenticateWithCredential, EmailAuthProvider} from "firebase/auth";
+import {
+  reauthenticateWithCredential,
+  reauthenticateWithPopup,
+  EmailAuthProvider,
+  GoogleAuthProvider,
+  signOut,
+} from "firebase/auth";
 import {auth} from "@/lib/firebase";
 import {
   customerProfileClientService,
@@ -18,6 +24,10 @@ export function DeleteAccountModal({onClose}: DeleteAccountModalProps) {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [requestId, setRequestId] = useState("");
+  const usesPasswordProvider = auth.currentUser?.providerData.some(
+    (provider) => provider.providerId === "password"
+  ) ?? true;
 
   async function handleDeleteAccount() {
     try {
@@ -29,32 +39,56 @@ export function DeleteAccountModal({onClose}: DeleteAccountModalProps) {
         throw new Error("No user logged in");
       }
 
-      const credential = EmailAuthProvider.credential(user.email, password);
-      await reauthenticateWithCredential(user, credential);
+      if (usesPasswordProvider) {
+        const credential = EmailAuthProvider.credential(user.email, password);
+        await reauthenticateWithCredential(user, credential);
+      } else {
+        await reauthenticateWithPopup(user, new GoogleAuthProvider());
+      }
 
       /*
        * Reauthentication proves the customer intentionally submitted this
        * sensitive request. The callable creates an admin-reviewed request;
        * it does not remove the customer profile or Firebase Auth account.
        */
-      await customerProfileClientService
+      const result = await customerProfileClientService
         .requestAccountDeletion();
+      setRequestId(result.requestId);
 
       setPassword("");
       setStep("requested");
+      await signOut(auth);
+      window.location.assign("/login?accountDeletion=review");
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error deleting account:", error);
-      
-      if (error.code === "auth/wrong-password") {
+      const code = error && typeof error === "object" && "code" in error
+        ? String(error.code)
+        : "";
+
+      if (code === "auth/wrong-password") {
         setError("Incorrect password. Please try again.");
-      } else if (error.code === "auth/too-many-requests") {
+      } else if (code === "auth/too-many-requests") {
         setError("Too many failed attempts. Please try again later.");
       } else {
         setError("Unable to submit the deletion request. Please try again.");
       }
       
       setStep("password");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleCancelRequest() {
+    if (!requestId) return;
+    try {
+      setLoading(true);
+      setError("");
+      await customerProfileClientService.cancelAccountDeletion(requestId);
+      onClose();
+    } catch {
+      setError("Unable to cancel the deletion request. Sign in again and try later.");
     } finally {
       setLoading(false);
     }
@@ -95,6 +129,14 @@ export function DeleteAccountModal({onClose}: DeleteAccountModalProps) {
             >
               Close
             </button>
+            <button
+              type="button"
+              disabled={loading || !requestId}
+              onClick={() => void handleCancelRequest()}
+              className="mt-3 w-full py-3 text-sm font-semibold text-red-700 disabled:opacity-50"
+            >
+              Cancel deletion request
+            </button>
           </div>
         ) : step === "confirm" ? (
           <div className="text-center">
@@ -127,7 +169,9 @@ export function DeleteAccountModal({onClose}: DeleteAccountModalProps) {
         ) : (
           <div>
             <p className="text-gray-600 text-sm mb-4">
-              Enter your password to confirm account deletion.
+              {usesPasswordProvider
+                ? "Enter your password to confirm account deletion."
+                : "Continue with Google to confirm account deletion."}
             </p>
 
             {error && (
@@ -136,15 +180,17 @@ export function DeleteAccountModal({onClose}: DeleteAccountModalProps) {
               </div>
             )}
 
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Enter your password"
-              className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-red-500 mb-4"
-              disabled={loading}
-              aria-label="Enter your password to confirm"
-            />
+            {usesPasswordProvider && (
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Enter your password"
+                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-red-500 mb-4"
+                disabled={loading}
+                aria-label="Enter your password to confirm"
+              />
+            )}
 
             <div className="flex gap-3">
               <button
@@ -157,14 +203,14 @@ export function DeleteAccountModal({onClose}: DeleteAccountModalProps) {
               </button>
               <button
                 onClick={handleDeleteAccount}
-                disabled={loading || !password}
+                disabled={loading || (usesPasswordProvider && !password)}
                 className="flex-1 py-3 bg-red-600 text-white rounded-xl font-semibold hover:bg-red-700 transition disabled:opacity-50"
                 aria-label="Permanently delete account"
               >
                 {loading ? (
                   <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mx-auto" />
                 ) : (
-                  "Delete Forever"
+                  usesPasswordProvider ? "Delete Forever" : "Continue with Google"
                 )}
               </button>
             </div>

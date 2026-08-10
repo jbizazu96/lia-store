@@ -18,6 +18,12 @@ export interface StoreOwnerProfile {
   formattedAddress?: string;
   photoIdUrl?: string;
 }
+export interface StoreImageVariants {
+  thumbnail?: string;
+  small?: string;
+  medium?: string;
+  large?: string;
+}
 export interface Store {
   id: string;
   ownerId: string;
@@ -36,6 +42,8 @@ export interface Store {
   formattedAddress: string;
   logoUrl: string;
   bannerUrl: string;
+  logoImageVariants?: StoreImageVariants;
+  bannerImageVariants?: StoreImageVariants;
   category?: string;
   rating?: number;
   reviewCount?: number;

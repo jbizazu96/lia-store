@@ -89,6 +89,7 @@ interface ProductCardProps {
    * cards that fill each column of their two-column grid.
    */
   layout?: "carousel" | "grid";
+  priority?: boolean;
 }
 
 /*
@@ -178,6 +179,7 @@ export function ProductCard({
   onQuantityChange,
   quantity,
   layout = "carousel",
+  priority = false,
 }: ProductCardProps) {
   const router =
     useRouter();
@@ -410,7 +412,7 @@ export function ProductCard({
 
         <div
           className={[
-            "relative w-full overflow-hidden rounded-2xl bg-gray-100",
+            "relative w-full overflow-hidden rounded-2xl bg-gray-50",
             isGridLayout ? "aspect-square" : "h-[104px]",
           ].join(" ")}
         >
@@ -431,7 +433,7 @@ export function ProductCard({
               fill
               sizes={
                 isGridLayout
-                  ? "(max-width: 640px) 50vw, 260px"
+                  ? "(max-width: 640px) calc(50vw - 24px), 260px"
                   : "(max-width: 640px) 135px, 148px"
               }
               className={`scale-[1.15] object-contain p-2 ${
@@ -439,6 +441,7 @@ export function ProductCard({
                   ? "grayscale"
                   : ""
               }`}
+              priority={priority}
             />
           ) : (
             <div className="flex h-full w-full items-center justify-center">

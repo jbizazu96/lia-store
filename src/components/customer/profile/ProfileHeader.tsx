@@ -1,6 +1,5 @@
 "use client";
 
-import {motion} from "framer-motion";
 import {
   Camera,
   User,
@@ -8,6 +7,7 @@ import {
 import {
   useRef,
 } from "react";
+import Image from "next/image";
 
 interface ProfileHeaderProps {
   displayName: string;
@@ -28,21 +28,19 @@ export function ProfileHeader({
 
   return (
     <div className="px-4 pb-5 pt-3">
-      <motion.div 
-        initial={{opacity: 0, y: -20}}
-        animate={{opacity: 1, y: 0}}
-        className="relative mx-auto max-w-lg overflow-hidden rounded-[28px] border border-orange-200/70 bg-gradient-to-br from-orange-100 via-amber-50 to-emerald-50 p-5 shadow-[0_18px_45px_rgba(249,115,22,0.12)]"
-      >
-        <div className="pointer-events-none absolute -right-12 -top-16 h-40 w-40 rounded-full bg-orange-300/25 blur-2xl" />
-        <div className="pointer-events-none absolute -bottom-20 left-16 h-36 w-36 rounded-full bg-emerald-300/20 blur-2xl" />
+      <div className="relative mx-auto max-w-lg overflow-hidden rounded-3xl bg-gradient-to-br from-orange-50 via-amber-50 to-white p-5 shadow-[0_12px_35px_rgba(249,115,22,0.08)]">
+        <div className="pointer-events-none absolute -right-8 -top-10 h-28 w-28 rounded-full bg-orange-200/35" />
+        <div className="pointer-events-none absolute -bottom-12 right-16 h-24 w-24 rounded-full bg-amber-100/70" />
 
         <div className="relative flex items-center gap-4">
           <div className="relative">
             <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-[30px] border-4 border-white/90 bg-orange-50 shadow-lg">
               {profileImageUrl ? (
-                <img
+                <Image
                   src={profileImageUrl}
                   alt="Your profile"
+                  width={96}
+                  height={96}
                   className="h-full w-full object-cover"
                 />
               ) : (
@@ -92,7 +90,7 @@ export function ProfileHeader({
             </p>
           </div>
         </div>
-      </motion.div>
+      </div>
     </div>
   );
 }

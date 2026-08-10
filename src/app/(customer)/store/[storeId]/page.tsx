@@ -20,6 +20,7 @@
 
 import {
   use,
+  useMemo,
   useState,
 } from "react";
 
@@ -27,6 +28,7 @@ import {
   useRouter,
   useSearchParams,
 } from "next/navigation";
+import Image from "next/image";
 
 import {
   AnimatePresence,
@@ -157,8 +159,15 @@ export default function StorePage({
   const storeTotalPrice =
     getStoreTotalPrice(storeId);
 
+  const sortedCategories = useMemo(
+    () => [...categories].sort((first, second) =>
+      first.name.localeCompare(second.name, undefined, {sensitivity: "base"})
+    ),
+    [categories]
+  );
+
   const hasFreshCategories =
-    categories.some((category) =>
+    sortedCategories.some((category) =>
       [
         "produce",
         "meat",
@@ -366,9 +375,11 @@ export default function StorePage({
             </motion.div>
 
             <div className="relative z-10 flex h-16 w-16 items-center justify-center overflow-hidden rounded-full border-2 border-yellow-400/50 bg-white/80 shadow-[0_0_30px_rgba(234,179,8,0.15)] backdrop-blur-md">
-              <img
+              <Image
                 src="/icon/icon-192.png"
                 alt="LIA Store"
+                width={48}
+                height={48}
                 className="h-12 w-12 object-contain"
               />
             </div>
@@ -450,13 +461,11 @@ export default function StorePage({
   */
 
   return (
-    <main className="min-h-screen bg-white pb-20">
+    <main className="min-h-screen bg-white pb-28 text-[#172217]">
       <StoreHeader
         bannerUrl={store.bannerUrl}
-        logoUrl={store.logoUrl}
+        bannerImageVariants={store.bannerImageVariants}
         name={store.name}
-        rating={store.rating ?? 0}
-        reviewCount={store.reviewCount}
         isFavorite={isFavorite(store.id)}
         onBack={() =>
           router.push("/home")
@@ -467,6 +476,9 @@ export default function StorePage({
 
       <StoreInfo
           name={store.name}
+          address={store.address}
+          logoUrl={store.logoUrl}
+          logoImageVariants={store.logoImageVariants}
           isOpen={store.isOpen}
           distance={store.distance}
           deliveryFee={store.deliveryFee}
@@ -484,7 +496,7 @@ export default function StorePage({
         />
 
       {store.promotions.length > 0 && (
-        <div className="mt-4 px-4">
+        <div className="mx-auto mt-5 max-w-2xl px-4">
           <PromoBanner
             promotions={
               store.promotions
@@ -493,10 +505,10 @@ export default function StorePage({
         </div>
       )}
 
-      {categories.length > 0 && (
-        <div className="mt-4 px-4">
+      {sortedCategories.length > 0 && (
+        <div className="mx-auto mt-5 max-w-2xl px-4">
           {hasFreshCategories && (
-            <div className="mb-4 flex items-center gap-2.5 rounded-2xl bg-emerald-50 px-3.5 py-3 text-sm font-semibold text-emerald-900">
+            <div className="mb-5 flex items-center gap-2.5 rounded-2xl border border-emerald-100 bg-emerald-50/70 px-4 py-3.5 text-sm font-semibold text-emerald-900">
               <CircleCheckBig className="h-5 w-5 shrink-0 text-emerald-600" />
               <span className="flex-1">
                 Freshness guaranteed or your money back
@@ -508,8 +520,17 @@ export default function StorePage({
             </div>
           )}
 
+          <div className="mb-3">
+            <p className="text-[11px] font-extrabold uppercase tracking-[0.15em] text-orange-600">
+              Shop by category
+            </p>
+            <h2 className="mt-1 text-2xl font-black tracking-[-0.025em] text-[#172217]">
+              Browse the aisles
+            </h2>
+          </div>
+
           <CategoryScroll
-            categories={categories}
+            categories={sortedCategories}
             onCategoryClick={(categoryId) =>
               router.push(
                 "/store/" +
@@ -529,7 +550,7 @@ export default function StorePage({
         </div>
       )}
 
-      {categories.map((category) => (
+      {sortedCategories.map((category, categoryIndex) => (
           <ProductSection
             key={category.id}
             category={category}
@@ -551,6 +572,7 @@ export default function StorePage({
                   encodeURIComponent(category.id)
               )
             }
+            preloadFirstImage={categoryIndex === 0}
           />
         ))}
 
@@ -564,7 +586,6 @@ export default function StorePage({
         }
         itemCount={storeItemCount}
         totalPrice={storeTotalPrice}
-        storeId={store.id}
         onCartClick={() =>
           router.push("/cart")
         }

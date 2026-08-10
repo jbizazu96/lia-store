@@ -1,15 +1,11 @@
 "use client";
 
-/*
-  Store card component with proper spacing and padding.
-*/
-
 import type { CustomerStore } from "@/types/view-models/customerStore";
 import { getStoreStatus } from "@/services/store/storeSchedule";
 import {useState} from "react";
 import Image from "next/image";
 import {motion} from "framer-motion";
-import {Heart, Star, MapPin, Truck, Clock, AlertCircle} from "lucide-react";
+import {Heart, Star, AlertCircle} from "lucide-react";
 import { formatDistance } from "@/services/delivery/distance";
 import {
   formatStoreName,
@@ -23,12 +19,14 @@ interface StoreCardProps {
     storeId: string,
     isFavorite: boolean
   ) => Promise<void>;
+  priority?: boolean;
 }
 
 export function StoreCard({
   store,
   onClick,
   onFavoriteChange,
+  priority = false,
 }: StoreCardProps) {
   const marketplacePolicy = useMarketplacePricingPolicy();
   const [isSavingFavorite, setIsSavingFavorite] = useState(false);
@@ -44,27 +42,29 @@ export function StoreCard({
   const hasReviews = (store.reviewCount ?? 0) > 0;
 
   const storeStatus = getStoreStatus(
-  store.schedule ?? [],
-  store.isOpen ?? false
-);
+    store.schedule ?? [],
+    store.isOpen ?? false
+  );
 
   return (
     <motion.div
       whileTap={{scale: 0.98}}
       onClick={onClick}
-      className={`bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition cursor-pointer mb-4 ${
+      className={`group cursor-pointer rounded-2xl border border-black/[0.045] bg-white p-2 transition duration-300 hover:border-black/[0.08] ${
         isTooFar ? "opacity-80" : ""
       }`}
     >
       {/* Store Image */}
-      <div className="relative h-48 bg-gray-200">
+      <div className="relative aspect-[16/10] overflow-hidden rounded-xl bg-gray-50">
         {store.bannerUrl || store.logoUrl ? (
           <Image
-            src={store.bannerUrl || store.logoUrl || "/placeholder-store.jpg"}
+            src={store.bannerImageVariants?.medium || store.bannerUrl ||
+              store.logoImageVariants?.medium || store.logoUrl || "/placeholder-store.jpg"}
             alt={displayName}
             fill
-            sizes="(max-width: 768px) 100vw, 672px"
-            className="object-cover"
+            sizes="(max-width: 672px) calc(100vw - 32px), 640px"
+            className="object-cover transition duration-500 group-hover:scale-[1.03]"
+            priority={priority}
           />
         ) : (
           <div className="w-full h-full bg-gradient-to-br from-orange-100 to-green-100 flex items-center justify-center">
@@ -74,142 +74,66 @@ export function StoreCard({
           </div>
         )}
 
-        {/* Store Name Overlay */}
-        {/*<div className="pointer-events-none absolute inset-0 flex items-center justify-center p-4">
-          <div className="max-w-[80%] rounded-xl bg-white/95 px-4 py-2 text-center shadow-md backdrop-blur-sm">
-            <h3 className="font-sans text-lg font-extrabold leading-tight tracking-tight text-gray-900">
-              {displayName}
-            </h3>
-          </div>
-        </div>*/}
-
-        {/* Favorite Button */}
-        <button
-          type="button"
-          disabled={isSavingFavorite}
-          onClick={(e) => {
-            e.stopPropagation();
-            const nextFavorite = !store.isFavorite;
-
-            setIsSavingFavorite(true);
-            void onFavoriteChange(store.id, nextFavorite)
-              .catch((error) => {
-                console.error("Unable to update saved store:", error);
-              })
-              .finally(() => {
-                setIsSavingFavorite(false);
-              });
-          }}
-          className="absolute top-3 right-3 flex h-10 w-10 items-center justify-center rounded-full bg-white/90 backdrop-blur-sm transition hover:bg-white disabled:cursor-wait disabled:opacity-60"
-          aria-label={store.isFavorite ? "Remove from favorites" : "Add to favorites"}
-        >
-          <Heart 
-            className={`w-5 h-5 transition ${store.isFavorite ? "fill-orange-500 text-orange-500" : "text-gray-600"}`}
-          />
-        </button>
-      
-        {/* Status Badges */}
-        <div className="absolute top-3 left-3 flex flex-col items-start gap-2">
-          <div
-            className={`px-3 py-1 rounded-full text-xs font-semibold ${
-              storeStatus.isOpen
-                ? "bg-green-600 text-white"
-                : "bg-red-500 text-white"
-            }`}
-          >
-            {storeStatus.statusText}
-          </div>
-
+        <div className="absolute left-3 top-3">
           {isTooFar && (
             <div className="px-3 py-1.5 bg-orange-500 text-white text-xs font-semibold rounded-full flex items-center gap-1">
               <AlertCircle className="w-3 h-3" />
               <span>Outside delivery radius</span>
             </div>
           )}
+      </div>
         </div>
-        </div>
-      {/* Store Info - With more padding */}
-      <div className="space-y-2 p-4">
+      <div className="space-y-1 px-0.5 pt-3">
         {/* Store Name & Rating */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            {store.logoUrl && (
-              <div className="relative w-8 h-8 rounded-full overflow-hidden flex-shrink-0 border border-gray-200">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <div className="relative flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-slate-100 bg-gray-50">
+              {store.logoUrl ? (
                 <Image
-                  src={store.logoUrl}
-                  alt={displayName}
+                  src={store.logoImageVariants?.thumbnail || store.logoUrl}
+                  alt=""
                   fill
-                  sizes="32px"
+                  sizes="36px"
                   className="object-cover"
                 />
-              </div>
-            )}
-            <h4 className="font-sans text-base font-bold leading-tight tracking-tight text-gray-900">
+              ) : (
+                <span className="text-sm font-extrabold text-slate-500">
+                  {displayName.charAt(0)}
+                </span>
+              )}
+            </div>
+            <h4 className="truncate font-sans text-base font-black leading-tight tracking-[-0.02em] text-slate-950">
               {displayName}
             </h4>
           </div>
-          
-          {hasReviews && (
-            <div className="flex items-center gap-1">
-              <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-              <span className="text-sm font-medium text-gray-700">
-                {(store.rating ?? 0).toFixed(1)}
-              </span>
-            </div>
-          )}
-        </div>
-
-        {/* Distance, Delivery Fee & Estimated Time */}
-        <div className="flex items-center gap-4 text-sm">
-          <div className="flex items-center gap-1.5 text-gray-500">
-            <MapPin className="w-4 h-4" />
-            <span>{formattedDistance}</span>
-          </div>
-          <div className={`flex items-center gap-1.5 ${
-            isTooFar ? "text-red-500" : "text-gray-500"
-          }`}>
-            <Truck className="w-4 h-4" />
-            <span>
-              {isTooFar ? "Delivery unavailable" : `Delivery: ${deliveryFee}`}
-            </span>
-          </div>
-          {!isTooFar && (
-            <div className="flex items-center gap-1.5 text-gray-500">
-              <Clock className="w-4 h-4" />
-              <span>{estimatedTime}</span>
-            </div>
-          )}
-        </div>
-
-        {/* Location */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1 text-sm text-gray-400">
-            <span>Location: {store.city}, {store.state}</span>
-          </div>
-          {isTooFar && (
-            <span className="text-xs text-orange-500 font-medium">
-              Outside delivery radius
-            </span>
-          )}
-        </div>
-
-        <div className="flex items-center gap-2 text-sm">
-          <div
-            className={`w-2 h-2 rounded-full ${storeStatus.statusColor}`}
-          />
-
-          <span
-            className={`font-medium ${storeStatus.textColor}`}
+          <button
+            type="button"
+            disabled={isSavingFavorite}
+            onClick={(event) => {
+              event.stopPropagation();
+              setIsSavingFavorite(true);
+              void onFavoriteChange(store.id, !store.isFavorite)
+                .catch((error) => console.error("Unable to update saved store:", error))
+                .finally(() => setIsSavingFavorite(false));
+            }}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-slate-500 transition hover:bg-slate-50 hover:text-orange-600 disabled:opacity-50"
+            aria-label={store.isFavorite ? "Remove from favorites" : "Add to favorites"}
           >
-            {storeStatus.statusText}
-          </span>
-
-          {storeStatus.message && (
-            <span className="text-gray-400">
-              • {storeStatus.message}
-            </span>
-          )}
+            <Heart className={`h-6 w-6 ${store.isFavorite ? "fill-orange-500 text-orange-500" : ""}`} />
+          </button>
         </div>
+
+        <div className="flex items-center gap-1.5 text-sm font-medium text-slate-600">
+          {hasReviews && <><span className="font-bold text-slate-900">{(store.rating ?? 0).toFixed(1)}</span><Star className="h-4 w-4 fill-slate-700 text-slate-700" /><span>·</span></>}
+          <span>{formattedDistance}</span>
+          <span>·</span>
+          <span>{estimatedTime}</span>
+          {!storeStatus.isOpen && <><span>·</span><span>{storeStatus.statusText}</span></>}
+        </div>
+
+        <p className={`text-sm font-medium ${isTooFar ? "text-red-500" : "text-slate-500"}`}>
+          {isTooFar ? "Delivery unavailable" : `${deliveryFee} delivery fee`}
+        </p>
       </div>
     </motion.div>
   );

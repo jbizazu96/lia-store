@@ -92,9 +92,13 @@ export function EditProfileModal({userData, onClose, onUpdate}: EditProfileModal
       showSuccess("Profile updated successfully.");
       onClose();
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error(error);
-      setError(error.message || "Failed to update profile");
+      setError(
+        error instanceof Error
+          ? error.message
+          : "Failed to update profile"
+      );
     } finally {
       setLoading(false);
     }

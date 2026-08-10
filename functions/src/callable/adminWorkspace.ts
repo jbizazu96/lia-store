@@ -557,25 +557,44 @@ export const setAdminStoreApproval = onCall(
     const isApproved = input.isApproved === true;
     if (!storeId || storeId.includes("/")) throw new HttpsError("invalid-argument", "A valid store is required.");
 
-    const store = await db.collection("stores").doc(storeId).get();
-    if (!store.exists) throw new HttpsError("not-found", "Store application not found.");
-    const data = store.data() ?? {};
+    const storeReference = db.collection("stores").doc(storeId);
     const policy = await getStoreApplicationPolicy();
-    if (isApproved && data.onboardingCompleted !== true) {
-      throw new HttpsError("failed-precondition", "The store owner has not submitted a complete onboarding application.");
-    }
-    if (isApproved && !policy.allowWorkspaceApprovalBeforeDocumentReview &&
-      !allRequiredStoreDocumentsApproved(data, policy)) {
-      throw new HttpsError("failed-precondition", "Approve every required store document before approving this store.");
-    }
+    await db.runTransaction(async (transaction) => {
+      const store = await transaction.get(storeReference);
+      if (!store.exists) throw new HttpsError("not-found", "Store application not found.");
+      const data = store.data() ?? {};
+      const ownerId = text(data.ownerId);
+      const owner = ownerId ?
+        await transaction.get(db.collection("users").doc(ownerId)) : null;
+      if (isApproved && owner &&
+        ["deletion_pending", "deletion_processing"].includes(
+          text(owner.data()?.accountDeletionState)
+        )) {
+        throw new HttpsError(
+          "failed-precondition",
+          "Reinstate or cancel the owner's account deletion request before approving this store."
+        );
+      }
+      if (isApproved && data.onboardingCompleted !== true) {
+        throw new HttpsError("failed-precondition", "The store owner has not submitted a complete onboarding application.");
+      }
+      if (isApproved && !policy.allowWorkspaceApprovalBeforeDocumentReview &&
+        !allRequiredStoreDocumentsApproved(data, policy)) {
+        throw new HttpsError("failed-precondition", "Approve every required store document before approving this store.");
+      }
 
-    await store.ref.update({
-      isApproved,
-      /* An unapproved store must never remain customer-visible. */
-      ...(isApproved ? {status: "approved"} : {status: "pending_review", isActive: false}),
-      approvalUpdatedAt: FieldValue.serverTimestamp(),
-      approvalUpdatedBy: administrator.uid,
-      updatedAt: FieldValue.serverTimestamp(),
+      transaction.update(storeReference, {
+        isApproved,
+        /* An unapproved store must never remain customer-visible. */
+        ...(isApproved ? {
+          status: "approved",
+          accountDeletionRequestId: FieldValue.delete(),
+          accountDeletionDisabledAt: FieldValue.delete(),
+        } : {status: "pending_review", isActive: false}),
+        approvalUpdatedAt: FieldValue.serverTimestamp(),
+        approvalUpdatedBy: administrator.uid,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
     });
 
     await writeAdminAuditLog(administrator, {
@@ -638,23 +657,37 @@ export const activateAdminStore = onCall(
     const isActive = input.isActive !== false;
     if (!storeId || storeId.includes("/")) throw new HttpsError("invalid-argument", "A valid store is required.");
 
-    const store = await db.collection("stores").doc(storeId).get();
-    if (!store.exists) throw new HttpsError("not-found", "Store application not found.");
-    const data = store.data() ?? {};
+    const storeReference = db.collection("stores").doc(storeId);
     const policy = await getStoreApplicationPolicy();
+    await db.runTransaction(async (transaction) => {
+      const store = await transaction.get(storeReference);
+      if (!store.exists) throw new HttpsError("not-found", "Store application not found.");
+      const data = store.data() ?? {};
+      const ownerId = text(data.ownerId);
+      const owner = ownerId ?
+        await transaction.get(db.collection("users").doc(ownerId)) : null;
+      if (isActive && owner &&
+        ["deletion_pending", "deletion_processing"].includes(
+          text(owner.data()?.accountDeletionState)
+        )) {
+        throw new HttpsError(
+          "failed-precondition",
+          "Reinstate or cancel the owner's account deletion request before activating this store."
+        );
+      }
+      if (isActive && data.isApproved !== true) {
+        throw new HttpsError("failed-precondition", "Approve the store before activating it.");
+      }
+      if (isActive && policy.requireApprovedDocumentsForActivation &&
+        !allRequiredStoreDocumentsApproved(data, policy)) {
+        throw new HttpsError("failed-precondition", "Approve every required store document before activating this store.");
+      }
 
-    if (isActive && data.isApproved !== true) {
-      throw new HttpsError("failed-precondition", "Approve the store before activating it.");
-    }
-    if (isActive && policy.requireApprovedDocumentsForActivation &&
-      !allRequiredStoreDocumentsApproved(data, policy)) {
-      throw new HttpsError("failed-precondition", "Approve every required store document before activating this store.");
-    }
-
-    await store.ref.update({
-      isActive,
-      ...(isActive ? {activatedAt: FieldValue.serverTimestamp(), activatedBy: administrator.uid} : {deactivatedAt: FieldValue.serverTimestamp(), deactivatedBy: administrator.uid}),
-      updatedAt: FieldValue.serverTimestamp(),
+      transaction.update(storeReference, {
+        isActive,
+        ...(isActive ? {activatedAt: FieldValue.serverTimestamp(), activatedBy: administrator.uid} : {deactivatedAt: FieldValue.serverTimestamp(), deactivatedBy: administrator.uid}),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
     });
 
     await writeAdminAuditLog(administrator, {

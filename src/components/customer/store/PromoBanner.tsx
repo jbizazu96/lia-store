@@ -88,7 +88,6 @@ export function PromoBanner({ promotions }: PromoBannerProps) {
 
   useEffect(() => {
     if (activePromotions.length < 2) {
-      setCurrentIndex(0);
       return;
     }
 
@@ -103,7 +102,8 @@ export function PromoBanner({ promotions }: PromoBannerProps) {
     return null;
   }
 
-  const promotion = activePromotions[currentIndex] ?? activePromotions[0];
+  const visibleIndex = currentIndex % activePromotions.length;
+  const promotion = activePromotions[visibleIndex];
   const theme = promoThemes[promotion.type];
   const Icon = theme.icon;
   const label = promotionService.getLabel(promotion);

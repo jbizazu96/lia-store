@@ -99,6 +99,8 @@ export function RoleGuard({
       return;
     }
 
+    // Reset the visible guard while a new identity or route is verified.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setAccessVerified(false);
     setAccessError(null);
 
@@ -132,7 +134,8 @@ export function RoleGuard({
 
         if (active) {
           setAccessError(
-            "We could not verify your account access. Please sign in again."
+            error instanceof Error ? error.message :
+              "We could not verify your account access. Please sign in again."
           );
         }
       }

@@ -88,22 +88,14 @@ export default function NotificationsPage() {
 
 
   useEffect(() => {
-    if (authLoading) {
-      /* Keep the branded loader visible until Firebase resolves the session. */
-      setLoading(true);
+    if (authLoading || !user) {
       return;
     }
 
-    if (!user) {
-      setNotifications([]);
-      /* RoleGuard will redirect unauthenticated visitors. Do not flash an
-       * empty notification page while that redirect is in progress. */
+    queueMicrotask(() => {
       setLoading(true);
-      return;
-    }
-
-    setLoading(true);
-    setListenerError(null);
+      setListenerError(null);
+    });
 
     const unsubscribe = notificationService.listenForNotifications(
       user.uid,
@@ -218,7 +210,7 @@ export default function NotificationsPage() {
             </div>
             <p className="text-gray-500 text-lg font-medium">No notifications yet</p>
             <p className="text-gray-400 text-sm mt-1">
-              We'll notify you when something happens with your orders
+              We&apos;ll notify you when something happens with your orders
             </p>
             <button
               onClick={() => router.push("/home")}

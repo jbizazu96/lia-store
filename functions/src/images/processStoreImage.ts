@@ -3,6 +3,7 @@ import { logger } from "firebase-functions";
 import { FieldValue, getFirestore } from "firebase-admin/firestore";
 import { randomUUID } from "crypto";
 import { getStorage } from "firebase-admin/storage";
+import sharp from "sharp";
 import { PRODUCT_IMAGE_CONFIG } from "./imageTypes";
 import { processProductImage } from "./imageProcessor";
 import {
@@ -11,6 +12,69 @@ import {
 } from "./imageStorage";
 
 type StoreImageField = "logo" | "banner" | "owner-photo-id" | "front" | "inside";
+type PublicStoreImageField = "logo" | "banner";
+
+const STORE_IMAGE_VARIANTS = {
+  logo: [
+    {name: "thumbnail", width: 128, height: 128, quality: 74},
+    {name: "small", width: 256, height: 256, quality: 78},
+    {name: "medium", width: 512, height: 512, quality: 82},
+  ],
+  banner: [
+    {name: "small", width: 640, height: 360, quality: 76},
+    {name: "medium", width: 1024, height: 576, quality: 80},
+    {name: "large", width: 1600, height: 900, quality: 82},
+  ],
+} as const;
+
+function downloadUrl(bucketName: string, path: string, token: string): string {
+  return `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/` +
+    `${encodeURIComponent(path)}?alt=media&token=${token}`;
+}
+
+async function createPublicStoreVariants(input: {
+  bucketName: string;
+  storeId: string;
+  imageId: string;
+  field: PublicStoreImageField;
+  original: Buffer;
+}) {
+  const bucket = getStorage().bucket(input.bucketName);
+  const variants = STORE_IMAGE_VARIANTS[input.field];
+  const results = await Promise.all(variants.map(async (variant) => {
+    const buffer = await sharp(input.original)
+      .rotate()
+      .resize({
+        width: variant.width,
+        height: variant.height,
+        fit: input.field === "banner" ? "cover" : "inside",
+        withoutEnlargement: true,
+      })
+      .webp({quality: variant.quality, effort: 4})
+      .toBuffer();
+    const path = `stores/${input.storeId}/images/optimized/${input.field}/` +
+      `${input.imageId}/${variant.name}.webp`;
+    const token = randomUUID();
+    await bucket.file(path).save(buffer, {
+      resumable: false,
+      metadata: {
+        contentType: "image/webp",
+        cacheControl: PRODUCT_IMAGE_CONFIG.CACHE_CONTROL,
+        metadata: {
+          firebaseStorageDownloadTokens: token,
+          processingType: "store-image-optimized",
+          variant: variant.name,
+        },
+      },
+    });
+    return {name: variant.name, path, url: downloadUrl(input.bucketName, path, token)};
+  }));
+
+  return {
+    urls: Object.fromEntries(results.map((variant) => [variant.name, variant.url])),
+    paths: Object.fromEntries(results.map((variant) => [variant.name, variant.path])),
+  };
+}
 
 function getMetadata(metadata: Record<string, string> | undefined) {
   if (
@@ -45,26 +109,36 @@ export const processStoreImage = onObjectFinalized(
     }
 
     try {
-      const image = await processProductImage(
-        await downloadOriginalImage(bucketName, originalPath)
-      );
+      const original = await downloadOriginalImage(bucketName, originalPath);
+      const publicVariants = metadata.imageField === "logo" || metadata.imageField === "banner" ?
+        await createPublicStoreVariants({
+          bucketName,
+          storeId: metadata.storeId,
+          imageId: metadata.imageId,
+          field: metadata.imageField,
+          original,
+        }) : null;
+      const image = publicVariants ? null : await processProductImage(original);
       const optimizedPath =
-        `stores/${metadata.storeId}/images/optimized/${metadata.imageField}/` +
-        `${metadata.imageId}.webp`;
+        publicVariants ? publicVariants.paths[
+          metadata.imageField === "logo" ? "medium" : "large"
+        ] : `stores/${metadata.storeId}/images/optimized/${metadata.imageField}/` +
+          `${metadata.imageId}.webp`;
       const token = randomUUID();
-      const file = getStorage().bucket(bucketName).file(optimizedPath);
-
-      await file.save(image.buffer, {
-        resumable: false,
-        metadata: {
-          contentType: "image/webp",
-          cacheControl: PRODUCT_IMAGE_CONFIG.CACHE_CONTROL,
+      if (image) {
+        const file = getStorage().bucket(bucketName).file(optimizedPath);
+        await file.save(image.buffer, {
+          resumable: false,
           metadata: {
-            firebaseStorageDownloadTokens: token,
-            processingType: "store-image-optimized",
+            contentType: "image/webp",
+            cacheControl: PRODUCT_IMAGE_CONFIG.CACHE_CONTROL,
+            metadata: {
+              firebaseStorageDownloadTokens: token,
+              processingType: "store-image-optimized",
+            },
           },
-        },
-      });
+        });
+      }
 
       const fieldName = {
         logo: "logoUrl", banner: "bannerUrl", front: "storeFrontUrl",
@@ -81,37 +155,51 @@ export const processStoreImage = onObjectFinalized(
         inside: "storeInsideImageStatus",
         "owner-photo-id": "ownerPhotoIdImageStatus",
       };
-      const imageUrl =
-        `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/` +
-        `${encodeURIComponent(optimizedPath)}?alt=media&token=${token}`;
+      const imageUrl = publicVariants ? publicVariants.urls[
+        metadata.imageField === "logo" ? "medium" : "large"
+      ] : downloadUrl(bucketName, optimizedPath, token);
       const storeReference = getFirestore("default")
         .collection("stores")
         .doc(metadata.storeId);
 
-      const oldPath = await getFirestore("default").runTransaction(async (transaction) => {
+      const oldPaths = await getFirestore("default").runTransaction(async (transaction) => {
         const storeSnapshot = await transaction.get(storeReference);
         if (!storeSnapshot.exists) {
           throw new Error(`Store not found: ${metadata.storeId}`);
         }
 
         const previousPath = storeSnapshot.data()?.[pathFieldName];
+        const variantPathsField = `${metadata.imageField}ImageVariantPaths`;
+        const previousVariantPaths = storeSnapshot.data()?.[variantPathsField];
         transaction.update(storeReference, {
           [fieldName]: imageUrl,
           [pathFieldName]: optimizedPath,
+          ...(publicVariants ? {
+            [`${metadata.imageField}ImageVariants`]: publicVariants.urls,
+            [variantPathsField]: publicVariants.paths,
+          } : {}),
           [statusFieldName[metadata.imageField]]: "ready",
           updatedAt: FieldValue.serverTimestamp(),
         });
 
-        return typeof previousPath === "string" ? previousPath : null;
+        return [
+          ...(typeof previousPath === "string" ? [previousPath] : []),
+          ...(previousVariantPaths && typeof previousVariantPaths === "object" ?
+            Object.values(previousVariantPaths).filter(
+              (value): value is string => typeof value === "string"
+            ) : []),
+        ];
       });
 
       await deleteOriginalImage(bucketName, originalPath);
 
-      if (oldPath && oldPath !== optimizedPath) {
-        await getStorage().bucket(bucketName).file(oldPath).delete({
+      const currentPaths = new Set(publicVariants ?
+        Object.values(publicVariants.paths) : [optimizedPath]);
+      await Promise.all([...new Set(oldPaths)]
+        .filter((path) => !currentPaths.has(path))
+        .map((path) => getStorage().bucket(bucketName).file(path).delete({
           ignoreNotFound: true,
-        });
-      }
+        })));
     } catch (error) {
       logger.error("Store image processing failed.", { originalPath, error });
       throw error;

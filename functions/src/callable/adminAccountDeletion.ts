@@ -25,6 +25,7 @@ import {
 import {
   ACCOUNT_DELETION_POLICY,
 } from "../accountDeletion/accountDeletionPolicy";
+import {restoreAccountDeletionAccess} from "../accountDeletion/accountDeletionAccessService";
 import {
   requireActiveAdmin,
 } from "../admin/adminAuthorizationService";
@@ -201,6 +202,7 @@ async function notifyOwner(
     title: string;
     body: string;
     requestId: string;
+    deepLink: string;
   }
 ): Promise<void> {
   const user = await db.collection("users").doc(ownerId).get();
@@ -214,7 +216,7 @@ async function notifyOwner(
       body: input.body,
       type: "system",
       read: false,
-      deepLink: "/profile",
+      deepLink: input.deepLink,
       requestId: input.requestId,
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
@@ -225,7 +227,7 @@ async function notifyOwner(
       ownerId,
       input.title,
       input.body,
-      "/profile",
+      input.deepLink,
     );
   } catch (error) {
     console.error("Account deletion push notification failed.", {
@@ -253,6 +255,9 @@ export const getAdminAccountDeletionRequests = onCall(
     await requireActiveAdmin(request);
     const input = record(request.data);
     const selectedStatus = text(input.status) || "pending_review";
+    const requestedPageSize = typeof input.pageSize === "number" ? input.pageSize : 50;
+    const pageSize = Math.min(100, Math.max(1, Math.floor(requestedPageSize)));
+    const cursorId = text(input.cursor);
 
     if (![
       "pending_review",
@@ -265,22 +270,37 @@ export const getAdminAccountDeletionRequests = onCall(
       throw new HttpsError("invalid-argument", "A valid deletion request status is required.");
     }
 
-    const snapshot = await db.collection("accountDeletionRequests").limit(100).get();
-    const requests = snapshot.docs.map(deletionListItem);
+    let query = db.collection("accountDeletionRequests")
+      .where("status", "==", selectedStatus)
+      .orderBy("requestedAt", "desc")
+      .limit(pageSize + 1);
+    if (cursorId) {
+      const cursor = await db.collection("accountDeletionRequests").doc(requestId(cursorId)).get();
+      if (!cursor.exists || cursor.data()?.status !== selectedStatus) {
+        throw new HttpsError("invalid-argument", "The deletion request cursor is invalid.");
+      }
+      query = query.startAfter(cursor);
+    }
+
+    const statuses = [
+      "pending_review", "more_information_required", "approved", "rejected", "failed",
+    ] as const;
+    const [snapshot, ...countResults] = await Promise.all([
+      query.get(),
+      ...statuses.map((status) => db.collection("accountDeletionRequests")
+        .where("status", "==", status).count().get()),
+    ]);
+    const hasMore = snapshot.size > pageSize;
+    const pageDocuments = snapshot.docs.slice(0, pageSize);
+    const counts = Object.fromEntries(statuses.map((status, index) => [
+      status,
+      countResults[index].data().count,
+    ]));
 
     return {
-      requests: requests
-        .filter((item) => item.status === selectedStatus)
-        .sort((left, right) => (right.requestedAt ?? "")
-          .localeCompare(left.requestedAt ?? "")),
-      counts: {
-        pending_review: requests.filter((item) => item.status === "pending_review").length,
-        more_information_required: requests.filter((item) =>
-          item.status === "more_information_required").length,
-        approved: requests.filter((item) => item.status === "approved").length,
-        rejected: requests.filter((item) => item.status === "rejected").length,
-        failed: requests.filter((item) => item.status === "failed").length,
-      },
+      requests: pageDocuments.map(deletionListItem),
+      counts,
+      nextCursor: hasMore ? pageDocuments.at(-1)?.id ?? null : null,
     };
   }
 );
@@ -310,7 +330,7 @@ export const getAdminAccountDeletionRequest = onCall(
       reasonDetails: text(data.reasonDetails) || null,
       requestedAt: timestamp(data.requestedAt),
       scheduledDeletionAt: timestamp(data.scheduledDeletionAt),
-      engineSupported: ownerType === "driver",
+      engineSupported: ["customer", "driver", "store"].includes(ownerType),
       adminDecision: {
         decision: text(decision.decision) || null,
         notes: text(decision.notes) || null,
@@ -354,14 +374,10 @@ export const decideAdminAccountDeletionRequest = onCall(
     const ownerType = text(data.ownerType);
     const ownerId = text(data.ownerId);
 
-    /*
-     * The existing engine only deletes driver accounts. Do not schedule a
-     * store/customer request that would later fail in the destructive worker.
-     */
-    if (decision === "approved" && ownerType !== "driver") {
+    if (!["customer", "driver", "store"].includes(ownerType)) {
       throw new HttpsError(
         "failed-precondition",
-        "Deletion approval is not available for this account type yet."
+        "Deletion is not available for this account type."
       );
     }
 
@@ -398,24 +414,33 @@ export const decideAdminAccountDeletionRequest = onCall(
     });
 
     try {
+      const deepLink = ownerType === "store"
+        ? "/store/settings"
+        : ownerType === "driver"
+          ? "/driver/settings"
+          : "/profile";
+
       if (decision === "approved" && scheduledDeletionAt) {
         await notifyOwner(ownerId, {
           title: "Account deletion approved",
           body: "Your deletion request was approved. It is scheduled for " +
             scheduledDeletionAt.toLocaleDateString("en-US") + ".",
           requestId: id,
+          deepLink,
         });
       } else if (decision === "rejected") {
         await notifyOwner(ownerId, {
           title: "Account deletion request update",
           body: notes || "Your deletion request was not approved.",
           requestId: id,
+          deepLink,
         });
       } else {
         await notifyOwner(ownerId, {
           title: "More information needed",
           body: notes || "LIA needs more information about your deletion request.",
           requestId: id,
+          deepLink,
         });
       }
     } catch (error) {
@@ -429,5 +454,97 @@ export const decideAdminAccountDeletionRequest = onCall(
       success: true,
       scheduledDeletionAt: scheduledDeletionAt?.toISOString() ?? null,
     };
+  }
+);
+
+export const retryAdminAccountDeletionRequest = onCall(
+  {region: "us-central1"},
+  async (request) => {
+    const administrator = await requireActiveAdmin(request);
+    const id = requestId(record(request.data).requestId);
+    const reference = db.collection("accountDeletionRequests").doc(id);
+
+    await db.runTransaction(async (transaction) => {
+      const snapshot = await transaction.get(reference);
+      if (!snapshot.exists) {
+        throw new HttpsError("not-found", "Deletion request not found.");
+      }
+      if (snapshot.data()?.status !== "failed") {
+        throw new HttpsError(
+          "failed-precondition",
+          "Only a failed deletion request can be retried."
+        );
+      }
+
+      transaction.update(reference, {
+        status: "approved",
+        scheduledDeletionAt: FieldValue.serverTimestamp(),
+        "workflow.currentStep": "validating_account",
+        "workflow.failedAt": null,
+        "workflow.failedStep": null,
+        "workflow.lastError": null,
+        "workflow.retryCount": 0,
+        "workflow.nextRetryAt": null,
+        "workflow.leaseExpiresAt": null,
+        "workflow.leaseToken": null,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+    });
+
+    await writeAdminAuditLog(administrator, {
+      action: "account_deletion_retry_requested",
+      targetType: "account_deletion_request",
+      targetId: id,
+      reason: "Administrator requested a retry.",
+    });
+
+    return {success: true};
+  }
+);
+
+export const reinstateAdminAccountDeletionRequest = onCall(
+  {region: "us-central1"},
+  async (request) => {
+    const administrator = await requireActiveAdmin(request);
+    const id = requestId(record(request.data).requestId);
+    const reference = db.collection("accountDeletionRequests").doc(id);
+    let ownerId = "";
+
+    await db.runTransaction(async (transaction) => {
+      const snapshot = await transaction.get(reference);
+      const data = snapshot.data();
+      if (!snapshot.exists || !data) {
+        throw new HttpsError("not-found", "Deletion request not found.");
+      }
+      if (["processing", "completed", "cancelled"].includes(data.status)) {
+        throw new HttpsError(
+          "failed-precondition",
+          "This deletion request can no longer be reinstated."
+        );
+      }
+      ownerId = text(data.ownerId);
+      transaction.update(reference, {
+        status: "cancelled",
+        scheduledDeletionAt: null,
+        reinstatedAt: FieldValue.serverTimestamp(),
+        reinstatedBy: administrator.uid,
+        "workflow.nextRetryAt": null,
+        "workflow.leaseExpiresAt": null,
+        "workflow.leaseToken": null,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+    });
+
+    if (!ownerId) {
+      throw new HttpsError("failed-precondition", "The request owner is invalid.");
+    }
+    await restoreAccountDeletionAccess(ownerId);
+    await writeAdminAuditLog(administrator, {
+      action: "account_deletion_reinstated",
+      targetType: "account_deletion_request",
+      targetId: id,
+      reason: "Administrator reinstated account access.",
+    });
+    return {success: true};
   }
 );

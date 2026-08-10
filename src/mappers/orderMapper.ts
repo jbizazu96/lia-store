@@ -5,7 +5,7 @@
 |
 | PURPOSE
 | -------
-| Converts checkout data into the application's Order model.
+| Converts Firestore order documents into the application's Order model.
 |
 | IMPORTANT
 | ---------
@@ -16,131 +16,22 @@
 | ❌ Charge Stripe
 | ❌ Update Status
 |
-| It ONLY creates an Order object.
+| It only maps trusted persisted order data.
 |
 */
 
 import type {
   Order,
-  OrderItem,
   OrderInvestigation,
   OrderStatus,
   StatusHistory,
 } from "@/types/order";
-
-import type { CheckoutSubmission } from "@/app/checkout/types";
 
 import {
   Timestamp,
   type DocumentData,
   type DocumentSnapshot,
 } from "firebase/firestore";
-
-/**
- * Converts Checkout UI data into the shared Order domain model.
- */
-export function createOrder(
-  input: CheckoutSubmission
-): Order {
-  const items: OrderItem[] = input.items.map((item) => ({
-    id: item.id,
-    name: item.name,
-    price: item.price,
-    quantity: item.quantity,
-    imageUrl: item.imageUrl,
-    size: item.size ?? null,
-  }));
-
-  return {
-    /**
-     * Firestore and OrderService will populate these values.
-     */
-    id: "",
-    orderNumber: "",
-
-    customer: {
-      uid: input.userId,
-      name: input.customerName,
-      email: input.customerEmail,
-      phone: input.customerPhone,
-      address:
-        input.deliveryAddress.formattedAddress ||
-        [
-          input.deliveryAddress.street,
-          input.deliveryAddress.city,
-          input.deliveryAddress.state,
-          input.deliveryAddress.zip,
-        ]
-          .filter(Boolean)
-          .join(", "),
-      latitude: input.customerLatitude,
-      longitude: input.customerLongitude,
-    },
-
-    store: {
-      id: input.storeId,
-      ownerId: input.storeOwnerId,
-      name: input.storeName,
-      address: input.storeAddress,
-      phone: input.storePhone,
-      latitude: input.storeLatitude,
-      longitude: input.storeLongitude,
-    },
-
-    items,
-
-    pricing: {
-      subtotal: input.totals.subtotal,
-
-      deliveryFee:
-        input.totals.deliveryFee,
-
-      /*
-        Customer-facing platform fee retained by LIA.
-
-        This value currently comes from the checkout estimate. Once Stripe
-        payment preparation is implemented, the backend will recalculate
-        and overwrite all payment-critical pricing from trusted settings
-        and Firestore product data.
-      */
-      serviceFee:
-        input.totals.serviceFee,
-
-      tax:
-        input.totals.tax,
-
-      tip:
-        input.totals.tip,
-
-      total:
-        input.totals.total,
-    },
-
-    delivery: {
-      instructions:
-        input.deliveryInstructions?.trim() || undefined,
-      distanceMiles: input.deliveryDistanceMiles,
-      estimatedMinutes:
-        input.estimatedDeliveryMinutes,
-    },
-
-    status: "pending",
-
-    statusHistory: [],
-
-    payment: {
-      status: "pending",
-    },
-
-    shipday: {
-      status: "pending",
-      active: false,
-    },
-
-    createdAt: new Date(),
-    updatedAt: undefined,
-  };
-}
 
 /**
  * Convert supported Firestore/date values into a JavaScript Date.

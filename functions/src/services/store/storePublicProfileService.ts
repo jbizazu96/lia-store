@@ -33,6 +33,8 @@ export interface StorePublicProfileSource {
   formattedAddress?: unknown;
   logoUrl?: unknown;
   bannerUrl?: unknown;
+  logoImageVariants?: unknown;
+  bannerImageVariants?: unknown;
   category?: unknown;
   rating?: unknown;
   reviewCount?: unknown;
@@ -59,6 +61,13 @@ function publicNumber(
     Number.isFinite(value)
     ? value
     : fallback;
+}
+
+function publicImageVariants(value: unknown): Record<string, string> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return Object.fromEntries(Object.entries(value).filter(
+    (entry): entry is [string, string] => typeof entry[1] === "string"
+  ));
 }
 
 export async function syncStorePublicProfile(
@@ -102,6 +111,8 @@ export async function syncStorePublicProfile(
       ),
       logoUrl: publicText(store.logoUrl),
       bannerUrl: publicText(store.bannerUrl),
+      logoImageVariants: publicImageVariants(store.logoImageVariants),
+      bannerImageVariants: publicImageVariants(store.bannerImageVariants),
       category: publicText(store.category),
       searchTokens: createCatalogSearchTokens([
         store.name,

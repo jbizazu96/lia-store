@@ -423,13 +423,15 @@ export default function CheckoutPage() {
       return;
     }
 
-    setPaymentConfirmationError(
-      null
-    );
+    queueMicrotask(() => {
+      setPaymentConfirmationError(
+        null
+      );
 
-    setCheckoutStep(
-      "payment_submitted"
-    );
+      setCheckoutStep(
+        "payment_submitted"
+      );
+    });
 
     window.scrollTo({
       top: 0,

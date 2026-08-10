@@ -5,8 +5,8 @@
 */
 import {useState, useEffect} from "react";
 import {useRouter} from "next/navigation";
-import {motion, AnimatePresence} from "framer-motion";
-import {onAuthStateChanged} from "firebase/auth";
+import {AnimatePresence} from "framer-motion";
+import {onAuthStateChanged, type User as FirebaseUser} from "firebase/auth";
 import {auth} from "@/lib/firebase";
 import {User, MapPin, Globe, FileText, Shield, LogOut, Trash2, Bell} from "lucide-react";
 import {
@@ -37,7 +37,7 @@ import {
 
 export default function ProfilePage() {
   const router = useRouter();
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<FirebaseUser | null>(null);
   const [userData, setUserData] = useState<CustomerProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [profileError, setProfileError] = useState<string | null>(null);

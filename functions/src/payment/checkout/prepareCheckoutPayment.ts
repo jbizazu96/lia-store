@@ -55,6 +55,7 @@ import * as admin from "firebase-admin";
 import {
   getFirestore,
 } from "firebase-admin/firestore";
+import {requireAccountOperational} from "../../accountDeletion/accountDeletionAccessService";
 
 import {
   checkoutDataService,
@@ -583,6 +584,8 @@ export const prepareCheckoutPayment =
           "You must sign in before preparing payment."
         );
       }
+
+      await requireAccountOperational(request.auth.uid);
 
       /*
        * Account suspension is a server-enforced customer lifecycle control.

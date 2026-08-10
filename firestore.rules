@@ -24,6 +24,29 @@ service cloud.firestore {
       return signedIn() && request.auth.uid == userId;
     }
 
+    /*
+     * Account-deletion cancellation and reinstatement run through trusted
+     * Cloud Functions. A browser token must not retain access to private
+     * account data after the deletion request has locked the account.
+     */
+    function isOperationalAccount(userId) {
+      return isSelf(userId) &&
+        exists(/databases/$(database)/documents/users/$(userId)) &&
+        (
+          !get(
+            /databases/$(database)/documents/users/$(userId)
+          ).data.keys().hasAny(["accountDeletionState"]) ||
+          (
+            get(
+              /databases/$(database)/documents/users/$(userId)
+            ).data.accountDeletionState != "deletion_pending" &&
+            get(
+              /databases/$(database)/documents/users/$(userId)
+            ).data.accountDeletionState != "deletion_processing"
+          )
+        );
+    }
+
     function userAccountType(userId) {
       return get(
         /databases/$(database)/documents/users/$(userId)
@@ -44,17 +67,17 @@ service cloud.firestore {
     }
 
     function isStoreOwnerAccount() {
-      return signedIn() &&
+      return isOperationalAccount(request.auth.uid) &&
         userAccountType(request.auth.uid) == "store_owner";
     }
 
     function isCustomerAccount() {
-      return signedIn() &&
+      return isOperationalAccount(request.auth.uid) &&
         userAccountType(request.auth.uid) == "customer";
     }
 
     function isDriverAccount() {
-      return signedIn() &&
+      return isOperationalAccount(request.auth.uid) &&
         userAccountType(request.auth.uid) == "driver";
     }
 
@@ -375,7 +398,7 @@ service cloud.firestore {
     */
 
     match /users/{userId} {
-      allow get: if isSelf(userId) || isAdmin();
+      allow get: if isOperationalAccount(userId) || isAdmin();
       allow list: if isAdmin();
 
       /*
@@ -388,7 +411,7 @@ service cloud.firestore {
        * Account type and UID are immutable from the client. This prevents a
        * customer from changing their own profile into another account type.
        */
-      allow update: if isSelf(userId) &&
+      allow update: if isOperationalAccount(userId) &&
         request.resource.data.uid == request.auth.uid &&
         (
           !resource.data.keys().hasAll(["uid"]) ||
@@ -411,14 +434,14 @@ service cloud.firestore {
           "updatedAt",
         ]);
 
-      allow delete: if isSelf(userId) || isAdmin();
+      allow delete: if isOperationalAccount(userId) || isAdmin();
 
       match /addresses/{addressId} {
-        allow read, write: if isSelf(userId) || isAdmin();
+        allow read, write: if isOperationalAccount(userId) || isAdmin();
       }
 
       match /notifications/{notificationId} {
-        allow read, update, delete: if isSelf(userId) || isAdmin();
+        allow read, update, delete: if isOperationalAccount(userId) || isAdmin();
         allow create: if isAdmin();
       }
     }
@@ -444,16 +467,16 @@ service cloud.firestore {
     */
 
     match /addresses/{userId} {
-      allow read, delete: if isSelf(userId) || isAdmin();
-      allow create, update: if isSelf(userId) &&
+      allow read, delete: if isOperationalAccount(userId) || isAdmin();
+      allow create, update: if isOperationalAccount(userId) &&
         request.resource.data.userId == request.auth.uid;
     }
 
     match /carts/{userId} {
       /* Cart persistence is handled by the authenticated customer API. */
-      allow read, delete: if isCustomerAccount() && isSelf(userId);
+      allow read, delete: if isCustomerAccount() && isOperationalAccount(userId);
       allow create, update: if isCustomerAccount() &&
-        isSelf(userId) &&
+        isOperationalAccount(userId) &&
         request.resource.data.userId == request.auth.uid;
     }
 
@@ -498,13 +521,13 @@ service cloud.firestore {
      * browser access to drivers/{driverId} or any document URL.
      */
     match /driverWorkspaceStatuses/{driverId} {
-      allow get: if isSelf(driverId);
+      allow get: if isOperationalAccount(driverId);
       allow list, create, update, delete: if false;
     }
 
     /* Store owners can watch their own lifecycle status, not stores/{id}. */
     match /storeWorkspaceStatuses/{ownerId} {
-      allow get: if isSelf(ownerId);
+      allow get: if isOperationalAccount(ownerId);
       allow list, create, update, delete: if false;
     }
 

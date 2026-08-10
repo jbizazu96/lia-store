@@ -1,7 +1,7 @@
 "use client";
 
 import {motion} from "framer-motion";
-import { useEffect, useRef } from "react";
+import { useState } from "react";
 import {ArrowLeft, MapPin, User, Phone} from "lucide-react";
 import { useUnsavedChanges } from "@/hooks/useUnsavedChanges";
 import { useConfirmation } from "@/context/ConfirmationContext";
@@ -19,7 +19,7 @@ interface AddressModalProps {
     name: string;
     phone: string;
   };
-  setFormData: (data: any) => void;
+  setFormData: (data: AddressModalProps["formData"]) => void;
   loading: boolean;
   error: string;
   title?: string;
@@ -35,18 +35,11 @@ export function AddressModal({
   error,
   title = "Delivery Information",
 }: AddressModalProps) {
-  const initialFormData = useRef("");
-
-  useEffect(() => {
-    if (isOpen) {
-      initialFormData.current = JSON.stringify(formData);
-    }
-  }, [isOpen]);
+  const [initialFormData] = useState(() => JSON.stringify(formData));
 
   const hasUnsavedChanges =
     isOpen &&
-    initialFormData.current !== "" &&
-    JSON.stringify(formData) !== initialFormData.current;
+    JSON.stringify(formData) !== initialFormData;
 
   useUnsavedChanges(hasUnsavedChanges);
   const { confirm } = useConfirmation();

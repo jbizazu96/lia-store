@@ -24,7 +24,7 @@ export function OrderSuccess({orderNumber, onViewOrders,}: OrderSuccessProps) {
       </p>
 
       <p className="text-gray-400 text-xs">
-        You'll receive a confirmation email shortly.
+        You&apos;ll receive a confirmation email shortly.
       </p>
       <div className="mt-6 flex flex-col gap-3">
         <div className="flex items-center justify-center gap-2 text-sm text-gray-500">
