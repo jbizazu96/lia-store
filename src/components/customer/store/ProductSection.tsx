@@ -7,6 +7,7 @@
 import {useRef} from "react";
 import {motion} from "framer-motion";
 import {ArrowRight} from "lucide-react";
+import Image from "next/image";
 import type { Category } from "@/types/category";
 import type { Product } from "@/types/product";
 import {ProductCard} from "./ProductCard";
@@ -43,8 +44,8 @@ export function ProductSection({
       {/* Header */}
       <div className="mb-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          {category.icon && (
-            <span className="text-xl">{category.icon}</span>
+          {category.iconUrl && (
+            <Image src={category.iconUrl} alt="" width={28} height={28} sizes="28px" className="h-7 w-7 object-contain" />
           )}
           <h3 className="text-xl font-black tracking-[-0.02em] text-[#172217]">
             {capitalize(category.name)}

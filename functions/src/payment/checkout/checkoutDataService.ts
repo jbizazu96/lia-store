@@ -419,6 +419,14 @@ function mapTrustedStore(
       "The store longitude is invalid."
     ),
 
+    homeZoneId: typeof data.homeZoneId === "string" && data.homeZoneId.trim()
+      ? data.homeZoneId.trim()
+      : null,
+
+    serviceZoneIds: Array.isArray(data.serviceZoneIds)
+      ? data.serviceZoneIds.filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+      : [],
+
     stripeAccountId,
 
     stripeTransfersEnabled,

@@ -10,45 +10,14 @@
 |
 */
 
+import Image from "next/image";
+import {ShoppingBag, Tag} from "lucide-react";
 import type {Category} from "@/types/category";
 
 interface CategoryScrollProps {
   categories: Category[];
   onCategoryClick: (categoryId: string) => void;
   onDealsClick: () => void;
-}
-
-const CATEGORY_ICONS: Record<string, string> = {
-  produce: "🥦",
-  meat: "🥩",
-  seafood: "🦐",
-  dairy: "🥛",
-  bakery: "🥖",
-  oil: "🫗",
-  grains: "🌾",
-  spices: "🫚",
-  beverages: "🥤",
-  snacks: "🍿",
-  frozen: "🧊",
-  canned: "🥫",
-  household: "🏠",
-  other: "🛍️",
-};
-
-function getCategoryIcon(category: Category): string {
-  if (category.icon?.trim()) {
-    return category.icon;
-  }
-
-  const normalizedName = category.name
-    .trim()
-    .toLowerCase();
-
-  return (
-    CATEGORY_ICONS[category.id.toLowerCase()] ??
-    CATEGORY_ICONS[normalizedName] ??
-    "🛍️"
-  );
 }
 
 function formatCategoryName(name: string): string {
@@ -83,12 +52,12 @@ export function CategoryScroll({
         <button
           type="button"
           onClick={onDealsClick}
-          className="flex w-[78px] shrink-0 flex-col items-center gap-2 rounded-2xl py-1.5 transition hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
+          className="flex w-[84px] shrink-0 flex-col items-center gap-1.5 rounded-xl border border-black/[0.025] px-2 py-2 transition hover:-translate-y-0.5 hover:border-black/[0.05] focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
         >
-          <span className="flex h-14 w-14 items-center justify-center rounded-[18px] border border-red-100 bg-red-50 text-3xl shadow-sm">
-            🏷️
+          <span className="flex h-12 w-12 items-center justify-center">
+            <Tag className="h-7 w-7 text-red-600" aria-hidden="true" />
           </span>
-          <span className="text-center text-sm font-semibold text-gray-900">
+          <span className="min-h-10 text-center text-sm font-semibold leading-5 text-gray-900">
             Deals
           </span>
         </button>
@@ -100,10 +69,21 @@ export function CategoryScroll({
               onClick={() =>
                 onCategoryClick(category.id)
               }
-              className="flex w-[78px] shrink-0 flex-col items-center gap-2 rounded-2xl py-1.5 transition hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
+              className="flex w-[84px] shrink-0 flex-col items-center gap-1.5 rounded-xl border border-black/[0.025] px-2 py-2 transition hover:-translate-y-0.5 hover:border-black/[0.05] focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
             >
-              <span className="flex h-14 w-14 items-center justify-center rounded-[18px] border border-black/[0.04] bg-[#f5f7f2] text-3xl shadow-sm">
-                {getCategoryIcon(category)}
+              <span className="flex h-12 w-12 items-center justify-center">
+                {category.iconUrl ? (
+                  <Image
+                    src={category.iconUrl}
+                    alt=""
+                    width={48}
+                    height={48}
+                    sizes="48px"
+                    className="h-12 w-12 object-contain"
+                  />
+                ) : (
+                  <ShoppingBag className="h-7 w-7 text-orange-600" aria-hidden="true" />
+                )}
               </span>
               <span className="line-clamp-2 min-h-10 text-center text-sm font-semibold leading-5 text-gray-900">
                 {formatCategoryName(category.name)}

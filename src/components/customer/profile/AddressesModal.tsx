@@ -16,6 +16,7 @@ import {
   customerProfileClientService,
   type CustomerProfileAddress,
 } from "@/services/user/customerProfileClientService";
+import {UsStateSelect} from "@/components/ui/UsStateSelect";
 
 interface AddressesModalProps {
   onClose: () => void;
@@ -323,12 +324,10 @@ export function AddressesModal({
                       <label className="block text-sm font-medium text-gray-700 mb-1">
                         State *
                       </label>
-                      <input
-                        type="text"
+                      <UsStateSelect
                         value={formData.state}
-                        onChange={(e) => setFormData({...formData, state: e.target.value})}
+                        onChange={(state) => setFormData({...formData, state})}
                         className="w-full px-4 py-2 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-orange-500"
-                        placeholder="CA"
                         required
                       />
                     </div>
@@ -410,12 +409,10 @@ export function AddressesModal({
                       <label className="block text-sm font-medium text-gray-700 mb-1">
                         State *
                       </label>
-                      <input
-                        type="text"
+                      <UsStateSelect
                         value={formData.state}
-                        onChange={(e) => setFormData({...formData, state: e.target.value})}
+                        onChange={(state) => setFormData({...formData, state})}
                         className="w-full px-4 py-2 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-orange-500"
-                        placeholder="CA"
                         required
                       />
                     </div>

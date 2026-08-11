@@ -17,13 +17,49 @@ import {
   Mail,
   PackageSearch,
   ShieldCheck,
+  MapPinned,
+  X,
 } from "lucide-react";
 import Link from "next/link";
+import {useEffect, useState} from "react";
 import {
   CustomerBottomNavigation,
 } from "@/components/customer/navigation/CustomerBottomNavigation";
+import {orderZoneRequestClientService} from "@/services/customer/orderZoneRequestClientService";
 
 export default function HelpPage() {
+  const [showOrderZoneForm, setShowOrderZoneForm] = useState(false);
+  const [customerAddress, setCustomerAddress] = useState("");
+  const [storeCity, setStoreCity] = useState("");
+  const [storeId, setStoreId] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [formMessage, setFormMessage] = useState("");
+
+  useEffect(() => {
+    const query = new URLSearchParams(window.location.search);
+    if (query.get("request") === "order-zone") {
+      queueMicrotask(() => {
+        setShowOrderZoneForm(true);
+        setStoreCity(query.get("storeCity") ?? "");
+        setStoreId(query.get("storeId") ?? "");
+      });
+    }
+  }, []);
+
+  const submitOrderZoneRequest = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setSubmitting(true);
+    setFormMessage("");
+    try {
+      await orderZoneRequestClientService.create({customerAddress, storeCity, ...(storeId ? {storeId} : {})});
+      setFormMessage("Your Order Zone request was sent to LIA Support. We’ll review it and contact you when there is an update.");
+    } catch (reason) {
+      setFormMessage(reason instanceof Error ? reason.message : "Unable to send your request. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
     <main className="min-h-screen bg-white pb-28">
       <header className="sticky top-0 z-20 bg-white/95 px-4 pb-4 pt-[max(1rem,env(safe-area-inset-top))] backdrop-blur-xl">
@@ -66,6 +102,11 @@ export default function HelpPage() {
             <p className="mt-0.5 text-xs text-gray-500">Choose the option that best fits your question.</p>
           </div>
           <div className="space-y-3">
+            <button type="button" onClick={() => {setShowOrderZoneForm(true); setFormMessage("");}} className="group flex w-full items-center gap-4 rounded-2xl border border-gray-200 bg-white p-4 text-left shadow-[0_4px_12px_rgba(15,23,42,0.06)] transition hover:-translate-y-0.5 hover:border-orange-200">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-orange-50 text-orange-600"><MapPinned className="h-5 w-5" /></span>
+              <span className="min-w-0 flex-1"><span className="block text-sm font-extrabold text-gray-900">Request an Order Zone</span><span className="mt-1 block text-xs leading-5 text-gray-500">Ask LIA Support for permission to order from a store outside your current zone.</span></span>
+              <ChevronRight className="h-5 w-5 text-orange-500 transition group-hover:translate-x-0.5" />
+            </button>
             <a href="mailto:support@liamarketplace.com" className="group flex items-center gap-4 rounded-2xl border border-gray-200 bg-white p-4 shadow-[0_4px_12px_rgba(15,23,42,0.06)] transition hover:-translate-y-0.5 hover:border-orange-200 hover:bg-white">
               <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-orange-50 text-orange-600"><Mail className="h-5 w-5" /></span>
               <span className="min-w-0 flex-1"><span className="block text-sm font-extrabold text-gray-900">Contact LIA Support</span><span className="mt-1 block text-xs leading-5 text-gray-500">Account questions, delivery concerns, or general help.</span></span>
@@ -78,6 +119,38 @@ export default function HelpPage() {
             </a>
           </div>
         </section>
+
+        {showOrderZoneForm && (
+          <div
+            className="fixed inset-0 z-[100] flex items-end justify-center bg-slate-950/55 p-0 backdrop-blur-[2px] sm:items-center sm:p-5"
+            onClick={() => setShowOrderZoneForm(false)}
+          >
+            <section
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="order-zone-title"
+              onClick={(event) => event.stopPropagation()}
+              className="relative max-h-[calc(100dvh-env(safe-area-inset-top)-1rem)] w-full max-w-lg overflow-y-auto rounded-t-3xl border border-orange-100 bg-white px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-6 shadow-2xl sm:rounded-3xl sm:p-6"
+            >
+              <button type="button" onClick={() => setShowOrderZoneForm(false)} className="absolute right-4 top-4 rounded-full p-2 text-gray-500 transition hover:bg-gray-100" aria-label="Close Order Zone form"><X className="h-5 w-5" /></button>
+              <div className="pr-10">
+                <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-orange-50 text-orange-600"><MapPinned className="h-5 w-5" /></span>
+                <h2 id="order-zone-title" className="mt-4 text-xl font-extrabold text-gray-900">Request an Order Zone</h2>
+                <p className="mt-1 text-sm leading-6 text-gray-600">Tell us where you need delivery and the city of the store you want to shop from. Approval is not automatic; LIA will review delivery coverage first.</p>
+              </div>
+              <form onSubmit={submitOrderZoneRequest} className="mt-5 space-y-4">
+                <label className="block text-sm font-bold text-gray-800">Your complete delivery address
+                  <textarea required minLength={10} maxLength={300} value={customerAddress} onChange={(event) => setCustomerAddress(event.target.value)} rows={3} placeholder="Street address, city, state, ZIP" className="mt-2 w-full rounded-xl border border-gray-200 px-3 py-3 text-sm font-medium outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100" />
+                </label>
+                <label className="block text-sm font-bold text-gray-800">City of the store
+                  <input required minLength={2} maxLength={100} value={storeCity} onChange={(event) => setStoreCity(event.target.value)} placeholder="Example: Cedar Rapids" className="mt-2 w-full rounded-xl border border-gray-200 px-3 py-3 text-sm font-medium outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100" />
+                </label>
+                {formMessage && <p className="rounded-xl bg-orange-50 px-3 py-2.5 text-sm font-semibold leading-5 text-orange-900" role="status">{formMessage}</p>}
+                <button type="submit" disabled={submitting} className="w-full rounded-xl bg-orange-500 py-3 text-sm font-extrabold text-white transition hover:bg-orange-600 disabled:opacity-60">{submitting ? "Sending request…" : "Send request to LIA Support"}</button>
+              </form>
+            </section>
+          </div>
+        )}
 
         <div className="flex items-start gap-3 rounded-2xl border border-emerald-100 bg-emerald-50/75 p-4 text-sm leading-6 text-emerald-950">
           <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" />

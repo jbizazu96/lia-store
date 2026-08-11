@@ -6,6 +6,7 @@ import {ArrowLeft, MapPin, User, Phone} from "lucide-react";
 import { useUnsavedChanges } from "@/hooks/useUnsavedChanges";
 import { useConfirmation } from "@/context/ConfirmationContext";
 import {formatPhoneNumber} from "@/utils/phone";
+import {UsStateSelect} from "@/components/ui/UsStateSelect";
 
 interface AddressModalProps {
   isOpen: boolean;
@@ -170,12 +171,10 @@ export function AddressModal({
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 State *
               </label>
-              <input
-                type="text"
+              <UsStateSelect
                 value={formData.state}
-                onChange={(e) => setFormData({...formData, state: e.target.value})}
+                onChange={(state) => setFormData({...formData, state})}
                 className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500"
-                placeholder="CA"
                 required
                 disabled={loading}
               />

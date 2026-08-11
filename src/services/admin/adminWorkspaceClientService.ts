@@ -45,6 +45,10 @@ import type {
   AdminRefundClaimListItem,
 } from "@/types/adminWorkspace";
 import type {HomePromotion} from "@/types/homePromotion";
+import type {
+  DeliveryZone,
+  DeliveryZoneDraft,
+} from "@/types/deliveryZone";
 
 export class AdminWorkspaceClientError extends Error {
   constructor(
@@ -319,8 +323,58 @@ export const adminWorkspaceClientService = {
   }>("reindexAdminCatalogSearch", afterStoreId ? {afterStoreId} : undefined),
   getAuditLogs: (search = "") => call<{logs: AdminAuditLog[]; limited: boolean}>("getAdminAuditLogs", {search}),
   getHomePromotions: () => call<{promotions: HomePromotion[]}>("getAdminHomePromotions"),
+  getProductCategories: () => call<{categories: Array<{id: string; name: string; iconUrl: string; freshnessEligible: boolean}>}>("getAdminProductCategories"),
+  createProductCategory: (category: {name: string; freshnessEligible: boolean}) => call<{id: string}>("createAdminProductCategory", category),
+  updateProductCategory: (id: string, category: {name: string; freshnessEligible: boolean}) => call<{success: boolean}>("updateAdminProductCategory", {id, ...category}),
+  uploadProductCategoryIcon: async (id: string, file: File) => {
+    if (!file.type.match(/^image\/(jpeg|png|webp|avif)$/)) {
+      throw new Error("Choose a JPG, PNG, WebP, or AVIF image.");
+    }
+    if (file.size <= 0 || file.size > 3 * 1024 * 1024) {
+      throw new Error("Category images must be no larger than 3 MB.");
+    }
+    return call<{success: boolean; iconUrl: string}>("uploadAdminProductCategoryIcon", {
+      id,
+      contentType: file.type,
+      base64: await imageBase64(file),
+    });
+  },
+  importProductCategories: () => call<{success: boolean; created: number; productsScanned: number}>("importAdminProductCategories"),
   saveHomePromotion: (id: string | null, promotion: Omit<HomePromotion, "id">) => call<{id: string}>("saveAdminHomePromotion", {id, promotion}),
   deleteHomePromotion: (id: string) => call<{success: boolean}>("deleteAdminHomePromotion", {id}),
+  getDeliveryZones: () => call<{zones: DeliveryZone[]}>("getAdminDeliveryZones"),
+  createDeliveryZone: (zone: DeliveryZoneDraft) =>
+    call<{id: string}>("createAdminDeliveryZone", {zone}),
+  updateDeliveryZone: (id: string, zone: DeliveryZoneDraft) =>
+    call<{success: boolean}>("updateAdminDeliveryZone", {id, zone}),
+  addDeliveryZoneCity: (zoneId: string, cityName: string, stateCode: string) =>
+    call<{success: boolean}>("addAdminDeliveryZoneCity", {zoneId, cityName, stateCode}),
+  removeDeliveryZoneCity: (zoneId: string, cityKey: string) =>
+    call<{success: boolean}>("removeAdminDeliveryZoneCity", {zoneId, cityKey}),
+  deleteDeliveryZone: (id: string) =>
+    call<{success: boolean}>("deleteAdminDeliveryZone", {id}),
+  backfillDeliveryZoneAssignments: () => call<{
+    success: boolean;
+    customers: {scanned: number; matched: number; defaultPricing: number; skippedAdmin: number; missingAddress: number};
+    stores: {scanned: number; matched: number; defaultPricing: number; skippedAdmin: number; missingAddress: number};
+    drivers: {scanned: number; matched: number; defaultPricing: number; skippedAdmin: number; missingAddress: number};
+  }>("backfillAdminDeliveryZoneAssignments"),
+  getDeliveryZonePricing: (zoneId: string) => call<{
+    zone: {id: string; name: string; primaryStateCode: string; maximumRouteMiles: number};
+    policy: Record<string, number>;
+    inherited: boolean;
+  }>("getAdminDeliveryZonePricing", {zoneId}),
+  saveDeliveryZonePricing: (zoneId: string, policy: Record<string, number>) =>
+    call<{success: boolean}>("saveAdminDeliveryZonePricing", {zoneId, policy}),
+  resetDeliveryZonePricing: (zoneId: string) =>
+    call<{success: boolean}>("resetAdminDeliveryZonePricing", {zoneId}),
+  setAccountZoneAssignment: (input: {
+    accountType: "customer" | "store" | "driver";
+    accountId: string;
+    homeZoneId: string | null;
+    serviceZoneIds?: string[];
+    orderZoneIds?: string[];
+  }) => call<{success: boolean}>("setAdminAccountZoneAssignment", input),
   getRefundClaims: (status = "pending_review") => call<{
     claims: AdminRefundClaimListItem[];
     counts: {pending_review: number; approved: number; rejected: number};

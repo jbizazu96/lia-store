@@ -184,7 +184,7 @@ export const getAdminCustomer = onCall(
       throw new HttpsError("not-found", "The customer was not found.");
     }
 
-    const [orders, notifications, deletionRequests] = await Promise.all([
+    const [orders, notifications, deletionRequests, orderZoneRequests] = await Promise.all([
       db.collection("orders")
         .where("customer.uid", "==", id)
         .limit(MAX_RECENT_ORDERS)
@@ -196,6 +196,10 @@ export const getAdminCustomer = onCall(
       db.collection("accountDeletionRequests")
         .where("ownerId", "==", id)
         .limit(10)
+        .get(),
+      db.collection("orderZoneRequests")
+        .where("customerId", "==", id)
+        .limit(20)
         .get(),
     ]);
     const address = record(data.defaultAddress);
@@ -224,6 +228,21 @@ export const getAdminCustomer = onCall(
       address: text(address.formattedAddress) || [
         text(address.street), text(address.city), text(address.state), text(address.zip),
       ].filter(Boolean).join(", ") || null,
+      zoneAssignment: {
+        homeZoneId: text(data.homeZoneId) || text(address.deliveryZoneId) || null,
+        orderZoneIds: Array.isArray(data.orderZoneIds) ? data.orderZoneIds.filter((value): value is string => typeof value === "string") : [],
+      },
+      orderZoneRequests: orderZoneRequests.docs.map((document) => {
+        const item = document.data();
+        return {
+          id: document.id,
+          customerAddress: text(item.customerAddress),
+          requestedStoreCity: text(item.requestedStoreCity),
+          storeName: text(item.storeName) || null,
+          status: text(item.status) || "pending_review",
+          createdAt: date(item.createdAt),
+        };
+      }).sort((left, right) => (right.createdAt ?? "").localeCompare(left.createdAt ?? "")),
       orders: orders.docs.map(orderSummary)
         .sort((left, right) => (right.createdAt ?? "").localeCompare(left.createdAt ?? "")),
       notifications: notifications.docs.map(notificationSummary),

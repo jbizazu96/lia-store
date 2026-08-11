@@ -179,6 +179,14 @@ export function CheckoutPaymentForm({
     ) => {
       event.preventDefault();
 
+      if (!navigator.onLine) {
+        const message =
+          "Internet connection required. Check your connection before submitting payment.";
+        setLocalError(message);
+        onPaymentError(message);
+        return;
+      }
+
       if (
         !stripe ||
         !elements

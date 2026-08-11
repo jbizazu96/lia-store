@@ -103,7 +103,7 @@ export function useCheckoutPricing({
   address,
 }: UseCheckoutPricingParams): UseCheckoutPricingResult {
   const marketplacePolicy =
-    useMarketplacePricingPolicy();
+    useMarketplacePricingPolicy(store?.id);
   const orderDeliveryPolicy = useOrderDeliveryPolicy();
   const [distanceMiles, setDistanceMiles] = useState(0);
   const [isCalculatingDistance, setIsCalculatingDistance] = useState(false);
@@ -192,7 +192,7 @@ export function useCheckoutPricing({
     return () => {
       isMounted = false;
     };
-  }, [store, address?.latitude, address?.longitude]);
+  }, [store, address]);
 
   return useMemo(() => {
     const pricing = marketplacePolicy

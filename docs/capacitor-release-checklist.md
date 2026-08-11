@@ -6,6 +6,7 @@ Complete these checks during native development and repeat them on release candi
 
 - Choose the final unique app identifier before creating the iOS and Android projects.
 - Set `CAPACITOR_SERVER_URL` to the deployed HTTPS customer app before running Capacitor sync.
+- Generate the Android and iOS splash assets from the approved LIA launch artwork after creating the native projects. The shared native splash behavior is already configured in `capacitor.config.ts`; verify the white native screen hands off cleanly to the branded customer loader without a blank or flashing frame.
 - Register the `lia://` deep-link scheme and configure Universal Links (iOS) and App Links (Android) for the production HTTPS domain.
 - Set `NEXT_PUBLIC_APP_URL` in the native build to that HTTPS origin. Stripe redirect returns must never use `capacitor://localhost`.
 - Configure Firebase Android (`google-services.json`) and iOS (`GoogleService-Info.plist`) applications separately from the web app.

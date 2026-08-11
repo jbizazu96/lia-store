@@ -53,9 +53,7 @@ import {
   calculateDeliveryFee,
   getDeliveryFeeDisplay,
 } from "@/services/delivery/deliveryPricing";
-import {
-  useMarketplacePricingPolicy,
-} from "@/hooks/useMarketplacePricingPolicy";
+import {useApplicableMarketplacePricing} from "@/hooks/useMarketplacePricingPolicy";
 import {useOrderDeliveryPolicy} from "@/hooks/useOrderDeliveryPolicy";
 
 import type { Category } from "@/types/category";
@@ -195,7 +193,8 @@ export function useCustomerStore({
   skipDistanceWarning = false,
 }: UseCustomerStoreParams): UseCustomerStoreResult {
   const orderDeliveryPolicy = useOrderDeliveryPolicy();
-  const marketplacePolicy = useMarketplacePricingPolicy();
+  const applicablePricing = useApplicableMarketplacePricing(storeId);
+  const marketplacePolicy = applicablePricing?.policy ?? null;
   const [store, setStore] =
     useState<CustomerStore | null>(null);
 
@@ -455,6 +454,9 @@ export function useCustomerStore({
                 ),
 
               isFavorite: false,
+              maxDeliveryMiles: marketplacePolicy.maxRadiusMiles,
+              zoneAccessAllowed: applicablePricing?.decision?.allowed ?? true,
+              zoneAccessType: applicablePricing?.decision?.zoneAccessType ?? "default_pricing",
             }
           );
 
@@ -511,6 +513,9 @@ export function useCustomerStore({
                   categories: currentStore.categories,
                   promotions: currentStore.promotions,
                   isFavorite: currentStore.isFavorite,
+                  maxDeliveryMiles: currentStore.maxDeliveryMiles,
+                  zoneAccessAllowed: currentStore.zoneAccessAllowed,
+                  zoneAccessType: currentStore.zoneAccessType,
                 }
               );
             });
@@ -523,14 +528,13 @@ export function useCustomerStore({
           }
         );
 
-        const exceedsDeliveryRadius =
-          distance >
-          marketplacePolicy.maxRadiusMiles;
+        const exceedsDeliveryRadius = distance > marketplacePolicy.maxRadiusMiles;
+        const cannotOrder = exceedsDeliveryRadius || applicablePricing?.decision?.allowed === false;
 
         setDistanceValue(distance);
 
         setShowDistanceWarning(
-          exceedsDeliveryRadius &&
+          cannotOrder &&
           !skipDistanceWarning
         );
 
@@ -620,6 +624,7 @@ export function useCustomerStore({
     estimatedTimeParam,
     skipDistanceWarning,
     marketplacePolicy,
+    applicablePricing,
     orderDeliveryPolicy,
   ]);
 
@@ -647,8 +652,8 @@ export function useCustomerStore({
     showDistanceWarning,
     distanceValue,
     isOutsideDeliveryRadius:
-      distanceValue >
-      (marketplacePolicy?.maxRadiusMiles ?? Infinity),
+      applicablePricing?.decision?.allowed === false ||
+      distanceValue > (marketplacePolicy?.maxRadiusMiles ?? Infinity),
     closeDistanceWarning,
     openDistanceWarning,
   };

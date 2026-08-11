@@ -10,7 +10,6 @@ import { formatDistance } from "@/services/delivery/distance";
 import {
   formatStoreName,
 } from "@/utils/productDisplay";
-import {useMarketplacePricingPolicy} from "@/hooks/useMarketplacePricingPolicy";
 
 interface StoreCardProps {
   store: CustomerStore;
@@ -28,11 +27,18 @@ export function StoreCard({
   onFavoriteChange,
   priority = false,
 }: StoreCardProps) {
-  const marketplacePolicy = useMarketplacePricingPolicy();
   const [isSavingFavorite, setIsSavingFavorite] = useState(false);
-  const maxRadius = marketplacePolicy?.maxRadiusMiles ?? Infinity;
+  const maxRadius = store.maxDeliveryMiles || Infinity;
   const distance = store.distance || 0;
   const isTooFar = distance > maxRadius;
+  const isUnavailable = isTooFar || !store.zoneAccessAllowed;
+  const zoneLabel = store.zoneAccessType === "same_home_zone"
+    ? "Home zone"
+    : store.zoneAccessType === "store_service_zone"
+      ? "Serves your zone"
+      : store.zoneAccessType === "customer_order_zone"
+        ? "Approved order zone"
+        : "Distance-based delivery";
 
   const formattedDistance = formatDistance(distance);
   const deliveryFee = store.deliveryFeeDisplay;
@@ -51,7 +57,7 @@ export function StoreCard({
       whileTap={{scale: 0.98}}
       onClick={onClick}
       className={`group cursor-pointer rounded-2xl border border-black/[0.045] bg-white p-2 transition duration-300 hover:border-black/[0.08] ${
-        isTooFar ? "opacity-80" : ""
+        isUnavailable ? "opacity-80" : ""
       }`}
     >
       {/* Store Image */}
@@ -75,12 +81,14 @@ export function StoreCard({
         )}
 
         <div className="absolute left-3 top-3">
-          {isTooFar && (
+          {isUnavailable ? (
             <div className="px-3 py-1.5 bg-orange-500 text-white text-xs font-semibold rounded-full flex items-center gap-1">
               <AlertCircle className="w-3 h-3" />
-              <span>Outside delivery radius</span>
+              <span>{isTooFar ? "Outside delivery radius" : "Outside your delivery zones"}</span>
             </div>
-          )}
+          ) : zoneLabel ? (
+            <div className="rounded-full bg-white/95 px-3 py-1.5 text-xs font-bold text-slate-700 shadow-sm">{zoneLabel}</div>
+          ) : null}
       </div>
         </div>
       <div className="space-y-1 px-0.5 pt-3">

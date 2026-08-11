@@ -96,7 +96,7 @@ export function useCartPricing({
   storeId,
 }: UseCartPricingParams): UseCartPricingResult {
   const marketplacePolicy =
-    useMarketplacePricingPolicy();
+    useMarketplacePricingPolicy(storeId);
   const [
     distanceMiles,
     setDistanceMiles,

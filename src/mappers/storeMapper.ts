@@ -18,6 +18,9 @@ interface CustomerStoreOptions {
   promotions?: Promotion[];
 
   isFavorite?: boolean;
+  maxDeliveryMiles?: number;
+  zoneAccessAllowed?: boolean;
+  zoneAccessType?: CustomerStore["zoneAccessType"];
 }
 
 /**
@@ -46,6 +49,9 @@ export const storeMapper = {
 
       promotions: options.promotions ?? [],
       isFavorite: options.isFavorite ?? false,
+      maxDeliveryMiles: options.maxDeliveryMiles ?? 0,
+      zoneAccessAllowed: options.zoneAccessAllowed ?? true,
+      zoneAccessType: options.zoneAccessType ?? "default_pricing",
     };
   },
 };

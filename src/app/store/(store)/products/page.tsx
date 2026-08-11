@@ -21,6 +21,7 @@ import {
 
 import {
   useEffect,
+  useMemo,
 } from "react";
 
 import {
@@ -66,11 +67,14 @@ import {
 import {
   ProductStats,
 } from "@/components/store/products/ProductStats";
+import {useProductCategories} from "@/hooks/useProductCategories";
+import {categoryService} from "@/services/category/categoryService";
 
 
 export default function ProductsPage() {
   const router = useRouter();
   const { confirm } = useConfirmation();
+  const categories = useProductCategories();
 
   const {
     products,
@@ -95,6 +99,16 @@ export default function ProductsPage() {
   } = useStoreProductFilters({
     products,
   });
+  const productGroups = useMemo(() =>
+    categoryService.groupCategoriesWithProducts(categories, filteredProducts)
+      .map((category) => ({
+        ...category,
+        products: [...category.products].sort((first, second) =>
+          first.name.localeCompare(second.name, undefined, {sensitivity: "base"})
+        ),
+      }))
+      .sort((first, second) => first.name.localeCompare(second.name, undefined, {sensitivity: "base"})),
+  [categories, filteredProducts]);
 
   /*
   |--------------------------------------------------------------------------
@@ -392,13 +406,11 @@ export default function ProductsPage() {
             </span>
           </div>
 
-          <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-5">
-            <AnimatePresence
-              initial={false}
-              mode="popLayout"
-            >
-              {filteredProducts.map(
-                (product) => (
+          <div className="space-y-7">
+            {productGroups.map((category) => <section key={category.id}>
+              <div className="mb-3 flex items-center justify-between border-b border-gray-100 pb-2"><h2 className="text-base font-bold text-gray-800">{category.name}</h2><span className="text-xs font-medium text-gray-400">{category.products.length} product{category.products.length === 1 ? "" : "s"}</span></div>
+              <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-5"><AnimatePresence initial={false} mode="popLayout">
+              {category.products.map((product) => (
                   <motion.div
                     key={product.id}
                     initial={{
@@ -419,6 +431,7 @@ export default function ProductsPage() {
                   >
                     <ProductCard
                       product={product}
+                      categoryName={category.name}
                       onToggleActive={
                         toggleProductActive
                       }
@@ -433,9 +446,9 @@ export default function ProductsPage() {
                       }
                     />
                   </motion.div>
-                )
-              )}
-            </AnimatePresence>
+              ))}
+              </AnimatePresence></div>
+            </section>)}
           </div>
         </>
       )}

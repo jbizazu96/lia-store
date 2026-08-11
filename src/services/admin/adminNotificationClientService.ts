@@ -33,6 +33,10 @@ export const adminNotificationClientService = {
     {notificationId}
   ),
 
+  markAllRead: () => call<{success: boolean; marked: number}>(
+    "markAllAdminNotificationsRead"
+  ),
+
   clear: () => call<{
     success: boolean;
     cleared: number;

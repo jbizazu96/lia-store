@@ -3,6 +3,7 @@
 import {memo} from "react";
 import {motion} from "framer-motion";
 import {Store, MapPin, Phone, Mail} from "lucide-react";
+import {UsStateSelect} from "@/components/ui/UsStateSelect";
 
 interface Step1StoreInfoProps {
   name: string;
@@ -139,12 +140,10 @@ export const Step1StoreInfo = memo(({
       </div>
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">State *</label>
-        <input
-          type="text"
+        <UsStateSelect
           value={state}
-          onChange={(e) => setState(e.target.value)}
+          onChange={setState}
           className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500"
-          placeholder="CA"
         />
       </div>
     </div>

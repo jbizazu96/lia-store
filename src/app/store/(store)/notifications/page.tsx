@@ -13,7 +13,7 @@
 */
 
 import { useEffect, useState } from "react";
-import { ArrowLeft, Bell, Store, Package, ShoppingBag, Clock } from "lucide-react";
+import { ArrowLeft, Bell, Package, Clock } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -40,6 +40,7 @@ export default function StoreNotificationsPage() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [clearing, setClearing] = useState(false);
+  const [markingAll, setMarkingAll] = useState(false);
   const { confirm } = useConfirmation();
   const { showSuccess } = useSuccessToast();
 
@@ -84,8 +85,10 @@ export default function StoreNotificationsPage() {
 
   useEffect(() => {
     if (!user) {
-      setNotifications([]);
-      setLoading(false);
+      queueMicrotask(() => {
+        setNotifications([]);
+        setLoading(false);
+      });
       return;
     }
 
@@ -198,7 +201,7 @@ export default function StoreNotificationsPage() {
             </div>
             <h3 className="text-xl font-bold text-gray-800 mb-2">No notifications yet</h3>
             <p className="text-gray-500 text-sm max-w-sm mx-auto">
-              You'll receive notifications here when customers place new orders or when there are important store updates.
+              You&apos;ll receive notifications here when customers place new orders or when there are important store updates.
             </p>
             <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-3">
               <button
@@ -224,16 +227,17 @@ export default function StoreNotificationsPage() {
                 <div className="flex items-center gap-3">
                   {unreadNotifications.length > 0 && (
                     <button
-                      onClick={async () => {
+                      disabled={markingAll}
+                      onClick={() => {
                         if (!user) return;
-                        for (const notification of unreadNotifications) {
-                          await notificationService.markAsRead(user.uid, notification.id);
-                        }
-                        showSuccess("All notifications marked as read.");
+                        setMarkingAll(true);
+                        void notificationService.markAllAsRead(user.uid)
+                          .then(() => showSuccess("All notifications marked as read."))
+                          .finally(() => setMarkingAll(false));
                       }}
                       className="text-xs text-orange-600 font-medium hover:text-orange-700 transition"
                     >
-                      Mark all as read
+                      {markingAll ? "Marking..." : "Mark all as read"}
                     </button>
                   )}
                   <button

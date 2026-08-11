@@ -98,6 +98,18 @@ export default function AdminNotificationsPage() {
     }
   };
 
+  const markAllRead = async () => {
+    setWorking(true);
+    try {
+      await adminNotificationClientService.markAllRead();
+      setNotifications((current) => current.map((notification) => ({...notification, read: true})));
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Unable to mark notifications as read.");
+    } finally {
+      setWorking(false);
+    }
+  };
+
   if (loading) return <PageContentSkeleton />;
 
   const unread = notifications.filter((notification) => !notification.read).length;
@@ -122,6 +134,8 @@ export default function AdminNotificationsPage() {
           </p>
         </div>
         {notifications.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+          {unread > 0 && <button type="button" disabled={working} onClick={() => void markAllRead()} className="inline-flex items-center gap-2 rounded-xl bg-orange-50 px-4 py-2.5 text-sm font-bold text-orange-700 ring-1 ring-orange-200 hover:bg-orange-100 disabled:opacity-50"><CheckCheck className="h-4 w-4" />Mark all as read</button>}
           <button
             type="button"
             disabled={working}
@@ -131,6 +145,7 @@ export default function AdminNotificationsPage() {
             <Trash2 className="h-4 w-4" />
             Clear all
           </button>
+          </div>
         )}
       </div>
 

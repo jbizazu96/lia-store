@@ -19,6 +19,8 @@ import {
   Building2,
   CircleDollarSign,
   LoaderCircle,
+  MapPinned,
+  Route,
   ShoppingBag,
   Truck,
   UserPlus,
@@ -47,8 +49,11 @@ export function AdminPlatformReportsWorkspace() {
 
   useEffect(() => {
     let active = true;
-    setReport(null);
-    setError("");
+    queueMicrotask(() => {
+      if (!active) return;
+      setReport(null);
+      setError("");
+    });
     void adminWorkspaceClientService.getPlatformReport(periodDays)
       .then((result) => { if (active) setReport(result); })
       .catch((reason: unknown) => {
@@ -85,7 +90,28 @@ export function AdminPlatformReportsWorkspace() {
 
 function ReportContent({report}: {report: AdminPlatformReport}) {
   const maxOrders = Math.max(1, ...report.daily.map((item) => item.orders));
-  return <><div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-3"><Metric icon={<ShoppingBag />} label="Confirmed orders" value={String(report.metrics.confirmedOrders)} tone="bg-orange-50 text-orange-800" /><Metric icon={<CircleDollarSign />} label="Gross customer payments" value={money(report.metrics.grossSalesAmount)} tone="bg-green-50 text-green-800" /><Metric icon={<UserPlus />} label="New customers" value={String(report.metrics.newCustomers)} tone="bg-blue-50 text-blue-800" /><Metric icon={<Building2 />} label="Active stores" value={String(report.metrics.activeStores)} tone="bg-violet-50 text-violet-800" /><Metric icon={<Truck />} label="Approved drivers" value={String(report.metrics.approvedDrivers)} tone="bg-sky-50 text-sky-800" /><Metric icon={<ShoppingBag />} label="Delivered / cancelled" value={`${report.metrics.deliveredOrders} / ${report.metrics.cancelledOrders}`} tone="bg-slate-100 text-slate-800" /></div>{report.limited && <p className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">This operational report reached its current record window. We will add durable daily reporting summaries before the marketplace reaches this volume.</p>}<section className="mt-6 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-100"><div><h2 className="font-bold">Confirmed order activity</h2><p className="mt-1 text-sm text-slate-500">Daily orders in the selected period.</p></div><div className="mt-6 flex h-52 items-end gap-1.5 sm:gap-2">{report.daily.map((item) => <div key={item.date} className="group flex h-full min-w-0 flex-1 flex-col justify-end"><div title={`${item.date}: ${item.orders} orders`} style={{height: `${Math.max(item.orders ? 8 : 2, (item.orders / maxOrders) * 100)}%`}} className="rounded-t-md bg-orange-500 transition group-hover:bg-orange-600" /><p className="mt-2 truncate text-center text-[10px] text-slate-400">{item.date.slice(5)}</p></div>)}</div></section><section className="mt-6 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-100"><div className="border-b border-slate-100 p-5"><h2 className="font-bold">Daily marketplace detail</h2></div><div className="divide-y divide-slate-100">{[...report.daily].reverse().map((item) => <div key={item.date} className="grid grid-cols-3 gap-3 px-5 py-3 text-sm"><p className="font-semibold">{item.date}</p><p className="text-slate-600">{item.orders} orders · {item.customers} new customers</p><p className="text-right font-bold">{money(item.grossSalesAmount)}</p></div>)}</div></section></>;
+  return <>
+    <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-3"><Metric icon={<ShoppingBag />} label="Confirmed orders" value={String(report.metrics.confirmedOrders)} tone="bg-orange-50 text-orange-800" /><Metric icon={<CircleDollarSign />} label="Gross customer payments" value={money(report.metrics.grossSalesAmount)} tone="bg-green-50 text-green-800" /><Metric icon={<UserPlus />} label="New customers" value={String(report.metrics.newCustomers)} tone="bg-blue-50 text-blue-800" /><Metric icon={<Building2 />} label="Active stores" value={String(report.metrics.activeStores)} tone="bg-violet-50 text-violet-800" /><Metric icon={<Truck />} label="Approved drivers" value={String(report.metrics.approvedDrivers)} tone="bg-sky-50 text-sky-800" /><Metric icon={<ShoppingBag />} label="Delivered / cancelled" value={`${report.metrics.deliveredOrders} / ${report.metrics.cancelledOrders}`} tone="bg-slate-100 text-slate-800" /></div>
+    <section className="mt-6">
+      <div><h2 className="text-lg font-bold">Delivery zone reporting</h2><p className="mt-1 text-sm text-slate-500">Paid orders and account coverage for the selected reporting period.</p></div>
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <Metric icon={<Route />} label="Average route miles" value={report.metrics.averageRouteMiles.toFixed(1)} tone="bg-blue-50 text-blue-800" />
+        <Metric icon={<MapPinned />} label="Order Zone exceptions" value={String(report.metrics.orderZoneExceptions)} tone="bg-orange-50 text-orange-800" />
+        <Metric icon={<Route />} label="Cross-zone deliveries" value={String(report.metrics.crossZoneDeliveries)} tone="bg-violet-50 text-violet-800" />
+        <Metric icon={<CircleDollarSign />} label="Peak surcharge total" value={money(report.metrics.peakSurchargeAmount)} tone="bg-amber-50 text-amber-800" />
+        <Metric icon={<UserPlus />} label="Customers without a zone" value={String(report.metrics.customersWithoutZone)} tone="bg-rose-50 text-rose-800" />
+        <Metric icon={<Building2 />} label="Stores without a home zone" value={String(report.metrics.storesWithoutHomeZone)} tone="bg-slate-100 text-slate-800" />
+      </div>
+    </section>
+    {report.zoneReportingLimited && <p className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Zone reporting is showing the first 5,000 paid-order candidates in this period. Reduce the reporting period for a complete operational view.</p>}
+    <section className="mt-6 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-100">
+      <div className="border-b border-slate-100 p-5"><h2 className="font-bold">Orders and revenue by pricing zone</h2><p className="mt-1 text-sm text-slate-500">Revenue uses the immutable customer-payment total saved on each order.</p></div>
+      {report.zones.length === 0 ? <p className="p-6 text-sm text-slate-500">No paid orders with zone snapshots were found in this period.</p> : <div className="overflow-x-auto"><table className="min-w-[850px] w-full text-left text-sm"><thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr><th className="px-5 py-3">Pricing zone</th><th className="px-4 py-3">Orders</th><th className="px-4 py-3">Revenue</th><th className="px-4 py-3">Avg. miles</th><th className="px-4 py-3">Order Zone</th><th className="px-4 py-3">Cross-zone</th><th className="px-4 py-3">Peak fees</th></tr></thead><tbody className="divide-y divide-slate-100">{report.zones.map((zone) => <tr key={zone.pricingZoneId ?? "default"}><td className="px-5 py-4 font-bold">{zone.pricingZoneName}</td><td className="px-4 py-4">{zone.orders}</td><td className="px-4 py-4 font-semibold">{money(zone.revenueAmount)}</td><td className="px-4 py-4">{zone.averageRouteMiles.toFixed(1)}</td><td className="px-4 py-4">{zone.orderZoneExceptions}</td><td className="px-4 py-4">{zone.crossZoneDeliveries}</td><td className="px-4 py-4">{money(zone.peakSurchargeAmount)}</td></tr>)}</tbody></table></div>}
+    </section>
+    {report.limited && <p className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">This operational report reached its current record window. We will add durable daily reporting summaries before the marketplace reaches this volume.</p>}
+    <section className="mt-6 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-100"><div><h2 className="font-bold">Confirmed order activity</h2><p className="mt-1 text-sm text-slate-500">Daily orders in the selected period.</p></div><div className="mt-6 flex h-52 items-end gap-1.5 sm:gap-2">{report.daily.map((item) => <div key={item.date} className="group flex h-full min-w-0 flex-1 flex-col justify-end"><div title={`${item.date}: ${item.orders} orders`} style={{height: `${Math.max(item.orders ? 8 : 2, (item.orders / maxOrders) * 100)}%`}} className="rounded-t-md bg-orange-500 transition group-hover:bg-orange-600" /><p className="mt-2 truncate text-center text-[10px] text-slate-400">{item.date.slice(5)}</p></div>)}</div></section>
+    <section className="mt-6 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-100"><div className="border-b border-slate-100 p-5"><h2 className="font-bold">Daily marketplace detail</h2></div><div className="divide-y divide-slate-100">{[...report.daily].reverse().map((item) => <div key={item.date} className="grid grid-cols-3 gap-3 px-5 py-3 text-sm"><p className="font-semibold">{item.date}</p><p className="text-slate-600">{item.orders} orders · {item.customers} new customers</p><p className="text-right font-bold">{money(item.grossSalesAmount)}</p></div>)}</div></section>
+  </>;
 }
 
 function Metric({icon, label, value, tone}: {icon: React.ReactNode; label: string; value: string; tone: string}) { return <article className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-100"><div className={`inline-flex rounded-xl p-2.5 ${tone}`}>{icon}</div><p className="mt-4 text-2xl font-bold">{value}</p><p className="mt-1 text-sm font-medium text-slate-500">{label}</p></article>; }

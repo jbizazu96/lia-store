@@ -27,6 +27,7 @@ import {
   grantStoreUploadClaim,
 } from "../services/store/storeUploadClaimService";
 import {PLATFORM_REPORTING_TIME_ZONE} from "../payment/pricing/paymentPricingConfig";
+import {resolveDeliveryZoneForAddress} from "../delivery/deliveryZoneAssignmentService";
 
 if (admin.apps.length === 0) {
   admin.initializeApp();
@@ -374,12 +375,12 @@ function validateSchedule(value: unknown): Array<Record<string, unknown>> {
 async function geocode(address: string) {
   const response = await fetch("https://maps.googleapis.com/maps/api/geocode/json?address=" + encodeURIComponent(address) + "&key=" + encodeURIComponent(googleMapsApiKey.value()));
   if (!response.ok) return null;
-  const body = await response.json() as { status?: unknown; results?: Array<{ formatted_address?: unknown; geometry?: { location?: { lat?: unknown; lng?: unknown } } }> };
+  const body = await response.json() as { status?: unknown; results?: Array<{ formatted_address?: unknown; place_id?: unknown; geometry?: { location?: { lat?: unknown; lng?: unknown } } }> };
   const result = body.status === "OK" ? body.results?.[0] : null;
   const latitude = result?.geometry?.location?.lat;
   const longitude = result?.geometry?.location?.lng;
   return typeof latitude === "number" && typeof longitude === "number"
-    ? { latitude, longitude, formattedAddress: text(result?.formatted_address) || address }
+    ? { latitude, longitude, formattedAddress: text(result?.formatted_address) || address, placeId: text(result?.place_id) || null }
     : null;
 }
 
@@ -683,11 +684,13 @@ export const saveStoreWorkspaceSettings = onCall({ region: "us-central1", secret
   }
   const location = await geocode(`${address}, ${city}, ${state} ${zip}`);
   if (!location) throw new HttpsError("invalid-argument", "We could not verify the store address.");
+  const zone = await resolveDeliveryZoneForAddress(city, state, zip, location.placeId);
   const store = await requireOwnedStore(request.auth.uid);
   await store.ref.update({
     name, email, phone, description,
     address: upper(address), city: upper(city), state, zip: upper(zip), country: "US",
     formattedAddress: upper(location.formattedAddress), latitude: location.latitude, longitude: location.longitude,
+    homeZoneId: zone?.id ?? null, homeZoneName: zone?.name ?? null, zoneAssignmentSource: "automatic",
     businessType, registeredName, ein, businessStructure,
     category: text(storeInput.category), isOpen: storeInput.isOpen === true,
     ...notificationSettings,

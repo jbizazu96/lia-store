@@ -10,6 +10,8 @@
 */
 
 import * as admin from "firebase-admin";
+import {normalizeUsStateCode} from "../common/usStateCodes";
+import {resolveDeliveryZoneForAddress, zoneFields} from "../delivery/deliveryZoneAssignmentService";
 import {
   FieldValue,
   getFirestore,
@@ -64,8 +66,7 @@ function upper(value: string): string {
 }
 
 function normalizeState(value: string): string | null {
-  const normalized = value.trim().toUpperCase();
-  return /^[A-Z]{2}$/.test(normalized) ? normalized : null;
+  return normalizeUsStateCode(value);
 }
 
 function isFutureDate(value: string): boolean {
@@ -205,13 +206,14 @@ async function getSummary(uid: string) {
   };
 }
 
-async function geocodeAddress(address: string): Promise<{ formattedAddress: string; latitude: number; longitude: number } | null> {
+async function geocodeAddress(address: string): Promise<{ formattedAddress: string; latitude: number; longitude: number; placeId: string | null } | null> {
   const response = await fetch("https://maps.googleapis.com/maps/api/geocode/json?address=" + encodeURIComponent(address) + "&key=" + encodeURIComponent(googleMapsApiKey.value()));
   if (!response.ok) return null;
   const body = await response.json() as {
     status?: unknown;
     results?: Array<{
       formatted_address?: unknown;
+      place_id?: unknown;
       geometry?: {
         location?: {
           lat?: unknown;
@@ -223,7 +225,7 @@ async function geocodeAddress(address: string): Promise<{ formattedAddress: stri
   const result = body.status === "OK" ? body.results?.[0] : null;
   const latitude = result?.geometry?.location?.lat;
   const longitude = result?.geometry?.location?.lng;
-  return typeof latitude === "number" && typeof longitude === "number" ? { formattedAddress: valueString(result?.formatted_address) || address, latitude, longitude } : null;
+  return typeof latitude === "number" && typeof longitude === "number" ? { formattedAddress: valueString(result?.formatted_address) || address, latitude, longitude, placeId: valueString(result?.place_id) || null } : null;
 }
 
 export const getDriverWorkspaceEntry = onCall({ region: "us-central1" }, async (request) => {
@@ -270,6 +272,19 @@ export const markDriverWorkspaceNotificationRead = onCall({ region: "us-central1
   await requireDriver(request.auth.uid);
   await db.collection("users").doc(request.auth.uid).collection("notifications").doc(notificationId).update({ read: true, updatedAt: FieldValue.serverTimestamp() });
   return { success: true };
+});
+
+export const markAllDriverWorkspaceNotificationsRead = onCall({ region: "us-central1" }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Sign in to update notifications.");
+  await requireDriver(request.auth.uid);
+  const snapshot = await db.collection("users").doc(request.auth.uid).collection("notifications").get();
+  const unread = snapshot.docs.filter((document) => document.data().read !== true);
+  for (let start = 0; start < unread.length; start += 450) {
+    const batch = db.batch();
+    unread.slice(start, start + 450).forEach((document) => batch.update(document.ref, {read: true, updatedAt: FieldValue.serverTimestamp()}));
+    await batch.commit();
+  }
+  return {success: true, marked: unread.length};
 });
 
 export const clearDriverWorkspaceNotifications = onCall({ region: "us-central1" }, async (request) => {
@@ -329,6 +344,7 @@ export const updateDriverWorkspaceProfile = onCall({ region: "us-central1", secr
   const rawAddress = valueString(address.street) + (valueString(address.apartment).trim() ? ", " + valueString(address.apartment) : "") + ", " + valueString(address.city) + ", " + addressState + " " + valueString(address.zip);
   const location = await geocodeAddress(rawAddress);
   if (!location) throw new HttpsError("invalid-argument", "We could not verify your home address. Check the street, city, state, and ZIP code.");
+  const zone = await resolveDeliveryZoneForAddress(address.city, addressState, address.zip, location.placeId);
   const driver = await requireDriver(request.auth.uid);
   const existingVehicle = isRecord(driver.data()?.vehicle) ? driver.data()?.vehicle as Record<string, unknown> : {};
   const vehicleRequiresReview = existingVehicle.make !== valueString(vehicle.make).trim() || existingVehicle.model !== valueString(vehicle.model).trim() || existingVehicle.year !== year || existingVehicle.licensePlate !== upper(valueString(vehicle.licensePlate)) || existingVehicle.registrationState !== registrationState;
@@ -336,7 +352,8 @@ export const updateDriverWorkspaceProfile = onCall({ region: "us-central1", secr
   await Promise.all([
     driver.ref.update({
       firstName, middleName: middleName || null, lastName, phone,
-      address: { street: upper(valueString(address.street)), apartment: upper(valueString(address.apartment)) || null, city: upper(valueString(address.city)), state: addressState, zip: upper(valueString(address.zip)), formattedAddress: upper(location.formattedAddress), latitude: location.latitude, longitude: location.longitude },
+      address: { street: upper(valueString(address.street)), apartment: upper(valueString(address.apartment)) || null, city: upper(valueString(address.city)), state: addressState, zip: upper(valueString(address.zip)), formattedAddress: upper(location.formattedAddress), latitude: location.latitude, longitude: location.longitude, ...zoneFields(zone) },
+      homeZoneId: zone?.id ?? null, homeZoneName: zone?.name ?? null, zoneAssignmentSource: "automatic",
       serviceArea: { city: upper(valueString(serviceArea.city)), state: serviceAreaState, preferredRadiusMiles: radius, approvedRadiusMiles: typeof existingArea.approvedRadiusMiles === "number" ? existingArea.approvedRadiusMiles : null },
       vehicle: { make: valueString(vehicle.make).trim(), model: valueString(vehicle.model).trim(), year, color: valueString(vehicle.color).trim(), licensePlate: upper(valueString(vehicle.licensePlate)), registrationState },
       ...(vehicleRequiresReview ? { "vehicleInsurance.reviewStatus": "pending", "vehicleInsurance.rejectionReason": null, "vehicleInsurance.reviewedAt": null, "vehicleInsurance.reviewedBy": null, "vehicleRegistration.reviewStatus": "pending", "vehicleRegistration.rejectionReason": null, "vehicleRegistration.reviewedAt": null, "vehicleRegistration.reviewedBy": null } : {}),

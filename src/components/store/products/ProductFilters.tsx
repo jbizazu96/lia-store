@@ -9,9 +9,7 @@ import {
   Grid3x3,
   List,
 } from "lucide-react";
-import {
-  PRODUCT_CATEGORIES,
-} from "@/config/productCategories";
+import {useProductCategories} from "@/hooks/useProductCategories";
 
 interface ProductFiltersProps {
   searchQuery: string;
@@ -34,6 +32,7 @@ export function ProductFilters({
   viewMode = "grid",
   onViewModeChange,
 }: ProductFiltersProps) {
+  const categories = useProductCategories();
   return (
     <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
       <div className="flex flex-col sm:flex-row gap-4">
@@ -56,13 +55,13 @@ export function ProductFilters({
           className="px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500 text-sm min-w-[140px]"
         >
           <option value="all">All Categories</option>
-          {PRODUCT_CATEGORIES.map(
+          {categories.map(
              (category) => (
             <option
-                  key={category.value}
-                  value={category.value}
+                  key={category.id}
+                  value={category.id}
                 >
-                  {category.label}
+                  {category.name}
                 </option>
               ))}
             </select>

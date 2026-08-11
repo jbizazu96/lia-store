@@ -18,7 +18,7 @@ import {
   formatDistance,
   getEstimatedTime,
 } from "@/services/delivery/distance";
-import {useMarketplacePricingPolicy} from "@/hooks/useMarketplacePricingPolicy";
+import {useApplicableMarketplacePricing} from "@/hooks/useMarketplacePricingPolicy";
 import {useOrderDeliveryPolicy} from "@/hooks/useOrderDeliveryPolicy";
 import {PricingFeesModal} from "./PricingFeesModal";
 import type {StoreImageVariants} from "@/types/store";
@@ -31,6 +31,7 @@ interface ScheduleDay {
 }
 
 interface StoreInfoProps {
+  storeId: string;
   name: string;
   address: string;
   logoUrl: string;
@@ -47,6 +48,7 @@ interface StoreInfoProps {
 }
 
 export function StoreInfo({
+  storeId,
   name,
   address,
   logoUrl,
@@ -60,7 +62,8 @@ export function StoreInfo({
   schedule,
   onViewMore,
 }: StoreInfoProps) {
-  const marketplacePolicy = useMarketplacePricingPolicy();
+  const applicablePricing = useApplicableMarketplacePricing(storeId);
+  const marketplacePolicy = applicablePricing?.policy ?? null;
   const orderDeliveryPolicy = useOrderDeliveryPolicy();
   const [showPricingFees, setShowPricingFees] = useState(false);
   // Use the shared formatting functions
@@ -157,6 +160,13 @@ export function StoreInfo({
         </span>
         <span>Minimum order ${displayedMinimumOrder.toFixed(2)}</span>
       </div>
+
+      {applicablePricing?.decision && (
+        <div className="mt-3 rounded-xl bg-orange-50/70 px-3 py-2.5 text-xs leading-5 text-slate-600">
+          <p><span className="font-bold text-slate-800">Pricing zone:</span> {applicablePricing.decision.pricingZoneName}</p>
+          <p>Delivery pricing uses the trusted driving route. Longer routes can increase the delivery fee.</p>
+        </div>
+      )}
 
       <PricingFeesModal
         open={showPricingFees}

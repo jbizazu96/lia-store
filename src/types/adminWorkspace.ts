@@ -70,6 +70,7 @@ export interface AdminStoreApplicationDetail {
   submittedAt: string | null;
   isApproved: boolean;
   isActive: boolean;
+  zoneAssignment: {homeZoneId: string | null; serviceZoneIds: string[]};
   owner: {name: string; email: string; phone: string; address: string};
   store: {name: string; email: string; phone: string; description: string; address: string; businessType: string; registeredName: string; ein: string; businessStructure: string; schedule: Array<{day: string; open: string; close: string; isClosed: boolean}>};
   stripe: {accountStatus: string; detailsSubmitted: boolean; transfersEnabled: boolean; payoutsEnabled: boolean; requiresAction: boolean};
@@ -82,6 +83,7 @@ export interface AdminDriverApplicationDetail {
   status: AdminApplicationStatus;
   submittedAt: string | null;
   isApproved: boolean;
+  zoneAssignment: {homeZoneId: string | null; serviceZoneIds: string[]};
   profile: {name: string; email: string; phone: string; dateOfBirth: string; address: string};
   serviceArea: {city: string; state: string; preferredRadiusMiles: number | null; approvedRadiusMiles: number | null};
   vehicle: {deliveryMethod: string; make: string; model: string; year: number | null; color: string; licensePlate: string; registrationState: string};
@@ -224,6 +226,15 @@ export interface AdminCustomerDetail {
     suspensionReason: string | null;
   };
   address: string | null;
+  zoneAssignment: {homeZoneId: string | null; orderZoneIds: string[]};
+  orderZoneRequests: Array<{
+    id: string;
+    customerAddress: string;
+    requestedStoreCity: string;
+    storeName: string | null;
+    status: string;
+    createdAt: string | null;
+  }>;
   orders: Array<{
     id: string;
     orderNumber: string;
@@ -260,6 +271,12 @@ export interface AdminPlatformReport {
     newCustomers: number;
     activeStores: number;
     approvedDrivers: number;
+    averageRouteMiles: number;
+    orderZoneExceptions: number;
+    customersWithoutZone: number;
+    storesWithoutHomeZone: number;
+    crossZoneDeliveries: number;
+    peakSurchargeAmount: number;
   };
   daily: Array<{
     date: string;
@@ -267,6 +284,17 @@ export interface AdminPlatformReport {
     customers: number;
     grossSalesAmount: number;
   }>;
+  zones: Array<{
+    pricingZoneId: string | null;
+    pricingZoneName: string;
+    orders: number;
+    revenueAmount: number;
+    averageRouteMiles: number;
+    orderZoneExceptions: number;
+    crossZoneDeliveries: number;
+    peakSurchargeAmount: number;
+  }>;
+  zoneReportingLimited: boolean;
 }
 
 export interface AdminAuditLog {

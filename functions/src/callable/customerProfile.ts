@@ -21,6 +21,8 @@ import {
 import {
   defineSecret,
 } from "firebase-functions/params";
+import {normalizeUsStateCode} from "../common/usStateCodes";
+import {resolveDeliveryZoneForAddress, zoneFields} from "../delivery/deliveryZoneAssignmentService";
 
 if (admin.apps.length === 0) {
   admin.initializeApp();
@@ -53,9 +55,7 @@ function upper(value: string): string {
 }
 
 function stateCode(value: unknown): string | null {
-  const normalized = upper(text(value));
-
-  return /^[A-Z]{2}$/.test(normalized) ? normalized : null;
+  return normalizeUsStateCode(value);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -124,6 +124,20 @@ function profileResponse(data: Record<string, unknown>) {
           formattedAddress: address.formattedAddress,
         }
       : null,
+    deliveryZones: {
+      homeZone: text(data.homeZoneId)
+        ? {id: text(data.homeZoneId), name: text(data.homeZoneName) || "Assigned delivery zone"}
+        : null,
+      orderZones: Array.isArray(data.orderZoneIds)
+        ? data.orderZoneIds.filter((value): value is string => typeof value === "string" && Boolean(value.trim()))
+          .map((id, index) => ({
+            id: id.trim(),
+            name: Array.isArray(data.orderZoneNames) && typeof data.orderZoneNames[index] === "string"
+              ? data.orderZoneNames[index].trim() || "Approved Order Zone"
+              : "Approved Order Zone",
+          }))
+        : [],
+    },
     recentSearches: [...new Set(
       Array.isArray(data.recentSearches)
         ? data.recentSearches.filter((item): item is string =>
@@ -185,6 +199,7 @@ async function verifyAddress(input: Record<string, unknown>) {
     status?: string;
     results?: Array<{
       formatted_address?: string;
+      place_id?: string;
       geometry?: { location?: { lat?: number; lng?: number } };
     }>;
   };
@@ -207,6 +222,7 @@ async function verifyAddress(input: Record<string, unknown>) {
     latitude,
     longitude,
     formattedAddress: upper(result?.formatted_address ?? address),
+    placeId: result?.place_id ?? null,
   };
 }
 
@@ -250,18 +266,20 @@ export const saveCustomerDefaultAddress = onCall(
     if (!request.auth) throw new HttpsError("unauthenticated", "Sign in to save your delivery address.");
     const { reference } = await requireCustomer(request.auth.uid);
     const address = await verifyAddress(isRecord(request.data) ? request.data : {});
+    const zone = await resolveDeliveryZoneForAddress(address.city, address.state, address.zip, address.placeId);
+    const zonedAddress = {...address, ...zoneFields(zone)};
 
     await Promise.all([
-      reference.update({ defaultAddress: address, updatedAt: FieldValue.serverTimestamp() }),
+      reference.update({defaultAddress: zonedAddress, homeZoneId: zone?.id ?? null, homeZoneName: zone?.name ?? null, zoneAssignmentSource: "automatic", updatedAt: FieldValue.serverTimestamp()}),
       reference.collection("addresses").doc("default").set({
-        ...address,
+        ...zonedAddress,
         isDefault: true,
         updatedAt: FieldValue.serverTimestamp(),
         createdAt: FieldValue.serverTimestamp(),
       }, { merge: true }),
     ]);
 
-    return { defaultAddress: address };
+    return { defaultAddress: zonedAddress };
   }
 );
 
@@ -271,7 +289,7 @@ export const deleteCustomerDefaultAddress = onCall(
     if (!request.auth) throw new HttpsError("unauthenticated", "Sign in to delete your delivery address.");
     const { reference } = await requireCustomer(request.auth.uid);
     await Promise.all([
-      reference.update({ defaultAddress: null, updatedAt: FieldValue.serverTimestamp() }),
+      reference.update({defaultAddress: null, homeZoneId: null, homeZoneName: null, updatedAt: FieldValue.serverTimestamp()}),
       reference.collection("addresses").doc("default").delete(),
     ]);
     return { success: true };

@@ -13,7 +13,7 @@
 */
 
 import { useEffect, useState } from "react";
-import { ArrowLeft, Bell } from "lucide-react";
+import { ArrowLeft, Bell, CheckCheck } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -44,6 +44,7 @@ export default function NotificationsPage() {
   const [loading, setLoading] = useState(true);
   const [listenerError, setListenerError] = useState<string | null>(null);
   const [clearing, setClearing] = useState(false);
+  const [markingAll, setMarkingAll] = useState(false);
   const { confirm } = useConfirmation();
   const { showSuccess } = useSuccessToast();
 
@@ -83,6 +84,17 @@ export default function NotificationsPage() {
       showSuccess("All notifications cleared.");
     } finally {
       setClearing(false);
+    }
+  };
+
+  const markAllNotificationsRead = async () => {
+    if (!user || notifications.every((notification) => notification.read)) return;
+    try {
+      setMarkingAll(true);
+      await notificationService.markAllAsRead(user.uid);
+      showSuccess("All notifications marked as read.");
+    } finally {
+      setMarkingAll(false);
     }
   };
 
@@ -171,7 +183,8 @@ export default function NotificationsPage() {
 
       <div className="max-w-2xl mx-auto p-4">
         {notifications.length > 0 && (
-          <div className="mb-3 flex justify-end">
+          <div className="mb-3 flex flex-wrap justify-end gap-2">
+            {unreadNotifications.length > 0 && <button type="button" onClick={() => void markAllNotificationsRead()} disabled={markingAll} className="inline-flex items-center gap-1.5 rounded-xl border border-orange-100 bg-orange-50 px-3 py-2 text-xs font-bold text-orange-700 transition hover:bg-orange-100 disabled:opacity-50"><CheckCheck className="h-4 w-4" />{markingAll ? "Marking..." : "Mark all as read"}</button>}
             <button
               type="button"
               onClick={clearAllNotifications}

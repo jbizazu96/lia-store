@@ -95,18 +95,7 @@ export default function StoreCategoryPage({
       : category?.products ?? [];
 
   const hasFreshProducts =
-    pageProducts.some((product) =>
-      [
-        "produce",
-        "meat",
-        "seafood",
-        "dairy",
-        "bakery",
-        "frozen",
-      ].includes(
-        product.category.trim().toLowerCase()
-      )
-    );
+    category?.freshnessEligible === true && pageProducts.length > 0;
 
   const normalizedSearch =
     searchQuery.trim().toLowerCase();

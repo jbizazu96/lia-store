@@ -419,7 +419,6 @@ service cloud.firestore {
         ) &&
         request.resource.data.accountType == resource.data.accountType &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          "defaultAddress",
           "displayName",
           "driverId",
           "email",
@@ -437,7 +436,8 @@ service cloud.firestore {
       allow delete: if isOperationalAccount(userId) || isAdmin();
 
       match /addresses/{addressId} {
-        allow read, write: if isOperationalAccount(userId) || isAdmin();
+        allow read: if isOperationalAccount(userId) || isAdmin();
+        allow write: if false;
       }
 
       match /notifications/{notificationId} {
@@ -455,6 +455,15 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    /* Delivery-zone configuration is exposed only by protected callables. */
+    match /deliveryZones/{zoneId} {
+      allow read, write: if false;
+    }
+
+    match /deliveryZoneCityAssignments/{cityKey} {
+      allow read, write: if false;
+    }
+
     /* Immutable server-managed records for administrator mutations. */
     match /adminAuditLogs/{auditLogId} {
       allow read, write: if false;
@@ -467,9 +476,8 @@ service cloud.firestore {
     */
 
     match /addresses/{userId} {
-      allow read, delete: if isOperationalAccount(userId) || isAdmin();
-      allow create, update: if isOperationalAccount(userId) &&
-        request.resource.data.userId == request.auth.uid;
+      allow read: if isOperationalAccount(userId) || isAdmin();
+      allow write: if false;
     }
 
     match /carts/{userId} {

@@ -12,6 +12,7 @@
 import type { Store } from "@/types/store";
 import type { Category } from "@/types/category";
 import type { Promotion } from "@/types/promotion";
+import type {ZoneAccessType} from "@/services/pricing/marketplacePricingClientService";
 
 /**
  * Store model used by customer pages.
@@ -78,5 +79,11 @@ estimatedDeliveryTime: string;
 /**
  * Whether this store is one of the customer's favorites.
  */
-isFavorite: boolean;
+  isFavorite: boolean;
+
+  maxDeliveryMiles: number;
+
+  zoneAccessAllowed: boolean;
+
+  zoneAccessType: ZoneAccessType;
 }

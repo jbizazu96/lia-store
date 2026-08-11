@@ -11,6 +11,8 @@
 */
 
 import * as admin from "firebase-admin";
+import {normalizeUsStateCode} from "../common/usStateCodes";
+import {resolveDeliveryZoneForAddress, zoneFields} from "../delivery/deliveryZoneAssignmentService";
 import { FieldValue, getFirestore } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { defineSecret } from "firebase-functions/params";
@@ -30,7 +32,7 @@ type ImageField = typeof imageFields[number];
 function record(value: unknown): value is Record<string, unknown> { return typeof value === "object" && value !== null && !Array.isArray(value); }
 function text(value: unknown): string { return typeof value === "string" ? value.trim() : ""; }
 function upper(value: unknown): string { return text(value).toUpperCase(); }
-function state(value: unknown): string | null { const normalized = upper(value); return /^[A-Z]{2}$/.test(normalized) ? normalized : null; }
+function state(value: unknown): string | null { return normalizeUsStateCode(value); }
 function futureDate(value: string): boolean { const date = new Date(`${value}T00:00:00`); const today = new Date(); today.setHours(0, 0, 0, 0); return !Number.isNaN(date.getTime()) && date > today; }
 function age(value: string): number { const birth = new Date(`${value}T00:00:00`); const today = new Date(); let result = today.getFullYear() - birth.getFullYear(); if (today.getMonth() < birth.getMonth() || (today.getMonth() === birth.getMonth() && today.getDate() < birth.getDate())) result--; return result; }
 function ownedUser(uid: string, user: FirebaseFirestore.DocumentSnapshot) { if (user.data()?.accountType !== "driver") throw new HttpsError("permission-denied", "Only drivers can update a driver application."); }
@@ -48,13 +50,14 @@ async function geocode(rawAddress: string) {
     status?: string;
     results?: Array<{
       formatted_address?: string;
+      place_id?: string;
       geometry?: { location?: { lat?: number; lng?: number } };
     }>;
   };
   const result = response.ok && body.status === "OK" ? body.results?.[0] : null;
   const lat = result?.geometry?.location?.lat; const lng = result?.geometry?.location?.lng;
   if (typeof lat !== "number" || typeof lng !== "number") throw new HttpsError("invalid-argument", "We could not verify your home address. Check the street, city, state, and ZIP code.");
-  return { formattedAddress: result?.formatted_address ?? rawAddress, latitude: lat, longitude: lng };
+  return { formattedAddress: result?.formatted_address ?? rawAddress, latitude: lat, longitude: lng, placeId: result?.place_id ?? null };
 }
 function requireComplete(
   data: FirebaseFirestore.DocumentData,
@@ -108,7 +111,8 @@ export const saveDriverAddressAndServiceArea = onCall({ region: "us-central1", s
   const policy = await getDriverApplicationPolicy();
   if (!text(address.street) || !text(address.city) || !addressState || !text(address.zip) || !text(area.city) || !areaState || !radius || radius <= 0 || radius > policy.maximumPreferredRadiusMiles) throw new HttpsError("invalid-argument", `Select a preferred service radius between 1 and ${policy.maximumPreferredRadiusMiles} miles.`);
   const verified = await geocode(`${text(address.street)}${text(address.apartment) ? `, ${text(address.apartment)}` : ""}, ${text(address.city)}, ${addressState} ${text(address.zip)}`); const { driver } = await driverFor(request.auth.uid); const approvedRadius = record(driver.data()?.serviceArea) && typeof driver.data()?.serviceArea.approvedRadiusMiles === "number" ? driver.data()?.serviceArea.approvedRadiusMiles : null;
-  await driver.ref.update({ address: { street: upper(address.street), apartment: upper(address.apartment) || null, city: upper(address.city), state: addressState, zip: upper(address.zip), formattedAddress: upper(verified.formattedAddress), latitude: verified.latitude, longitude: verified.longitude }, serviceArea: { city: upper(area.city), state: areaState, preferredRadiusMiles: radius, approvedRadiusMiles: approvedRadius }, onboardingStep: "vehicle-information", updatedAt: FieldValue.serverTimestamp() });
+  const zone = await resolveDeliveryZoneForAddress(address.city, addressState, address.zip, verified.placeId);
+  await driver.ref.update({ address: { street: upper(address.street), apartment: upper(address.apartment) || null, city: upper(address.city), state: addressState, zip: upper(address.zip), formattedAddress: upper(verified.formattedAddress), latitude: verified.latitude, longitude: verified.longitude, ...zoneFields(zone) }, homeZoneId: zone?.id ?? null, homeZoneName: zone?.name ?? null, zoneAssignmentSource: "automatic", serviceZoneIds: Array.isArray(driver.data()?.serviceZoneIds) ? driver.data()!.serviceZoneIds : [], serviceArea: { city: upper(area.city), state: areaState, preferredRadiusMiles: radius, approvedRadiusMiles: approvedRadius }, onboardingStep: "vehicle-information", updatedAt: FieldValue.serverTimestamp() });
   return safeDraft(request.auth.uid, (await driver.ref.get()).data());
 });
 

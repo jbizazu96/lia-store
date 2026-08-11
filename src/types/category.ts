@@ -26,10 +26,10 @@ export interface Category {
    */
   name: string;
 
-  /**
-   * Emoji or icon.
-   */
-  icon: string;
+  /** Admin-managed optimized category image. */
+  iconUrl: string;
+
+  freshnessEligible: boolean;
 
   /**
    * Products belonging to this category.

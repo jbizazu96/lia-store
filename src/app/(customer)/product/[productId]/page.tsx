@@ -35,6 +35,12 @@ import { storeService } from "@/services/store/storeService";
 import { isStoreCustomerVisible } from "@/services/store/storeAvailability";
 import { formatProductName } from "@/utils/productDisplay";
 import { CustomerPageSkeleton } from "@/components/customer/ui/CustomerPageSkeleton";
+import {DistanceWarningModal} from "@/components/customer/home/DistanceWarningModal";
+import {useApplicableMarketplacePricing} from "@/hooks/useMarketplacePricingPolicy";
+import {userService} from "@/services/user/userService";
+import {getStoreDeliveryRoute} from "@/services/delivery/deliveryRoutesClientService";
+import {auth} from "@/lib/firebase";
+import {useProductCategories} from "@/hooks/useProductCategories";
 
 import type {
   Product,
@@ -97,21 +103,6 @@ function formatPromotionWindow(
   return null;
 }
 
-function qualifiesForFreshnessGuarantee(
-  category: string | undefined
-): boolean {
-  if (!category) return false;
-
-  return [
-    "produce",
-    "meat",
-    "seafood",
-    "dairy",
-    "bakery",
-    "frozen",
-  ].includes(category.trim().toLowerCase());
-}
-
 export default function ProductPage({ params }: ProductPageProps) {
   const { productId } = use(params);
   const router = useRouter();
@@ -127,6 +118,11 @@ export default function ProductPage({ params }: ProductPageProps) {
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [purchaseDistance, setPurchaseDistance] = useState(0);
+  const [purchaseAllowed, setPurchaseAllowed] = useState<boolean | null>(null);
+  const [showPurchaseWarning, setShowPurchaseWarning] = useState(false);
+  const applicablePricing = useApplicableMarketplacePricing(store?.id);
+  const productCategories = useProductCategories();
 
   useEffect(() => {
     let active = true;
@@ -211,6 +207,26 @@ export default function ProductPage({ params }: ProductPageProps) {
     };
   }, [productId]);
 
+  useEffect(() => {
+    let active = true;
+    if (!store || !applicablePricing) return;
+    const userId = auth.currentUser?.uid;
+    if (!userId || applicablePricing.decision?.allowed === false) {
+      queueMicrotask(() => {if (active) setPurchaseAllowed(false);});
+      return () => {active = false;};
+    }
+    void userService.getDefaultLocation(userId).then(async (location) => {
+      if (!location) return null;
+      return getStoreDeliveryRoute(store.id, {latitude: location.lat, longitude: location.lng});
+    }).then((route) => {
+      if (!active) return;
+      const distance = route?.distanceMiles ?? 0;
+      setPurchaseDistance(distance);
+      setPurchaseAllowed(Boolean(route) && distance <= applicablePricing.policy.maxRadiusMiles);
+    }).catch(() => {if (active) setPurchaseAllowed(false);});
+    return () => {active = false;};
+  }, [store, applicablePricing]);
+
   const selectedImage = galleryImages[selectedImageIndex] ?? null;
   const selectedImageUrl =
     getGalleryImageUrl(selectedImage) ||
@@ -255,6 +271,10 @@ export default function ProductPage({ params }: ProductPageProps) {
 
   const addProductToCart = async (target: Product): Promise<boolean> => {
     if (!store || !target.isAvailable || target.stock <= 0) return false;
+    if (purchaseAllowed !== true) {
+      setShowPurchaseWarning(true);
+      return false;
+    }
 
     const discountedPrice =
       promotionService.getDiscountedPrice(
@@ -290,6 +310,10 @@ export default function ProductPage({ params }: ProductPageProps) {
               !product ||
               !canPurchase
             ) {
+              return;
+            }
+            if (purchaseAllowed !== true) {
+              setShowPurchaseWarning(true);
               return;
             }
 
@@ -352,6 +376,10 @@ export default function ProductPage({ params }: ProductPageProps) {
   };
 
   const relatedQuantityChange = (relatedProductId: string, nextQuantity: number) => {
+    if (nextQuantity > getItemQuantity(relatedProductId) && purchaseAllowed !== true) {
+      setShowPurchaseWarning(true);
+      return;
+    }
     updateQuantity(relatedProductId, Math.max(0, nextQuantity));
   };
 
@@ -458,7 +486,7 @@ export default function ProductPage({ params }: ProductPageProps) {
         </section>
 
         <section className="px-4 pb-5 pt-5 sm:px-6">
-          {qualifiesForFreshnessGuarantee(product.category) && (
+          {productCategories.find((category) => category.id === product.category)?.freshnessEligible === true && (
             <div className="mb-4 flex items-center gap-2 rounded-xl bg-emerald-50 px-3 py-2.5 text-sm font-semibold text-emerald-800">
               <CircleCheckBig className="h-5 w-5 shrink-0 text-emerald-600" />
               <span>Freshness guaranteed or your money back</span>
@@ -610,6 +638,16 @@ export default function ProductPage({ params }: ProductPageProps) {
           </button>
         </div>
       </div>
+      {showPurchaseWarning && store && (
+        <DistanceWarningModal
+          storeId={store.id}
+          storeCity={store.city}
+          distance={purchaseDistance}
+          zoneAccessAllowed={applicablePricing?.decision?.allowed ?? false}
+          onClose={() => setShowPurchaseWarning(false)}
+          onContinue={() => setShowPurchaseWarning(false)}
+        />
+      )}
     </main>
   );
 }

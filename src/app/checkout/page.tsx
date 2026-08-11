@@ -165,7 +165,6 @@ function formatCurrencyFromCents(
 */
 
 export default function CheckoutPage() {
-  const marketplacePolicy = useMarketplacePricingPolicy();
   const router =
     useRouter();
 
@@ -184,6 +183,7 @@ export default function CheckoutPage() {
 
   const storeId =
     items[0]?.storeId;
+  const marketplacePolicy = useMarketplacePricingPolicy(storeId);
 
 
   /*
@@ -569,6 +569,13 @@ export default function CheckoutPage() {
   const handleContinueToPayment =
     async () => {
       clearErrors();
+
+      if (!navigator.onLine) {
+        setCheckoutError(
+          "Internet connection required. Check your connection and try again."
+        );
+        return;
+      }
 
       /*
         Reuse the payment already prepared during this checkout session.

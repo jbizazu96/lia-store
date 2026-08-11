@@ -119,6 +119,9 @@ export const driverWorkspaceClientService = {
       {notificationId}
     ),
 
+  markAllNotificationsRead: () =>
+    call<{success: boolean; marked: number}>("markAllDriverWorkspaceNotificationsRead"),
+
   clearNotifications: () =>
     call("clearDriverWorkspaceNotifications"),
 

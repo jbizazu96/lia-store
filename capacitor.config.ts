@@ -19,6 +19,17 @@ const config: CapacitorConfig = {
       }
     : {}),
   plugins: {
+    SplashScreen: {
+      // Keep the native launch screen visible while the hosted Next.js shell
+      // initializes, then let Capacitor hand off to the branded route loader.
+      launchAutoHide: true,
+      launchShowDuration: 2000,
+      backgroundColor: "#ffffff",
+      showSpinner: false,
+      androidScaleType: "CENTER",
+      splashFullScreen: true,
+      splashImmersive: true,
+    },
     FirebaseAuthentication: {
       skipNativeAuth: true,
       providers: ["google.com"],

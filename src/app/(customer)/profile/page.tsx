@@ -8,7 +8,7 @@ import {useRouter} from "next/navigation";
 import {AnimatePresence} from "framer-motion";
 import {onAuthStateChanged, type User as FirebaseUser} from "firebase/auth";
 import {auth} from "@/lib/firebase";
-import {User, MapPin, Globe, FileText, Shield, LogOut, Trash2, Bell} from "lucide-react";
+import {User, MapPin, MapPinned, Globe, FileText, Shield, LogOut, Trash2, Bell} from "lucide-react";
 import {
   customerProfileClientService,
   updateCustomerNotificationPreferences,
@@ -198,6 +198,7 @@ export default function ProfilePage() {
       productUpdates: true,
       marketing: true,
     },
+    deliveryZones: userData?.deliveryZones || {homeZone: null, orderZones: []},
   };
 
   const personalItems = menuItems.slice(0, 3);
@@ -243,6 +244,23 @@ export default function ProfilePage() {
             </span>
             <span className="text-xs font-bold text-orange-600">Change</span>
           </button>
+
+          <section className="rounded-2xl border border-orange-100 bg-white p-4 shadow-sm">
+            <div className="flex items-start gap-3">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-orange-100 text-orange-600"><MapPinned className="h-5 w-5" /></span>
+              <div className="min-w-0 flex-1">
+                <h2 className="text-sm font-extrabold text-gray-900">Your delivery zones</h2>
+                <p className="mt-2 text-xs font-bold uppercase tracking-wide text-gray-500">Home delivery zone</p>
+                <p className="mt-1 text-sm font-semibold text-gray-800">{profileData.deliveryZones.homeZone?.name || "Default distance-based pricing"}</p>
+                <p className="mt-3 text-xs font-bold uppercase tracking-wide text-gray-500">Approved Order Zones</p>
+                {profileData.deliveryZones.orderZones.length > 0 ? (
+                  <div className="mt-2 flex flex-wrap gap-2">{profileData.deliveryZones.orderZones.map((zone) => <span key={zone.id} className="rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700">{zone.name}</span>)}</div>
+                ) : <p className="mt-1 text-sm text-gray-600">You do not have additional Order Zones.</p>}
+                <p className="mt-3 text-xs leading-5 text-gray-500">Zone assignments are managed by LIA and cannot be edited from your account. Need to shop in another area?</p>
+                <button type="button" onClick={() => router.push("/help?request=order-zone")} className="mt-2 text-sm font-extrabold text-orange-600 hover:text-orange-700">Contact LIA Support</button>
+              </div>
+            </div>
+          </section>
 
           <section>
             <div className="mb-3 flex items-end justify-between px-1">

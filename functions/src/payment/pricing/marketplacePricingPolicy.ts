@@ -80,3 +80,29 @@ export async function getMarketplacePricingPolicy(): Promise<MarketplacePricingP
     .get();
   return parseMarketplacePricingPolicy(snapshot.data() ?? {});
 }
+
+export async function getMarketplacePricingPolicyForZone(
+  zoneId: string | null,
+): Promise<MarketplacePricingPolicy> {
+  if (!zoneId) return getMarketplacePricingPolicy();
+  const snapshot = await getFirestore("default").collection("deliveryZones").doc(zoneId).get();
+  if (!snapshot.exists || snapshot.data()?.isActive !== true) {
+    return getMarketplacePricingPolicy();
+  }
+  const zoneMaximumRouteMiles = snapshot.data()?.maximumRouteMiles;
+  try {
+    const policy = parseMarketplacePricingPolicy(
+      snapshot.data()?.pricingPolicy && typeof snapshot.data()?.pricingPolicy === "object"
+        ? snapshot.data()!.pricingPolicy as Record<string, unknown>
+        : {},
+    );
+    return typeof zoneMaximumRouteMiles === "number"
+      ? {...policy, maxRadiusMiles: zoneMaximumRouteMiles}
+      : policy;
+  } catch {
+    const policy = await getMarketplacePricingPolicy();
+    return typeof zoneMaximumRouteMiles === "number"
+      ? {...policy, maxRadiusMiles: zoneMaximumRouteMiles}
+      : policy;
+  }
+}

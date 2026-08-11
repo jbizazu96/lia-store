@@ -45,6 +45,7 @@ import { useCustomerFavoriteStores } from "@/hooks/useCustomerFavoriteStores";
 import { Heart, ShoppingBag, Sparkles } from "lucide-react";
 import { AddressesModal } from "@/components/customer/profile/AddressesModal";
 import { MarketplaceCategoryNav } from "@/components/customer/home/MarketplaceCategoryNav";
+import {marketplacePricingClientService} from "@/services/pricing/marketplacePricingClientService";
 
 export default function CustomerHomePage() {
   const marketplacePolicy = useMarketplacePricingPolicy();
@@ -195,9 +196,9 @@ export default function CustomerHomePage() {
             })
           );
 
-        const routes =
+        const [routes, applicablePricing] = await Promise.all([
           storesWithCoordinates.length > 0
-            ? await getCachedStoreDeliveryRoutes(
+            ? getCachedStoreDeliveryRoutes(
                 storesWithCoordinates.map((store) => ({
                   id: store.id,
                   latitude: store.latitude,
@@ -208,7 +209,11 @@ export default function CustomerHomePage() {
                   longitude: userLocation.lng,
                 }
               )
-            : [];
+            : Promise.resolve([]),
+          marketplacePricingClientService.getApplicablePricingForStores(
+            storesWithCoordinates.map((store) => store.id),
+          ),
+        ]);
 
         if (!isMounted || requestId !== latestRequest) {
           return;
@@ -231,17 +236,22 @@ export default function CustomerHomePage() {
               return null;
             }
 
-            const pricing = calculateDeliveryFee(distance, 0, marketplacePolicy);
+            const applicable = applicablePricing[store.id];
+            const storePolicy = applicable?.policy ?? marketplacePolicy;
+            const pricing = calculateDeliveryFee(distance, 0, storePolicy);
 
             return storeMapper.toCustomerStore(store, {
               distance,
               deliveryFee: pricing.deliveryFee,
-              deliveryFeeDisplay: getDeliveryFeeDisplay(distance, marketplacePolicy),
+              deliveryFeeDisplay: getDeliveryFeeDisplay(distance, storePolicy),
               estimatedPrepTime: getEstimatedTimeNumber(distance, orderDeliveryPolicy),
               estimatedDeliveryTime: getEstimatedTime(distance, orderDeliveryPolicy),
               categories: [],
               promotions: [],
               isFavorite: false,
+              maxDeliveryMiles: storePolicy.maxRadiusMiles,
+              zoneAccessAllowed: applicable?.decision?.allowed ?? true,
+              zoneAccessType: applicable?.decision?.zoneAccessType ?? "default_pricing",
             });
           });
 
@@ -272,12 +282,12 @@ export default function CustomerHomePage() {
         // Split stores into nearby (≤25mi) and far (>25mi)
         const nearby = activeStores.filter(
           (store) =>
-            store.distance <= marketplacePolicy.maxRadiusMiles
+            store.zoneAccessAllowed && store.distance <= store.maxDeliveryMiles
         );
 
         const far = activeStores.filter(
           (store) =>
-            store.distance > marketplacePolicy.maxRadiusMiles
+            !store.zoneAccessAllowed || store.distance > store.maxDeliveryMiles
         );
         
         if (isMounted && requestId === latestRequest) {
@@ -322,9 +332,9 @@ export default function CustomerHomePage() {
   // Handle store click
   const handleStoreClick = (store: CustomerStore) => {
     const distance = store.distance;
-    const maxRadius = marketplacePolicy?.maxRadiusMiles ?? 0;
+    const maxRadius = store.maxDeliveryMiles || marketplacePolicy?.maxRadiusMiles || 0;
     
-    if (distance > maxRadius) {
+    if (!store.zoneAccessAllowed || distance > maxRadius) {
       setSelectedStore(store);
       setSelectedDistance(distance);
       setShowDistanceWarning(true);
@@ -522,14 +532,14 @@ export default function CustomerHomePage() {
                   <div className="flex items-center gap-2 text-xs text-gray-400 whitespace-nowrap">
                     <span className="w-1.5 h-1.5 rounded-full bg-gray-300" />
                     <span>
-                        Stores beyond {marketplacePolicy?.maxRadiusMiles ?? "…"} miles
+                        More stores to explore
                       </span>
                     <span className="w-1.5 h-1.5 rounded-full bg-gray-300" />
                   </div>
                   <div className="flex-1 h-px bg-gray-200" />
                 </div>
                 <p className="text-xs text-gray-400 text-center mt-1.5">
-                  These stores are available but outside your delivery radius
+                  Browse stores outside your current zone or delivery distance
                 </p>
               </div>
             )}
@@ -583,7 +593,10 @@ export default function CustomerHomePage() {
       <AnimatePresence>
         {showDistanceWarning && selectedStore && (
           <DistanceWarningModal
+            storeId={selectedStore.id}
+            storeCity={selectedStore.city}
             distance={selectedDistance}
+            zoneAccessAllowed={selectedStore.zoneAccessAllowed}
             onClose={() => setShowDistanceWarning(false)}
             onContinue={handleContinueToStore}
           />

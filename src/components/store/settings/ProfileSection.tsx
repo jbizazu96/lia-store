@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { storeImageService } from "@/services/store/storeImageService";
 import {formatPhoneNumber} from "@/utils/phone";
+import {UsStateSelect} from "@/components/ui/UsStateSelect";
 
 interface ProfileSectionProps {
   storeData: any;
@@ -259,12 +260,10 @@ export function ProfileSection({
             <label className="block text-sm font-medium text-gray-700 mb-1">
               State
             </label>
-            <input
-              type="text"
+            <UsStateSelect
               value={storeData?.state || ""}
-              onChange={(e) => setStoreData({...storeData, state: e.target.value})}
+              onChange={(state) => setStoreData({...storeData, state})}
               className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500"
-              placeholder="CA"
             />
           </div>
           <div>

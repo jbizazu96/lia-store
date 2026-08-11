@@ -37,9 +37,6 @@ import {
   productService,
 } from "@/services/product/productService";
 
-import {
-  PRODUCT_CATEGORIES,
-} from "@/config/productCategories";
 
 /*
 |--------------------------------------------------------------------------
@@ -58,10 +55,12 @@ function mapCategoryDocument(
       data.name ??
       "Unnamed Category",
 
-  icon:
-      data.icon === "Package"
-        ? ""
-        : data.icon ?? "",
+    iconUrl:
+      typeof data.iconUrl === "string"
+        ? data.iconUrl
+        : "",
+
+    freshnessEligible: data.freshnessEligible === true,
 
     products: [],
   };
@@ -97,15 +96,13 @@ export const categoryService = {
             )
           );
 
-        return snapshot.docs.map(
-          (document) =>
-            mapCategoryDocument(
-              document.id,
-              document.data()
-            )
+        return snapshot.docs.map((document) =>
+          mapCategoryDocument(document.id, document.data())
+        ).sort((first, second) =>
+          first.name.localeCompare(second.name, undefined, {sensitivity: "base"})
         );
       },
-      { ttlMs: 5 * 60_000, scope: "public" },
+      { ttlMs: 30_000, scope: "public" },
     );
   },
 
@@ -124,16 +121,6 @@ export const categoryService = {
       value: string
     ) => value.trim().toLowerCase();
 
-    const categoryLabelByValue =
-      new Map(
-        PRODUCT_CATEGORIES.map(
-          (category) => [
-            category.value,
-            category.label,
-          ]
-        )
-      );
-
     const matchesCategory = (
       productCategory: string,
       category: Category
@@ -143,23 +130,7 @@ export const categoryService = {
           productCategory
         );
 
-      const configuredLabel =
-        categoryLabelByValue.get(
-          productKey
-        );
-
-      const categoryKeys = [
-        normalizedCategoryValue(category.id),
-        normalizedCategoryValue(category.name),
-      ];
-
-      return (
-        categoryKeys.includes(productKey) ||
-        (configuredLabel !== undefined &&
-          categoryKeys.includes(
-            normalizedCategoryValue(configuredLabel)
-          ))
-      );
+      return normalizedCategoryValue(category.id) === productKey;
     };
 
     const mappedCategories =
@@ -214,11 +185,9 @@ export const categoryService = {
       ).map(
         ([categoryValue, categoryProducts]) => ({
           id: categoryValue,
-          name:
-            categoryLabelByValue.get(
-              categoryValue
-            ) ?? categoryValue,
-          icon: "",
+          name: categoryValue,
+          iconUrl: "",
+          freshnessEligible: false,
           products: categoryProducts,
         })
       );

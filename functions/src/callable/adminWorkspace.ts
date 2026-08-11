@@ -361,6 +361,10 @@ export const getAdminStoreApplication = onCall(
       submittedAt: timestamp(data.submittedAt),
       isApproved: data.isApproved === true,
       isActive: data.isActive === true,
+      zoneAssignment: {
+        homeZoneId: text(data.homeZoneId) || null,
+        serviceZoneIds: Array.isArray(data.serviceZoneIds) ? data.serviceZoneIds.filter((value): value is string => typeof value === "string") : [],
+      },
       owner: {
         name: [text(owner.firstName), text(owner.lastName)].filter(Boolean).join(" "),
         email: text(owner.email), phone: text(owner.phone),
@@ -399,6 +403,10 @@ export const getAdminDriverApplication = onCall(
       status: driverReviewStatus(data, policy),
       submittedAt: timestamp(data.submittedAt),
       isApproved: data.isApproved === true,
+      zoneAssignment: {
+        homeZoneId: text(data.homeZoneId) || null,
+        serviceZoneIds: Array.isArray(data.serviceZoneIds) ? data.serviceZoneIds.filter((value): value is string => typeof value === "string") : [],
+      },
       profile: {name: [text(data.firstName), text(data.middleName), text(data.lastName)].filter(Boolean).join(" "), email: text(data.email), phone: text(data.phone), dateOfBirth: text(data.dateOfBirth), address: [text(address.formattedAddress) || text(address.street), text(address.city), text(address.state), text(address.zip)].filter(Boolean).join(", ")},
       serviceArea: {city: text(area.city), state: text(area.state), preferredRadiusMiles: typeof area.preferredRadiusMiles === "number" ? area.preferredRadiusMiles : null, approvedRadiusMiles: typeof area.approvedRadiusMiles === "number" ? area.approvedRadiusMiles : null},
       vehicle: {deliveryMethod: text(data.deliveryMethod), make: text(vehicle.make), model: text(vehicle.model), year: typeof vehicle.year === "number" ? vehicle.year : null, color: text(vehicle.color), licensePlate: text(vehicle.licensePlate), registrationState: text(vehicle.registrationState)},

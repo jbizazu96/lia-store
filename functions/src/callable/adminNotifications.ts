@@ -135,6 +135,25 @@ export const markAdminNotificationRead = onCall(
   }
 );
 
+export const markAllAdminNotificationsRead = onCall(
+  {region: "us-central1"},
+  async (request) => {
+    const administrator = await requireActiveAdmin(request);
+    const snapshot = await db.collection("admins").doc(administrator.uid)
+      .collection("notifications").get();
+    const unread = snapshot.docs.filter((document) => document.data().read !== true);
+    for (let start = 0; start < unread.length; start += 450) {
+      const batch = db.batch();
+      unread.slice(start, start + 450).forEach((document) => batch.update(document.ref, {
+        read: true,
+        updatedAt: FieldValue.serverTimestamp(),
+      }));
+      await batch.commit();
+    }
+    return {success: true, marked: unread.length};
+  },
+);
+
 export const clearAdminNotifications = onCall(
   {region: "us-central1"},
   async (request) => {

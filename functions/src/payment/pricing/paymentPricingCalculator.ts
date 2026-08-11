@@ -79,6 +79,10 @@ export interface PaymentPricingResult {
   totalAmount: number;
 
   isFreeDelivery: boolean;
+
+  isPeakTime: boolean;
+
+  peakSurchargeAmount: number;
 }
 
 
@@ -324,5 +328,12 @@ export function calculatePaymentPricing(
     totalAmount,
 
     isFreeDelivery,
+
+    isPeakTime: input.isPeakTime === true,
+
+    peakSurchargeAmount:
+      input.isPeakTime === true && !isFreeDelivery
+        ? input.policy.peakSurchargeCents
+        : 0,
   };
 }

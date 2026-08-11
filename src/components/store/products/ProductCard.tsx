@@ -37,6 +37,7 @@ interface ProductCardProps {
   onToggleFeatured: (id: string, current: boolean) => void;
   onDelete: (id: string) => void;
   onDuplicate?: (product: Product) => void;
+  categoryName?: string;
 }
 
 export function ProductCard({
@@ -45,6 +46,7 @@ export function ProductCard({
   onToggleFeatured,
   onDelete,
   onDuplicate,
+  categoryName,
 }: ProductCardProps) {
   const [showMenu, setShowMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -219,7 +221,7 @@ export function ProductCard({
           <h3 className="font-semibold text-gray-800 text-xs truncate">
             {formatProductName(product.name)}
           </h3>
-          <p className="text-[10px] text-gray-500 truncate">{product.category}</p>
+          <p className="text-[10px] text-gray-500 truncate">{categoryName || product.category}</p>
         </div>
 
         {/* Price & Size */}

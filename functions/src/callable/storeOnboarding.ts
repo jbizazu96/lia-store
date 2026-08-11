@@ -32,6 +32,7 @@ import {
 import {
   grantStoreUploadClaim,
 } from "../services/store/storeUploadClaimService";
+import {resolveDeliveryZoneForAddress, zoneFields} from "../delivery/deliveryZoneAssignmentService";
 import {
   getStoreApplicationPolicy,
   type StoreApplicationPolicy,
@@ -249,7 +250,7 @@ async function geocodeAddress(address: string) {
   if (!response.ok) return null;
   const body = await response.json() as {
     status?: unknown;
-    results?: Array<{ formatted_address?: unknown; geometry?: { location?: { lat?: unknown; lng?: unknown } } }>;
+    results?: Array<{ formatted_address?: unknown; place_id?: unknown; geometry?: { location?: { lat?: unknown; lng?: unknown } } }>;
   };
   const result = body.status === "OK" ? body.results?.[0] : null;
   const latitude = result?.geometry?.location?.lat;
@@ -259,6 +260,7 @@ async function geocodeAddress(address: string) {
     latitude,
     longitude,
     formattedAddress: text(result?.formatted_address) || address,
+    placeId: text(result?.place_id) || null,
   };
 }
 
@@ -372,6 +374,7 @@ export const saveStoreOnboardingOwner = onCall({ region: "us-central1", secrets:
   if (policy.requiredDocuments.ownerPhotoId && !(await hasUploadedImage(store.id, "owner-photo-id")) && !text(owner.photoIdUrl)) throw new HttpsError("failed-precondition", "Upload a photo ID.");
   const location = await geocodeAddress(fullAddress({ ...input, state }));
   if (!location) throw new HttpsError("invalid-argument", "We couldn't verify your home address. Check the street, city, state, and ZIP code.");
+  const zone = await resolveDeliveryZoneForAddress(input.city, state, input.zip, location.placeId);
   const photoChanged = requireRecord(request.data).photoIdUploaded === true;
   await store.ref.update({
     ownerId: request.auth.uid,
@@ -385,7 +388,8 @@ export const saveStoreOnboardingOwner = onCall({ region: "us-central1", secrets:
     storeId: store.id, onboardingCompleted: data.onboardingCompleted === true,
     displayName: `${text(input.firstName).trim()} ${text(input.lastName).trim()}`,
     email: text(input.email).trim(), phone: text(input.phone).trim(),
-    defaultAddress: { street: upper(text(input.address)), city: upper(text(input.city)), state, zip: upper(text(input.zip)), latitude: location.latitude, longitude: location.longitude, formattedAddress: upper(location.formattedAddress) },
+    defaultAddress: { street: upper(text(input.address)), city: upper(text(input.city)), state, zip: upper(text(input.zip)), latitude: location.latitude, longitude: location.longitude, formattedAddress: upper(location.formattedAddress), ...zoneFields(zone) },
+    homeZoneId: zone?.id ?? null, homeZoneName: zone?.name ?? null, zoneAssignmentSource: "automatic",
     updatedAt: FieldValue.serverTimestamp(),
   }, { merge: true });
   const updated = await store.ref.get();
@@ -405,12 +409,15 @@ export const saveStoreOnboardingStoreInformation = onCall({ region: "us-central1
   if (policy.requiredDocuments.banner && !(await hasUploadedImage(store.id, "banner")) && !text(data.bannerUrl)) throw new HttpsError("failed-precondition", "Upload a store banner.");
   const location = await geocodeAddress(fullAddress({ ...input, state }));
   if (!location) throw new HttpsError("invalid-argument", "We couldn't verify the store address. Check the street, city, state, and ZIP code.");
+  const zone = await resolveDeliveryZoneForAddress(input.city, state, input.zip, location.placeId);
   const logoChanged = input.logoUploaded === true;
   const bannerChanged = input.bannerUploaded === true;
   await store.ref.update({
     name: text(input.name).trim(), email: text(input.email).trim(), phone: text(input.phone).trim(), description: text(input.description).trim(),
     address: upper(text(input.address)), city: upper(text(input.city)), state, zip: upper(text(input.zip)), country: "US",
-    latitude: location.latitude, longitude: location.longitude, placeId: "", formattedAddress: upper(location.formattedAddress),
+    latitude: location.latitude, longitude: location.longitude, placeId: location.placeId, formattedAddress: upper(location.formattedAddress),
+    homeZoneId: zone?.id ?? null, homeZoneName: zone?.name ?? null, zoneAssignmentSource: "automatic",
+    serviceZoneIds: Array.isArray(data.serviceZoneIds) ? data.serviceZoneIds : [],
     ...(logoChanged ? { logoReview: pendingReview(), logoSubmissionVersion: (typeof data.logoSubmissionVersion === "number" ? data.logoSubmissionVersion : 0) + 1 } : {}),
     ...(bannerChanged ? { bannerReview: pendingReview(), bannerSubmissionVersion: (typeof data.bannerSubmissionVersion === "number" ? data.bannerSubmissionVersion : 0) + 1 } : {}),
     onboardingStep: data.onboardingCompleted === true ? text(data.onboardingStep) || "stripe" : "business-information",

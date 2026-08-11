@@ -45,10 +45,10 @@ import {
 import {useMarketplacePricingPolicy} from "@/hooks/useMarketplacePricingPolicy";
 
 export default function CartPage() {
-  const marketplacePolicy = useMarketplacePricingPolicy();
   const router = useRouter();
   const { items, itemCount, totalPrice, updateQuantity, removeItem, clearCart, isLoading } = useCart();
   const storeId = items[0]?.storeId;
+  const marketplacePolicy = useMarketplacePricingPolicy(storeId);
   const storeName = items[0]?.storeName || "Your store";
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
@@ -104,6 +104,10 @@ export default function CartPage() {
 
   // Proceed to checkout
   const handleCheckout = () => {
+    if (!navigator.onLine) {
+      return;
+    }
+
     router.push("/checkout");
   };
 

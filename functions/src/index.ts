@@ -62,6 +62,7 @@ export {
   getDriverWorkspacePayments,
   getDriverWorkspaceNotifications,
   markDriverWorkspaceNotificationRead,
+  markAllDriverWorkspaceNotificationsRead,
   clearDriverWorkspaceNotifications,
   submitDriverDocumentReplacement,
   updateDriverWorkspaceProfile,
@@ -83,10 +84,31 @@ export {
   activateAdminStore,
 } from "./callable/adminWorkspace";
 export {
+  addAdminDeliveryZoneCity,
+  backfillAdminDeliveryZoneAssignments,
+  createAdminDeliveryZone,
+  deleteAdminDeliveryZone,
+  getAdminDeliveryZonePricing,
+  getAdminDeliveryZones,
+  removeAdminDeliveryZoneCity,
+  resetAdminDeliveryZonePricing,
+  saveAdminDeliveryZonePricing,
+  setAdminAccountZoneAssignment,
+  updateAdminDeliveryZone,
+} from "./callable/adminDeliveryZones";
+export {
   clearAdminNotifications,
   getAdminNotifications,
   markAdminNotificationRead,
+  markAllAdminNotificationsRead,
 } from "./callable/adminNotifications";
+export {
+  createAdminProductCategory,
+  getAdminProductCategories,
+  importAdminProductCategories,
+  updateAdminProductCategory,
+  uploadAdminProductCategoryIcon,
+} from "./callable/adminProductCategories";
 export {
   decideAdminAccountDeletionRequest,
   getAdminAccountDeletionRequest,
@@ -596,6 +618,7 @@ export {
   createCustomerOrderSupportRequest,
   getCustomerOrderSupportRequest,
 } from "./callable/orderSupport";
+export {createCustomerOrderZoneRequest} from "./callable/orderZoneRequests";
 export {
   getCustomerDeliveryProof,
 } from "./callable/customerDeliveryProof";

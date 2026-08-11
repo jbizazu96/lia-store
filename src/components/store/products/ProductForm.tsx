@@ -48,9 +48,7 @@ import {
   ProductPromotionSection,
 } from "@/components/store/products/ProductPromotionSection";
 
-import {
-  PRODUCT_CATEGORIES,
-} from "@/config/productCategories";
+import {useProductCategories} from "@/hooks/useProductCategories";
 
 import {
   PRODUCT_SIZE_UNITS,
@@ -98,6 +96,8 @@ interface ProductFormProps {
   successMessage?: string | null;
 }
 
+const EMPTY_INITIAL_IMAGES: ProductGalleryImageSelection[] = [];
+
 /*
 |--------------------------------------------------------------------------
 | Empty Form
@@ -144,12 +144,13 @@ ProductFormData = {
 
 export function ProductForm({
   initialData,
-  initialImages = [],
+  initialImages = EMPTY_INITIAL_IMAGES,
   onSubmit,
   loading,
   submitLabel,
   successMessage,
 }: ProductFormProps) {
+  const categories = useProductCategories();
   const {
     confirm,
   } = useConfirmation();
@@ -243,44 +244,21 @@ export function ProductForm({
     const size =
       initialData.size ?? null;
 
-    setFormData({
-      ...EMPTY_FORM_DATA,
-      ...initialData,
-
-      price,
-
-      stock,
-
-      size,
-
-      promotion:
-        initialData.promotion ??
-        null,
+    queueMicrotask(() => {
+      setFormData({
+        ...EMPTY_FORM_DATA,
+        ...initialData,
+        price,
+        stock,
+        size,
+        promotion: initialData.promotion ?? null,
+      });
+      setPriceInput(price > 0 ? price.toString() : "");
+      setStockInput(stock > 0 ? stock.toString() : "");
+      setSizeValueInput(size && size.value > 0 ? size.value.toString() : "");
+      setSizeUnit(size?.unit ?? "each");
+      setImageFiles(initialImages);
     });
-
-    setPriceInput(
-      price > 0
-        ? price.toString()
-        : ""
-    );
-
-    setStockInput(
-      stock > 0
-        ? stock.toString()
-        : ""
-    );
-
-    setSizeValueInput(
-      size &&
-      size.value > 0
-        ? size.value.toString()
-        : ""
-    );
-
-    setSizeUnit(
-      size?.unit ??
-      "each"
-    );
 
     /*
     |--------------------------------------------------------------------------
@@ -291,11 +269,7 @@ export function ProductForm({
     |
     */
 
-    setImageFiles(
-      initialImages
-    );
-
-  }, [initialData]);
+  }, [initialData, initialImages]);
 
   /*
   |--------------------------------------------------------------------------
@@ -801,17 +775,17 @@ export function ProductForm({
                 Select category
               </option>
 
-              {PRODUCT_CATEGORIES.map(
+              {categories.map(
                 (category) => (
                   <option
                     key={
-                      category.value
+                      category.id
                     }
                     value={
-                      category.value
+                      category.id
                     }
                   >
-                    {category.label}
+                    {category.name}
                   </option>
                 )
               )}

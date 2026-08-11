@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import {useEffect, useState} from "react";
-import {ArrowLeft, LoaderCircle} from "lucide-react";
+import {useCallback, useEffect, useState} from "react";
+import {ArrowLeft, LoaderCircle, RotateCcw} from "lucide-react";
 import {adminWorkspaceClientService} from "@/services/admin/adminWorkspaceClientService";
 
 interface MarketplacePricingPolicy {
@@ -78,18 +78,38 @@ function toStored(value: string, unit: FieldDefinition["unit"]): number | null {
   return Number.isInteger(amount) ? amount : null;
 }
 
-export function AdminCustomerPricingWorkspace() {
+interface ZonePricingScope {
+  id: string;
+  name: string;
+  primaryStateCode: string;
+  maximumRouteMiles: number;
+}
+
+export function AdminCustomerPricingWorkspace({zoneId}: {zoneId?: string}) {
   const [policy, setPolicy] = useState<MarketplacePricingPolicy | null>(null);
   const [draft, setDraft] = useState<Record<EditablePricingField, string> | null>(null);
+  const [zone, setZone] = useState<ZonePricingScope | null>(null);
+  const [inherited, setInherited] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [resetting, setResetting] = useState(false);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setError("");
     try {
-      const result = await adminWorkspaceClientService.getMarketplacePricingPolicy();
-      const loaded = (result.policy ?? {}) as unknown as MarketplacePricingPolicy;
+      let loaded: MarketplacePricingPolicy;
+      if (zoneId) {
+        const result = await adminWorkspaceClientService.getDeliveryZonePricing(zoneId);
+        loaded = result.policy as unknown as MarketplacePricingPolicy;
+        setZone(result.zone);
+        setInherited(result.inherited);
+      } else {
+        const result = await adminWorkspaceClientService.getMarketplacePricingPolicy();
+        loaded = (result.policy ?? {}) as unknown as MarketplacePricingPolicy;
+        setZone(null);
+        setInherited(false);
+      }
       setPolicy(loaded);
       setDraft(Object.fromEntries(
         SECTIONS.flatMap((section) => section.fields).map((field) => [
@@ -102,9 +122,11 @@ export function AdminCustomerPricingWorkspace() {
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Unable to load customer pricing.");
     }
-  };
+  }, [zoneId]);
 
-  useEffect(() => { void load(); }, []);
+  useEffect(() => {
+    queueMicrotask(() => void load());
+  }, [load]);
 
   const save = async () => {
     if (!draft || !policy) return;
@@ -125,13 +147,33 @@ export function AdminCustomerPricingWorkspace() {
     setError("");
     setSaved(false);
     try {
-      await adminWorkspaceClientService.saveMarketplacePricingPolicy(next);
+      if (zoneId) {
+        await adminWorkspaceClientService.saveDeliveryZonePricing(zoneId, next);
+      } else {
+        await adminWorkspaceClientService.saveMarketplacePricingPolicy(next);
+      }
       setSaved(true);
       await load();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Unable to save customer pricing.");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const resetToDefaults = async () => {
+    if (!zoneId || !window.confirm("Reset this zone to the default customer pricing?")) return;
+    setResetting(true);
+    setError("");
+    setSaved(false);
+    try {
+      await adminWorkspaceClientService.resetDeliveryZonePricing(zoneId);
+      await load();
+      setSaved(true);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Unable to reset zone pricing.");
+    } finally {
+      setResetting(false);
     }
   };
 
@@ -142,12 +184,23 @@ export function AdminCustomerPricingWorkspace() {
   }
 
   return <section>
-    <Link href="/admin/settings" className="mb-5 inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-bold text-slate-700 ring-1 ring-slate-200">
-      <ArrowLeft className="h-4 w-4"/>Back to settings
+    <Link href={zoneId ? "/admin/delivery-zones" : "/admin/settings"} className="mb-5 inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-bold text-slate-700 ring-1 ring-slate-200">
+      <ArrowLeft className="h-4 w-4"/>{zoneId ? "Back to delivery zones" : "Back to settings"}
     </Link>
-    <p className="text-sm font-bold tracking-wide text-orange-600">CUSTOMER PRICING</p>
-    <h1 className="mt-1 text-3xl font-bold">Customer pricing policy</h1>
-    <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">These values are delivered to customer estimates, rechecked by trusted checkout, and saved on each order for consistent settlement after delivery. Changes affect new orders only.</p>
+    <p className="text-sm font-bold tracking-wide text-orange-600">{zoneId ? "ZONE CUSTOMER PRICING" : "DEFAULT CUSTOMER PRICING"}</p>
+    <h1 className="mt-1 text-3xl font-bold">{zone ? `${zone.name} pricing` : "Default customer pricing"}</h1>
+    <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+      {zone
+        ? `Pricing configuration for ${zone.name}, ${zone.primaryStateCode}. The ${zone.maximumRouteMiles}-mile maximum comes from the zone settings.`
+        : "This fallback pricing is used when the store address or customer address is not assigned to a delivery zone. Route distance is still calculated and must remain within the maximum delivery distance."}
+    </p>
+    {zoneId && (
+      <div className={"mt-4 rounded-xl p-3 text-sm font-semibold " + (inherited ? "bg-blue-50 text-blue-800" : "bg-orange-50 text-orange-800")}>
+        {inherited
+          ? "This zone currently inherits the default customer pricing. Saving creates a zone-specific policy."
+          : "This zone has its own customer-pricing policy."}
+      </div>
+    )}
     {error && <p className="mt-4 rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}
     {saved && <p className="mt-4 rounded-xl bg-green-50 p-3 text-sm text-green-800">Customer pricing policy saved and audited.</p>}
     <div className="mt-6 space-y-5">
@@ -159,15 +212,20 @@ export function AdminCustomerPricingWorkspace() {
             {field.label}
             <span className="mt-1 block text-xs font-normal leading-5 text-slate-500">{field.hint}</span>
             <div className="mt-2 flex overflow-hidden rounded-xl border border-slate-200 bg-white focus-within:ring-2 focus-within:ring-orange-200">
-              <input type="number" min="0" step={field.unit === "miles" ? "1" : "0.01"} value={draft[field.key]} onChange={(event) => { setSaved(false); setDraft({...draft, [field.key]: event.target.value}); }} className="min-w-0 flex-1 px-3 py-2.5 outline-none"/>
+              <input type="number" min="0" step={field.unit === "miles" ? "1" : "0.01"} value={draft[field.key]} disabled={Boolean(zoneId && field.key === "maxRadiusMiles")} onChange={(event) => { setSaved(false); setDraft({...draft, [field.key]: event.target.value}); }} className="min-w-0 flex-1 px-3 py-2.5 outline-none disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500"/>
               <span className="border-l border-slate-200 bg-slate-50 px-3 py-2.5 text-xs font-bold text-slate-500">{field.unit}</span>
             </div>
           </label>)}
         </div>
       </section>)}
     </div>
-    <div className="sticky bottom-4 mt-6 flex justify-end rounded-2xl bg-white/95 p-3 shadow-lg ring-1 ring-slate-200 backdrop-blur">
-      <button disabled={saving} onClick={() => void save()} className="rounded-xl bg-orange-600 px-5 py-3 text-sm font-bold text-white disabled:opacity-50">{saving ? "Saving…" : "Save customer pricing"}</button>
+    <div className="sticky bottom-4 mt-6 flex flex-wrap justify-end gap-3 rounded-2xl bg-white/95 p-3 shadow-lg ring-1 ring-slate-200 backdrop-blur">
+      {zoneId && !inherited && (
+        <button disabled={saving || resetting} onClick={() => void resetToDefaults()} className="inline-flex items-center gap-2 rounded-xl bg-white px-5 py-3 text-sm font-bold text-slate-700 ring-1 ring-slate-200 disabled:opacity-50">
+          <RotateCcw className="h-4 w-4" />{resetting ? "Resetting…" : "Use default pricing"}
+        </button>
+      )}
+      <button disabled={saving || resetting} onClick={() => void save()} className="rounded-xl bg-orange-600 px-5 py-3 text-sm font-bold text-white disabled:opacity-50">{saving ? "Saving…" : zoneId ? "Save zone pricing" : "Save default pricing"}</button>
     </div>
   </section>;
 }

@@ -86,8 +86,9 @@ import {
   calculatePaymentPricing,
 } from "../pricing/paymentPricingCalculator";
 import {
-  getMarketplacePricingPolicy,
+  getMarketplacePricingPolicyForZone,
 } from "../pricing/marketplacePricingPolicy";
+import {resolveZonePricingDecision} from "../pricing/zonePricingResolutionService";
 
 import {
   isStripeCustomerServiceError,
@@ -726,8 +727,18 @@ export const prepareCheckoutPayment =
         |--------------------------------------------------------------------------
         */
 
+        const zoneDecision = resolveZonePricingDecision(
+          customerProfile.data() ?? {},
+          {homeZoneId: checkoutData.store.homeZoneId, serviceZoneIds: checkoutData.store.serviceZoneIds},
+        );
+        if (!zoneDecision.allowed) {
+          throw new HttpsError(
+            "failed-precondition",
+            "This store is outside your approved order zones. Contact LIA support for assistance.",
+          );
+        }
         const marketplacePricingPolicy =
-          await getMarketplacePricingPolicy();
+          await getMarketplacePricingPolicyForZone(zoneDecision.pricingZoneId);
 
         requireMinimumOrder({
           storeName:
@@ -1063,6 +1074,8 @@ export const prepareCheckoutPayment =
 
               pricingPolicy:
                 marketplacePricingPolicy,
+
+              zoneDecision,
 
               distanceMiles,
 

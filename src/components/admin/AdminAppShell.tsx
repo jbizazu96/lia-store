@@ -26,10 +26,12 @@ import {
   CircleDollarSign,
   Settings,
   Tag,
+  MapPinned,
   Truck,
   UsersRound,
   ChartNoAxesCombined,
   RotateCcw,
+  ListTree,
   X,
 } from "lucide-react";
 import {
@@ -94,6 +96,10 @@ export function AdminAppShell({
             <Store className="h-5 w-5" />
             Store applications
           </Link>
+          <Link onClick={() => setSidebarOpen(false)} href="/admin/product-categories" className={`flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition ${pathname.startsWith("/admin/product-categories") ? "bg-orange-50 text-orange-700" : "text-slate-600 hover:bg-slate-50"}`}>
+            <ListTree className="h-5 w-5" />
+            Product categories
+          </Link>
           <Link onClick={() => setSidebarOpen(false)} href="/admin/driver-applications" className={`flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition ${pathname.startsWith("/admin/driver-applications") ? "bg-orange-50 text-orange-700" : "text-slate-600 hover:bg-slate-50"}`}>
             <Truck className="h-5 w-5" />
             Driver applications
@@ -125,6 +131,10 @@ export function AdminAppShell({
           <Link onClick={() => setSidebarOpen(false)} href="/admin/promotions" className={"flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition " + (pathname.startsWith("/admin/promotions") ? "bg-orange-50 text-orange-700" : "text-slate-600 hover:bg-slate-50")}>
             <Tag className="h-5 w-5" />
             Home promotions
+          </Link>
+          <Link onClick={() => setSidebarOpen(false)} href="/admin/delivery-zones" className={"flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition " + (pathname.startsWith("/admin/delivery-zones") ? "bg-orange-50 text-orange-700" : "text-slate-600 hover:bg-slate-50")}>
+            <MapPinned className="h-5 w-5" />
+            Delivery zones
           </Link>
           <Link onClick={() => setSidebarOpen(false)} href="/admin/settings" className={"flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition " + (pathname.startsWith("/admin/settings") ? "bg-orange-50 text-orange-700" : "text-slate-600 hover:bg-slate-50")}>
             <Settings className="h-5 w-5" />

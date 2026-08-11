@@ -56,6 +56,10 @@ export interface CustomerProfile {
   defaultAddress: CustomerProfileAddress | null;
   recentSearches: string[];
   notificationPreferences: CustomerNotificationPreferences;
+  deliveryZones: {
+    homeZone: {id: string; name: string} | null;
+    orderZones: Array<{id: string; name: string}>;
+  };
 }
 
 async function call<T>(name: string, data?: unknown): Promise<T> {

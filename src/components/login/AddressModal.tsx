@@ -5,6 +5,7 @@
 */
 
 import {motion} from "framer-motion";
+import {UsStateSelect} from "@/components/ui/UsStateSelect";
 
 interface AddressModalProps {
   isOpen: boolean;
@@ -100,12 +101,10 @@ export function AddressModal({
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 State *
               </label>
-              <input
-                type="text"
+              <UsStateSelect
                 value={addressData.state}
-                onChange={(e) => setAddressData({...addressData, state: e.target.value})}
+                onChange={(state) => setAddressData({...addressData, state})}
                 className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition"
-                placeholder="CA"
                 required
                 disabled={addressGeocoding}
               />
@@ -137,8 +136,6 @@ export function AddressModal({
               disabled={addressGeocoding}
             >
               <option value="US">United States</option>
-              <option value="CA">Canada</option>
-              <option value="UK">United Kingdom</option>
             </select>
           </div>
 

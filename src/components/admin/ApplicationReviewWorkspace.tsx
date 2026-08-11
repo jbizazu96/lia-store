@@ -33,6 +33,7 @@ import {
 import {
   adminWorkspaceClientService,
 } from "@/services/admin/adminWorkspaceClientService";
+import {AdminZoneAssignmentEditor} from "@/components/admin/AdminZoneAssignmentEditor";
 import type {
   AdminApplicationListItem,
   AdminApplicationCounts,
@@ -364,6 +365,16 @@ export function ApplicationReviewWorkspace({
             {rejectionTarget && <div className="mt-5 rounded-xl border border-red-100 bg-red-50 p-4"><label className="text-sm font-bold text-red-900">Rejection reason</label><textarea value={reason} onChange={(event) => setReason(event.target.value)} rows={3} className="mt-2 w-full rounded-lg border border-red-200 bg-white p-2 text-sm outline-none ring-orange-300 focus:ring" placeholder="Explain what needs to be corrected." /><div className="mt-3 flex gap-2"><button type="button" disabled={working || !reason.trim()} onClick={() => { if (rejectionTarget.kind === "document") { const document = documents.find((item) => item.key === rejectionTarget.key); if (document) void decideDocument(document, "rejected", reason.trim()); } else void decideApplication("rejected", reason.trim()); }} className="rounded-lg bg-red-600 px-3 py-2 text-sm font-bold text-white disabled:opacity-50">Reject</button><button type="button" disabled={working} onClick={() => setRejectionTarget(null)} className="rounded-lg bg-white px-3 py-2 text-sm font-bold text-slate-600 ring-1 ring-slate-200">Cancel</button></div></div>}
 
             {suspensionTarget && <div className="mt-5 rounded-xl border border-red-100 bg-red-50 p-4"><label className="text-sm font-bold text-red-900">Suspension reason</label><textarea value={reason} onChange={(event) => setReason(event.target.value)} rows={3} className="mt-2 w-full rounded-lg border border-red-200 bg-white p-2 text-sm outline-none ring-red-300 focus:ring" placeholder="Explain why this account is being suspended." /><div className="mt-3 flex gap-2"><button type="button" disabled={working || !reason.trim()} onClick={() => void setSuspension(true, reason.trim())} className="rounded-lg bg-red-600 px-3 py-2 text-sm font-bold text-white disabled:opacity-50">Suspend</button><button type="button" disabled={working} onClick={() => { setSuspensionTarget(false); setReason(""); }} className="rounded-lg bg-white px-3 py-2 text-sm font-bold text-slate-600 ring-1 ring-slate-200">Cancel</button></div></div>}
+
+            <AdminZoneAssignmentEditor
+              key={selected.id}
+              accountType={type}
+              accountId={selected.id}
+              homeZoneId={selected.zoneAssignment.homeZoneId}
+              serviceZoneIds={selected.zoneAssignment.serviceZoneIds}
+              disabled={working}
+              onSaved={refreshSelected}
+            />
 
             <div className="mt-7 flex flex-wrap gap-3 border-t border-slate-100 pt-5">
               <button type="button" disabled={working || (type === "driver" && !selected.isApproved && !allRequiredApproved)} onClick={() => type === "store" ? void setStoreApproval() : void setDriverApproval()} className="inline-flex items-center gap-2 rounded-xl bg-green-600 px-4 py-2.5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-45">

@@ -220,6 +220,13 @@ function serializable(value: unknown): unknown {
   return value;
 }
 
+async function requireConfiguredCategory(value: unknown): Promise<void> {
+  const category = text(value, 100);
+  if (!category || category.includes("/") || !(await db.collection("categories").doc(category).get()).exists) {
+    throw new HttpsError("failed-precondition", "Choose a category currently configured by LIA Admin.");
+  }
+}
+
 export const mutateStoreProduct = onCall({ region: "us-central1" }, async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Sign in to manage products.");
@@ -231,6 +238,7 @@ export const mutateStoreProduct = onCall({ region: "us-central1" }, async (reque
 
   if (action === "create") {
     const data = editableProductData(input.product);
+    await requireConfiguredCategory(data.category);
     const primaryImageId = optionalText(record(input.product).primaryImageId, 200);
     const created = await db.collection("products").add({
       ...data,
@@ -273,6 +281,7 @@ export const mutateStoreProduct = onCall({ region: "us-central1" }, async (reque
 
   if (action === "duplicate") {
     const data = editableProductData(existing.data());
+    await requireConfiguredCategory(data.category);
     const created = await db.collection("products").add({
       ...data,
       name: `${data.name} (Copy)`,
@@ -297,8 +306,10 @@ export const mutateStoreProduct = onCall({ region: "us-central1" }, async (reque
   }
 
   if (action === "update") {
+    const updates = editableProductData(input.product, false);
+    if (updates.category !== undefined) await requireConfiguredCategory(updates.category);
     await reference.update({
-      ...editableProductData(input.product, false),
+      ...updates,
       updatedAt: FieldValue.serverTimestamp(),
     });
 

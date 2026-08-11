@@ -167,18 +167,7 @@ export default function StorePage({
   );
 
   const hasFreshCategories =
-    sortedCategories.some((category) =>
-      [
-        "produce",
-        "meat",
-        "seafood",
-        "dairy",
-        "bakery",
-        "frozen",
-      ].includes(
-        category.id.toLowerCase()
-      )
-    );
+    sortedCategories.some((category) => category.freshnessEligible);
 
   /*
   |--------------------------------------------------------------------------
@@ -475,6 +464,7 @@ export default function StorePage({
       />
 
       <StoreInfo
+          storeId={store.id}
           name={store.name}
           address={store.address}
           logoUrl={store.logoUrl}

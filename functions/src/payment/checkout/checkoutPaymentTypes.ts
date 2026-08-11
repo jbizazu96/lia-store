@@ -184,6 +184,10 @@ export interface TrustedCheckoutStore {
 
   longitude: number;
 
+  homeZoneId: string | null;
+
+  serviceZoneIds: string[];
+
   /*
     Connected account used later for store transfers.
 

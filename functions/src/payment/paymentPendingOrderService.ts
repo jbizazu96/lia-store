@@ -54,6 +54,7 @@ import type {
 import type {
   MarketplacePricingPolicy,
 } from "./pricing/marketplacePricingPolicy";
+import type {ZonePricingDecision} from "./pricing/zonePricingResolutionService";
 
 
 const db =
@@ -107,6 +108,8 @@ export interface CreatePaymentPendingOrderInput {
 
   pricingPolicy:
     MarketplacePricingPolicy;
+
+  zoneDecision: ZonePricingDecision;
 
   distanceMiles: number;
 
@@ -479,6 +482,12 @@ async function createPaymentPendingOrder(
         totalAmount:
           input.pricing
             .totalAmount,
+
+        isPeakTime:
+          input.pricing.isPeakTime,
+
+        peakSurchargeAmount:
+          input.pricing.peakSurchargeAmount,
       },
 
       /*
@@ -487,6 +496,12 @@ async function createPaymentPendingOrder(
        */
       pricingPolicy:
         input.pricingPolicy,
+
+      customerHomeZoneId: input.zoneDecision.customerHomeZoneId,
+      storeHomeZoneId: input.zoneDecision.storeHomeZoneId,
+      pricingZoneId: input.zoneDecision.pricingZoneId,
+      zoneAccessType: input.zoneDecision.zoneAccessType,
+      trustedRouteDistanceMiles: input.distanceMiles,
 
       delivery: {
         instructions:
