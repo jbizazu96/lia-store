@@ -53,6 +53,7 @@ import {useProductCategories} from "@/hooks/useProductCategories";
 import {
   PRODUCT_SIZE_UNITS,
 } from "@/config/productFormOptions";
+import {productService} from "@/services/product/productService";
 
 import {
   useConfirmation,
@@ -208,6 +209,25 @@ export function ProductForm({
     sizeUnit,
     setSizeUnit,
   ] = useState("each");
+
+  const [sizeUnits, setSizeUnits] = useState<Array<{value: string; label: string}>>(
+    PRODUCT_SIZE_UNITS.map((unit) => ({...unit})),
+  );
+
+  useEffect(() => {
+    let active = true;
+    void productService.getStoreProductSizeUnits().then((units) => {
+      if (!active) return;
+      setSizeUnits(() => {
+        const existingUnit = initialData?.size?.unit;
+        return existingUnit && !units.some((unit) => unit.value === existingUnit)
+          ? [{value: existingUnit, label: `${existingUnit} (existing product)`}, ...units]
+          : units;
+      });
+      if (!initialData?.size?.unit && units.length === 0) setSizeUnit("");
+    }).catch(() => undefined);
+    return () => { active = false; };
+  }, [initialData?.size?.unit]);
 
   /*
   |--------------------------------------------------------------------------
@@ -1007,7 +1027,7 @@ export function ProductForm({
               }
               className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 focus:ring-2 focus:ring-orange-500 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {PRODUCT_SIZE_UNITS.map(
+              {sizeUnits.map(
                 (unit) => (
                   <option
                     key={

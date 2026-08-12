@@ -243,11 +243,11 @@ export default function CartPage() {
 
       {/* One cart belongs to one store. Keep its items together like a store basket. */}
       <div className="mx-auto max-w-2xl px-4 py-5 pb-64">
-        <section className="overflow-hidden rounded-[26px] border border-gray-200 bg-transparent">
+        <section className="overflow-hidden rounded-xl border border-gray-200 bg-transparent">
           <div className="flex items-center justify-between gap-3 border-b border-gray-100 px-4 py-4">
             <div className="min-w-0">
-              <h2 className="truncate text-base font-extrabold text-gray-900">{storeName}</h2>
-              <p className="mt-0.5 text-sm font-medium text-gray-500">
+              <h2 className="truncate text-sm font-extrabold text-gray-900">{storeName}</h2>
+              <p className="mt-0.5 text-xs font-medium text-gray-500">
                 ${subtotal.toFixed(2)} subtotal
               </p>
             </div>

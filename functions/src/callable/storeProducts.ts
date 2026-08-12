@@ -234,6 +234,14 @@ async function requireConfiguredCategory(value: unknown): Promise<void> {
   }
 }
 
+async function requireConfiguredSizeUnit(value: unknown): Promise<void> {
+  if (value === null || value === undefined) return;
+  const unit = text(record(value).unit, 20).toLowerCase();
+  if (!unit || !(await db.collection("productSizeUnits").doc(unit).get()).exists) {
+    throw new HttpsError("failed-precondition", "Choose a size unit currently configured by LIA Admin.");
+  }
+}
+
 export const mutateStoreProduct = onCall({ region: "us-central1" }, async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Sign in to manage products.");
@@ -246,6 +254,7 @@ export const mutateStoreProduct = onCall({ region: "us-central1" }, async (reque
   if (action === "create") {
     const data = editableProductData(input.product);
     await requireConfiguredCategory(data.category);
+    await requireConfiguredSizeUnit(data.size);
     const primaryImageId = optionalText(record(input.product).primaryImageId, 200);
     const created = await db.collection("products").add({
       ...data,
@@ -315,6 +324,11 @@ export const mutateStoreProduct = onCall({ region: "us-central1" }, async (reque
   if (action === "update") {
     const updates = editableProductData(input.product, false);
     if (updates.category !== undefined) await requireConfiguredCategory(updates.category);
+    if (updates.size !== undefined) {
+      const previousUnit = text(record(existing.data()?.size).unit, 20).toLowerCase();
+      const nextUnit = text(record(updates.size).unit, 20).toLowerCase();
+      if (nextUnit && nextUnit !== previousUnit) await requireConfiguredSizeUnit(updates.size);
+    }
     await reference.update({
       ...updates,
       updatedAt: FieldValue.serverTimestamp(),

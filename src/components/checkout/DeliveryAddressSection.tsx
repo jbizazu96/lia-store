@@ -1,5 +1,7 @@
 "use client";
 
+import {useEffect, useMemo, useState} from "react";
+import Image from "next/image";
 import {MapPin, User, Phone, Edit2} from "lucide-react";
 import type { CheckoutAddress } from "@/app/checkout/types";
 
@@ -16,13 +18,33 @@ export function DeliveryAddressSection({
   userPhone,
   onEdit,
 }: DeliveryAddressSectionProps) {
+  const mapUrl = useMemo(() => {
+    if (!address || !process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY) return "";
+    const location = typeof address.latitude === "number" && typeof address.longitude === "number"
+      ? `${address.latitude},${address.longitude}`
+      : address.formattedAddress || [address.street, address.city, address.state, address.zip].filter(Boolean).join(", ");
+    if (!location) return "";
+    const encoded = encodeURIComponent(location);
+    return `https://maps.googleapis.com/maps/api/staticmap?center=${encoded}&zoom=15&size=700x260&scale=2&markers=color:orange%7C${encoded}&key=${encodeURIComponent(process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY)}`;
+  }, [address]);
+  const [mapFailed, setMapFailed] = useState(false);
+  useEffect(() => {queueMicrotask(() => setMapFailed(false));}, [mapUrl]);
+
   return (
-    <section className="overflow-hidden rounded-[26px] border border-gray-200 bg-transparent">
-      <div className="flex items-center justify-between gap-3 border-b border-gray-100 px-4 py-4">
-        <div className="flex items-center gap-2">
-          <MapPin className="w-5 h-5 text-orange-500" />
-          <h3 className="font-extrabold text-gray-900">Delivery Information</h3>
-        </div>
+    <section className="overflow-hidden rounded-xl border border-gray-200 bg-transparent">
+      {address && <div className="relative h-36 w-full border-b border-gray-100 bg-gray-100">
+        <Image
+          src={mapUrl && !mapFailed ? mapUrl : "/images/checkout-map-placeholder.png"}
+          alt="Delivery address map"
+          fill
+          sizes="(max-width: 512px) 100vw, 512px"
+          priority
+          className="object-cover"
+          onError={() => setMapFailed(true)}
+        />
+        <span className="absolute left-1/2 top-1/2 flex h-10 w-10 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-orange-500 text-white shadow-lg ring-4 ring-white/80"><MapPin className="h-5 w-5" /></span>
+      </div>}
+      <div className="flex items-center justify-end gap-3 border-b border-gray-100 px-4 py-3">
         <button
           onClick={onEdit}
           className="text-sm text-orange-500 font-medium hover:text-orange-600 transition flex items-center gap-1"
@@ -32,7 +54,7 @@ export function DeliveryAddressSection({
         </button>
       </div>
 
-      <div className="px-4 py-4">
+      <div className="px-4 pb-4 pt-3">
         {address ? (
           <div className="space-y-3">
           {/* User Name */}

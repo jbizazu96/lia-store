@@ -20,7 +20,7 @@ import {
   formatStoreTime,
   getStoreStatus,
 } from "@/services/store/storeSchedule";
-import { use } from "react";
+import { use, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
@@ -40,6 +40,7 @@ import { CustomerPageSkeleton } from "@/components/customer/ui/CustomerPageSkele
 interface StoreInfoPageProps {params: Promise<{storeId: string;}>;}export default function StoreInfoPage({params,}: StoreInfoPageProps) {
   const router = useRouter();
   const { storeId } = use(params);
+  const [mapFailed, setMapFailed] = useState(false);
 
   const {store,loading,error,} = useStoreInfo({
         storeId,
@@ -143,7 +144,7 @@ const phoneUrl =
 
       {/* Map Section */}
       <div className="relative w-full h-64 bg-gray-200">
-        {store.address && staticMapUrl ? (
+        {store.address && staticMapUrl && !mapFailed ? (
           <>
             {/* Static Map Image */}
             <Image
@@ -152,15 +153,22 @@ const phoneUrl =
               fill
               sizes="100vw"
               className="w-full h-full object-cover"
-              onError={(event) => {
-                event.currentTarget.src = "/images/store-map-placeholder.png";
-              }}
+              onError={() => setMapFailed(true)}
             />
             {/* Map attribution */}
             <div className="absolute bottom-2 right-2 bg-white/80 backdrop-blur-sm px-2 py-1 rounded text-xs text-gray-500">
               Google Maps
             </div>
           </>
+        ) : store.address ? (
+          <Image
+            src="/images/store-map-placeholder.png"
+            alt={`${store.name} map unavailable`}
+            fill
+            sizes="100vw"
+            className="object-cover"
+            priority
+          />
         ) : (
           <div className="w-full h-full flex items-center justify-center">
             <div className="text-center">

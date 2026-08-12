@@ -106,14 +106,16 @@ export const registerNotificationDevice = onCall(
         platform,
         userAgent,
         createdAt: FieldValue.serverTimestamp(),
+        lastRegisteredAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
       });
-    } else if (tokenChanged || current.data()?.active !== true) {
+    } else {
       await deviceReference.set({
         token,
         active: true,
         platform,
         userAgent,
+        lastRegisteredAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
       }, {merge: true});
     }

@@ -239,7 +239,9 @@ export const getAdminCustomer = onCall(
           customerAddress: text(item.customerAddress),
           requestedStoreCity: text(item.requestedStoreCity),
           storeName: text(item.storeName) || null,
+          storeHomeZoneId: text(item.storeHomeZoneId) || null,
           status: text(item.status) || "pending_review",
+          decisionMessage: text(item.decisionMessage) || null,
           createdAt: date(item.createdAt),
         };
       }).sort((left, right) => (right.createdAt ?? "").localeCompare(left.createdAt ?? "")),
@@ -249,6 +251,54 @@ export const getAdminCustomer = onCall(
       deletionRequest,
     };
   }
+);
+
+export const decideAdminOrderZoneRequest = onCall(
+  {region: "us-central1"},
+  async (request) => {
+    const administrator = await requireAdminPermission(request, "customers", "write");
+    const input = record(request.data);
+    const requestId = customerId(input.requestId);
+    const decision = text(input.decision);
+    const message = text(input.message).slice(0, 1_000);
+    const selectedZoneId = text(input.zoneId);
+    if (!message || !["approved", "rejected"].includes(decision)) throw new HttpsError("invalid-argument", "Choose approve or decline and enter a message for the customer.");
+
+    const reference = db.collection("orderZoneRequests").doc(requestId);
+    const snapshot = await reference.get();
+    const data = snapshot.data() ?? {};
+    if (!snapshot.exists || data.status !== "pending_review") throw new HttpsError("failed-precondition", "This Order Zone request has already been reviewed.");
+    const id = customerId(data.customerId);
+    const customerReference = db.collection("users").doc(id);
+    const customer = await customerReference.get();
+    if (!customer.exists || customer.data()?.accountType !== "customer") throw new HttpsError("not-found", "The customer account was not found.");
+
+    let zoneId: string | null = null;
+    let zoneName: string | null = null;
+    if (decision === "approved") {
+      zoneId = selectedZoneId || text(data.storeHomeZoneId);
+      if (!zoneId) throw new HttpsError("failed-precondition", "Choose the Order Zone to approve.");
+      const zone = await db.collection("deliveryZones").doc(zoneId).get();
+      if (!zone.exists || zone.data()?.isActive !== true) throw new HttpsError("failed-precondition", "Choose an active delivery zone.");
+      zoneName = text(zone.data()?.name) || "Delivery zone";
+    }
+
+    const title = decision === "approved" ? "Order Zone approved" : "Order Zone request declined";
+    await db.runTransaction(async (transaction) => {
+      const latest = await transaction.get(reference);
+      if (latest.data()?.status !== "pending_review") throw new HttpsError("failed-precondition", "This Order Zone request has already been reviewed.");
+      if (decision === "approved" && zoneId) {
+        const currentIds = Array.isArray(customer.data()?.orderZoneIds) ? customer.data()?.orderZoneIds.filter((value: unknown): value is string => typeof value === "string") : [];
+        const currentNames = Array.isArray(customer.data()?.orderZoneNames) ? customer.data()?.orderZoneNames.filter((value: unknown): value is string => typeof value === "string") : [];
+        if (!currentIds.includes(zoneId)) transaction.update(customerReference, {orderZoneIds: [...currentIds, zoneId], orderZoneNames: [...currentNames, zoneName], zoneAssignmentUpdatedAt: FieldValue.serverTimestamp(), zoneAssignmentUpdatedBy: administrator.uid, updatedAt: FieldValue.serverTimestamp()});
+      }
+      transaction.update(reference, {status: decision, approvedZoneId: zoneId, approvedZoneName: zoneName, decisionMessage: message, resolvedAt: FieldValue.serverTimestamp(), resolvedBy: administrator.uid, updatedAt: FieldValue.serverTimestamp()});
+      transaction.set(customerReference.collection("notifications").doc(`order-zone-${requestId}`), {title, body: message, type: "system", deepLink: decision === "approved" ? "/home" : "/help", read: false, createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp()}, {merge: true});
+    });
+    try {await notificationService.sendToUser(id, title, message, decision === "approved" ? "/home" : "/help");} catch (error) {console.error("Order Zone decision push failed.", {code: (error as {code?: unknown}).code ?? "unknown"});}
+    await writeAdminAuditLog(administrator, {action: `order_zone_request.${decision}`, targetType: "orderZoneRequest", targetId: requestId, reason: message, details: {customerId: id, zoneId}});
+    return {success: true};
+  },
 );
 
 export const setAdminCustomerSuspension = onCall(

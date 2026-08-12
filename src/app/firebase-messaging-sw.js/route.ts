@@ -44,7 +44,7 @@ messaging.onBackgroundMessage((payload) => {
     ? candidate
     : "/home";
 
-  self.registration.showNotification(notificationTitle, {
+  return self.registration.showNotification(notificationTitle, {
     body: payload.notification?.body,
     icon: "/icon/icon-192.png",
     badge: "/icon/icon-192.png",

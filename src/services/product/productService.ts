@@ -406,6 +406,14 @@ primaryImageId:
  * Product service used throughout the application.
  */
 export const productService = {
+  async getStoreProductSizeUnits(): Promise<Array<{value: string; label: string}>> {
+    const result = await httpsCallable<unknown, {units: Array<{id: string; label: string}>}>(
+      functions,
+      "getStoreProductSizeUnits",
+    )();
+    return result.data.units.map((unit) => ({value: unit.id, label: unit.label}));
+  },
+
   /**
    * Get one product by its Firestore document ID.
    */

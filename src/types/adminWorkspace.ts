@@ -230,7 +230,9 @@ export interface AdminCustomerDetail {
     customerAddress: string;
     requestedStoreCity: string;
     storeName: string | null;
+    storeHomeZoneId: string | null;
     status: string;
+    decisionMessage: string | null;
     createdAt: string | null;
   }>;
   orders: Array<{

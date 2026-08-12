@@ -110,8 +110,8 @@ export function AdminAppShell({
 
       {sidebarOpen && <button type="button" aria-label="Close admin navigation" onClick={() => setSidebarOpen(false)} className="fixed inset-0 z-30 bg-black/30 md:hidden" />}
 
-      <aside className={`fixed inset-y-0 left-0 z-40 flex w-72 flex-col border-r border-slate-200 bg-white p-5 transition-transform duration-200 md:translate-x-0 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`}>
-        <div className="mb-8 flex items-center justify-between">
+      <aside className={`fixed inset-y-0 left-0 z-40 flex w-72 flex-col overflow-hidden border-r border-slate-200 bg-white p-5 transition-transform duration-200 md:translate-x-0 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`}>
+        <div className="mb-8 flex shrink-0 items-center justify-between">
           <div className="flex items-center gap-2">
             <Image src="/icon/icon-192.png" alt="LIA" width={30} height={30} className="rounded-md" />
             <p className="text-xl font-bold text-orange-600">LIA Admin</p>
@@ -121,7 +121,7 @@ export function AdminAppShell({
           </button>
         </div>
 
-        <nav className="space-y-2">
+        <nav className="min-h-0 flex-1 space-y-2 overflow-y-auto overflow-x-hidden overscroll-contain pb-[max(1rem,env(safe-area-inset-bottom))] pr-1 [scrollbar-gutter:stable]">
           {visibleNavigation.map((item) => {
             const Icon = item.icon;
             const active = item.href === "/admin" ? pathname === "/admin" : pathname.startsWith(item.href);

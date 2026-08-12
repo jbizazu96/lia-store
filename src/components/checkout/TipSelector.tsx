@@ -6,17 +6,16 @@
 
 import {useState} from "react";
 import {motion, AnimatePresence} from "framer-motion";
-import {Heart, DollarSign, Plus} from "lucide-react";
+import {DollarSign, Plus} from "lucide-react";
 
 interface TipSelectorProps {
   selectedTip: number;
   onTipChange: (amount: number) => void;
-  subtotal: number;
 }
 
 const TIP_OPTIONS = [2.5, 3, 4];
 
-export function TipSelector({selectedTip, onTipChange, subtotal}: TipSelectorProps) {
+export function TipSelector({selectedTip, onTipChange}: TipSelectorProps) {
   const [showCustomTip, setShowCustomTip] = useState(false);
   const [customTip, setCustomTip] = useState("");
 
@@ -30,15 +29,8 @@ export function TipSelector({selectedTip, onTipChange, subtotal}: TipSelectorPro
   };
 
   return (
-    <div className="rounded-[26px] border border-gray-200 bg-transparent p-5">
-      {/* Tip Header */}
-      <div className="flex items-center gap-2 mb-3">
-        <Heart className="w-5 h-5 text-orange-500" />
-        <h3 className="font-semibold text-gray-800">Driver Tip</h3>
-        <span className="text-xs text-gray-400 ml-auto">100% goes to driver</span>
-      </div>
-
-      <p className="text-xs text-gray-500 mb-4">
+    <div className="rounded-xl border border-gray-200 bg-transparent p-5">
+      <p className="mb-4 text-xs text-gray-500">
         100% of the tip goes to your driver. Show appreciation for great service!
       </p>
 

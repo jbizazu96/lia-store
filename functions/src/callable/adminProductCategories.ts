@@ -10,9 +10,22 @@ import {writeAdminAuditLog} from "../admin/adminAuditLogService";
 if (admin.apps.length === 0) admin.initializeApp();
 const db = getFirestore("default");
 const MAX_ICON_BYTES = 3 * 1024 * 1024;
+const DEFAULT_SIZE_UNITS = [
+  {id: "each", label: "Each"}, {id: "oz", label: "Ounce (oz)"},
+  {id: "lb", label: "Pound (lb)"}, {id: "g", label: "Gram (g)"},
+  {id: "kg", label: "Kilogram (kg)"}, {id: "ml", label: "Milliliter (ml)"},
+  {id: "l", label: "Liter (L)"}, {id: "pack", label: "Pack"},
+  {id: "box", label: "Box"},
+];
 
 function text(value: unknown, maximum = 100): string {
   return typeof value === "string" ? value.trim().replace(/\s+/g, " ").slice(0, maximum) : "";
+}
+
+function record(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
 }
 
 function categoryId(value: unknown): string {
@@ -20,6 +33,147 @@ function categoryId(value: unknown): string {
   if (!id || id.includes("/")) throw new HttpsError("invalid-argument", "A valid product category is required.");
   return id;
 }
+
+function sizeUnitId(value: unknown): string {
+  const id = text(value, 20).toLowerCase();
+  if (!/^[a-z0-9][a-z0-9-]{0,19}$/.test(id)) {
+    throw new HttpsError("invalid-argument", "Use a unit code containing only lowercase letters, numbers, or hyphens.");
+  }
+  return id;
+}
+
+async function sizeUnits() {
+  const snapshot = await db.collection("productSizeUnits").limit(100).get();
+  return snapshot.docs.map((document) => ({
+    id: document.id,
+    label: text(document.data().label, 80) || document.id,
+  })).sort((first, second) => first.label.localeCompare(second.label));
+}
+
+export const getStoreProductSizeUnits = onCall({region: "us-central1"}, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Sign in to load product size units.");
+  return {units: await sizeUnits()};
+});
+
+export const getAdminProductSizeUnits = onCall({region: "us-central1"}, async (request) => {
+  await requireAdminPermission(request, "product_categories");
+  return {units: await sizeUnits()};
+});
+
+export const createAdminProductSizeUnit = onCall({region: "us-central1"}, async (request) => {
+  const administrator = await requireAdminPermission(request, "product_categories", "write");
+  const input = request.data && typeof request.data === "object" ? request.data as Record<string, unknown> : {};
+  const id = sizeUnitId(input.id);
+  const label = text(input.label, 80);
+  if (label.length < 1) throw new HttpsError("invalid-argument", "Enter a size-unit label.");
+  try {
+    await db.collection("productSizeUnits").doc(id).create({label, createdAt: FieldValue.serverTimestamp(), createdBy: administrator.uid, updatedAt: FieldValue.serverTimestamp(), updatedBy: administrator.uid});
+  } catch (error) {
+    if ((error as {code?: unknown}).code === 6 || (error as {code?: unknown}).code === "already-exists") throw new HttpsError("already-exists", "That size-unit code already exists.");
+    throw error;
+  }
+  await writeAdminAuditLog(administrator, {action: "product_size_unit.created", targetType: "productSizeUnit", targetId: id, details: {label}});
+  return {id};
+});
+
+export const updateAdminProductSizeUnit = onCall({region: "us-central1", timeoutSeconds: 540}, async (request) => {
+  const administrator = await requireAdminPermission(request, "product_categories", "write");
+  const input = request.data && typeof request.data === "object" ? request.data as Record<string, unknown> : {};
+  const id = sizeUnitId(input.id);
+  const nextId = sizeUnitId(input.nextId ?? input.id);
+  const label = text(input.label, 80);
+  if (!label) throw new HttpsError("invalid-argument", "Enter a size-unit label.");
+  const reference = db.collection("productSizeUnits").doc(id);
+  const existing = await reference.get();
+  if (!existing.exists) throw new HttpsError("not-found", "Size unit not found.");
+  if (nextId !== id && (await db.collection("productSizeUnits").doc(nextId).get()).exists) {
+    throw new HttpsError("already-exists", "That size-unit code already exists.");
+  }
+
+  let productsUpdated = 0;
+  let publicProfilesUpdated = 0;
+  let cartsUpdated = 0;
+  if (nextId !== id) {
+    const [products, profiles] = await Promise.all([
+      db.collection("products").where("size.unit", "==", id).get(),
+      db.collection("productPublicProfiles").where("size.unit", "==", id).get(),
+    ]);
+    const writer = db.bulkWriter();
+    products.docs.forEach((document) => writer.update(document.ref, {"size.unit": nextId, updatedAt: FieldValue.serverTimestamp()}));
+    profiles.docs.forEach((document) => writer.update(document.ref, {"size.unit": nextId, updatedAt: FieldValue.serverTimestamp()}));
+    productsUpdated = products.size;
+    publicProfilesUpdated = profiles.size;
+
+    let lastCartId: string | undefined;
+    while (true) {
+      let query = db.collection("carts").orderBy("__name__").limit(250);
+      if (lastCartId) query = query.startAfter(lastCartId);
+      const carts = await query.get();
+      if (carts.empty) break;
+      carts.docs.forEach((document) => {
+        const data = document.data();
+        if (!Array.isArray(data.items)) return;
+        let changed = false;
+        const items = data.items.map((item: unknown) => {
+          const entry = record(item);
+          const size = record(entry.size);
+          if (text(size.unit, 20).toLowerCase() !== id) return item;
+          changed = true;
+          return {...entry, size: {...size, unit: nextId}};
+        });
+        if (changed) {writer.update(document.ref, {items, updatedAt: FieldValue.serverTimestamp()}); cartsUpdated += 1;}
+      });
+      lastCartId = carts.docs[carts.docs.length - 1]?.id;
+      if (carts.size < 250) break;
+    }
+    await writer.close();
+  }
+
+  if (nextId === id) {
+    await reference.update({label, updatedAt: FieldValue.serverTimestamp(), updatedBy: administrator.uid});
+  } else {
+    await db.runTransaction(async (transaction) => {
+      const nextReference = db.collection("productSizeUnits").doc(nextId);
+      const next = await transaction.get(nextReference);
+      if (next.exists) throw new HttpsError("already-exists", "That size-unit code already exists.");
+      transaction.create(nextReference, {...existing.data(), label, updatedAt: FieldValue.serverTimestamp(), updatedBy: administrator.uid});
+      transaction.delete(reference);
+    });
+  }
+  await writeAdminAuditLog(administrator, {action: "product_size_unit.updated", targetType: "productSizeUnit", targetId: nextId, details: {previousCode: id, code: nextId, previousLabel: text(existing.data()?.label, 80), label, productsUpdated, publicProfilesUpdated, cartsUpdated}});
+  return {success: true};
+});
+
+export const deleteAdminProductSizeUnit = onCall({region: "us-central1"}, async (request) => {
+  const administrator = await requireAdminPermission(request, "product_categories", "write");
+  const id = sizeUnitId(record(request.data).id);
+  const reference = db.collection("productSizeUnits").doc(id);
+  const existing = await reference.get();
+  if (!existing.exists) throw new HttpsError("not-found", "Size unit not found.");
+  await reference.delete();
+  await writeAdminAuditLog(administrator, {action: "product_size_unit.deleted", targetType: "productSizeUnit", targetId: id, details: {label: text(existing.data()?.label, 80)}});
+  return {success: true};
+});
+
+export const importAdminProductSizeUnits = onCall({region: "us-central1"}, async (request) => {
+  const administrator = await requireAdminPermission(request, "product_categories", "write");
+  const [products, configured] = await Promise.all([
+    db.collection("products").select("size").get(),
+    db.collection("productSizeUnits").get(),
+  ]);
+  const labels = new Map(DEFAULT_SIZE_UNITS.map((unit) => [unit.id, unit.label]));
+  products.docs.forEach((document) => {
+    const unit = text(record(document.data().size).unit, 20).toLowerCase();
+    if (/^[a-z0-9][a-z0-9-]{0,19}$/.test(unit) && !labels.has(unit)) labels.set(unit, inferredName(unit));
+  });
+  const existing = new Set(configured.docs.map((document) => document.id));
+  const missing = [...labels].filter(([id]) => !existing.has(id));
+  const batch = db.batch();
+  missing.forEach(([id, label]) => batch.create(db.collection("productSizeUnits").doc(id), {label, source: "existing_units_import", createdAt: FieldValue.serverTimestamp(), createdBy: administrator.uid, updatedAt: FieldValue.serverTimestamp(), updatedBy: administrator.uid}));
+  if (missing.length > 0) await batch.commit();
+  await writeAdminAuditLog(administrator, {action: "product_size_units.imported", targetType: "productSizeUnit", targetId: "existing-units", details: {created: missing.length, productsScanned: products.size}});
+  return {success: true, created: missing.length, productsScanned: products.size};
+});
 
 function slug(value: string): string {
   return value.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase()

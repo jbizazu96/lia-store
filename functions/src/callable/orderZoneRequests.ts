@@ -58,7 +58,7 @@ export const createCustomerOrderZoneRequest = onCall(
       title: "New Order Zone request",
       body: `${text(customerData.displayName, 100) || "A customer"} requested ordering access for ${requestedStoreCity}${storeName ? ` (${storeName})` : ""}.`,
       type: "customer",
-      deepLink: "/admin/customers",
+      deepLink: `/admin/customers?customerId=${encodeURIComponent(request.auth.uid)}&orderZoneRequestId=${encodeURIComponent(reference.id)}`,
       subject: {type: "order_zone_request", id: reference.id},
       dedupeKey: `order-zone-${reference.id}`,
     });

@@ -280,7 +280,19 @@ export class FirebaseMessaging {
   async enableNativeNotifications(): Promise<NotificationPermissionState> {
     if (!capacitorNotificationAdapter.isNativeApp()) {
       const enabled = await this.registerDevice({requestPermission: true});
-      return enabled ? "granted" : this.getPermissionStatus();
+      const permission = await this.getPermissionStatus();
+
+      if (!enabled && permission === "granted") {
+        throw new Error(
+          "Notification permission is enabled, but this device could not be registered. Reopen LIA from your Home Screen and try again."
+        );
+      }
+
+      if (enabled) {
+        this.setNativePreference("accepted");
+      }
+
+      return permission;
     }
 
     let permission = await this.getPermissionStatus();

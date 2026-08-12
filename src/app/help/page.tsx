@@ -21,6 +21,7 @@ import {
   X,
 } from "lucide-react";
 import Link from "next/link";
+import {useRouter} from "next/navigation";
 import {useEffect, useState} from "react";
 import {createPortal} from "react-dom";
 import {
@@ -29,6 +30,7 @@ import {
 import {orderZoneRequestClientService} from "@/services/customer/orderZoneRequestClientService";
 
 export default function HelpPage() {
+  const router = useRouter();
   const [showOrderZoneForm, setShowOrderZoneForm] = useState(false);
   const [customerAddress, setCustomerAddress] = useState("");
   const [storeCity, setStoreCity] = useState("");
@@ -67,7 +69,12 @@ export default function HelpPage() {
     setFormMessage("");
     try {
       await orderZoneRequestClientService.create({customerAddress, storeCity, ...(storeId ? {storeId} : {})});
-      setFormMessage("Your Order Zone request was sent to LIA Support. We’ll review it and contact you when there is an update.");
+      setShowOrderZoneForm(false);
+      setCustomerAddress("");
+      setStoreCity("");
+      setStoreId("");
+      setFormMessage("Your Order Zone request was sent. LIA Support will notify you after review. Returning you home…");
+      window.setTimeout(() => router.replace("/home"), 1800);
     } catch (reason) {
       setFormMessage(reason instanceof Error ? reason.message : "Unable to send your request. Please try again.");
     } finally {
@@ -84,6 +91,7 @@ export default function HelpPage() {
       </header>
 
       <div className="mx-auto max-w-xl space-y-6 px-4 py-5">
+        {formMessage && !showOrderZoneForm && <p className="rounded-2xl border border-green-200 bg-green-50 px-4 py-3 text-sm font-bold leading-6 text-green-800" role="status">{formMessage}</p>}
         <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-orange-50 via-amber-50 to-white p-6 shadow-[0_12px_35px_rgba(249,115,22,0.08)]">
           <div className="pointer-events-none absolute -right-8 -top-10 h-28 w-28 rounded-full bg-orange-200/35" />
           <div className="pointer-events-none absolute -bottom-12 right-16 h-24 w-24 rounded-full bg-amber-100/70" />

@@ -39,9 +39,8 @@ export function OrderSummary({
 
   return (
     <>
-      <section className="overflow-hidden rounded-[26px] border border-gray-200 bg-transparent p-5">
-        <h3 className="mb-3 font-extrabold text-gray-900">Cart Summary</h3>
-
+      <h2 className="px-1 pt-1 text-base font-extrabold text-gray-900">Cart Summary</h2>
+      <section className="overflow-hidden rounded-xl border border-gray-200 bg-transparent p-5">
       {/* Store Info */}
       {storeName && (
         <div className="flex items-start gap-2 mb-3 pb-2 border-b border-gray-100">
@@ -104,8 +103,8 @@ export function OrderSummary({
       </section>
 
       {/* Totals */}
-      <section className="overflow-hidden rounded-[26px] border border-gray-200 bg-transparent p-5">
-        <h3 className="mb-3 font-extrabold text-gray-900">Price Summary</h3>
+      <h2 className="px-1 pt-1 text-base font-extrabold text-gray-900">Price Summary</h2>
+      <section className="overflow-hidden rounded-xl border border-gray-200 bg-transparent p-5">
       <div className="space-y-2">
         <div className="flex justify-between text-sm">
           <span className="text-gray-500">Subtotal</span>

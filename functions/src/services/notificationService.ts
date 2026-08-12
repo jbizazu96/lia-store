@@ -131,6 +131,10 @@ async sendToUser(
     .get();
 
   if (snapshot.empty) {
+    console.warn("Push notification skipped: no active device registration.", {
+      uid,
+      preference: preference ?? "none",
+    });
     return;
   }
 
@@ -156,6 +160,14 @@ async sendToUser(
       async ([token, documents]) => {
         try {
           await this.sendToDevice(token, title, body, deepLink);
+          const batch = db.batch();
+          documents.forEach((document) => {
+            batch.set(document.ref, {
+              lastPushAcceptedAt: new Date(),
+              lastPushErrorCode: null,
+            }, {merge: true});
+          });
+          await batch.commit();
         } catch (error) {
           const code = (error as {code?: unknown}).code;
           const invalidToken = code ===
@@ -165,6 +177,15 @@ async sendToUser(
           if (invalidToken) {
             const batch = db.batch();
             documents.forEach((document) => batch.delete(document.ref));
+            await batch.commit();
+          } else {
+            const batch = db.batch();
+            documents.forEach((document) => {
+              batch.set(document.ref, {
+                lastPushErrorAt: new Date(),
+                lastPushErrorCode: typeof code === "string" ? code : "unknown",
+              }, {merge: true});
+            });
             await batch.commit();
           }
 

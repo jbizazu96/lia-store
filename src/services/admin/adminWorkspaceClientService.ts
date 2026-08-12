@@ -314,6 +314,7 @@ export const adminWorkspaceClientService = {
   }>("getAdminCustomers", input),
   getCustomer: (customerId: string) => call<AdminCustomerDetail>("getAdminCustomer", {customerId}),
   setCustomerSuspension: (customerId: string, isSuspended: boolean, reason?: string) => call<{success: boolean}>("setAdminCustomerSuspension", {customerId, isSuspended, ...(reason ? {reason} : {})}),
+  decideOrderZoneRequest: (input: {requestId: string; decision: "approved" | "rejected"; message: string; zoneId?: string}) => call<{success: boolean}>("decideAdminOrderZoneRequest", input),
   getPlatformReport: (periodDays: 7 | 30 | 90 | number) => call<AdminPlatformReport>("getAdminPlatformReport", {periodDays}),
   backfillPlatformReports: () => call<{success: boolean; ordersScanned: number; customersScanned: number; limited: boolean}>("backfillAdminPlatformDailyReports"),
   reindexCatalogSearch: (afterStoreId?: string) => call<{
@@ -340,6 +341,11 @@ export const adminWorkspaceClientService = {
     });
   },
   importProductCategories: () => call<{success: boolean; created: number; productsScanned: number}>("importAdminProductCategories"),
+  getProductSizeUnits: () => call<{units: Array<{id: string; label: string}>}>("getAdminProductSizeUnits"),
+  createProductSizeUnit: (unit: {id: string; label: string}) => call<{id: string}>("createAdminProductSizeUnit", unit),
+  updateProductSizeUnit: (id: string, nextId: string, label: string) => call<{success: boolean}>("updateAdminProductSizeUnit", {id, nextId, label}),
+  deleteProductSizeUnit: (id: string) => call<{success: boolean}>("deleteAdminProductSizeUnit", {id}),
+  importProductSizeUnits: () => call<{success: boolean; created: number; productsScanned: number}>("importAdminProductSizeUnits"),
   saveHomePromotion: (id: string | null, promotion: Omit<HomePromotion, "id">) => call<{id: string}>("saveAdminHomePromotion", {id, promotion}),
   deleteHomePromotion: (id: string) => call<{success: boolean}>("deleteAdminHomePromotion", {id}),
   getDeliveryZones: () => call<{zones: DeliveryZone[]}>("getAdminDeliveryZones"),

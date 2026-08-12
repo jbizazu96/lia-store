@@ -1233,7 +1233,9 @@ const handleViewOrder =
           </div>
         )}
 
-        <DeliveryAddressSection
+        <section className="space-y-2">
+          <h2 className="px-1 text-base font-extrabold text-gray-900">Delivery Information</h2>
+          <DeliveryAddressSection
           address={
             address
           }
@@ -1246,16 +1248,20 @@ const handleViewOrder =
           onEdit={
             openAddressModal
           }
-        />
+          />
+        </section>
 
-        <DeliveryInstructions
+        <section className="space-y-2">
+          <h2 className="px-1 text-base font-extrabold text-gray-900">Delivery Instructions</h2>
+          <DeliveryInstructions
           value={
             deliveryInstructions
           }
           onChange={
             setDeliveryInstructions
           }
-        />
+          />
+        </section>
 
         <OrderSummary
           items={
@@ -1276,17 +1282,17 @@ const handleViewOrder =
           }
         />
 
-        <TipSelector
+        <section className="space-y-2">
+          <div className="flex items-center justify-between gap-3 px-1"><h2 className="text-base font-extrabold text-gray-900">Driver Tip</h2><span className="text-xs font-semibold text-gray-400">100% goes to driver</span></div>
+          <TipSelector
           selectedTip={
             tip
           }
           onTipChange={
             setTip
           }
-          subtotal={
-            totalPrice
-          }
-        />
+          />
+        </section>
 
         {isStoreClosed && (
           <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-center">
