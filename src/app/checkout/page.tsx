@@ -85,7 +85,7 @@ import {
 import {
   useCheckoutPricing,
 } from "@/hooks/useCheckoutPricing";
-import {useMarketplacePricingPolicy} from "@/hooks/useMarketplacePricingPolicy";
+import {useApplicableMarketplacePricing} from "@/hooks/useMarketplacePricingPolicy";
 
 import {
   usePrepareCheckoutPayment,
@@ -183,7 +183,8 @@ export default function CheckoutPage() {
 
   const storeId =
     items[0]?.storeId;
-  const marketplacePolicy = useMarketplacePricingPolicy(storeId);
+  const applicablePricing = useApplicableMarketplacePricing(storeId);
+  const marketplacePolicy = applicablePricing?.policy ?? null;
 
 
   /*
@@ -369,6 +370,7 @@ export default function CheckoutPage() {
 
   const isOutsideDeliveryRadius =
     address !== null &&
+    applicablePricing?.decision?.zoneAccessType !== "customer_order_zone" &&
     distanceMiles >
       (marketplacePolicy?.maxRadiusMiles ?? Infinity);
 

@@ -23,6 +23,7 @@ import {
 } from "../admin/adminAuditLogService";
 import {
   requireActiveAdmin,
+  requireAdminPermission,
 } from "../admin/adminAuthorizationService";
 import {
   getStoreApplicationPolicy,
@@ -238,7 +239,7 @@ export const getAdminWorkspaceEntry = onCall(
 export const getAdminWorkspaceOverview = onCall(
   {region: "us-central1"},
   async (request) => {
-    await requireActiveAdmin(request);
+    await requireAdminPermission(request, "overview");
 
     const [
       pendingStoreApplications,
@@ -287,7 +288,7 @@ export const getAdminWorkspaceOverview = onCall(
 export const getAdminStoreApplications = onCall(
   {region: "us-central1"},
   async (request) => {
-    await requireActiveAdmin(request);
+    await requireAdminPermission(request, "stores");
     const policy = await getStoreApplicationPolicy();
     const status = text(record(request.data).status) || "pending_review";
 
@@ -316,7 +317,7 @@ export const getAdminStoreApplications = onCall(
 export const getAdminDriverApplications = onCall(
   {region: "us-central1"},
   async (request) => {
-    await requireActiveAdmin(request);
+    await requireAdminPermission(request, "drivers");
     const policy = await getDriverApplicationPolicy();
     const status = text(record(request.data).status) || "pending_review";
 
@@ -345,7 +346,7 @@ export const getAdminDriverApplications = onCall(
 export const getAdminStoreApplication = onCall(
   {region: "us-central1"},
   async (request) => {
-    await requireActiveAdmin(request);
+    await requireAdminPermission(request, "stores");
     const storeId = text(record(request.data).storeId);
     if (!storeId || storeId.includes("/")) throw new HttpsError("invalid-argument", "A valid store is required.");
 
@@ -386,7 +387,7 @@ export const getAdminStoreApplication = onCall(
 export const getAdminDriverApplication = onCall(
   {region: "us-central1"},
   async (request) => {
-    await requireActiveAdmin(request);
+    await requireAdminPermission(request, "drivers");
     const driverId = text(record(request.data).driverId);
     if (!driverId || driverId.includes("/")) throw new HttpsError("invalid-argument", "A valid driver is required.");
 
@@ -420,9 +421,9 @@ export const getAdminDriverApplication = onCall(
 export const decideAdminApplicationDocument = onCall(
   {region: "us-central1"},
   async (request) => {
-    const administrator = await requireActiveAdmin(request);
     const input = record(request.data);
     const type = text(input.type);
+    const administrator = await requireAdminPermission(request, type === "store" ? "stores" : "drivers", "write");
     const applicationId = text(input.applicationId);
     const documentKey = text(input.documentKey);
     const outcome = text(input.decision);
@@ -474,9 +475,9 @@ export const decideAdminApplicationDocument = onCall(
 export const decideAdminApplication = onCall(
   {region: "us-central1"},
   async (request) => {
-    const administrator = await requireActiveAdmin(request);
     const input = record(request.data);
     const type = text(input.type);
+    const administrator = await requireAdminPermission(request, type === "store" ? "stores" : "drivers", "write");
     const applicationId = text(input.applicationId);
     const outcome = text(input.decision);
     const reason = text(input.reason);
@@ -559,7 +560,7 @@ export const decideAdminApplication = onCall(
 export const setAdminStoreApproval = onCall(
   {region: "us-central1"},
   async (request) => {
-    const administrator = await requireActiveAdmin(request);
+    const administrator = await requireAdminPermission(request, "stores", "write");
     const input = record(request.data);
     const storeId = text(input.storeId);
     const isApproved = input.isApproved === true;
@@ -618,7 +619,7 @@ export const setAdminStoreApproval = onCall(
 export const setAdminDriverApproval = onCall(
   {region: "us-central1"},
   async (request) => {
-    const administrator = await requireActiveAdmin(request);
+    const administrator = await requireAdminPermission(request, "drivers", "write");
     const input = record(request.data);
     const driverId = text(input.driverId);
     const isApproved = input.isApproved === true;
@@ -659,7 +660,7 @@ export const setAdminDriverApproval = onCall(
 export const activateAdminStore = onCall(
   {region: "us-central1"},
   async (request) => {
-    const administrator = await requireActiveAdmin(request);
+    const administrator = await requireAdminPermission(request, "stores", "write");
     const input = record(request.data);
     const storeId = text(input.storeId);
     const isActive = input.isActive !== false;
@@ -716,7 +717,7 @@ export const activateAdminStore = onCall(
 export const setAdminStoreSuspension = onCall(
   {region: "us-central1"},
   async (request) => {
-    const administrator = await requireActiveAdmin(request);
+    const administrator = await requireAdminPermission(request, "stores", "write");
     const input = record(request.data);
     const storeId = text(input.storeId);
     const isSuspended = input.isSuspended === true;
@@ -768,7 +769,7 @@ export const setAdminStoreSuspension = onCall(
 export const setAdminDriverSuspension = onCall(
   {region: "us-central1"},
   async (request) => {
-    const administrator = await requireActiveAdmin(request);
+    const administrator = await requireAdminPermission(request, "drivers", "write");
     const input = record(request.data);
     const driverId = text(input.driverId);
     const isSuspended = input.isSuspended === true;
@@ -824,7 +825,7 @@ export const setAdminDriverSuspension = onCall(
 export const setAdminDriverApprovedRadius = onCall(
   {region: "us-central1"},
   async (request) => {
-    const administrator = await requireActiveAdmin(request);
+    const administrator = await requireAdminPermission(request, "drivers", "write");
     const input = record(request.data);
     const driverId = text(input.driverId);
     const approvedRadiusMiles = input.approvedRadiusMiles;

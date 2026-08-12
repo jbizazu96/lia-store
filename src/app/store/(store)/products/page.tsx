@@ -11,10 +11,6 @@
 |
 */
 
-import type {
-  Product,
-} from "@/types/product";
-
 import {
   useStoreProductFilters,
 } from "@/hooks/useStoreProductFilters";
@@ -46,13 +42,6 @@ import {
 } from "@/hooks/useStoreProducts";
 
 import {
-  productService,
-} from "@/services/product/productService";
-import {
-  useConfirmation,
-} from "@/context/ConfirmationContext";
-
-import {
   BrandedLoader,
 } from "@/components/ui/BrandedLoader";
 
@@ -69,11 +58,11 @@ import {
 } from "@/components/store/products/ProductStats";
 import {useProductCategories} from "@/hooks/useProductCategories";
 import {categoryService} from "@/services/category/categoryService";
+import {useStoreProductActions} from "@/hooks/useStoreProductActions";
 
 
 export default function ProductsPage() {
   const router = useRouter();
-  const { confirm } = useConfirmation();
   const categories = useProductCategories();
 
   const {
@@ -84,6 +73,12 @@ export default function ProductsPage() {
     needsStoreSetup,
     refreshProducts,
   } = useStoreProducts();
+  const {
+    toggleProductActive,
+    toggleProductFeatured,
+    deleteProduct,
+    duplicateProduct,
+  } = useStoreProductActions(refreshProducts);
 
   const {
     filteredProducts,
@@ -135,121 +130,6 @@ export default function ProductsPage() {
     needsStoreSetup,
     router,
   ]);
-
-  /*
-  |--------------------------------------------------------------------------
-  | Product Actions
-  |--------------------------------------------------------------------------
-  */
-
-  const toggleProductActive =
-    async (
-      productId: string,
-      currentStatus: boolean
-    ) => {
-      try {
-        await productService
-          .updateAvailability(
-            productId,
-            !currentStatus
-          );
-
-        await refreshProducts();
-      } catch (actionError) {
-        console.error(
-          "Error updating product availability:",
-          actionError
-        );
-
-        alert(
-          "Failed to update product availability"
-        );
-      }
-    };
-
-  const toggleProductFeatured =
-    async (
-      productId: string,
-      currentStatus: boolean
-    ) => {
-      try {
-        await productService
-          .updateFeatured(
-            productId,
-            !currentStatus
-          );
-
-        await refreshProducts();
-      } catch (actionError) {
-        console.error(
-          "Error updating featured status:",
-          actionError
-        );
-
-        alert(
-          "Failed to update featured status"
-        );
-      }
-    };
-
-  const deleteProduct =
-    async (
-      productId: string
-    ) => {
-      const confirmed = await confirm({
-        title: "Delete product?",
-        message:
-          "This product and its images will be permanently removed. This action cannot be undone.",
-        confirmLabel: "Delete product",
-        cancelLabel: "Keep product",
-        destructive: true,
-      });
-
-      if (!confirmed) {
-        return;
-      }
-
-      try {
-        await productService
-          .deleteProduct(
-            productId
-          );
-
-        await refreshProducts();
-      } catch (actionError) {
-        console.error(
-          "Error deleting product:",
-          actionError
-        );
-
-        alert(
-          "Failed to delete product"
-        );
-      }
-    };
-
-  const duplicateProduct =
-    async (
-      product: Product
-    ) => {
-      try {
-        await productService
-          .duplicateProduct(
-            product
-          );
-
-        await refreshProducts();
-      } catch (actionError) {
-        console.error(
-          "Error duplicating product:",
-          actionError
-        );
-
-        alert(
-          "Failed to duplicate product"
-        );
-      }
-    };
 
   /*
   |--------------------------------------------------------------------------
@@ -407,12 +287,13 @@ export default function ProductsPage() {
           </div>
 
           <div className="space-y-7">
-            {productGroups.map((category) => <section key={category.id}>
-              <div className="mb-3 flex items-center justify-between border-b border-gray-100 pb-2"><h2 className="text-base font-bold text-gray-800">{category.name}</h2><span className="text-xs font-medium text-gray-400">{category.products.length} product{category.products.length === 1 ? "" : "s"}</span></div>
-              <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-5"><AnimatePresence initial={false} mode="popLayout">
+            {productGroups.map((category) => <section key={category.id} className="min-w-0 max-w-full">
+              <div className="mb-3 flex items-center justify-between border-b border-gray-100 pb-2"><div><h2 className="text-base font-bold text-gray-800">{category.name}</h2><p className="mt-0.5 text-xs font-medium text-gray-400">{category.products.length} product{category.products.length === 1 ? "" : "s"}</p></div><Link href={`/store/products/category/${encodeURIComponent(category.id)}`} className="inline-flex items-center rounded-lg bg-orange-50 px-3 py-1.5 text-xs font-bold text-orange-700 ring-1 ring-orange-100 transition hover:bg-orange-100 hover:ring-orange-200 focus:outline-none focus:ring-2 focus:ring-orange-400">View all →</Link></div>
+              <div className="flex w-full max-w-full gap-3 overflow-x-auto overscroll-x-contain pb-3 scrollbar-hide"><AnimatePresence initial={false} mode="popLayout">
               {category.products.map((product) => (
                   <motion.div
                     key={product.id}
+                    className="w-[150px] shrink-0 sm:w-[170px]"
                     initial={{
                       opacity: 0,
                       scale: 0.95,

@@ -26,7 +26,7 @@ import {
 } from "firebase-functions/v2/https";
 
 import {
-  requireActiveAdmin,
+  requireAdminPermission,
 } from "../admin/adminAuthorizationService";
 import {
   writeAdminAuditLog,
@@ -105,7 +105,7 @@ export const uploadAdminStoreBrandingImage =
     },
     async (request) => {
       const administrator =
-        await requireActiveAdmin(request);
+        await requireAdminPermission(request, "stores", "write");
 
       const input = request.data &&
         typeof request.data === "object"

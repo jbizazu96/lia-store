@@ -11,7 +11,7 @@
 import * as admin from "firebase-admin";
 import {FieldValue, getFirestore} from "firebase-admin/firestore";
 import {HttpsError, onCall} from "firebase-functions/v2/https";
-import {requireActiveAdmin} from "../admin/adminAuthorizationService";
+import {requireAdminPermission} from "../admin/adminAuthorizationService";
 import {writeAdminAuditLog} from "../admin/adminAuditLogService";
 
 if (admin.apps.length === 0) admin.initializeApp();
@@ -73,13 +73,13 @@ function toClient(id: string, data: Record<string, unknown>) {
 }
 
 export const getAdminHomePromotions = onCall({region: "us-central1"}, async (request) => {
-  await requireActiveAdmin(request);
+  await requireAdminPermission(request, "promotions");
   const snapshots = await db.collection("homePromotions").orderBy("position").limit(100).get();
   return {promotions: snapshots.docs.map((item) => toClient(item.id, item.data()))};
 });
 
 export const saveAdminHomePromotion = onCall({region: "us-central1"}, async (request) => {
-  const administrator = await requireActiveAdmin(request);
+  const administrator = await requireAdminPermission(request, "promotions", "write");
   const input = (request.data ?? {}) as {id?: unknown; promotion?: unknown};
   const id = text(input.id, 128);
   const promotion = promotionData(input.promotion);
@@ -91,7 +91,7 @@ export const saveAdminHomePromotion = onCall({region: "us-central1"}, async (req
 });
 
 export const deleteAdminHomePromotion = onCall({region: "us-central1"}, async (request) => {
-  const administrator = await requireActiveAdmin(request);
+  const administrator = await requireAdminPermission(request, "promotions", "write");
   const id = text((request.data as {id?: unknown} | undefined)?.id, 128);
   if (!id) throw new HttpsError("invalid-argument", "Promotion banner is required.");
   const reference = db.collection("homePromotions").doc(id);

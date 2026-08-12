@@ -13,7 +13,7 @@ import {
   onCall,
 } from "firebase-functions/v2/https";
 import {
-  requireActiveAdmin,
+  requireAdminPermission,
 } from "../admin/adminAuthorizationService";
 import {
   writeAdminAuditLog,
@@ -55,7 +55,7 @@ export const reindexAdminCatalogSearch = onCall(
     memory: "512MiB",
   },
   async (request) => {
-    const administrator = await requireActiveAdmin(request);
+    const administrator = await requireAdminPermission(request, "settings", "write");
     const afterStoreId = cursor(
       (request.data as { afterStoreId?: unknown } | undefined)?.afterStoreId,
     );

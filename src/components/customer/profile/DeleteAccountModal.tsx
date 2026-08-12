@@ -109,14 +109,14 @@ export function DeleteAccountModal({onClose}: DeleteAccountModalProps) {
             <div className="flex gap-3">
               <button
                 onClick={onClose}
-                className="flex-1 py-3 border border-gray-200 rounded-xl text-gray-600 font-medium hover:bg-gray-50 transition"
+                className="flex-1 rounded-full border border-gray-200 py-3 font-medium text-gray-600 transition hover:bg-gray-50"
                 aria-label="Cancel account deletion"
               >
                 Cancel
               </button>
               <button
                 onClick={() => setStep("password")}
-                className="flex-1 py-3 bg-red-600 text-white rounded-xl font-semibold hover:bg-red-700 transition"
+                className="flex-1 rounded-full bg-red-600 py-3 font-semibold text-white transition hover:bg-red-700"
                 aria-label="Continue to account deletion"
               >
                 Continue
@@ -152,7 +152,7 @@ export function DeleteAccountModal({onClose}: DeleteAccountModalProps) {
             <div className="flex gap-3">
               <button
                 onClick={() => setStep("confirm")}
-                className="flex-1 py-3 border border-gray-200 rounded-xl text-gray-600 font-medium hover:bg-gray-50 transition"
+                className="flex-1 rounded-full border border-gray-200 py-3 font-medium text-gray-600 transition hover:bg-gray-50"
                 disabled={loading}
                 aria-label="Go back"
               >
@@ -161,7 +161,7 @@ export function DeleteAccountModal({onClose}: DeleteAccountModalProps) {
               <button
                 onClick={handleDeleteAccount}
                 disabled={loading || (usesPasswordProvider && !password)}
-                className="flex-1 py-3 bg-red-600 text-white rounded-xl font-semibold hover:bg-red-700 transition disabled:opacity-50"
+                className="flex-1 rounded-full bg-red-600 py-3 font-semibold text-white transition hover:bg-red-700 disabled:opacity-50"
                 aria-label="Submit account deletion request"
               >
                 {loading ? (

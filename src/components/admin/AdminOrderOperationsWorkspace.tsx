@@ -46,7 +46,7 @@ export function AdminOrderOperationsWorkspace({orderId}: {orderId?: string}) {
   }, [orderId, status, exception]);
 
   if (orderId) return <section>
-    <button type="button" onClick={() => router.push("/admin/orders")} className="mb-5 inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-bold text-slate-700 ring-1 ring-slate-200"><ChevronRight className="h-4 w-4 rotate-180" />Back to orders</button>
+    <button data-admin-read-action type="button" onClick={() => router.push("/admin/orders")} className="mb-5 inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-bold text-slate-700 ring-1 ring-slate-200"><ChevronRight className="h-4 w-4 rotate-180" />Back to orders</button>
     {loading ? <Loading /> : error ? <ErrorPanel message={error} /> : detail ? <><OrderDetail detail={detail} /><AdminOrderSupportCard orderId={detail.id} /></> : null}
   </section>;
 

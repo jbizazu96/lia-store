@@ -30,7 +30,8 @@ export function StoreCard({
   const [isSavingFavorite, setIsSavingFavorite] = useState(false);
   const maxRadius = store.maxDeliveryMiles || Infinity;
   const distance = store.distance || 0;
-  const isTooFar = distance > maxRadius;
+  const isTooFar =
+    store.zoneAccessType !== "customer_order_zone" && distance > maxRadius;
   const isUnavailable = isTooFar || !store.zoneAccessAllowed;
   const zoneLabel = store.zoneAccessType === "same_home_zone"
     ? "Home zone"

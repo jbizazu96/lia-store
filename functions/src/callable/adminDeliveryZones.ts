@@ -19,7 +19,7 @@ import {
   onCall,
 } from "firebase-functions/v2/https";
 import {
-  requireActiveAdmin,
+  requireAdminPermission,
 } from "../admin/adminAuthorizationService";
 import {
   writeAdminAuditLog,
@@ -207,7 +207,7 @@ function toClient(id: string, data: Record<string, unknown>) {
 export const getAdminDeliveryZones = onCall(
   {region: "us-central1"},
   async (request) => {
-    await requireActiveAdmin(request);
+    await requireAdminPermission(request, "delivery_zones");
     const snapshot = await db.collection("deliveryZones").orderBy("name").limit(250).get();
     return {zones: snapshot.docs.map((document) => toClient(document.id, document.data()))};
   },
@@ -216,7 +216,7 @@ export const getAdminDeliveryZones = onCall(
 export const createAdminDeliveryZone = onCall(
   {region: "us-central1"},
   async (request) => {
-    const administrator = await requireActiveAdmin(request);
+    const administrator = await requireAdminPermission(request, "delivery_zones", "write");
     const zone = zoneInput(record(request.data).zone);
     await ensureUniqueZoneMatchers(null, zone.postalCodes, zone.placeIds);
     const reference = db.collection("deliveryZones").doc();
@@ -247,7 +247,7 @@ export const createAdminDeliveryZone = onCall(
 export const updateAdminDeliveryZone = onCall(
   {region: "us-central1"},
   async (request) => {
-    const administrator = await requireActiveAdmin(request);
+    const administrator = await requireAdminPermission(request, "delivery_zones", "write");
     const input = record(request.data);
     const id = text(input.id, 128);
     const zone = zoneInput(input.zone);
@@ -288,7 +288,7 @@ export const updateAdminDeliveryZone = onCall(
 export const addAdminDeliveryZoneCity = onCall(
   {region: "us-central1"},
   async (request) => {
-    const administrator = await requireActiveAdmin(request);
+    const administrator = await requireAdminPermission(request, "delivery_zones", "write");
     const input = record(request.data);
     const zoneId = text(input.zoneId, 128);
     const name = cityName(input.cityName);
@@ -345,7 +345,7 @@ export const addAdminDeliveryZoneCity = onCall(
 export const removeAdminDeliveryZoneCity = onCall(
   {region: "us-central1"},
   async (request) => {
-    const administrator = await requireActiveAdmin(request);
+    const administrator = await requireAdminPermission(request, "delivery_zones", "write");
     const input = record(request.data);
     const zoneId = text(input.zoneId, 128);
     const key = text(input.cityKey, 100);
@@ -402,7 +402,7 @@ async function zoneUsage(zoneId: string): Promise<string | null> {
 export const deleteAdminDeliveryZone = onCall(
   {region: "us-central1"},
   async (request) => {
-    const administrator = await requireActiveAdmin(request);
+    const administrator = await requireAdminPermission(request, "delivery_zones", "write");
     const id = text(record(request.data).id, 128);
     if (!id) throw new HttpsError("invalid-argument", "Delivery zone is required.");
     const reference = db.collection("deliveryZones").doc(id);
@@ -443,7 +443,7 @@ function pricingPolicy(value: unknown): MarketplacePricingPolicy {
 export const getAdminDeliveryZonePricing = onCall(
   {region: "us-central1"},
   async (request) => {
-    await requireActiveAdmin(request);
+    await requireAdminPermission(request, "delivery_zones");
     const zoneId = text(record(request.data).zoneId, 128);
     if (!zoneId) throw new HttpsError("invalid-argument", "Delivery zone is required.");
     const [zoneSnapshot, defaultSnapshot] = await Promise.all([
@@ -488,7 +488,7 @@ export const getAdminDeliveryZonePricing = onCall(
 export const saveAdminDeliveryZonePricing = onCall(
   {region: "us-central1"},
   async (request) => {
-    const administrator = await requireActiveAdmin(request);
+    const administrator = await requireAdminPermission(request, "delivery_zones", "write");
     const input = record(request.data);
     const zoneId = text(input.zoneId, 128);
     if (!zoneId) throw new HttpsError("invalid-argument", "Delivery zone is required.");
@@ -519,6 +519,7 @@ export const saveAdminDeliveryZonePricing = onCall(
         baseDeliveryFeeCents: policy.baseDeliveryFeeCents,
         serviceFeeRate: policy.serviceFeeRate,
         peakSurchargeCents: policy.peakSurchargeCents,
+        peakSurchargeEnabled: policy.peakSurchargeEnabled,
       },
     });
     return {success: true};
@@ -528,7 +529,7 @@ export const saveAdminDeliveryZonePricing = onCall(
 export const resetAdminDeliveryZonePricing = onCall(
   {region: "us-central1"},
   async (request) => {
-    const administrator = await requireActiveAdmin(request);
+    const administrator = await requireAdminPermission(request, "delivery_zones", "write");
     const zoneId = text(record(request.data).zoneId, 128);
     if (!zoneId) throw new HttpsError("invalid-argument", "Delivery zone is required.");
     const reference = db.collection("deliveryZones").doc(zoneId);
@@ -554,7 +555,7 @@ export const resetAdminDeliveryZonePricing = onCall(
 export const setAdminAccountZoneAssignment = onCall(
   {region: "us-central1"},
   async (request) => {
-    const administrator = await requireActiveAdmin(request);
+    const administrator = await requireAdminPermission(request, "delivery_zones", "write");
     const input = record(request.data);
     const accountType = text(input.accountType, 20);
     const accountId = text(input.accountId, 128);
@@ -640,7 +641,7 @@ export const setAdminAccountZoneAssignment = onCall(
           });
           resolvedWriter.set(reference.collection("notifications").doc(`order-zone-${document.id}`), {
             title: "Order Zone approved",
-            body: "LIA Support approved your Order Zone request. You can now shop from stores in that zone when they are within the delivery-distance limit.",
+            body: "LIA Support approved your Order Zone request. You can now shop from stores in that zone outside the normal delivery radius; delivery pricing uses the full trusted route miles.",
             type: "system",
             deepLink: "/home",
             read: false,
@@ -730,7 +731,7 @@ async function backfillCollection(
 export const backfillAdminDeliveryZoneAssignments = onCall(
   {region: "us-central1", timeoutSeconds: 540, memory: "1GiB"},
   async (request) => {
-    const administrator = await requireActiveAdmin(request);
+    const administrator = await requireAdminPermission(request, "delivery_zones", "write");
     const [customers, stores, drivers] = await Promise.all([
       backfillCollection("users", "customer"),
       backfillCollection("stores", "store"),

@@ -766,7 +766,11 @@ export const prepareCheckoutPayment =
                 .tipAmountCents,
 
             isPeakTime:
-              false,
+              marketplacePricingPolicy
+                .peakSurchargeEnabled,
+
+            enforceMaximumDistance:
+              zoneDecision.zoneAccessType !== "customer_order_zone",
 
             policy:
               marketplacePricingPolicy,

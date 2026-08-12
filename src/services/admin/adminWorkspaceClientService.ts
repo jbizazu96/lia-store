@@ -296,10 +296,10 @@ export const adminWorkspaceClientService = {
   getLiaFinanceReport: () =>
     call<AdminLiaFinanceReport>("getAdminLiaFinanceReport"),
   getCommissionSettings: () => call<AdminCommissionSettings>("getAdminCommissionSettings"),
-  getMarketplacePricingPolicy: () => call<{policy: Record<string, number> | null}>("getAdminMarketplacePricingPolicy"),
+  getMarketplacePricingPolicy: () => call<{policy: Record<string, number | boolean> | null}>("getAdminMarketplacePricingPolicy"),
   saveDefaultStoreCommission: (basisPoints: number) => call<{success: boolean}>("saveAdminDefaultStoreCommission", {basisPoints}),
   saveDefaultDriverCommission: (basisPoints: number) => call<{success: boolean}>("saveAdminDefaultDriverCommission", {basisPoints}),
-  saveMarketplacePricingPolicy: (policy: Record<string, number>) => call<{success: boolean}>("saveAdminMarketplacePricingPolicy", {policy}),
+  saveMarketplacePricingPolicy: (policy: Record<string, number | boolean>) => call<{success: boolean}>("saveAdminMarketplacePricingPolicy", {policy}),
   saveStoreCommissionOverride: (storeId: string, basisPoints: number | null) => call<{success: boolean}>("saveAdminStoreCommissionOverride", {storeId, basisPoints}),
   getStoreApplicationPolicy: () => call<{policy: AdminStoreApplicationPolicy}>("getAdminStoreApplicationPolicy"),
   saveStoreApplicationPolicy: (policy: AdminStoreApplicationPolicy) => call<{success: boolean}>("saveAdminStoreApplicationPolicy", {policy}),
@@ -364,7 +364,7 @@ export const adminWorkspaceClientService = {
     policy: Record<string, number>;
     inherited: boolean;
   }>("getAdminDeliveryZonePricing", {zoneId}),
-  saveDeliveryZonePricing: (zoneId: string, policy: Record<string, number>) =>
+  saveDeliveryZonePricing: (zoneId: string, policy: Record<string, number | boolean>) =>
     call<{success: boolean}>("saveAdminDeliveryZonePricing", {zoneId, policy}),
   resetDeliveryZonePricing: (zoneId: string) =>
     call<{success: boolean}>("resetAdminDeliveryZonePricing", {zoneId}),

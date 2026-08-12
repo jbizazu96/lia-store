@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import {useEffect, useState} from "react";
+import {createPortal} from "react-dom";
 import {
   CustomerBottomNavigation,
 } from "@/components/customer/navigation/CustomerBottomNavigation";
@@ -45,6 +46,20 @@ export default function HelpPage() {
       });
     }
   }, []);
+
+  useEffect(() => {
+    if (!showOrderZoneForm) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setShowOrderZoneForm(false);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [showOrderZoneForm]);
 
   const submitOrderZoneRequest = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -104,7 +119,7 @@ export default function HelpPage() {
           <div className="space-y-3">
             <button type="button" onClick={() => {setShowOrderZoneForm(true); setFormMessage("");}} className="group flex w-full items-center gap-4 rounded-2xl border border-gray-200 bg-white p-4 text-left shadow-[0_4px_12px_rgba(15,23,42,0.06)] transition hover:-translate-y-0.5 hover:border-orange-200">
               <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-orange-50 text-orange-600"><MapPinned className="h-5 w-5" /></span>
-              <span className="min-w-0 flex-1"><span className="block text-sm font-extrabold text-gray-900">Request an Order Zone</span><span className="mt-1 block text-xs leading-5 text-gray-500">Ask LIA Support for permission to order from a store outside your current zone.</span></span>
+              <span className="min-w-0 flex-1"><span className="block text-sm font-extrabold text-gray-900">Request an Order Zone</span><span className="mt-1 block text-xs leading-5 text-gray-500">Ask LIA Support for permission to order from a store outside your current zone and normal delivery radius.</span></span>
               <ChevronRight className="h-5 w-5 text-orange-500 transition group-hover:translate-x-0.5" />
             </button>
             <a href="mailto:support@liamarketplace.com" className="group flex items-center gap-4 rounded-2xl border border-gray-200 bg-white p-4 shadow-[0_4px_12px_rgba(15,23,42,0.06)] transition hover:-translate-y-0.5 hover:border-orange-200 hover:bg-white">
@@ -120,9 +135,9 @@ export default function HelpPage() {
           </div>
         </section>
 
-        {showOrderZoneForm && (
+        {showOrderZoneForm && typeof document !== "undefined" && createPortal((
           <div
-            className="fixed inset-0 z-[100] flex items-end justify-center bg-slate-950/55 p-0 backdrop-blur-[2px] sm:items-center sm:p-5"
+            className="fixed inset-0 z-[200] flex items-end justify-center bg-slate-950/55 p-0 backdrop-blur-[2px] sm:items-center sm:p-5"
             onClick={() => setShowOrderZoneForm(false)}
           >
             <section
@@ -130,13 +145,13 @@ export default function HelpPage() {
               aria-modal="true"
               aria-labelledby="order-zone-title"
               onClick={(event) => event.stopPropagation()}
-              className="relative max-h-[calc(100dvh-env(safe-area-inset-top)-1rem)] w-full max-w-lg overflow-y-auto rounded-t-3xl border border-orange-100 bg-white px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-6 shadow-2xl sm:rounded-3xl sm:p-6"
+              className="relative max-h-[calc(100dvh-env(safe-area-inset-top)-1rem)] w-full max-w-lg overflow-y-auto rounded-t-[32px] border border-orange-100 bg-white px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-6 shadow-2xl sm:rounded-[32px] sm:p-6"
             >
-              <button type="button" onClick={() => setShowOrderZoneForm(false)} className="absolute right-4 top-4 rounded-full p-2 text-gray-500 transition hover:bg-gray-100" aria-label="Close Order Zone form"><X className="h-5 w-5" /></button>
+              <button type="button" onClick={() => setShowOrderZoneForm(false)} className="absolute right-4 top-4 flex h-11 w-11 items-center justify-center rounded-full bg-slate-100 text-slate-700 transition hover:bg-slate-200" aria-label="Close Order Zone form"><X className="h-5 w-5" /></button>
               <div className="pr-10">
                 <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-orange-50 text-orange-600"><MapPinned className="h-5 w-5" /></span>
                 <h2 id="order-zone-title" className="mt-4 text-xl font-extrabold text-gray-900">Request an Order Zone</h2>
-                <p className="mt-1 text-sm leading-6 text-gray-600">Tell us where you need delivery and the city of the store you want to shop from. Approval is not automatic; LIA will review delivery coverage first.</p>
+                <p className="mt-1 text-sm leading-6 text-gray-600">Tell us where you need delivery and the city of the store you want to shop from. Approval is not automatic; LIA will review the requested zone and delivery coverage first.</p>
               </div>
               <form onSubmit={submitOrderZoneRequest} className="mt-5 space-y-4">
                 <label className="block text-sm font-bold text-gray-800">Your complete delivery address
@@ -146,11 +161,11 @@ export default function HelpPage() {
                   <input required minLength={2} maxLength={100} value={storeCity} onChange={(event) => setStoreCity(event.target.value)} placeholder="Example: Cedar Rapids" className="mt-2 w-full rounded-xl border border-gray-200 px-3 py-3 text-sm font-medium outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100" />
                 </label>
                 {formMessage && <p className="rounded-xl bg-orange-50 px-3 py-2.5 text-sm font-semibold leading-5 text-orange-900" role="status">{formMessage}</p>}
-                <button type="submit" disabled={submitting} className="w-full rounded-xl bg-orange-500 py-3 text-sm font-extrabold text-white transition hover:bg-orange-600 disabled:opacity-60">{submitting ? "Sending request…" : "Send request to LIA Support"}</button>
+                <button type="submit" disabled={submitting} className="w-full rounded-full bg-orange-500 py-3 text-sm font-extrabold text-white transition hover:bg-orange-600 disabled:opacity-60">{submitting ? "Sending request…" : "Send request to LIA Support"}</button>
               </form>
             </section>
           </div>
-        )}
+        ), document.body)}
 
         <div className="flex items-start gap-3 rounded-2xl border border-emerald-100 bg-emerald-50/75 p-4 text-sm leading-6 text-emerald-950">
           <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" />

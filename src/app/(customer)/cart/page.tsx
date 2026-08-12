@@ -518,13 +518,13 @@ export default function CartPage() {
               <div className="flex gap-3">
                 <button
                   onClick={cancelRemoveItem}
-                  className="flex-1 py-3 border border-gray-200 rounded-xl text-gray-600 font-medium hover:bg-gray-50 transition"
+                  className="flex-1 rounded-full border border-gray-200 py-3 font-medium text-gray-600 transition hover:bg-gray-50"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={confirmRemoveItem}
-                  className="flex-1 py-3 bg-red-600 text-white rounded-xl font-semibold hover:bg-red-700 transition"
+                  className="flex-1 rounded-full bg-red-600 py-3 font-semibold text-white transition hover:bg-red-700"
                 >
                   Remove
                 </button>
@@ -556,7 +556,7 @@ export default function CartPage() {
               <div className="flex gap-3">
                 <button
                   onClick={() => setShowClearConfirm(false)}
-                  className="flex-1 py-3 border border-gray-200 rounded-xl text-gray-600 font-medium hover:bg-gray-50 transition"
+                  className="flex-1 rounded-full border border-gray-200 py-3 font-medium text-gray-600 transition hover:bg-gray-50"
                 >
                   Cancel
                 </button>
@@ -565,7 +565,7 @@ export default function CartPage() {
                     clearCart();
                     setShowClearConfirm(false);
                   }}
-                  className="flex-1 py-3 bg-red-600 text-white rounded-xl font-semibold hover:bg-red-700 transition"
+                  className="flex-1 rounded-full bg-red-600 py-3 font-semibold text-white transition hover:bg-red-700"
                 >
                   Clear Cart
                 </button>

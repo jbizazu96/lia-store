@@ -11,7 +11,7 @@
 import * as admin from "firebase-admin";
 import {getFirestore} from "firebase-admin/firestore";
 import {onCall} from "firebase-functions/v2/https";
-import {requireActiveAdmin} from "../admin/adminAuthorizationService";
+import {requireAdminPermission} from "../admin/adminAuthorizationService";
 
 if (admin.apps.length === 0) admin.initializeApp();
 
@@ -67,7 +67,7 @@ function listItem(document: FirebaseFirestore.QueryDocumentSnapshot) {
 }
 
 export const getAdminOrders = onCall({region: "us-central1"}, async (request) => {
-  await requireActiveAdmin(request);
+  await requireAdminPermission(request, "orders");
   const input = record(request.data); const status = text(input.status) || "all"; const exception = text(input.exception) || "all";
   const snapshot = await db.collection("orders").where("checkoutStatus", "==", "confirmed").orderBy("createdAt", "desc").limit(100).get();
   const orders = snapshot.docs.map(listItem).filter((item) => (status === "all" || item.status === status) && (exception === "all" || item.exceptions.includes(exception)));
@@ -75,7 +75,7 @@ export const getAdminOrders = onCall({region: "us-central1"}, async (request) =>
 });
 
 export const getAdminOrder = onCall({region: "us-central1"}, async (request) => {
-  await requireActiveAdmin(request);
+  await requireAdminPermission(request, "orders");
   const orderId = text(record(request.data).orderId);
   if (!orderId) throw new Error("An order is required.");
   const snapshot = await db.collection("orders").doc(orderId).get();

@@ -30,7 +30,7 @@ export function DistanceWarningModal({storeId, storeCity, distance, zoneAccessAl
         <h2 className="mb-2 text-center text-xl font-bold text-gray-900">Ordering isn&apos;t available from this store yet</h2>
         <p className="text-center text-sm leading-6 text-gray-600">
           {outsideRadius
-            ? `This store is ${formatDistance(distance)} away, beyond the ${maxRadius}-mile delivery limit.`
+            ? `This store is ${formatDistance(distance)} away, beyond the normal ${maxRadius}-mile delivery limit.`
             : !zoneAccessAllowed
               ? "This store is not in your home zone or one of your approved Order Zones."
               : "This store is currently outside your available delivery area."}
@@ -39,10 +39,10 @@ export function DistanceWarningModal({storeId, storeCity, distance, zoneAccessAl
           <div className="flex items-center justify-between gap-3"><span className="flex items-center gap-2 text-gray-600"><MapPin className="h-4 w-4" />Distance</span><strong>{formatDistance(distance)}</strong></div>
           <div className="mt-2 flex items-center justify-between gap-3"><span className="flex items-center gap-2 text-gray-600"><Truck className="h-4 w-4" />Order status</span><strong className="text-orange-700">Browsing only</strong></div>
         </div>
-        <p className="mb-5 text-center text-xs leading-5 text-gray-500">You can browse every product. To request permission to order from this area, contact LIA Support and ask us to add an Order Zone.</p>
+        <p className="mb-5 text-center text-xs leading-5 text-gray-500">You can browse every product. An Order Zone approved by LIA Support can allow ordering outside the normal delivery radius.</p>
         <div className="flex flex-col gap-3">
-          <button type="button" onClick={requestOrderZone} className="w-full rounded-xl bg-orange-500 py-3 font-semibold text-white hover:bg-orange-600">Request an Order Zone</button>
-          <button type="button" onClick={onContinue} className="w-full rounded-xl border border-gray-200 py-3 font-medium text-gray-700 hover:bg-gray-50">Browse store</button>
+          <button type="button" onClick={requestOrderZone} className="w-full rounded-full bg-orange-500 py-3 font-semibold text-white hover:bg-orange-600">Request an Order Zone</button>
+          <button type="button" onClick={onContinue} className="w-full rounded-full border border-gray-200 py-3 font-medium text-gray-700 hover:bg-gray-50">Browse store</button>
         </div>
       </motion.div>
     </div>

@@ -230,7 +230,7 @@ export function SecurityModal({onClose}: SecurityModalProps) {
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 py-3 border border-gray-200 rounded-xl text-gray-600 font-medium hover:bg-gray-50 transition"
+              className="flex-1 rounded-full border border-gray-200 py-3 font-medium text-gray-600 transition hover:bg-gray-50"
               disabled={loading}
               aria-label="Cancel password change"
             >
@@ -239,7 +239,7 @@ export function SecurityModal({onClose}: SecurityModalProps) {
             <button
               type="submit"
               disabled={loading || success}
-              className="flex-1 py-3 bg-gradient-to-r from-orange-600 to-orange-700 text-white rounded-xl font-semibold hover:shadow-lg transition disabled:opacity-50"
+              className="flex-1 rounded-full bg-gradient-to-r from-orange-600 to-orange-700 py-3 font-semibold text-white transition hover:shadow-lg disabled:opacity-50"
               aria-label="Update password"
             >
               {loading ? (

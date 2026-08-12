@@ -2,7 +2,7 @@ import {httpsCallable} from "firebase/functions";
 import {functions} from "@/lib/firebase";
 
 export interface MarketplacePricingPolicy {
-  maxRadiusMiles: number; baseDeliveryFeeCents: number; baseDistanceMiles: number; costPerMileCents: number; peakSurchargeCents: number;
+  maxRadiusMiles: number; baseDeliveryFeeCents: number; baseDistanceMiles: number; costPerMileCents: number; peakSurchargeEnabled: boolean; peakSurchargeCents: number;
   freeDeliveryMinimumCents: number; defaultMinimumOrderCents: number; serviceFeeRate: number; minimumServiceFeeCents: number; maximumServiceFeeCents: number; salesTaxRate: number;
   freeDeliveryDriverIncentiveWithoutTipCents: number; freeDeliveryDriverIncentiveWithTipCents: number;
 }

@@ -4,7 +4,7 @@ import {FieldValue, getFirestore} from "firebase-admin/firestore";
 import {getStorage} from "firebase-admin/storage";
 import {HttpsError, onCall} from "firebase-functions/v2/https";
 import sharp from "sharp";
-import {requireActiveAdmin} from "../admin/adminAuthorizationService";
+import {requireAdminPermission} from "../admin/adminAuthorizationService";
 import {writeAdminAuditLog} from "../admin/adminAuditLogService";
 
 if (admin.apps.length === 0) admin.initializeApp();
@@ -35,13 +35,13 @@ async function requireUniqueName(name: string, excludedId?: string): Promise<voi
 }
 
 export const getAdminProductCategories = onCall({region: "us-central1"}, async (request) => {
-  await requireActiveAdmin(request);
+  await requireAdminPermission(request, "product_categories");
   const snapshot = await db.collection("categories").limit(250).get();
   return {categories: snapshot.docs.map((document) => ({id: document.id, name: text(document.data().name) || "Unnamed category", iconUrl: text(document.data().iconUrl, 2_000), freshnessEligible: document.data().freshnessEligible === true})).sort((first, second) => first.name.localeCompare(second.name))};
 });
 
 export const createAdminProductCategory = onCall({region: "us-central1"}, async (request) => {
-  const administrator = await requireActiveAdmin(request);
+  const administrator = await requireAdminPermission(request, "product_categories", "write");
   const input = request.data && typeof request.data === "object" ? request.data as Record<string, unknown> : {};
   const name = text(input.name);
   const freshnessEligible = input.freshnessEligible === true;
@@ -62,7 +62,7 @@ export const createAdminProductCategory = onCall({region: "us-central1"}, async 
 });
 
 export const updateAdminProductCategory = onCall({region: "us-central1"}, async (request) => {
-  const administrator = await requireActiveAdmin(request);
+  const administrator = await requireAdminPermission(request, "product_categories", "write");
   const input = request.data && typeof request.data === "object" ? request.data as Record<string, unknown> : {};
   const id = categoryId(input.id);
   const name = text(input.name);
@@ -83,7 +83,7 @@ function inferredName(id: string): string {
 }
 
 export const importAdminProductCategories = onCall({region: "us-central1"}, async (request) => {
-  const administrator = await requireActiveAdmin(request);
+  const administrator = await requireAdminPermission(request, "product_categories", "write");
   const [products, categories] = await Promise.all([
     db.collection("products").select("category").get(),
     db.collection("categories").get(),
@@ -131,7 +131,7 @@ function downloadUrl(bucketName: string, path: string, token: string): string {
 export const uploadAdminProductCategoryIcon = onCall(
   {region: "us-central1", memory: "512MiB", timeoutSeconds: 60},
   async (request) => {
-    const administrator = await requireActiveAdmin(request);
+    const administrator = await requireAdminPermission(request, "product_categories", "write");
     const input = request.data && typeof request.data === "object" ? request.data as Record<string, unknown> : {};
     const id = categoryId(input.id);
     const contentType = text(input.contentType).toLowerCase();

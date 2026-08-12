@@ -16,9 +16,7 @@ import {
 import {
   onCall,
 } from "firebase-functions/v2/https";
-import {
-  requireActiveAdmin,
-} from "../admin/adminAuthorizationService";
+import {requireMasterAdmin} from "../admin/adminAuthorizationService";
 
 if (admin.apps.length === 0) {
   admin.initializeApp();
@@ -72,7 +70,7 @@ function safeDetails(value: unknown): Record<string, string | number | boolean |
 export const getAdminAuditLogs = onCall(
   { region: "us-central1" },
   async (request) => {
-    await requireActiveAdmin(request);
+    await requireMasterAdmin(request);
     const input = record(request.data);
     const search = text(input.search).toLowerCase();
 
@@ -91,6 +89,7 @@ export const getAdminAuditLogs = onCall(
         actor: {
           email: text(actor.email) || "Administrator",
           role: text(actor.role) || "admin",
+          displayName: text(actor.displayName),
         },
         target: {
           type: text(target.type) || "record",

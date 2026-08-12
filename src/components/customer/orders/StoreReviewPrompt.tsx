@@ -132,7 +132,7 @@ export function StoreReviewPrompt({
         </div>
         <textarea value={comment} onChange={(event) => setComment(event.target.value)} maxLength={1000} placeholder="Tell us more (optional)" className="mt-4 min-h-28 w-full rounded-xl border border-orange-100 bg-orange-50/40 p-3 text-sm text-gray-800 outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-200" />
         {error && <p className="mt-3 text-sm font-medium text-red-600">{error}</p>}
-        <button type="button" disabled={!rating || saving} onClick={() => void submit()} className="mt-4 w-full rounded-xl bg-orange-500 py-3 text-sm font-bold text-white transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-50">
+        <button type="button" disabled={!rating || saving} onClick={() => void submit()} className="mt-4 w-full rounded-full bg-orange-500 py-3 text-sm font-bold text-white transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-50">
           {saving ? "Submitting review..." : "Submit review"}
         </button>
       </section>

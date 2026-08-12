@@ -10,6 +10,7 @@ interface MarketplacePricingPolicy {
   baseDeliveryFeeCents: number;
   baseDistanceMiles: number;
   costPerMileCents: number;
+  peakSurchargeEnabled: boolean;
   peakSurchargeCents: number;
   freeDeliveryMinimumCents: number;
   defaultMinimumOrderCents: number;
@@ -21,7 +22,7 @@ interface MarketplacePricingPolicy {
   freeDeliveryDriverIncentiveWithTipCents: number;
 }
 
-type EditablePricingField = keyof MarketplacePricingPolicy;
+type EditablePricingField = Exclude<keyof MarketplacePricingPolicy, "peakSurchargeEnabled">;
 
 interface FieldDefinition {
   key: EditablePricingField;
@@ -39,7 +40,7 @@ const SECTIONS: Array<{title: string; description: string; fields: FieldDefiniti
       {key: "baseDeliveryFeeCents", label: "Base delivery fee", hint: "Fee charged within the base distance.", unit: "$"},
       {key: "baseDistanceMiles", label: "Base delivery distance", hint: "Miles covered by the base fee.", unit: "miles"},
       {key: "costPerMileCents", label: "Additional cost per mile", hint: "Applied after the base distance.", unit: "$"},
-      {key: "peakSurchargeCents", label: "Peak delivery surcharge", hint: "Added only when the delivery calculator marks a peak period.", unit: "$"},
+      {key: "peakSurchargeCents", label: "Peak delivery amount", hint: "When peak pricing is enabled, this amount is included in the delivery fee and driver-fee calculation.", unit: "$"},
       {key: "freeDeliveryMinimumCents", label: "Free-delivery order threshold", hint: "Subtotal required for delivery to be free.", unit: "$"},
     ],
   },
@@ -90,6 +91,7 @@ export function AdminCustomerPricingWorkspace({zoneId}: {zoneId?: string}) {
   const [draft, setDraft] = useState<Record<EditablePricingField, string> | null>(null);
   const [zone, setZone] = useState<ZonePricingScope | null>(null);
   const [inherited, setInherited] = useState(false);
+  const [peakSurchargeEnabled, setPeakSurchargeEnabled] = useState(false);
   const [saving, setSaving] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [error, setError] = useState("");
@@ -111,6 +113,7 @@ export function AdminCustomerPricingWorkspace({zoneId}: {zoneId?: string}) {
         setInherited(false);
       }
       setPolicy(loaded);
+      setPeakSurchargeEnabled(loaded.peakSurchargeEnabled === true);
       setDraft(Object.fromEntries(
         SECTIONS.flatMap((section) => section.fields).map((field) => [
           field.key,
@@ -130,7 +133,7 @@ export function AdminCustomerPricingWorkspace({zoneId}: {zoneId?: string}) {
 
   const save = async () => {
     if (!draft || !policy) return;
-    const next = {...policy};
+    const next = {...policy, peakSurchargeEnabled};
 
     for (const section of SECTIONS) {
       for (const field of section.fields) {
@@ -207,6 +210,26 @@ export function AdminCustomerPricingWorkspace({zoneId}: {zoneId?: string}) {
       {SECTIONS.map((section) => <section key={section.title} className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-100">
         <h2 className="font-bold text-slate-950">{section.title}</h2>
         <p className="mt-1 text-sm text-slate-500">{section.description}</p>
+        {section.title === "Delivery pricing" && (
+          <div className="mt-5 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-slate-100 bg-slate-50/70 p-4">
+            <div>
+              <p className="text-sm font-bold text-slate-900">Peak time</p>
+              <p className="mt-1 max-w-xl text-xs leading-5 text-slate-500">
+                {peakSurchargeEnabled
+                  ? "Active. The configured peak amount is included inside the delivery fee shown to customers and sent through driver settlement."
+                  : "Inactive. The configured amount is saved but is not added to estimates or checkout."}
+              </p>
+            </div>
+            <button data-admin-write-action
+              type="button"
+              aria-pressed={peakSurchargeEnabled}
+              onClick={() => {setSaved(false); setPeakSurchargeEnabled((enabled) => !enabled);}}
+              className={"rounded-xl px-4 py-2.5 text-sm font-bold text-white transition " + (peakSurchargeEnabled ? "bg-emerald-600 hover:bg-emerald-700" : "bg-slate-700 hover:bg-slate-800")}
+            >
+              {peakSurchargeEnabled ? "Disable peak" : "Enable peak"}
+            </button>
+          </div>
+        )}
         <div className="mt-5 grid gap-4 md:grid-cols-2">
           {section.fields.map((field) => <label key={field.key} className="block text-sm font-semibold text-slate-800">
             {field.label}
@@ -221,11 +244,11 @@ export function AdminCustomerPricingWorkspace({zoneId}: {zoneId?: string}) {
     </div>
     <div className="sticky bottom-4 mt-6 flex flex-wrap justify-end gap-3 rounded-2xl bg-white/95 p-3 shadow-lg ring-1 ring-slate-200 backdrop-blur">
       {zoneId && !inherited && (
-        <button disabled={saving || resetting} onClick={() => void resetToDefaults()} className="inline-flex items-center gap-2 rounded-xl bg-white px-5 py-3 text-sm font-bold text-slate-700 ring-1 ring-slate-200 disabled:opacity-50">
+        <button data-admin-write-action disabled={saving || resetting} onClick={() => void resetToDefaults()} className="inline-flex items-center gap-2 rounded-xl bg-white px-5 py-3 text-sm font-bold text-slate-700 ring-1 ring-slate-200 disabled:opacity-50">
           <RotateCcw className="h-4 w-4" />{resetting ? "Resetting…" : "Use default pricing"}
         </button>
       )}
-      <button disabled={saving || resetting} onClick={() => void save()} className="rounded-xl bg-orange-600 px-5 py-3 text-sm font-bold text-white disabled:opacity-50">{saving ? "Saving…" : zoneId ? "Save zone pricing" : "Save default pricing"}</button>
+      <button data-admin-write-action disabled={saving || resetting} onClick={() => void save()} className="rounded-xl bg-orange-600 px-5 py-3 text-sm font-bold text-white disabled:opacity-50">{saving ? "Saving…" : zoneId ? "Save zone pricing" : "Save default pricing"}</button>
     </div>
   </section>;
 }

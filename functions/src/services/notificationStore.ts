@@ -45,6 +45,9 @@ interface CreateNotificationInput {
    */
   navigationPath?: string;
 
+  /** Deterministic key used by retryable jobs to avoid duplicate alerts. */
+  dedupeKey?: string;
+
 }
 export class NotificationStore {
 
@@ -53,7 +56,7 @@ export class NotificationStore {
    */
   async createNotification(
   input: CreateNotificationInput
-  ): Promise<void> {
+  ): Promise<boolean> {
 
     const notification = {
       uid: input.uid,
@@ -76,15 +79,30 @@ export class NotificationStore {
       createdAt: new Date(),
     };
 
-    await getFirestore("default")
+    const notifications = getFirestore("default")
       .collection("users")
       .doc(input.uid)
-      .collection("notifications")
-      .add(notification);
+      .collection("notifications");
+
+    if (input.dedupeKey) {
+      const safeKey = input.dedupeKey.replace(/[^A-Za-z0-9_-]/g, "-").slice(0, 180);
+      if (!safeKey) throw new Error("A valid notification dedupe key is required.");
+      try {
+        await notifications.doc(safeKey).create(notification);
+      } catch (error) {
+        const code = (error as {code?: unknown}).code;
+        if (code === 6 || code === "already-exists") return false;
+        throw error;
+      }
+    } else {
+      await notifications.add(notification);
+    }
 
     console.log(
       "Notification stored."
     );
+
+    return true;
 
   }
 

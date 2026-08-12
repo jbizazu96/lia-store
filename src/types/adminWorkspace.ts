@@ -4,12 +4,10 @@
 |--------------------------------------------------------------------------
 */
 
+import type {AdminAccessProfile} from "@/types/adminAccess";
+
 export interface AdminWorkspaceEntry {
-  administrator: {
-    uid: string;
-    email: string;
-    role: string;
-  };
+  administrator: AdminAccessProfile;
 }
 
 export interface AdminWorkspaceOverview {
@@ -303,6 +301,7 @@ export interface AdminAuditLog {
   actor: {
     email: string;
     role: string;
+    displayName: string;
   };
   target: {
     type: string;

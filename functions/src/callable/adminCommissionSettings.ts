@@ -15,7 +15,7 @@ import {
   getFirestore,
 } from "firebase-admin/firestore";
 import {HttpsError, onCall} from "firebase-functions/v2/https";
-import {requireActiveAdmin} from "../admin/adminAuthorizationService";
+import {requireAdminPermission} from "../admin/adminAuthorizationService";
 import {writeAdminAuditLog} from "../admin/adminAuditLogService";
 import {
   parseMarketplacePricingPolicy,
@@ -33,7 +33,7 @@ function basisPoints(value: unknown): number {
 }
 
 export const getAdminCommissionSettings = onCall({region: "us-central1"}, async (request) => {
-  await requireActiveAdmin(request);
+  await requireAdminPermission(request, "settings");
   const [settings, stores] = await Promise.all([
     db.collection("settings").doc("marketplacePayment").get(),
     db.collection("stores").orderBy("name").limit(100).get(),
@@ -43,14 +43,14 @@ export const getAdminCommissionSettings = onCall({region: "us-central1"}, async 
   return {defaultStoreCommissionBasisPoints, defaultDriverCommissionBasisPoints, stores: stores.docs.map((store) => ({id: store.id, name: text(store.data().name) || "Unnamed store", overrideBasisPoints: typeof store.data().paymentSettings?.storeCommissionBasisPoints === "number" ? store.data().paymentSettings.storeCommissionBasisPoints : null}))};
 });
 export const saveAdminDefaultDriverCommission = onCall({region: "us-central1"}, async (request) => {
-  const administrator = await requireActiveAdmin(request);
+  const administrator = await requireAdminPermission(request, "settings", "write");
   const value = basisPoints((request.data as {basisPoints?: unknown} | undefined)?.basisPoints);
   await db.collection("settings").doc("marketplacePayment").set({defaultDriverCommissionBasisPoints: value, updatedAt: FieldValue.serverTimestamp(), updatedBy: administrator.uid}, {merge: true});
   await writeAdminAuditLog(administrator, {action: "marketplace.default_driver_commission_updated", targetType: "settings", targetId: "marketplacePayment", details: {basisPoints: value}});
   return {success: true};
 });
 export const saveAdminMarketplacePricingPolicy = onCall({region: "us-central1"}, async (request) => {
-  const administrator = await requireActiveAdmin(request);
+  const administrator = await requireAdminPermission(request, "settings", "write");
   const input = (request.data as {policy?: Record<string, unknown>} | undefined)?.policy ?? {};
   let policy: MarketplacePricingPolicy;
   try {
@@ -67,6 +67,8 @@ export const saveAdminMarketplacePricingPolicy = onCall({region: "us-central1"},
       serviceFeeRate: policy.serviceFeeRate,
       salesTaxRate: policy.salesTaxRate,
       freeDeliveryMinimumCents: policy.freeDeliveryMinimumCents,
+      peakSurchargeEnabled: policy.peakSurchargeEnabled,
+      peakSurchargeCents: policy.peakSurchargeCents,
     },
   });
   return {success:true};
@@ -75,7 +77,7 @@ export const saveAdminMarketplacePricingPolicy = onCall({region: "us-central1"},
 export const getAdminMarketplacePricingPolicy = onCall(
   {region: "us-central1"},
   async (request) => {
-    await requireActiveAdmin(request);
+    await requireAdminPermission(request, "settings");
     const settings = await db.collection("settings")
       .doc("marketplacePayment").get();
     try {
@@ -87,7 +89,7 @@ export const getAdminMarketplacePricingPolicy = onCall(
 );
 
 export const saveAdminDefaultStoreCommission = onCall({region: "us-central1"}, async (request) => {
-  const administrator = await requireActiveAdmin(request);
+  const administrator = await requireAdminPermission(request, "settings", "write");
   const value = basisPoints((request.data as {basisPoints?: unknown} | undefined)?.basisPoints);
   await db.collection("settings").doc("marketplacePayment").set({defaultStoreCommissionBasisPoints: value, updatedAt: FieldValue.serverTimestamp(), updatedBy: administrator.uid}, {merge: true});
   await writeAdminAuditLog(administrator, {action: "marketplace.default_store_commission_updated", targetType: "settings", targetId: "marketplacePayment", details: {basisPoints: value}});
@@ -95,7 +97,7 @@ export const saveAdminDefaultStoreCommission = onCall({region: "us-central1"}, a
 });
 
 export const saveAdminStoreCommissionOverride = onCall({region: "us-central1"}, async (request) => {
-  const administrator = await requireActiveAdmin(request);
+  const administrator = await requireAdminPermission(request, "settings", "write");
   const input = request.data as {storeId?: unknown; basisPoints?: unknown} | undefined;
   const storeId = text(input?.storeId); if (!storeId) throw new HttpsError("invalid-argument", "A store is required.");
   const store = db.collection("stores").doc(storeId); if (!(await store.get()).exists) throw new HttpsError("not-found", "The store was not found.");

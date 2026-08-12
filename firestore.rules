@@ -63,6 +63,9 @@ service cloud.firestore {
         ).data.isActive == true &&
         get(
           /databases/$(database)/documents/admins/$(request.auth.uid)
+        ).data.role == "master_admin" &&
+        get(
+          /databases/$(database)/documents/admins/$(request.auth.uid)
         ).data.email == request.auth.token.email;
     }
 

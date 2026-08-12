@@ -584,7 +584,7 @@ function StoreLayoutContent({ children }: { children: React.ReactNode }) {
       </motion.aside>
 
       {/* Main Content */}
-      <div className={`flex-1 transition-all duration-300 ${isMobile ? '' : 'ml-64'}`}>
+      <div className={`min-w-0 flex-1 transition-all duration-300 ${isMobile ? '' : 'ml-64'}`}>
         {/* Top Bar */}
         <header className="bg-white border-b border-gray-200 sticky top-0 z-40">
           <div className="flex items-center justify-between px-4 sm:px-6 py-4">
@@ -725,7 +725,7 @@ function StoreLayoutContent({ children }: { children: React.ReactNode }) {
         </header>
 
         {/* Page Content */}
-        <div className="p-4 sm:p-6">
+        <div className="min-w-0 max-w-full p-4 sm:p-6">
           {children}
         </div>
       </div>

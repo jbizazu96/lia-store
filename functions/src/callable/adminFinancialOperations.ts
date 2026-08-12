@@ -12,7 +12,7 @@
 import * as admin from "firebase-admin";
 import {AggregateField, getFirestore} from "firebase-admin/firestore";
 import {onCall} from "firebase-functions/v2/https";
-import {requireActiveAdmin} from "../admin/adminAuthorizationService";
+import {requireAdminPermission} from "../admin/adminAuthorizationService";
 
 if (admin.apps.length === 0) admin.initializeApp();
 const db = getFirestore("default");
@@ -28,7 +28,7 @@ function date(value: unknown): string | null {
 }
 
 export const getAdminFinanceOverview = onCall({region: "us-central1"}, async (request) => {
-  await requireActiveAdmin(request);
+  await requireAdminPermission(request, "finance");
   const [transfers, refunds, settlements] = await Promise.all([
     db.collection("paymentTransfers").orderBy("updatedAt", "desc").limit(100).get(),
     db.collection("paymentRefunds").orderBy("updatedAt", "desc").limit(100).get(),
@@ -77,7 +77,7 @@ export const getAdminFinanceOverview = onCall({region: "us-central1"}, async (re
  * reporting remains correct after a commission rule changes.
  */
 export const getAdminLiaFinanceReport = onCall({region: "us-central1"}, async (request) => {
-  await requireActiveAdmin(request);
+  await requireAdminPermission(request, "finance");
   const [allocations, completedRefunds, stripeFees, completedTransfers] = await Promise.all([
     db.collection("paymentLedger").where("event", "==", "allocation_created").orderBy("createdAt", "desc").limit(500).get(),
     db.collection("paymentLedger").where("event", "==", "refund_completed").orderBy("createdAt", "desc").limit(500).get(),

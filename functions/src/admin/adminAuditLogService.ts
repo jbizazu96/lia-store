@@ -42,6 +42,7 @@ export async function writeAdminAuditLog(
       uid: admin.uid,
       email: admin.email,
       role: admin.role,
+      displayName: admin.displayName,
     },
     action: input.action,
     target: {

@@ -6,17 +6,20 @@ import type {
   CustomerNotificationPreferences,
 } from "@/services/user/customerProfileClientService";
 import type {
+  NativeNotificationPreference,
   NotificationPermissionState,
 } from "@/services/notification/firebaseMessaging";
 
 interface NotificationSettingsModalProps {
   preferences: CustomerNotificationPreferences;
   permission: NotificationPermissionState;
+  devicePreference: NativeNotificationPreference;
   onClose: () => void;
   onSave: (
     preferences: CustomerNotificationPreferences,
   ) => Promise<CustomerNotificationPreferences>;
   onEnableDeviceNotifications: () => Promise<void>;
+  onDeclineDeviceNotifications: () => Promise<void>;
 }
 
 const settings = [
@@ -52,33 +55,42 @@ const settings = [
   },
 ];
 
-function permissionDescription(permission: NotificationPermissionState): string {
-  if (permission === "granted") {
-    return "Device notifications are enabled.";
+function permissionDescription(
+  permission: NotificationPermissionState,
+  preference: NativeNotificationPreference,
+): string {
+  if (permission === "granted" && preference === "accepted") {
+    return "Notifications are enabled. LIA can send the notification types selected below.";
   }
 
   if (permission === "denied") {
-    return "Notifications are blocked in your device settings.";
+    return "Notifications are currently off. Enable them in the LIA device settings, then return to the app.";
   }
 
   if (permission === "unsupported") {
     return "Notifications are not available on this device.";
   }
 
-  return "Enable device notifications to receive alerts outside the app.";
+  return preference === "declined"
+    ? "You chose not to receive device notifications. You can allow them whenever you are ready."
+    : "Allow device notifications to receive alerts outside the app.";
 }
 
 export function NotificationSettingsModal({
   preferences,
   permission,
+  devicePreference,
   onClose,
   onSave,
   onEnableDeviceNotifications,
+  onDeclineDeviceNotifications,
 }: NotificationSettingsModalProps) {
   const [values, setValues] = useState(preferences);
   const [saving, setSaving] = useState<keyof CustomerNotificationPreferences | null>(null);
   const [enabling, setEnabling] = useState(false);
   const [error, setError] = useState("");
+  const deviceNotificationsEnabled =
+    permission === "granted" && devicePreference !== "declined";
 
   const update = async (
     key: keyof CustomerNotificationPreferences,
@@ -116,7 +128,7 @@ export function NotificationSettingsModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-xl p-2 text-gray-500 transition hover:bg-gray-100"
+            className="rounded-full p-2 text-gray-500 transition hover:bg-gray-100"
             aria-label="Close notification settings"
           >
             <X className="h-5 w-5" />
@@ -129,9 +141,18 @@ export function NotificationSettingsModal({
               Device notifications
             </p>
             <p className="mt-1 text-xs leading-5 text-gray-500">
-              {permissionDescription(permission)}
+              {permissionDescription(permission, devicePreference)}
             </p>
-            {permission === "prompt" && (
+            {deviceNotificationsEnabled ? (
+              <button
+                type="button"
+                disabled
+                className="mt-3 rounded-full bg-green-100 px-3 py-2 text-sm font-bold text-green-700"
+              >
+                Notifications enabled
+              </button>
+            ) : permission !== "unsupported" && (
+              <div className="mt-3 flex flex-wrap gap-2">
               <button
                 type="button"
                 disabled={enabling}
@@ -150,10 +171,29 @@ export function NotificationSettingsModal({
                     setEnabling(false);
                   }
                 }}
-                className="mt-3 rounded-xl bg-orange-500 px-3 py-2 text-sm font-bold text-white disabled:opacity-60"
+                className="rounded-full bg-orange-500 px-3 py-2 text-sm font-bold text-white disabled:opacity-60"
               >
-                {enabling ? "Enabling…" : "Enable notifications"}
+                {enabling ? "Please wait…" : permission === "denied" ? "Open device settings" : "Allow notifications"}
               </button>
+              <button
+                type="button"
+                disabled={enabling}
+                onClick={async () => {
+                  setEnabling(true);
+                  setError("");
+                  try {
+                    await onDeclineDeviceNotifications();
+                  } catch (reason) {
+                    setError(reason instanceof Error ? reason.message : "Unable to save your choice.");
+                  } finally {
+                    setEnabling(false);
+                  }
+                }}
+                className="rounded-full bg-white px-3 py-2 text-sm font-bold text-gray-600 ring-1 ring-gray-200 disabled:opacity-60"
+              >
+                Keep notifications off
+              </button>
+              </div>
             )}
           </div>
 

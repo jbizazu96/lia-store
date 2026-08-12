@@ -83,6 +83,7 @@ export function ProductCard({
   );
   const isOnSale = discountedProductPrice < product.price;
   const hasActivePromotion = promotionService.isActive(product.promotion);
+  const isOutOfStock = product.stock <= 0;
 
   // Get stock color based on quantity
   const getStockColor = (stock: number) => {
@@ -108,10 +109,10 @@ export function ProductCard({
       initial={{opacity: 0, scale: 0.95}}
       animate={{opacity: 1, scale: 1}}
       whileHover={{y: -2}}
-      className="relative overflow-visible rounded-xl border border-gray-100 bg-white shadow-sm transition hover:shadow-md"
+      className={`relative overflow-visible rounded-xl border shadow-sm transition hover:shadow-md ${isOutOfStock ? "border-slate-300 bg-slate-100 opacity-70" : "border-gray-100 bg-white"}`}
     >
       {/* Image - Fixed ratio with object-cover */}
-      <div className="relative w-full aspect-square overflow-visible rounded-t-xl bg-gray-50">
+      <div className={`relative w-full aspect-square overflow-visible rounded-t-xl ${isOutOfStock ? "bg-slate-200" : "bg-gray-50"}`}>
         {product.imageUrl ? (
           <Image
             src={productImageSelector.getUrl(
@@ -120,7 +121,7 @@ export function ProductCard({
             )}
             alt={formatProductName(product.name)}
             fill
-            className="object-contain p-2"
+            className={`object-contain p-2 ${isOutOfStock ? "grayscale" : ""}`}
             sizes="(max-width: 640px) 33vw, (max-width: 1024px) 25vw, 20vw"
             priority={false}
           />

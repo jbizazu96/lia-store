@@ -26,7 +26,7 @@ export function DistanceWarningModal({store, distance, onClose, onContinue}: Dis
         <h2 className="mb-2 text-center text-xl font-bold text-gray-900">This store is available for browsing only</h2>
         <p className="text-center text-sm leading-6 text-gray-600">
           {outsideRadius
-            ? `${store.name} is ${formatDistance(distance)} away, beyond the ${store.maxDeliveryMiles}-mile delivery limit.`
+            ? `${store.name} is ${formatDistance(distance)} away, beyond the normal ${store.maxDeliveryMiles}-mile delivery limit.`
             : !store.zoneAccessAllowed
               ? `${store.name} is not in your home zone or one of your approved Order Zones.`
               : "Ordering is not currently available for your delivery address."}
@@ -35,10 +35,10 @@ export function DistanceWarningModal({store, distance, onClose, onContinue}: Dis
           <div className="flex items-center justify-between gap-3"><span className="flex items-center gap-2 text-gray-600"><MapPin className="h-4 w-4" />Distance</span><strong>{formatDistance(distance)}</strong></div>
           <div className="mt-2 flex items-center justify-between gap-3"><span className="flex items-center gap-2 text-gray-600"><Truck className="h-4 w-4" />Order status</span><strong className="text-orange-700">Browsing only</strong></div>
         </div>
-        <p className="mb-5 text-center text-xs leading-5 text-gray-500">You can continue browsing. To shop from this area, send LIA Support an Order Zone request.</p>
+        <p className="mb-5 text-center text-xs leading-5 text-gray-500">You can continue browsing. An Order Zone approved by LIA Support can allow ordering outside the normal delivery radius.</p>
         <div className="flex flex-col gap-3">
-          <button type="button" onClick={requestOrderZone} className="w-full rounded-xl bg-orange-500 py-3 font-semibold text-white hover:bg-orange-600">Request an Order Zone</button>
-          <button type="button" onClick={onContinue} className="w-full rounded-xl border border-gray-200 py-3 font-medium text-gray-700 hover:bg-gray-50">Continue browsing</button>
+          <button type="button" onClick={requestOrderZone} className="w-full rounded-full bg-orange-500 py-3 font-semibold text-white hover:bg-orange-600">Request an Order Zone</button>
+          <button type="button" onClick={onContinue} className="w-full rounded-full border border-gray-200 py-3 font-medium text-gray-700 hover:bg-gray-50">Continue browsing</button>
         </div>
       </motion.div>
     </div>

@@ -19,7 +19,7 @@ import {
   onCall,
 } from "firebase-functions/v2/https";
 import {
-  requireActiveAdmin,
+  requireAdminPermission,
 } from "../admin/adminAuthorizationService";
 
 if (admin.apps.length === 0) {
@@ -72,7 +72,7 @@ function requestedPeriod(value: unknown): number {
 export const getAdminPlatformReport = onCall(
   { region: "us-central1" },
   async (request) => {
-    await requireActiveAdmin(request);
+    await requireAdminPermission(request, "reports");
     const periodDays = requestedPeriod(record(request.data).periodDays);
     const beginning = new Date();
     beginning.setUTCHours(0, 0, 0, 0);

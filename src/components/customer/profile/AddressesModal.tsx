@@ -272,7 +272,7 @@ export function AddressesModal({
                   <div className="flex gap-2 mt-4 pt-3 border-t border-gray-200">
                     <button
                       onClick={startEditing}
-                      className="flex-1 py-2 bg-orange-500 text-white rounded-lg font-medium hover:bg-orange-600 transition flex items-center justify-center gap-2"
+                      className="flex flex-1 items-center justify-center gap-2 rounded-full bg-orange-500 py-2 font-medium text-white transition hover:bg-orange-600"
                       aria-label="Edit address"
                     >
                       <Edit2 className="w-4 h-4" />
@@ -280,7 +280,7 @@ export function AddressesModal({
                     </button>
                     <button
                       onClick={handleDelete}
-                      className="px-4 py-2 border border-red-200 text-red-600 rounded-lg font-medium hover:bg-red-50 transition flex items-center gap-2"
+                      className="flex items-center gap-2 rounded-full border border-red-200 px-4 py-2 font-medium text-red-600 transition hover:bg-red-50"
                       aria-label="Delete address"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -351,7 +351,7 @@ export function AddressesModal({
                     <button
                       type="button"
                       onClick={cancelEditing}
-                      className="flex-1 py-2 border border-gray-200 rounded-lg text-gray-600 font-medium hover:bg-gray-50 transition"
+                      className="flex-1 rounded-full border border-gray-200 py-2 font-medium text-gray-600 transition hover:bg-gray-50"
                       aria-label="Cancel editing"
                     >
                       Cancel
@@ -359,7 +359,7 @@ export function AddressesModal({
                     <button
                       type="submit"
                       disabled={submitting}
-                      className="flex-1 py-2 bg-orange-500 text-white rounded-lg font-semibold hover:bg-orange-600 transition disabled:opacity-50"
+                      className="flex-1 rounded-full bg-orange-500 py-2 font-semibold text-white transition hover:bg-orange-600 disabled:opacity-50"
                       aria-label="Update address"
                     >
                       {submitting ? "Saving..." : "Update Address"}
@@ -435,7 +435,7 @@ export function AddressesModal({
                   <button
                     type="submit"
                     disabled={submitting}
-                    className="w-full py-2.5 bg-orange-500 text-white rounded-lg font-semibold hover:bg-orange-600 transition disabled:opacity-50 flex items-center justify-center gap-2"
+                    className="flex w-full items-center justify-center gap-2 rounded-full bg-orange-500 py-2.5 font-semibold text-white transition hover:bg-orange-600 disabled:opacity-50"
                     aria-label="Save address"
                   >
                     <Plus className="w-4 h-4" />

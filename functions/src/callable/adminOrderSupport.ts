@@ -10,7 +10,7 @@ import {
   onCall,
 } from "firebase-functions/v2/https";
 import {
-  requireActiveAdmin,
+  requireAdminPermission,
 } from "../admin/adminAuthorizationService";
 import {
   writeAdminAuditLog,
@@ -59,7 +59,7 @@ async function requestForOrder(orderId: string) {
 }
 
 export const getAdminOrderSupportRequest = onCall({region: "us-central1"}, async (request) => {
-  await requireActiveAdmin(request);
+  await requireAdminPermission(request, "orders");
   const orderId = identifier(record(request.data).orderId, "Order");
   const support = await requestForOrder(orderId);
   if (!support) return {request: null};
@@ -68,7 +68,7 @@ export const getAdminOrderSupportRequest = onCall({region: "us-central1"}, async
 });
 
 export const respondAdminOrderSupportRequest = onCall({region: "us-central1"}, async (request) => {
-  const administrator = await requireActiveAdmin(request);
+  const administrator = await requireAdminPermission(request, "orders", "write");
   const input = record(request.data);
   const requestId = identifier(input.requestId, "Support request");
   const message = text(input.message);

@@ -159,7 +159,7 @@ export function EditProfileModal({userData, onClose, onUpdate}: EditProfileModal
               <button
                 type="button"
                 onClick={() => toggleEdit("name")}
-                className="px-3 py-2 text-sm text-orange-600 font-medium hover:bg-orange-50 rounded-lg transition"
+                className="rounded-full px-3 py-2 text-sm font-medium text-orange-600 transition hover:bg-orange-50"
                 aria-label={isEditing.name ? "Done editing name" : "Edit name"}
               >
                 {isEditing.name ? "Done" : "Edit"}
@@ -210,7 +210,7 @@ export function EditProfileModal({userData, onClose, onUpdate}: EditProfileModal
               <button
                 type="button"
                 onClick={() => toggleEdit("phone")}
-                className="px-3 py-2 text-sm text-orange-600 font-medium hover:bg-orange-50 rounded-lg transition"
+                className="rounded-full px-3 py-2 text-sm font-medium text-orange-600 transition hover:bg-orange-50"
                 aria-label={isEditing.phone ? "Done editing phone" : "Edit phone"}
               >
                 {isEditing.phone ? "Done" : "Edit"}
@@ -223,7 +223,7 @@ export function EditProfileModal({userData, onClose, onUpdate}: EditProfileModal
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 py-3 px-4 border border-gray-200 rounded-xl text-gray-600 font-medium hover:bg-gray-50 transition"
+              className="flex-1 rounded-full border border-gray-200 px-4 py-3 font-medium text-gray-600 transition hover:bg-gray-50"
               aria-label="Cancel editing"
             >
               Cancel
@@ -231,7 +231,7 @@ export function EditProfileModal({userData, onClose, onUpdate}: EditProfileModal
             <button
               type="submit"
               disabled={loading}
-              className="flex-1 py-3 px-4 bg-gradient-to-r from-orange-600 to-orange-700 text-white rounded-xl font-semibold hover:shadow-lg transition disabled:opacity-50 flex items-center justify-center gap-2"
+              className="flex flex-1 items-center justify-center gap-2 rounded-full bg-gradient-to-r from-orange-600 to-orange-700 px-4 py-3 font-semibold text-white transition hover:shadow-lg disabled:opacity-50"
               aria-label="Save profile changes"
             >
               {loading ? (

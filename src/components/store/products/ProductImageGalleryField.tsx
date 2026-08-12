@@ -116,7 +116,7 @@ ImageRoleDefinition[] = [
 ];
 
 const ACCEPTED_IMAGE_TYPES =
-  "image/jpeg,image/png,image/webp,image/heic,image/heif";
+  "image/jpeg,image/png,image/webp,image/avif,image/heic,image/heif";
 
 /*
 |--------------------------------------------------------------------------

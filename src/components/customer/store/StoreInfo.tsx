@@ -70,6 +70,7 @@ export function StoreInfo({
   const formattedDistance = formatDistance(distance);
   
   const isWithinDeliveryRadius =
+    applicablePricing?.decision?.zoneAccessType === "customer_order_zone" ||
     distance <= (marketplacePolicy?.maxRadiusMiles ?? Infinity);
 
   const displayedMinimumOrder =

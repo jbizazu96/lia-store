@@ -203,12 +203,12 @@ export function AccountDeletionReviewWorkspace({
 
   return (
     <section>
-      {requestId && <button type="button" onClick={() => router.push("/admin/deletion-requests")} className="mb-5 inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-bold text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50"><ChevronRight className="h-4 w-4 rotate-180" />Back to deletion requests</button>}
+      {requestId && <button data-admin-read-action type="button" onClick={() => router.push("/admin/deletion-requests")} className="mb-5 inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-bold text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50"><ChevronRight className="h-4 w-4 rotate-180" />Back to deletion requests</button>}
       <p className="text-sm font-bold tracking-wide text-orange-600">ACCOUNT DELETION</p>
       <h1 className="mt-1 text-3xl font-bold tracking-tight text-slate-950">Deletion requests</h1>
       <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">Review requests without directly deleting an account. Driver approvals are scheduled with a grace period and processed later by the protected deletion workflow.</p>
 
-      {!requestId && <><div className="mt-6 flex flex-wrap gap-2">{statuses.map((item) => <button key={item.value} type="button" onClick={() => setStatus(item.value)} className={"rounded-full px-4 py-2 text-sm font-bold " + (status === item.value ? "bg-orange-600 text-white" : "bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50")}>{item.label}</button>)}</div><div className="mt-6 grid gap-3 sm:grid-cols-3"><CountCard label="Pending review" value={counts.pending_review} tone="bg-amber-50 text-amber-800" /><CountCard label="More information" value={counts.more_information_required} tone="bg-blue-50 text-blue-700" /><CountCard label="Approved / scheduled" value={counts.approved} tone="bg-green-50 text-green-700" /></div></>}
+      {!requestId && <><div className="mt-6 flex flex-wrap gap-2">{statuses.map((item) => <button data-admin-read-action key={item.value} type="button" onClick={() => setStatus(item.value)} className={"rounded-full px-4 py-2 text-sm font-bold " + (status === item.value ? "bg-orange-600 text-white" : "bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50")}>{item.label}</button>)}</div><div className="mt-6 grid gap-3 sm:grid-cols-3"><CountCard label="Pending review" value={counts.pending_review} tone="bg-amber-50 text-amber-800" /><CountCard label="More information" value={counts.more_information_required} tone="bg-blue-50 text-blue-700" /><CountCard label="Approved / scheduled" value={counts.approved} tone="bg-green-50 text-green-700" /></div></>}
 
       {error && <p className="mt-5 rounded-xl border border-red-100 bg-red-50 p-3 text-sm text-red-700">{error}</p>}
 
@@ -218,6 +218,7 @@ export function AccountDeletionReviewWorkspace({
       </div>
       {!requestId && nextCursor && (
         <button
+          data-admin-read-action
           type="button"
           disabled={loading}
           onClick={() => void loadList(nextCursor)}

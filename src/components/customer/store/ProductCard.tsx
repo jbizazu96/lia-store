@@ -703,7 +703,7 @@ export function ProductCard({
                     onClick={
                       cancelRemove
                     }
-                    className="flex-1 rounded-xl border border-gray-200 py-3 font-medium text-gray-600 transition hover:bg-gray-50"
+                    className="flex-1 rounded-full border border-gray-200 py-3 font-medium text-gray-600 transition hover:bg-gray-50"
                   >
                     Cancel
                   </button>
@@ -713,7 +713,7 @@ export function ProductCard({
                     onClick={
                       confirmRemove
                     }
-                    className="flex-1 rounded-xl bg-red-600 py-3 font-semibold text-white transition hover:bg-red-700"
+                    className="flex-1 rounded-full bg-red-600 py-3 font-semibold text-white transition hover:bg-red-700"
                   >
                     Remove
                   </button>

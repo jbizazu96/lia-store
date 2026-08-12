@@ -94,7 +94,7 @@ export function FeeInfoSheet({
         <button
           type="button"
           onClick={onClose}
-          className="mt-6 w-full rounded-2xl bg-orange-600 py-3 text-base font-bold text-white transition hover:bg-orange-700"
+          className="mt-6 w-full rounded-full bg-orange-600 py-3 text-base font-bold text-white transition hover:bg-orange-700"
         >
           OK
         </button>

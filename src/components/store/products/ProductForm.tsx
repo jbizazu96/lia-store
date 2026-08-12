@@ -98,6 +98,13 @@ interface ProductFormProps {
 
 const EMPTY_INITIAL_IMAGES: ProductGalleryImageSelection[] = [];
 
+function titleCaseBrand(value: string): string {
+  return value.replace(
+    /(^|[\s\-'’])([A-Za-zÀ-ÖØ-öø-ÿ])/g,
+    (_match, separator: string, letter: string) => `${separator}${letter.toUpperCase()}`,
+  );
+}
+
 /*
 |--------------------------------------------------------------------------
 | Empty Form
@@ -248,6 +255,7 @@ export function ProductForm({
       setFormData({
         ...EMPTY_FORM_DATA,
         ...initialData,
+        brand: titleCaseBrand(initialData.brand ?? ""),
         price,
         stock,
         size,
@@ -575,7 +583,7 @@ export function ProductForm({
         formData.description.trim(),
 
       brand:
-        formData.brand.trim(),
+        titleCaseBrand(formData.brand.trim()),
 
       sku:
         formData.sku.trim(),
@@ -813,6 +821,7 @@ export function ProductForm({
                   event.target.value
                 )
               }
+              onBlur={() => updateField("brand", titleCaseBrand(formData.brand.trim()))}
               disabled={
                 loading
               }

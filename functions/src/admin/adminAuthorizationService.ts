@@ -31,6 +31,41 @@ export interface ActiveAdmin {
   uid: string;
   email: string;
   role: string;
+  displayName: string;
+  permissions: Partial<Record<AdminPermission, AdminAccessLevel>>;
+}
+
+export const ADMIN_PERMISSIONS = [
+  "overview",
+  "stores",
+  "drivers",
+  "customers",
+  "delivery_zones",
+  "product_categories",
+  "reports",
+  "deletion_requests",
+  "orders",
+  "finance",
+  "refunds",
+  "promotions",
+  "settings",
+] as const;
+
+export type AdminPermission = typeof ADMIN_PERMISSIONS[number];
+export type AdminAccessLevel = "read" | "write";
+
+export function isMasterAdmin(administrator: ActiveAdmin): boolean {
+  return administrator.role === "master_admin";
+}
+
+function adminPermissions(value: unknown): Partial<Record<AdminPermission, AdminAccessLevel>> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const input = value as Record<string, unknown>;
+  return Object.fromEntries(ADMIN_PERMISSIONS.flatMap((permission) =>
+    input[permission] === "read" || input[permission] === "write"
+      ? [[permission, input[permission] as AdminAccessLevel]]
+      : [],
+  ));
 }
 
 function normalizedEmail(value: unknown): string {
@@ -73,7 +108,8 @@ export async function requireActiveAdmin(
   if (
     !admin.exists ||
     data?.isActive !== true ||
-    normalizedEmail(data?.email) !== email
+    normalizedEmail(data?.email) !== email ||
+    !["master_admin", "staff_admin"].includes(data?.role)
   ) {
     throw new HttpsError(
       "permission-denied",
@@ -84,8 +120,33 @@ export async function requireActiveAdmin(
   return {
     uid: request.auth.uid,
     email,
-    role: typeof data?.role === "string" && data.role.trim()
-      ? data.role.trim()
-      : "super_admin",
+    role: data?.role as "master_admin" | "staff_admin",
+    displayName: typeof data?.displayName === "string" ? data.displayName.trim() : "",
+    permissions: adminPermissions(data?.permissions),
   };
+}
+
+export async function requireMasterAdmin(
+  request: CallableRequest<unknown>,
+): Promise<ActiveAdmin> {
+  const administrator = await requireActiveAdmin(request);
+  if (!isMasterAdmin(administrator)) {
+    throw new HttpsError("permission-denied", "Only the master administrator can manage admin users.");
+  }
+  return administrator;
+}
+
+export async function requireAdminPermission(
+  request: CallableRequest<unknown>,
+  permission: AdminPermission,
+  requiredAccess: AdminAccessLevel = "read",
+): Promise<ActiveAdmin> {
+  const administrator = await requireActiveAdmin(request);
+  const assignedAccess = administrator.permissions[permission];
+  const allowed = assignedAccess === "write" ||
+    (requiredAccess === "read" && assignedAccess === "read");
+  if (!isMasterAdmin(administrator) && !allowed) {
+    throw new HttpsError("permission-denied", "You do not have permission to access this admin area.");
+  }
+  return administrator;
 }

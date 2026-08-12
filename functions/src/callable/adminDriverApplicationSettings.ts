@@ -10,7 +10,7 @@
 import * as admin from "firebase-admin";
 import {FieldValue, getFirestore} from "firebase-admin/firestore";
 import {HttpsError, onCall} from "firebase-functions/v2/https";
-import {requireActiveAdmin} from "../admin/adminAuthorizationService";
+import {requireAdminPermission} from "../admin/adminAuthorizationService";
 import {writeAdminAuditLog} from "../admin/adminAuditLogService";
 import {
   DRIVER_APPLICATION_POLICY_DOCUMENT,
@@ -48,7 +48,7 @@ function isValidPolicy(value: Record<string, unknown>): boolean {
 export const getAdminDriverApplicationPolicy = onCall(
   {region: "us-central1"},
   async (request) => {
-    await requireActiveAdmin(request);
+    await requireAdminPermission(request, "settings");
     return {policy: await getDriverApplicationPolicy()};
   },
 );
@@ -56,7 +56,7 @@ export const getAdminDriverApplicationPolicy = onCall(
 export const saveAdminDriverApplicationPolicy = onCall(
   {region: "us-central1"},
   async (request) => {
-    const administrator = await requireActiveAdmin(request);
+    const administrator = await requireAdminPermission(request, "settings", "write");
     const input = record(record(request.data).policy);
     if (!isValidPolicy(input)) {
       throw new HttpsError(

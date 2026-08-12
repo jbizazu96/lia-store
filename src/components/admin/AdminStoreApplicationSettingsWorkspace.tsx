@@ -102,7 +102,7 @@ export function AdminStoreApplicationSettingsWorkspace() {
       </div>
     </section>
     <div className="sticky bottom-4 mt-6 flex justify-end rounded-2xl bg-white/95 p-3 shadow-lg ring-1 ring-slate-200 backdrop-blur">
-      <button disabled={saving} onClick={() => void save()} className="rounded-xl bg-orange-600 px-5 py-3 text-sm font-bold text-white disabled:opacity-50">{saving ? "Saving…" : "Save store application policy"}</button>
+      <button data-admin-write-action disabled={saving} onClick={() => void save()} className="rounded-xl bg-orange-600 px-5 py-3 text-sm font-bold text-white disabled:opacity-50">{saving ? "Saving…" : "Save store application policy"}</button>
     </div>
   </section>;
 }

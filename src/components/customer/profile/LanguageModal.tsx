@@ -57,7 +57,7 @@ export function LanguageModal({currentLanguage, onClose, onSelect}: LanguageModa
                   }
                 }}
                 disabled={savingLanguage !== null}
-                className="w-full flex items-center justify-between px-4 py-4 hover:bg-gray-50 rounded-xl transition"
+                className="flex w-full items-center justify-between rounded-full px-4 py-4 transition hover:bg-gray-50"
                 aria-label={`Select ${lang.name}`}
               >
                 <div className="flex items-center gap-3">

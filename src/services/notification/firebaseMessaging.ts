@@ -26,6 +26,10 @@ export type {
   NotificationPermissionState,
 } from "./capacitorNotificationAdapter";
 
+export type NativeNotificationPreference = "accepted" | "declined" | null;
+
+export const NATIVE_NOTIFICATION_STATE_EVENT = "lia:native-notification-state";
+
 export class FirebaseMessaging {
   private foregroundMessageUnsubscribe: Unsubscribe | null = null;
 
@@ -41,6 +45,24 @@ export class FirebaseMessaging {
       Date.now().toString() + "-" + Math.random().toString(36).slice(2);
     window.localStorage.setItem(key, created);
     return created;
+  }
+
+  private nativePreferenceKey(uid: string): string {
+    return `lia.native-notification-preference:${uid}`;
+  }
+
+  getNativePreference(): NativeNotificationPreference {
+    const uid = auth.currentUser?.uid;
+    if (!uid || typeof window === "undefined") return null;
+    const value = window.localStorage.getItem(this.nativePreferenceKey(uid));
+    return value === "accepted" || value === "declined" ? value : null;
+  }
+
+  setNativePreference(value: Exclude<NativeNotificationPreference, null>): void {
+    const uid = auth.currentUser?.uid;
+    if (!uid || typeof window === "undefined") return;
+    window.localStorage.setItem(this.nativePreferenceKey(uid), value);
+    window.dispatchEvent(new Event(NATIVE_NOTIFICATION_STATE_EVENT));
   }
 
   private startForegroundMessageListener(): void {
@@ -177,6 +199,7 @@ export class FirebaseMessaging {
   async registerDevice(
     options: {
       requestPermission?: boolean;
+      explicitUserAction?: boolean;
     } = {},
   ): Promise<boolean> {
     const native = capacitorNotificationAdapter.isNativeApp();
@@ -195,6 +218,14 @@ export class FirebaseMessaging {
     const user = auth.currentUser;
 
     if (!user) {
+      return false;
+    }
+
+    if (
+      native &&
+      options.explicitUserAction !== true &&
+      this.getNativePreference() !== "accepted"
+    ) {
       return false;
     }
 
@@ -225,10 +256,6 @@ export class FirebaseMessaging {
       this.startForegroundMessageListener();
     }
 
-    if (window.localStorage.getItem(cacheKey) === registrationValue) {
-      return true;
-    }
-
     const register = httpsCallable<
       {
         token: string;
@@ -248,6 +275,60 @@ export class FirebaseMessaging {
 
     window.localStorage.setItem(cacheKey, registrationValue);
     return true;
+  }
+
+  async enableNativeNotifications(): Promise<NotificationPermissionState> {
+    if (!capacitorNotificationAdapter.isNativeApp()) {
+      const enabled = await this.registerDevice({requestPermission: true});
+      return enabled ? "granted" : this.getPermissionStatus();
+    }
+
+    let permission = await this.getPermissionStatus();
+    if (permission === "denied") {
+      this.setNativePreference("accepted");
+      await capacitorNotificationAdapter.openNotificationSettings();
+      return permission;
+    }
+
+    this.setNativePreference("accepted");
+    const registered = await this.registerDevice({
+      requestPermission: true,
+      explicitUserAction: true,
+    });
+    permission = await this.getPermissionStatus();
+    if (!registered || permission !== "granted") {
+      this.setNativePreference("declined");
+    }
+    window.dispatchEvent(new Event(NATIVE_NOTIFICATION_STATE_EVENT));
+    return permission;
+  }
+
+  async declineNativeNotifications(): Promise<void> {
+    this.setNativePreference("declined");
+    if (!capacitorNotificationAdapter.isNativeApp()) return;
+    const user = auth.currentUser;
+    if (user) {
+      const deactivate = httpsCallable<
+        {deviceId: string},
+        {deactivated: boolean}
+      >(functions, "deactivateNotificationDevice");
+      await deactivate({deviceId: this.deviceId()});
+      window.localStorage.removeItem("lia.notification-device:" + user.uid);
+    }
+    if (await this.getPermissionStatus() === "granted") {
+      await capacitorNotificationAdapter.deleteToken();
+    }
+    window.dispatchEvent(new Event(NATIVE_NOTIFICATION_STATE_EVENT));
+  }
+
+  async recoverNativeRegistration(): Promise<NotificationPermissionState> {
+    const permission = await this.getPermissionStatus();
+    if (permission === "granted") {
+      this.setNativePreference("accepted");
+      await this.registerDevice({explicitUserAction: true});
+    }
+    window.dispatchEvent(new Event(NATIVE_NOTIFICATION_STATE_EVENT));
+    return permission;
   }
 
   async initialize(): Promise<void> {

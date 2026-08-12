@@ -222,7 +222,11 @@ export default function ProductPage({ params }: ProductPageProps) {
       if (!active) return;
       const distance = route?.distanceMiles ?? 0;
       setPurchaseDistance(distance);
-      setPurchaseAllowed(Boolean(route) && distance <= applicablePricing.policy.maxRadiusMiles);
+      setPurchaseAllowed(
+        Boolean(route) &&
+        (applicablePricing.decision?.zoneAccessType === "customer_order_zone" ||
+          distance <= applicablePricing.policy.maxRadiusMiles),
+      );
     }).catch(() => {if (active) setPurchaseAllowed(false);});
     return () => {active = false;};
   }, [store, applicablePricing]);

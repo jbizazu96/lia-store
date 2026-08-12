@@ -32,6 +32,8 @@ import { CustomerPageSkeleton } from "@/components/customer/ui/CustomerPageSkele
 import { CustomerBottomNavigation } from "@/components/customer/navigation/CustomerBottomNavigation";
 import {
   firebaseMessaging,
+  NATIVE_NOTIFICATION_STATE_EVENT,
+  type NativeNotificationPreference,
   type NotificationPermissionState,
 } from "@/services/notification/firebaseMessaging";
 
@@ -56,6 +58,8 @@ export default function ProfilePage() {
   const [showNotificationSettings, setShowNotificationSettings] = useState(false);
   const [notificationPermission, setNotificationPermission] =
     useState<NotificationPermissionState>("prompt");
+  const [nativeNotificationPreference, setNativeNotificationPreference] =
+    useState<NativeNotificationPreference>(null);
 
   /*
     Get current user and profile data.
@@ -83,16 +87,29 @@ export default function ProfilePage() {
   }, [router]);
 
   useEffect(() => {
-    void firebaseMessaging.getPermissionStatus()
-      .then(setNotificationPermission)
-      .catch(() => setNotificationPermission("unsupported"));
-  }, []);
+    const refresh = () => {
+      setNativeNotificationPreference(firebaseMessaging.getNativePreference());
+      void firebaseMessaging.getPermissionStatus()
+        .then(setNotificationPermission)
+        .catch(() => setNotificationPermission("unsupported"));
+    };
+    refresh();
+    window.addEventListener(NATIVE_NOTIFICATION_STATE_EVENT, refresh);
+    return () => window.removeEventListener(NATIVE_NOTIFICATION_STATE_EVENT, refresh);
+  }, [user]);
 
   async function enableNotifications() {
-    await firebaseMessaging.registerDevice({ requestPermission: true });
+    await firebaseMessaging.enableNativeNotifications();
+    setNativeNotificationPreference(firebaseMessaging.getNativePreference());
     setNotificationPermission(
       await firebaseMessaging.getPermissionStatus(),
     );
+  }
+
+  async function declineNotifications() {
+    await firebaseMessaging.declineNativeNotifications();
+    setNativeNotificationPreference(firebaseMessaging.getNativePreference());
+    setNotificationPermission(await firebaseMessaging.getPermissionStatus());
   }
 
   async function handleProfileImageUpload(file: File) {
@@ -405,8 +422,10 @@ export default function ProfilePage() {
           <NotificationSettingsModal
             preferences={profileData.notificationPreferences}
             permission={notificationPermission}
+            devicePreference={nativeNotificationPreference}
             onClose={() => setShowNotificationSettings(false)}
             onEnableDeviceNotifications={enableNotifications}
+            onDeclineDeviceNotifications={declineNotifications}
             onSave={async (preferences) => {
               const saved = await updateCustomerNotificationPreferences(
                 preferences,

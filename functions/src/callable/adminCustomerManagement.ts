@@ -19,7 +19,7 @@ import {
   onCall,
 } from "firebase-functions/v2/https";
 import {
-  requireActiveAdmin,
+  requireAdminPermission,
 } from "../admin/adminAuthorizationService";
 import {
   writeAdminAuditLog,
@@ -139,7 +139,7 @@ function notificationSummary(
 export const getAdminCustomers = onCall(
   { region: "us-central1" },
   async (request) => {
-    await requireActiveAdmin(request);
+    await requireAdminPermission(request, "customers");
     const input = record(request.data);
     const search = text(input.search).toLowerCase();
     const status = text(input.status) || "all";
@@ -175,7 +175,7 @@ export const getAdminCustomers = onCall(
 export const getAdminCustomer = onCall(
   { region: "us-central1" },
   async (request) => {
-    await requireActiveAdmin(request);
+    await requireAdminPermission(request, "customers");
     const id = customerId(record(request.data).customerId);
     const customer = await db.collection("users").doc(id).get();
     const data = customer.data();
@@ -254,7 +254,7 @@ export const getAdminCustomer = onCall(
 export const setAdminCustomerSuspension = onCall(
   { region: "us-central1" },
   async (request) => {
-    const administrator = await requireActiveAdmin(request);
+    const administrator = await requireAdminPermission(request, "customers", "write");
     const input = record(request.data);
     const id = customerId(input.customerId);
     const isSuspended = input.isSuspended === true;

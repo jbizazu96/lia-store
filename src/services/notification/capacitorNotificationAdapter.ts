@@ -14,8 +14,13 @@ import {
   App,
 } from "@capacitor/app";
 import {
-  PushNotifications,
-} from "@capacitor/push-notifications";
+  FirebaseMessaging as NativeFirebaseMessaging,
+} from "@capacitor-firebase/messaging";
+import {
+  AndroidSettings,
+  IOSSettings,
+  NativeSettings,
+} from "capacitor-native-settings";
 import {
   openLiaDeepLink,
 } from "./notificationDeepLink";
@@ -26,10 +31,7 @@ export type NotificationPermissionState =
   | "prompt"
   | "unsupported";
 
-const TOKEN_STORAGE_KEY = "lia.native-notification-token";
-
 let initialized = false;
-let tokenRequest: Promise<string | null> | null = null;
 
 function isNativeApp(): boolean {
   return Capacitor.isNativePlatform();
@@ -62,10 +64,13 @@ async function initializeNativeListeners(): Promise<void> {
     openLiaDeepLink(url);
   });
 
-  await PushNotifications.addListener(
-    "pushNotificationActionPerformed",
+  await NativeFirebaseMessaging.addListener(
+    "notificationActionPerformed",
     ({ notification }) => {
-      openLiaDeepLink(notification.data?.deepLink);
+      const data = notification.data && typeof notification.data === "object"
+        ? notification.data as Record<string, unknown>
+        : {};
+      openLiaDeepLink(typeof data.deepLink === "string" ? data.deepLink : undefined);
     },
   );
 
@@ -81,7 +86,7 @@ async function nativePermission(): Promise<NotificationPermissionState> {
     return "unsupported";
   }
 
-  const permissions = await PushNotifications.checkPermissions();
+  const permissions = await NativeFirebaseMessaging.checkPermissions();
   return mapPermission(permissions.receive);
 }
 
@@ -95,7 +100,7 @@ async function requestNativePermission(): Promise<NotificationPermissionState> {
     return current;
   }
 
-  const permissions = await PushNotifications.requestPermissions();
+  const permissions = await NativeFirebaseMessaging.requestPermissions();
   return mapPermission(permissions.receive);
 }
 
@@ -104,48 +109,20 @@ async function getNativeToken(): Promise<string | null> {
     return null;
   }
 
-  const cached = window.localStorage.getItem(TOKEN_STORAGE_KEY);
-  if (cached) {
-    return cached;
-  }
+  const result = await NativeFirebaseMessaging.getToken();
+  return result.token?.trim() || null;
+}
 
-  if (tokenRequest) {
-    return tokenRequest;
-  }
+async function deleteNativeToken(): Promise<void> {
+  if (isNativeApp()) await NativeFirebaseMessaging.deleteToken();
+}
 
-  tokenRequest = new Promise<string | null>((resolve, reject) => {
-    let settled = false;
-
-    const finish = (value: string | null): void => {
-      if (settled) return;
-      settled = true;
-      window.clearTimeout(timeout);
-      tokenRequest = null;
-      resolve(value);
-    };
-
-    const timeout = window.setTimeout(() => {
-      finish(null);
-    }, 15_000);
-
-    void PushNotifications.addListener("registration", ({ value }) => {
-      if (value) {
-        window.localStorage.setItem(TOKEN_STORAGE_KEY, value);
-      }
-      finish(value || null);
-    });
-
-    void PushNotifications.addListener("registrationError", (error) => {
-      if (settled) return;
-      window.clearTimeout(timeout);
-      tokenRequest = null;
-      reject(new Error(error.error || "Native push registration failed."));
-    });
-
-    void PushNotifications.register();
+async function openNativeNotificationSettings(): Promise<void> {
+  if (!isNativeApp()) return;
+  await NativeSettings.open({
+    optionAndroid: AndroidSettings.AppNotification,
+    optionIOS: IOSSettings.App,
   });
-
-  return tokenRequest;
 }
 
 export const capacitorNotificationAdapter = {
@@ -158,4 +135,8 @@ export const capacitorNotificationAdapter = {
   requestPermission: requestNativePermission,
 
   getToken: getNativeToken,
+
+  deleteToken: deleteNativeToken,
+
+  openNotificationSettings: openNativeNotificationSettings,
 };

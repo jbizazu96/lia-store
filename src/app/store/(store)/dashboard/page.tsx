@@ -37,6 +37,7 @@ import {
   Clock,
   DollarSign,
   Package,
+  Settings,
   ShoppingBag,
   Star,
   TrendingUp,
@@ -368,7 +369,7 @@ export default function DashboardPage() {
         </Link>
 
         <Link
-          href="/store/products/add"
+          href="/store/products"
           className="group rounded-xl bg-white p-4 text-center transition hover:shadow-md"
         >
           <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-blue-500">
@@ -376,7 +377,33 @@ export default function DashboardPage() {
           </div>
 
           <p className="text-sm font-medium text-gray-700">
-            Add Product
+            View Products
+          </p>
+        </Link>
+
+        <Link
+          href="/store/earnings"
+          className="group rounded-xl bg-white p-4 text-center transition hover:shadow-md"
+        >
+          <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500">
+            <DollarSign className="h-6 w-6 text-white" />
+          </div>
+
+          <p className="text-sm font-medium text-gray-700">
+            View Earnings
+          </p>
+        </Link>
+
+        <Link
+          href="/store/settings"
+          className="group rounded-xl bg-white p-4 text-center transition hover:shadow-md"
+        >
+          <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-slate-600">
+            <Settings className="h-6 w-6 text-white" />
+          </div>
+
+          <p className="text-sm font-medium text-gray-700">
+            Settings
           </p>
         </Link>
       </div>

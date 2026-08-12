@@ -199,7 +199,7 @@ export function AdminRefundClaimsWorkspace() {
 
       <div className="mt-6 flex flex-wrap gap-2">
         {claimStatuses.map((value) => (
-          <button
+          <button data-admin-read-action
             key={value}
             type="button"
             onClick={() => setStatus(value)}
@@ -232,7 +232,7 @@ export function AdminRefundClaimsWorkspace() {
           ) : (
             <div className="divide-y divide-slate-100">
               {claims.map((claim) => (
-                <button
+                <button data-admin-read-action
                   key={claim.id}
                   type="button"
                   onClick={() => void open(claim.id)}
@@ -319,7 +319,7 @@ function ClaimModal({
               {label(detail.reason)}
             </h2>
           </div>
-          <button
+          <button data-admin-read-action
             type="button"
             onClick={onClose}
             className="rounded-xl p-2 hover:bg-slate-100"

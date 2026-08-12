@@ -15,6 +15,7 @@ export interface MarketplacePricingPolicy {
   baseDeliveryFeeCents: number;
   baseDistanceMiles: number;
   costPerMileCents: number;
+  peakSurchargeEnabled: boolean;
   peakSurchargeCents: number;
   freeDeliveryMinimumCents: number;
   defaultMinimumOrderCents: number;
@@ -54,6 +55,13 @@ export function parseMarketplacePricingPolicy(
     }
     policy[field] = value;
   }
+
+  /*
+   * Policies created before manual peak activation did not contain a switch.
+   * Treating a missing switch as disabled keeps checkout safe until an admin
+   * explicitly enables peak pricing for the default policy or a zone.
+   */
+  policy.peakSurchargeEnabled = input.peakSurchargeEnabled === true;
 
   const integerFields: Array<keyof MarketplacePricingPolicy> = [
     "maxRadiusMiles", "baseDeliveryFeeCents", "baseDistanceMiles",

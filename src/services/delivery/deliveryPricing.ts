@@ -32,19 +32,19 @@ export function calculateDeliveryFee(
   distanceMiles: number,
   subtotal: number,
   policy: MarketplacePricingPolicy,
-  isPeakTime = false,
+  isPeakTime = policy.peakSurchargeEnabled,
+  enforceMaximumDistance = true,
 ): DeliveryPricingResult {
   const baseFee = policy.baseDeliveryFeeCents / 100;
   const baseDistanceMiles = policy.baseDistanceMiles;
   const perMileRate = policy.costPerMileCents / 100;
   const peakSurcharge = isPeakTime ? policy.peakSurchargeCents / 100 : 0;
   const isFreeDelivery = subtotal >= policy.freeDeliveryMinimumCents / 100;
-  const cappedDistance = Math.min(
-    Math.max(distanceMiles, 0),
-    policy.maxRadiusMiles,
-  );
+  const billableDistance = enforceMaximumDistance
+    ? Math.min(Math.max(distanceMiles, 0), policy.maxRadiusMiles)
+    : Math.max(distanceMiles, 0);
   const distanceFee = roundMoney(
-    baseFee + Math.max(cappedDistance - baseDistanceMiles, 0) * perMileRate,
+    baseFee + Math.max(billableDistance - baseDistanceMiles, 0) * perMileRate,
   );
   const serviceFee = roundMoney(Math.max(
     policy.minimumServiceFeeCents / 100,
@@ -69,7 +69,14 @@ export function calculateDeliveryFee(
 export function getDeliveryFeeDisplay(
   distanceMiles: number,
   policy: MarketplacePricingPolicy,
+  enforceMaximumDistance = true,
 ): string {
-  const {deliveryFee} = calculateDeliveryFee(distanceMiles, 0, policy);
+  const {deliveryFee} = calculateDeliveryFee(
+    distanceMiles,
+    0,
+    policy,
+    policy.peakSurchargeEnabled,
+    enforceMaximumDistance,
+  );
   return deliveryFee === 0 ? "Free" : `$${deliveryFee.toFixed(2)}`;
 }

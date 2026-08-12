@@ -42,6 +42,13 @@ function optionalText(value: unknown, maximum = 500): string | undefined {
   return normalized || undefined;
 }
 
+function titleCaseBrand(value: string): string {
+  return value.replace(
+    /(^|[\s\-'’])([A-Za-zÀ-ÖØ-öø-ÿ])/g,
+    (_match, separator: string, letter: string) => `${separator}${letter.toUpperCase()}`,
+  );
+}
+
 function nonNegativeNumber(value: unknown, field: string): number {
   if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
     throw new HttpsError("invalid-argument", `${field} must be a non-negative number.`);
@@ -150,7 +157,7 @@ function editableProductData(
   if (requireCompleteProduct || product.category !== undefined) data.category = category;
   if (requireCompleteProduct || product.brand !== undefined) {
     const brand = optionalText(product.brand, 160);
-    data.brand = brand ?? null;
+    data.brand = brand ? titleCaseBrand(brand) : null;
   }
   if (requireCompleteProduct || product.price !== undefined) data.price = nonNegativeNumber(product.price, "Product price");
   if (requireCompleteProduct || product.stock !== undefined) data.stock = Math.floor(nonNegativeNumber(product.stock, "Product stock"));

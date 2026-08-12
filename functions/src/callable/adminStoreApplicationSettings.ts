@@ -16,7 +16,7 @@ import {
   parseStoreApplicationPolicy,
   STORE_APPLICATION_POLICY_DOCUMENT,
 } from "../admin/storeApplicationPolicy";
-import {requireActiveAdmin} from "../admin/adminAuthorizationService";
+import {requireAdminPermission} from "../admin/adminAuthorizationService";
 import {writeAdminAuditLog} from "../admin/adminAuditLogService";
 
 if (admin.apps.length === 0) admin.initializeApp();
@@ -46,7 +46,7 @@ function hasEveryPolicyField(value: Record<string, unknown>): boolean {
 export const getAdminStoreApplicationPolicy = onCall(
   {region: "us-central1"},
   async (request) => {
-    await requireActiveAdmin(request);
+    await requireAdminPermission(request, "settings");
     return {policy: await getStoreApplicationPolicy()};
   },
 );
@@ -54,7 +54,7 @@ export const getAdminStoreApplicationPolicy = onCall(
 export const saveAdminStoreApplicationPolicy = onCall(
   {region: "us-central1"},
   async (request) => {
-    const administrator = await requireActiveAdmin(request);
+    const administrator = await requireAdminPermission(request, "settings", "write");
     const input = record(request.data).policy;
     const policyInput = record(input);
 

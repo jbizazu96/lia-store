@@ -27,7 +27,7 @@ import {
 } from "../accountDeletion/accountDeletionPolicy";
 import {restoreAccountDeletionAccess} from "../accountDeletion/accountDeletionAccessService";
 import {
-  requireActiveAdmin,
+  requireAdminPermission,
 } from "../admin/adminAuthorizationService";
 import {
   writeAdminAuditLog,
@@ -252,7 +252,7 @@ function deletionListItem(document: FirebaseFirestore.QueryDocumentSnapshot) {
 export const getAdminAccountDeletionRequests = onCall(
   {region: "us-central1"},
   async (request) => {
-    await requireActiveAdmin(request);
+    await requireAdminPermission(request, "deletion_requests");
     const input = record(request.data);
     const selectedStatus = text(input.status) || "pending_review";
     const requestedPageSize = typeof input.pageSize === "number" ? input.pageSize : 50;
@@ -308,7 +308,7 @@ export const getAdminAccountDeletionRequests = onCall(
 export const getAdminAccountDeletionRequest = onCall(
   {region: "us-central1"},
   async (request) => {
-    await requireActiveAdmin(request);
+    await requireAdminPermission(request, "deletion_requests");
     const id = requestId(record(request.data).requestId);
     const deletionRequest = await db.collection("accountDeletionRequests").doc(id).get();
     if (!deletionRequest.exists) {
@@ -353,7 +353,7 @@ export const getAdminAccountDeletionRequest = onCall(
 export const decideAdminAccountDeletionRequest = onCall(
   {region: "us-central1"},
   async (request) => {
-    const administrator = await requireActiveAdmin(request);
+    const administrator = await requireAdminPermission(request, "deletion_requests", "write");
     const input = record(request.data);
     const id = requestId(input.requestId);
     const decision = text(input.decision);
@@ -460,7 +460,7 @@ export const decideAdminAccountDeletionRequest = onCall(
 export const retryAdminAccountDeletionRequest = onCall(
   {region: "us-central1"},
   async (request) => {
-    const administrator = await requireActiveAdmin(request);
+    const administrator = await requireAdminPermission(request, "deletion_requests", "write");
     const id = requestId(record(request.data).requestId);
     const reference = db.collection("accountDeletionRequests").doc(id);
 
@@ -505,7 +505,7 @@ export const retryAdminAccountDeletionRequest = onCall(
 export const reinstateAdminAccountDeletionRequest = onCall(
   {region: "us-central1"},
   async (request) => {
-    const administrator = await requireActiveAdmin(request);
+    const administrator = await requireAdminPermission(request, "deletion_requests", "write");
     const id = requestId(record(request.data).requestId);
     const reference = db.collection("accountDeletionRequests").doc(id);
     let ownerId = "";

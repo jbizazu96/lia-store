@@ -28,6 +28,8 @@ import {
   adminWorkspaceClientService,
   AdminWorkspaceClientError,
 } from "@/services/admin/adminWorkspaceClientService";
+import {AdminAccessProvider} from "@/context/AdminAccessContext";
+import type {AdminAccessProfile} from "@/types/adminAccess";
 
 export function AdminGuard({
   children,
@@ -36,7 +38,7 @@ export function AdminGuard({
 }) {
   const router = useRouter();
   const {user, loading} = useAuth();
-  const [authorized, setAuthorized] = useState(false);
+  const [administrator, setAdministrator] = useState<AdminAccessProfile | null>(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -49,13 +51,17 @@ export function AdminGuard({
       return;
     }
 
-    setAuthorized(false);
-    setError("");
+    queueMicrotask(() => {
+      if (active) {
+        setAdministrator(null);
+        setError("");
+      }
+    });
 
     void adminWorkspaceClientService
       .getEntry()
-      .then(() => {
-        if (active) setAuthorized(true);
+      .then((entry) => {
+        if (active) setAdministrator(entry.administrator);
       })
       .catch((reason: unknown) => {
         if (!active) return;
@@ -80,7 +86,7 @@ export function AdminGuard({
     };
   }, [loading, router, user]);
 
-  if (loading || !authorized) {
+  if (loading || !administrator) {
     if (error) {
       return (
         <main className="flex min-h-screen items-center justify-center p-6">
@@ -104,5 +110,5 @@ export function AdminGuard({
     return <BrandedLoader message="Verifying administrator access" />;
   }
 
-  return <>{children}</>;
+  return <AdminAccessProvider administrator={administrator}>{children}</AdminAccessProvider>;
 }

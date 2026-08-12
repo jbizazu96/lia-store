@@ -11,6 +11,7 @@
 */
 
 import {
+  useEffect,
   useState,
 } from "react";
 import Link from "next/link";
@@ -29,6 +30,7 @@ import {
   MapPinned,
   Truck,
   UsersRound,
+  UserCog,
   ChartNoAxesCombined,
   RotateCcw,
   ListTree,
@@ -44,6 +46,9 @@ import {
 import {
   AdminNotificationBell,
 } from "@/components/admin/AdminNotificationBell";
+import {useAdminAccess} from "@/context/AdminAccessContext";
+import {requiredAdminPermission} from "@/services/admin/adminAccessRoutes";
+import type {AdminPermission} from "@/types/adminAccess";
 
 export function AdminAppShell({
   children,
@@ -53,6 +58,35 @@ export function AdminAppShell({
   const router = useRouter();
   const pathname = usePathname();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const {can, canWrite, isMaster} = useAdminAccess();
+
+  const navigation: Array<{href: string; label: string; icon: typeof LayoutDashboard; permission: AdminPermission | "master"}> = [
+    {href: "/admin", label: "Overview", icon: LayoutDashboard, permission: "overview"},
+    {href: "/admin/store-applications", label: "Store applications", icon: Store, permission: "stores"},
+    {href: "/admin/driver-applications", label: "Driver applications", icon: Truck, permission: "drivers"},
+    {href: "/admin/customers", label: "Customers", icon: UsersRound, permission: "customers"},
+    {href: "/admin/delivery-zones", label: "Delivery zones", icon: MapPinned, permission: "delivery_zones"},
+    {href: "/admin/product-categories", label: "Product categories", icon: ListTree, permission: "product_categories"},
+    {href: "/admin/reports", label: "Reports", icon: ChartNoAxesCombined, permission: "reports"},
+    {href: "/admin/deletion-requests", label: "Deletion requests", icon: FileWarning, permission: "deletion_requests"},
+    {href: "/admin/orders", label: "Orders & delivery", icon: ClipboardList, permission: "orders"},
+    {href: "/admin/finance", label: "Finance", icon: CircleDollarSign, permission: "finance"},
+    {href: "/admin/refund-claims", label: "Refund claims", icon: RotateCcw, permission: "refunds"},
+    {href: "/admin/promotions", label: "Home promotions", icon: Tag, permission: "promotions"},
+    {href: "/admin/settings", label: "Platform settings", icon: Settings, permission: "settings"},
+    {href: "/admin/users", label: "Admin users", icon: UserCog, permission: "master"},
+  ];
+  const visibleNavigation = navigation.filter((item) => item.permission === "master" ? isMaster : can(item.permission));
+  const requiredPermission = requiredAdminPermission(pathname);
+  const hasRouteAccess = requiredPermission === null ||
+    (requiredPermission === "master" ? isMaster : can(requiredPermission));
+  const isReadOnly = requiredPermission !== null && requiredPermission !== "master" && !canWrite(requiredPermission);
+
+  useEffect(() => {
+    if (pathname === "/admin" && !can("overview") && visibleNavigation.length > 0) {
+      router.replace(visibleNavigation[0].href);
+    }
+  }, [can, pathname, router, visibleNavigation]);
 
   const signOut = async () => {
     await auth.signOut();
@@ -88,58 +122,11 @@ export function AdminAppShell({
         </div>
 
         <nav className="space-y-2">
-          <Link onClick={() => setSidebarOpen(false)} href="/admin" className={`flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-bold transition ${pathname === "/admin" ? "bg-orange-50 text-orange-700" : "text-slate-600 hover:bg-slate-50"}`}>
-            <LayoutDashboard className="h-5 w-5" />
-            Overview
-          </Link>
-          <Link onClick={() => setSidebarOpen(false)} href="/admin/store-applications" className={`flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition ${pathname.startsWith("/admin/store-applications") ? "bg-orange-50 text-orange-700" : "text-slate-600 hover:bg-slate-50"}`}>
-            <Store className="h-5 w-5" />
-            Store applications
-          </Link>
-          <Link onClick={() => setSidebarOpen(false)} href="/admin/product-categories" className={`flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition ${pathname.startsWith("/admin/product-categories") ? "bg-orange-50 text-orange-700" : "text-slate-600 hover:bg-slate-50"}`}>
-            <ListTree className="h-5 w-5" />
-            Product categories
-          </Link>
-          <Link onClick={() => setSidebarOpen(false)} href="/admin/driver-applications" className={`flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition ${pathname.startsWith("/admin/driver-applications") ? "bg-orange-50 text-orange-700" : "text-slate-600 hover:bg-slate-50"}`}>
-            <Truck className="h-5 w-5" />
-            Driver applications
-          </Link>
-          <Link onClick={() => setSidebarOpen(false)} href="/admin/customers" className={`flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition ${pathname.startsWith("/admin/customers") ? "bg-orange-50 text-orange-700" : "text-slate-600 hover:bg-slate-50"}`}>
-            <UsersRound className="h-5 w-5" />
-            Customers
-          </Link>
-          <Link onClick={() => setSidebarOpen(false)} href="/admin/reports" className={`flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition ${pathname.startsWith("/admin/reports") ? "bg-orange-50 text-orange-700" : "text-slate-600 hover:bg-slate-50"}`}>
-            <ChartNoAxesCombined className="h-5 w-5" />
-            Reports
-          </Link>
-          <Link onClick={() => setSidebarOpen(false)} href="/admin/deletion-requests" className={"flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition " + (pathname.startsWith("/admin/deletion-requests") ? "bg-orange-50 text-orange-700" : "text-slate-600 hover:bg-slate-50")}>
-            <FileWarning className="h-5 w-5" />
-            Deletion requests
-          </Link>
-          <Link onClick={() => setSidebarOpen(false)} href="/admin/orders" className={"flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition " + (pathname.startsWith("/admin/orders") ? "bg-orange-50 text-orange-700" : "text-slate-600 hover:bg-slate-50")}>
-            <ClipboardList className="h-5 w-5" />
-            Orders & delivery
-          </Link>
-          <Link onClick={() => setSidebarOpen(false)} href="/admin/finance" className={"flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition " + (pathname.startsWith("/admin/finance") ? "bg-orange-50 text-orange-700" : "text-slate-600 hover:bg-slate-50")}>
-            <CircleDollarSign className="h-5 w-5" />
-            Finance
-          </Link>
-          <Link onClick={() => setSidebarOpen(false)} href="/admin/refund-claims" className={"flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition " + (pathname.startsWith("/admin/refund-claims") ? "bg-orange-50 text-orange-700" : "text-slate-600 hover:bg-slate-50")}>
-            <RotateCcw className="h-5 w-5" />
-            Refund claims
-          </Link>
-          <Link onClick={() => setSidebarOpen(false)} href="/admin/promotions" className={"flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition " + (pathname.startsWith("/admin/promotions") ? "bg-orange-50 text-orange-700" : "text-slate-600 hover:bg-slate-50")}>
-            <Tag className="h-5 w-5" />
-            Home promotions
-          </Link>
-          <Link onClick={() => setSidebarOpen(false)} href="/admin/delivery-zones" className={"flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition " + (pathname.startsWith("/admin/delivery-zones") ? "bg-orange-50 text-orange-700" : "text-slate-600 hover:bg-slate-50")}>
-            <MapPinned className="h-5 w-5" />
-            Delivery zones
-          </Link>
-          <Link onClick={() => setSidebarOpen(false)} href="/admin/settings" className={"flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition " + (pathname.startsWith("/admin/settings") ? "bg-orange-50 text-orange-700" : "text-slate-600 hover:bg-slate-50")}>
-            <Settings className="h-5 w-5" />
-            Platform settings
-          </Link>
+          {visibleNavigation.map((item) => {
+            const Icon = item.icon;
+            const active = item.href === "/admin" ? pathname === "/admin" : pathname.startsWith(item.href);
+            return <Link key={item.href} onClick={() => setSidebarOpen(false)} href={item.href} className={`flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition ${active ? "bg-orange-50 text-orange-700" : "text-slate-600 hover:bg-slate-50"}`}><Icon className="h-5 w-5" />{item.label}</Link>;
+          })}
           <div className="my-5 rounded-xl bg-slate-50 p-3 text-xs leading-5 text-slate-500">
             Activation, delivery operations, financial controls, and platform settings will appear here as their protected workflows are added.
           </div>
@@ -160,7 +147,16 @@ export function AdminAppShell({
         <div className="mb-4 hidden justify-end md:flex">
           <AdminNotificationBell />
         </div>
-        {children}
+        {hasRouteAccess ? <>
+          {isReadOnly && <div className="mb-5 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-800">Read-only access: you can view this area, but only an administrator with write access can make changes.</div>}
+          <div className={isReadOnly ? "[&_button:not([data-admin-read-action])]:hidden [&_button.text-left]:!flex" : ""}>{children}</div>
+        </> : (
+          <section className="mx-auto mt-16 max-w-lg rounded-2xl border border-amber-200 bg-white p-7 text-center shadow-sm">
+            <ShieldCheck className="mx-auto h-10 w-10 text-amber-600" />
+            <h1 className="mt-4 text-xl font-bold">You don&apos;t have access</h1>
+            <p className="mt-2 text-sm leading-6 text-slate-600">The master administrator has not assigned this admin area to your account.</p>
+          </section>
+        )}
       </main>
     </div>
   );

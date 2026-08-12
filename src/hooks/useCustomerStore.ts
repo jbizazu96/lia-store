@@ -400,6 +400,8 @@ export function useCustomerStore({
                   distance,
                   0,
                   marketplacePolicy,
+                  marketplacePolicy.peakSurchargeEnabled,
+                  applicablePricing?.decision?.zoneAccessType !== "customer_order_zone",
                 );
 
               deliveryFee =
@@ -432,6 +434,7 @@ export function useCustomerStore({
                 getDeliveryFeeDisplay(
                   distance,
                   marketplacePolicy,
+                  applicablePricing?.decision?.zoneAccessType !== "customer_order_zone",
                 ),
 
               estimatedPrepTime:
@@ -528,7 +531,9 @@ export function useCustomerStore({
           }
         );
 
-        const exceedsDeliveryRadius = distance > marketplacePolicy.maxRadiusMiles;
+        const exceedsDeliveryRadius =
+          applicablePricing?.decision?.zoneAccessType !== "customer_order_zone" &&
+          distance > marketplacePolicy.maxRadiusMiles;
         const cannotOrder = exceedsDeliveryRadius || applicablePricing?.decision?.allowed === false;
 
         setDistanceValue(distance);
@@ -653,7 +658,8 @@ export function useCustomerStore({
     distanceValue,
     isOutsideDeliveryRadius:
       applicablePricing?.decision?.allowed === false ||
-      distanceValue > (marketplacePolicy?.maxRadiusMiles ?? Infinity),
+      (applicablePricing?.decision?.zoneAccessType !== "customer_order_zone" &&
+        distanceValue > (marketplacePolicy?.maxRadiusMiles ?? Infinity)),
     closeDistanceWarning,
     openDistanceWarning,
   };

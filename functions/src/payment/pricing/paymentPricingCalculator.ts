@@ -51,11 +51,16 @@ export interface CalculatePaymentPricingInput {
   tipAmount: number;
 
   /*
-    Optional peak-pricing flag.
-
-    The current checkout flow will use false.
+    Trusted peak-pricing state from the applicable default or zone policy.
   */
   isPeakTime?: boolean;
+
+  /*
+    An administrator-approved customer Order Zone is allowed to bypass the
+    normal marketplace radius. The route remains trusted and is still used
+    to calculate the complete distance-based delivery fee.
+  */
+  enforceMaximumDistance?: boolean;
 }
 
 
@@ -113,6 +118,7 @@ function requireValidCentAmount(
 function requireValidDistance(
   distanceMiles: number,
   policy: MarketplacePricingPolicy,
+  enforceMaximumDistance: boolean,
 ): number {
   if (
     !Number.isFinite(distanceMiles) ||
@@ -124,6 +130,7 @@ function requireValidDistance(
   }
 
   if (
+    enforceMaximumDistance &&
     distanceMiles >
     policy.maxRadiusMiles
   ) {
@@ -281,6 +288,7 @@ export function calculatePaymentPricing(
     requireValidDistance(
       input.distanceMiles,
       input.policy,
+      input.enforceMaximumDistance ?? true,
     );
 
   const {

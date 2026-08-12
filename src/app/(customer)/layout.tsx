@@ -7,6 +7,7 @@ import {
   CustomerOrdersProvider,
 } from "@/context/CustomerOrdersContext";
 import { CustomerOfflineNotice } from "@/components/customer/ui/CustomerOfflineNotice";
+import {CustomerPushPermissionPrompt} from "@/components/customer/native/CustomerPushPermissionPrompt";
 
 export default function CustomerLayout({
   children,
@@ -21,6 +22,7 @@ export default function CustomerLayout({
     >
       <CustomerOrdersProvider>
         <CustomerOfflineNotice />
+        <CustomerPushPermissionPrompt />
         {children}
       </CustomerOrdersProvider>
     </RoleGuard>

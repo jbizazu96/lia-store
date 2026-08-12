@@ -298,7 +298,7 @@ export function RefundClaimCard({
             setError("");
             setShowForm(true);
           }}
-          className="mt-4 rounded-xl bg-orange-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-orange-600"
+          className="mt-4 rounded-full bg-orange-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-orange-600"
         >
           Start a refund or return claim
         </button>
@@ -340,7 +340,7 @@ export function RefundClaimCard({
               <button
                 type="button"
                 onClick={() => setEvidencePickerOpen(true)}
-                className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-orange-300 bg-orange-50 px-3 py-3 text-sm font-semibold text-orange-700 transition hover:bg-orange-100"
+                className="mt-2 flex w-full items-center justify-center gap-2 rounded-full border border-dashed border-orange-300 bg-orange-50 px-3 py-3 text-sm font-semibold text-orange-700 transition hover:bg-orange-100"
               >
                 <ImagePlus className="h-4 w-4" />
                 {evidenceFile ? evidenceFile.name : "Choose photo"}
@@ -352,7 +352,7 @@ export function RefundClaimCard({
               type="button"
               disabled={saving}
               onClick={() => void submit()}
-              className="inline-flex items-center gap-2 rounded-xl bg-orange-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-orange-600 disabled:opacity-60"
+              className="inline-flex items-center gap-2 rounded-full bg-orange-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-orange-600 disabled:opacity-60"
             >
               {saving && <LoaderCircle className="h-4 w-4 animate-spin" />}
               Submit claim
@@ -364,7 +364,7 @@ export function RefundClaimCard({
                 setError("");
                 setShowForm(false);
               }}
-              className="rounded-xl px-4 py-2.5 text-sm font-semibold text-gray-600 hover:bg-gray-100"
+              className="rounded-full px-4 py-2.5 text-sm font-semibold text-gray-600 hover:bg-gray-100"
             >
               Cancel
             </button>
@@ -411,7 +411,7 @@ export function RefundClaimCard({
             <button
               type="button"
               onClick={() => setEvidencePickerOpen(false)}
-              className="mt-4 w-full rounded-xl py-2 text-sm font-semibold text-gray-600 hover:bg-gray-100"
+              className="mt-4 w-full rounded-full py-2 text-sm font-semibold text-gray-600 hover:bg-gray-100"
             >
               Cancel
             </button>

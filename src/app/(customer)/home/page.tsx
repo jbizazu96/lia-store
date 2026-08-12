@@ -238,12 +238,19 @@ export default function CustomerHomePage() {
 
             const applicable = applicablePricing[store.id];
             const storePolicy = applicable?.policy ?? marketplacePolicy;
-            const pricing = calculateDeliveryFee(distance, 0, storePolicy);
+            const isOrderZone = applicable?.decision?.zoneAccessType === "customer_order_zone";
+            const pricing = calculateDeliveryFee(
+              distance,
+              0,
+              storePolicy,
+              storePolicy.peakSurchargeEnabled,
+              !isOrderZone,
+            );
 
             return storeMapper.toCustomerStore(store, {
               distance,
               deliveryFee: pricing.deliveryFee,
-              deliveryFeeDisplay: getDeliveryFeeDisplay(distance, storePolicy),
+              deliveryFeeDisplay: getDeliveryFeeDisplay(distance, storePolicy, !isOrderZone),
               estimatedPrepTime: getEstimatedTimeNumber(distance, orderDeliveryPolicy),
               estimatedDeliveryTime: getEstimatedTime(distance, orderDeliveryPolicy),
               categories: [],
@@ -282,12 +289,16 @@ export default function CustomerHomePage() {
         // Split stores into nearby (≤25mi) and far (>25mi)
         const nearby = activeStores.filter(
           (store) =>
-            store.zoneAccessAllowed && store.distance <= store.maxDeliveryMiles
+            store.zoneAccessAllowed &&
+            (store.zoneAccessType === "customer_order_zone" ||
+              store.distance <= store.maxDeliveryMiles)
         );
 
         const far = activeStores.filter(
           (store) =>
-            !store.zoneAccessAllowed || store.distance > store.maxDeliveryMiles
+            !store.zoneAccessAllowed ||
+            (store.zoneAccessType !== "customer_order_zone" &&
+              store.distance > store.maxDeliveryMiles)
         );
         
         if (isMounted && requestId === latestRequest) {
@@ -334,7 +345,10 @@ export default function CustomerHomePage() {
     const distance = store.distance;
     const maxRadius = store.maxDeliveryMiles || marketplacePolicy?.maxRadiusMiles || 0;
     
-    if (!store.zoneAccessAllowed || distance > maxRadius) {
+    if (
+      !store.zoneAccessAllowed ||
+      (store.zoneAccessType !== "customer_order_zone" && distance > maxRadius)
+    ) {
       setSelectedStore(store);
       setSelectedDistance(distance);
       setShowDistanceWarning(true);

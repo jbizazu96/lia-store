@@ -17,7 +17,7 @@ import {
   onCall,
 } from "firebase-functions/v2/https";
 import {
-  requireActiveAdmin,
+  requireAdminPermission,
 } from "../admin/adminAuthorizationService";
 import {
   writeAdminAuditLog,
@@ -51,7 +51,7 @@ export const backfillAdminPlatformDailyReports = onCall(
     memory: "512MiB",
   },
   async (request) => {
-    const administrator = await requireActiveAdmin(request);
+    const administrator = await requireAdminPermission(request, "reports", "write");
     const [orders, customers] = await Promise.all([
       db.collection("orders").limit(MAX_BACKFILL_DOCUMENTS).get(),
       db.collection("users")

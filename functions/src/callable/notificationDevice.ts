@@ -176,3 +176,29 @@ export const registerNotificationDevice = onCall(
     };
   },
 );
+
+export const deactivateNotificationDevice = onCall(
+  {region: "us-central1"},
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Sign in before changing notification access.");
+    }
+    const deviceId = text(record(request.data).deviceId);
+    if (!validDeviceId(deviceId)) {
+      throw new HttpsError("invalid-argument", "A valid notification device is required.");
+    }
+    const reference = db.collection("notificationDevices")
+      .doc(`${request.auth.uid}_${deviceId}`);
+    const snapshot = await reference.get();
+    if (snapshot.exists && text(snapshot.data()?.uid) !== request.auth.uid) {
+      throw new HttpsError("permission-denied", "This notification device belongs to another account.");
+    }
+    if (snapshot.exists) {
+      await reference.update({
+        active: false,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+    }
+    return {deactivated: snapshot.exists};
+  },
+);

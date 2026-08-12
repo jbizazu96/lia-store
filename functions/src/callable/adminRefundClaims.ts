@@ -14,7 +14,7 @@ import * as admin from "firebase-admin";
 import {FieldValue, getFirestore} from "firebase-admin/firestore";
 import {getStorage} from "firebase-admin/storage";
 import {HttpsError, onCall} from "firebase-functions/v2/https";
-import {requireActiveAdmin} from "../admin/adminAuthorizationService";
+import {requireAdminPermission} from "../admin/adminAuthorizationService";
 import {writeAdminAuditLog} from "../admin/adminAuditLogService";
 import {
   calculatePaymentRefundAllocation,
@@ -112,7 +112,7 @@ function summary(
 }
 
 export const getAdminRefundClaims = onCall({region: "us-central1"}, async (request) => {
-  await requireActiveAdmin(request); const requestedStatus = text(record(request.data).status) || "pending_review";
+  await requireAdminPermission(request, "refunds"); const requestedStatus = text(record(request.data).status) || "pending_review";
   const valid = new Set(["pending_review", "approved", "rejected", "all"]); if (!valid.has(requestedStatus)) throw new HttpsError("invalid-argument", "Choose a valid claim status.");
   const snapshot = requestedStatus === "all" ? await db.collection("refundClaims").orderBy("createdAt", "desc").limit(100).get() : await db.collection("refundClaims").where("status", "==", requestedStatus).limit(100).get();
   const orders = snapshot.docs.length
@@ -134,14 +134,14 @@ export const getAdminRefundClaims = onCall({region: "us-central1"}, async (reque
 });
 
 export const getAdminRefundClaim = onCall({region: "us-central1"}, async (request) => {
-  await requireActiveAdmin(request); const claimId = identifier(record(request.data).claimId, "Claim"); const claim = await db.collection("refundClaims").doc(claimId).get();
+  await requireAdminPermission(request, "refunds"); const claimId = identifier(record(request.data).claimId, "Claim"); const claim = await db.collection("refundClaims").doc(claimId).get();
   if (!claim.exists) throw new HttpsError("not-found", "The refund claim was not found.");
   const data = claim.data() ?? {}; const orderId = identifier(data.orderId, "Order"); const order = await db.collection("orders").doc(orderId).get(); const orderData = order.data() ?? {}; const pricing = record(orderData.pricing); const customer = record(orderData.customer); const decision = record(data.decision); const refundId = text(data.refundId); const refund = refundId ? await db.collection("paymentRefunds").doc(refundId).get() : null; const customerId = text(data.customerId); const evidence = record(data.evidence); const evidenceUrl = await signedEvidenceUrl(evidence, customerId, orderId);
   return {id: claim.id, status: status(data.status), reason: text(data.reason), description: text(data.description), createdAt: timestamp(data.createdAt), customer: {id: customerId, name: text(customer.name) || "Customer", email: text(customer.email) || null}, order: {id: order.id, orderNumber: text(orderData.orderNumber) || "Unavailable", status: text(orderData.status), currency: text(pricing.currency) || "usd", pricing: {merchandiseAmount: number(pricing.subtotalAmount), taxAmount: number(pricing.taxAmount), deliveryFeeAmount: number(pricing.deliveryFeeAmount), serviceFeeAmount: number(pricing.serviceFeeAmount), driverTipAmount: number(pricing.tipAmount), totalAmount: number(pricing.totalAmount)}}, evidence: evidenceUrl ? {imageUrl: evidenceUrl, contentType: text(evidence.contentType) || "image"} : null, decision: {reason: text(decision.reason) || null, decidedAt: timestamp(decision.decidedAt), decidedBy: text(decision.decidedBy) || null}, refund: refund?.exists ? {id: refund.id, status: text(refund.data()?.status), amount: number(record(refund.data()?.allocation).totalAmount), completedAt: timestamp(refund.data()?.completedAt), lastError: text(refund.data()?.lastError) || null} : null};
 });
 
 export const decideAdminRefundClaim = onCall({region: "us-central1"}, async (request) => {
-  const administrator = await requireActiveAdmin(request); const input = record(request.data); const claimId = identifier(input.claimId, "Claim"); const decision = text(input.decision); const note = text(input.note);
+  const administrator = await requireAdminPermission(request, "refunds", "write"); const input = record(request.data); const claimId = identifier(input.claimId, "Claim"); const decision = text(input.decision); const note = text(input.note);
   if (decision !== "approved" && decision !== "rejected") throw new HttpsError("invalid-argument", "Choose approve or reject.");
   if (note.length > 2_000 || (decision === "rejected" && !note)) throw new HttpsError("invalid-argument", "A rejection reason of up to 2,000 characters is required.");
   const claimReference = db.collection("refundClaims").doc(claimId); const claim = await claimReference.get(); const claimData = claim.data() ?? {};

@@ -13,10 +13,14 @@ Complete these checks during native development and repeat them on release candi
 - Enable Google as a Firebase Authentication provider. Add the Android SHA-1 fingerprint and enable the plugin's Google dependencies in `android/variables.gradle` after creating Android.
 - Add the reversed Google client ID URL scheme and the Firebase Authentication Google pod configuration after creating iOS.
 - Configure APNs credentials in Firebase for iOS, then confirm that FCM tokens can receive an APNs notification.
+- After creating each native project, run `npx cap sync`. Confirm that `@capacitor-firebase/messaging` and `capacitor-native-settings` appear in the synchronized plugin list.
+- Follow the Firebase Messaging iOS setup in the plugin documentation: forward remote-notification registration and receipt callbacks from `AppDelegate.swift`. Do not reinstall `@capacitor/push-notifications`; it conflicts with the Firebase Messaging plugin used to obtain iOS FCM tokens.
+- Add the recommended Android monochrome notification icon metadata after the Android project is created.
 
 ## Push and deep-link tests
 
-- Opt in from Profile > Notifications. Confirm no permission prompt appears immediately after sign-in.
+- On the first authenticated customer app open, confirm the LIA notification explanation appears once before the native permission dialog.
+- Test both first-open choices. “Not now” must leave notification controls available in Profile; “Allow notifications” must register an FCM token and show the enabled confirmation.
 - Tap each push type from background and terminated states: store, product, order, claim, refund, and promotion.
 - Verify each opens only an internal LIA path and the correct account type; sign out, switch account, and confirm the old account no longer receives pushes.
 - Test denied permission, later enabling it in system Settings, a token refresh, and reinstalling the app.

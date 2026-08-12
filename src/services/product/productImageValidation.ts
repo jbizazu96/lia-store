@@ -19,6 +19,7 @@ export const SUPPORTED_PRODUCT_IMAGE_TYPES = [
   "image/jpeg",
   "image/png",
   "image/webp",
+  "image/avif",
   "image/heic",
   "image/heif",
 ] as const;
@@ -31,6 +32,7 @@ const IMAGE_TYPE_BY_EXTENSION: Record<
   jpeg: "image/jpeg",
   png: "image/png",
   webp: "image/webp",
+  avif: "image/avif",
   heic: "image/heic",
   heif: "image/heif",
 };
@@ -74,7 +76,7 @@ export function validateProductImageFile(
 
   if (!contentType) {
     throw new Error(
-      "Please upload a JPG, PNG, WebP, or HEIC image."
+      "Please upload a JPG, PNG, WebP, AVIF, or HEIC image."
     );
   }
 

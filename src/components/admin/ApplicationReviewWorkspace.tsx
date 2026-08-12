@@ -321,7 +321,7 @@ export function ApplicationReviewWorkspace({
 
   return (
     <section>
-      {applicationId && <button type="button" onClick={() => router.push(`/admin/${type === "store" ? "store-applications" : "driver-applications"}`)} className="mb-5 inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-bold text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50"><ChevronRight className="h-4 w-4 rotate-180" />Back to applications</button>}
+      {applicationId && <button data-admin-read-action type="button" onClick={() => router.push(`/admin/${type === "store" ? "store-applications" : "driver-applications"}`)} className="mb-5 inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-bold text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50"><ChevronRight className="h-4 w-4 rotate-180" />Back to applications</button>}
       <p className="text-sm font-bold tracking-wide text-orange-600">
         {type === "store" ? "STORE APPLICATIONS" : "DRIVER APPLICATIONS"}
       </p>
@@ -330,7 +330,7 @@ export function ApplicationReviewWorkspace({
 
       {!applicationId && <div className="mt-6 flex flex-wrap gap-2">
         {statuses.map((item) => (
-          <button key={item.value} type="button" onClick={() => setStatus(item.value)} className={`rounded-full px-4 py-2 text-sm font-bold ${status === item.value ? "bg-orange-600 text-white" : "bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50"}`}>
+          <button data-admin-read-action key={item.value} type="button" onClick={() => setStatus(item.value)} className={`rounded-full px-4 py-2 text-sm font-bold ${status === item.value ? "bg-orange-600 text-white" : "bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50"}`}>
             {item.label}
           </button>
         ))}
