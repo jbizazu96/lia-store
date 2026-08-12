@@ -16,6 +16,7 @@ import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { defineSecret, defineString } from "firebase-functions/params";
 import { mapStripeAccount } from "../stripe/stripeConnectMapper";
 import { stripeConnectPersistence } from "../stripe/stripeConnectPersistence";
+import {enforceCallableAbuseProtection} from "../security/callableAbuseProtection";
 
 if (admin.apps.length === 0) admin.initializeApp();
 
@@ -58,6 +59,7 @@ async function persistNewDriverAccount(driver: FirebaseFirestore.DocumentSnapsho
 
 export const createOrRetrieveDriverStripeAccount = onCall({ region: "us-central1", secrets: [stripeSecretKey] }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in before managing Stripe.");
+  await enforceCallableAbuseProtection({operation: "driver-stripe-account", uid: request.auth.uid, appCheckVerified: Boolean(request.app), maximumRequests: 5, windowSeconds: 3_600});
   try {
     const driver = await requireDriver(request.auth.uid); const data = driver.data() ?? {}; const accountId = text(data.stripeAccountId);
     if (accountId && text(data.stripeConnectApiVersion) !== "v2") throw new HttpsError("failed-precondition", "This driver has a legacy Stripe connection. Contact LIA support to reconnect it.");
@@ -70,6 +72,7 @@ export const createOrRetrieveDriverStripeAccount = onCall({ region: "us-central1
 
 export const getDriverStripeAccountStatus = onCall({ region: "us-central1", secrets: [stripeSecretKey] }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in before managing Stripe.");
+  await enforceCallableAbuseProtection({operation: "driver-stripe-status", uid: request.auth.uid, appCheckVerified: Boolean(request.app), maximumRequests: 30, windowSeconds: 600});
   try {
     const driver = await requireDriver(request.auth.uid); const accountId = text(driver.data()?.stripeAccountId);
     if (!accountId) return { account: null, connected: false };
@@ -81,6 +84,7 @@ export const getDriverStripeAccountStatus = onCall({ region: "us-central1", secr
 
 export const createDriverStripeOnboardingLink = onCall({ region: "us-central1", secrets: [stripeSecretKey] }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in before managing Stripe.");
+  await enforceCallableAbuseProtection({operation: "driver-stripe-onboarding-link", uid: request.auth.uid, appCheckVerified: Boolean(request.app), maximumRequests: 10, windowSeconds: 600});
   try {
     const driver = await requireDriver(request.auth.uid); const accountId = text(driver.data()?.stripeAccountId);
     if (!accountId) throw new HttpsError("failed-precondition", "Create the driver payout account before starting Stripe onboarding.");

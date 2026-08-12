@@ -12,6 +12,9 @@
 
 # testing
 /coverage
+/playwright-report/
+/test-results/
+/.firebase-test/
 
 # next.js
 /.next/
@@ -31,6 +34,8 @@
 
 # debug
 npm-debug.log*
+firebase-debug.log
+functions/firebase-debug.log
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*

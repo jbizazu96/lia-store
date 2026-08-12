@@ -23,6 +23,7 @@ import {
 } from "firebase-functions/params";
 import {normalizeUsStateCode} from "../common/usStateCodes";
 import {resolveDeliveryZoneForAddress, zoneFields} from "../delivery/deliveryZoneAssignmentService";
+import {enforceCallableAbuseProtection} from "../security/callableAbuseProtection";
 
 if (admin.apps.length === 0) {
   admin.initializeApp();
@@ -264,6 +265,7 @@ export const saveCustomerDefaultAddress = onCall(
   { region: "us-central1", secrets: [googleMapsApiKey] },
   async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Sign in to save your delivery address.");
+    await enforceCallableAbuseProtection({operation: "customer-address-geocode", uid: request.auth.uid, appCheckVerified: Boolean(request.app), maximumRequests: 10, windowSeconds: 3_600});
     const { reference } = await requireCustomer(request.auth.uid);
     const address = await verifyAddress(isRecord(request.data) ? request.data : {});
     const zone = await resolveDeliveryZoneForAddress(address.city, address.state, address.zip, address.placeId);
@@ -469,6 +471,7 @@ export const beginCustomerProfileImageUpload = onCall(
   { region: "us-central1" },
   async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Sign in to upload a profile photo.");
+    await enforceCallableAbuseProtection({operation: "customer-profile-image-upload", uid: request.auth.uid, appCheckVerified: Boolean(request.app), maximumRequests: 20, windowSeconds: 3_600});
     const { reference } = await requireCustomer(request.auth.uid);
     const input = isRecord(request.data) ? request.data : {};
     const contentType = text(input.contentType);

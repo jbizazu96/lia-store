@@ -7,7 +7,34 @@
 |
 */
 
-export function mapOrderToShipday(order: any) {
+interface ShipdayOrderInput {
+  orderNumber: string;
+  customer: {
+    name: string;
+    address: string;
+    email: string;
+    phone: string;
+    latitude: number;
+    longitude: number;
+  };
+  store: {
+    name: string;
+    address: string;
+    phone: string;
+    latitude: number;
+    longitude: number;
+  };
+  delivery: {instructions?: string | null};
+  pricing: {
+    deliveryFee: number;
+    tax: number;
+    tip: number;
+    total: number;
+  };
+}
+
+export function mapOrderToShipday(rawOrder: Record<string, unknown>) {
+  const order = rawOrder as unknown as ShipdayOrderInput;
   return {
     orderNumber: order.orderNumber,
 

@@ -18,6 +18,7 @@ import {
 } from "firebase-admin/firestore";
 import {getStorage} from "firebase-admin/storage";
 import {HttpsError, onCall} from "firebase-functions/v2/https";
+import {enforceCallableAbuseProtection} from "../security/callableAbuseProtection";
 
 if (admin.apps.length === 0) admin.initializeApp();
 
@@ -118,6 +119,8 @@ export const beginCustomerRefundClaimEvidenceUpload = onCall(
         "Sign in to upload claim evidence.",
       );
     }
+
+    await enforceCallableAbuseProtection({operation: "refund-evidence-upload", uid: request.auth.uid, appCheckVerified: Boolean(request.app), maximumRequests: 20, windowSeconds: 3_600});
 
     const customerId = request.auth.uid;
     await requireActiveCustomer(customerId);

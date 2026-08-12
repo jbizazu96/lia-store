@@ -20,6 +20,7 @@ import {
 import { useAuth } from "./AuthContext";
 
 import { notificationService } from "@/services/notification/notificationService";
+import {listenForNotificationMutations} from "@/services/notification/notificationSync";
 
 interface NotificationContextType {
 
@@ -62,6 +63,14 @@ export function NotificationProvider({
     return unsubscribe;
 
   }, [user]);
+
+  useEffect(() => listenForNotificationMutations("user", (mutation) => {
+    if (mutation.action === "read-one") {
+      setUnreadCount((count) => Math.max(0, count - 1));
+    } else {
+      setUnreadCount(0);
+    }
+  }), []);
 
   return (
 

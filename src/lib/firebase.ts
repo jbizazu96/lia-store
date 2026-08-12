@@ -8,6 +8,10 @@ import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getFunctions } from "firebase/functions";
 import { getStorage } from "firebase/storage";
+import {
+  ReCaptchaEnterpriseProvider,
+  initializeAppCheck,
+} from "firebase/app-check";
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -33,6 +37,27 @@ if (missingConfig.length > 0) {
 
 // Initialize Firebase
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
+
+/*
+ * App Check rollout is intentionally opt-in until web, PWA, iOS, and Android
+ * have registered providers. Supplying the public Enterprise site key starts
+ * sending tokens immediately; backend strict enforcement is enabled later.
+ */
+const appCheckSiteKey = process.env.NEXT_PUBLIC_FIREBASE_APP_CHECK_SITE_KEY;
+const appCheckRuntime = globalThis as typeof globalThis & {
+  __liaAppCheckInitialized?: boolean;
+};
+if (
+  typeof window !== "undefined" &&
+  appCheckSiteKey &&
+  !appCheckRuntime.__liaAppCheckInitialized
+) {
+  initializeAppCheck(app, {
+    provider: new ReCaptchaEnterpriseProvider(appCheckSiteKey),
+    isTokenAutoRefreshEnabled: true,
+  });
+  appCheckRuntime.__liaAppCheckInitialized = true;
+}
 
 // Export Firebase instances
 export const auth = getAuth(app);

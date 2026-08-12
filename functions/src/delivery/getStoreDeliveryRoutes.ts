@@ -16,6 +16,7 @@ import {
   checkoutDistanceService,
   hasValidCheckoutCoordinates,
 } from "../payment/checkout/checkoutDistanceService";
+import {enforceCallableAbuseProtection} from "../security/callableAbuseProtection";
 
 const db = getFirestore("default");
 
@@ -127,6 +128,14 @@ export const getStoreDeliveryRoutes =
           "You must be signed in to calculate delivery routes."
         );
       }
+
+      await enforceCallableAbuseProtection({
+        operation: "store-delivery-routes",
+        uid: request.auth.uid,
+        appCheckVerified: Boolean(request.app),
+        maximumRequests: 30,
+        windowSeconds: 60,
+      });
 
       const input = request.data as DeliveryRouteRequest;
       const storeIds = parseStoreIds(input.storeIds);

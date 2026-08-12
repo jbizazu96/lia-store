@@ -40,6 +40,30 @@ service firebase.storage {
         );
     }
 
+    function isSupportedStoreImage() {
+      return request.resource.size > 0 &&
+        request.resource.size <= 10 * 1024 * 1024 &&
+        request.resource.contentType.matches(
+          "image/(jpeg|png|webp|avif|heic|heif)"
+        );
+    }
+
+    function isSupportedCustomerProfileImage() {
+      return request.resource.size > 0 &&
+        request.resource.size <= 10 * 1024 * 1024 &&
+        request.resource.contentType.matches(
+          "image/(jpeg|png|webp|avif|heic|heif)"
+        );
+    }
+
+    function isStoreImageField(imageField) {
+      return imageField == "logo" ||
+        imageField == "banner" ||
+        imageField == "owner-photo-id" ||
+        imageField == "front" ||
+        imageField == "inside";
+    }
+
     function isSupportedClaimEvidence() {
       return request.resource.size > 0 &&
         request.resource.size <= 10 * 1024 * 1024 &&
@@ -90,7 +114,20 @@ service firebase.storage {
      * optimized files with the Admin SDK.
      */
     match /stores/{storeId}/images/originals/{imageField}/{fileName} {
-      allow read, write: if ownsStore(storeId);
+      allow read: if ownsStore(storeId);
+      allow write: if ownsStore(storeId) &&
+        isStoreImageField(imageField) &&
+        isSupportedStoreImage() &&
+        request.resource.metadata.storeId == storeId &&
+        request.resource.metadata.imageField == imageField &&
+        request.resource.metadata.processingType == "store-image-original" &&
+        request.resource.metadata.imageId.matches(
+          "[0-9]+-[0-9a-fA-F-]{36}"
+        ) &&
+        fileName.matches(
+          request.resource.metadata.imageId +
+          "\\.(jpg|jpeg|png|webp|avif|heic|heif)"
+        );
     }
 
     match /stores/{storeId}/images/optimized/{imageField}/{fileName} {
@@ -125,7 +162,20 @@ service firebase.storage {
 
     /* Customer profile photos are private to their authenticated owner. */
     match /users/{userId}/images/originals/profile/{fileName} {
-      allow read, write: if signedIn() && request.auth.uid == userId;
+      allow read: if signedIn() && request.auth.uid == userId;
+      allow write: if signedIn() &&
+        request.auth.uid == userId &&
+        isSupportedCustomerProfileImage() &&
+        request.resource.metadata.userId == userId &&
+        request.resource.metadata.processingType ==
+          "customer-profile-image-original" &&
+        request.resource.metadata.imageId.matches(
+          "[0-9]+-[0-9a-fA-F-]{36}"
+        ) &&
+        fileName.matches(
+          request.resource.metadata.imageId +
+          "\\.(jpg|jpeg|png|webp|avif|heic|heif)"
+        );
     }
 
     match /users/{userId}/images/optimized/profile/{fileName} {

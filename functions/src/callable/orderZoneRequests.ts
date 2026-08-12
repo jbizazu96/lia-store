@@ -2,6 +2,7 @@ import * as admin from "firebase-admin";
 import {FieldValue, getFirestore} from "firebase-admin/firestore";
 import {HttpsError, onCall} from "firebase-functions/v2/https";
 import {notifyActiveAdministrators} from "../admin/adminNotificationService";
+import {enforceCallableAbuseProtection} from "../security/callableAbuseProtection";
 
 if (admin.apps.length === 0) admin.initializeApp();
 const db = getFirestore("default");
@@ -14,6 +15,7 @@ export const createCustomerOrderZoneRequest = onCall(
   {region: "us-central1"},
   async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Sign in to request an Order Zone.");
+    await enforceCallableAbuseProtection({operation: "customer-order-zone-request", uid: request.auth.uid, appCheckVerified: Boolean(request.app), maximumRequests: 3, windowSeconds: 86_400});
     const input = request.data && typeof request.data === "object" ? request.data as Record<string, unknown> : {};
     const customerAddress = text(input.customerAddress, 300).toUpperCase();
     const requestedStoreCity = text(input.storeCity, 100).toUpperCase();

@@ -26,6 +26,7 @@ import type {
   DriverProfile,
   DriverWorkspaceSummary,
 } from "@/types/driverWorkspace";
+import {publishNotificationMutation} from "@/services/notification/notificationSync";
 
 export class DriverWorkspaceClientError extends Error {
   constructor(
@@ -113,17 +114,23 @@ export const driverWorkspaceClientService = {
       "getDriverWorkspaceNotifications"
     ),
 
-  markNotificationRead: (notificationId: string) =>
-    call(
-      "markDriverWorkspaceNotificationRead",
-      {notificationId}
-    ),
+  markNotificationRead: async (notificationId: string) => {
+    const result = await call("markDriverWorkspaceNotificationRead", {notificationId});
+    publishNotificationMutation({workspace: "driver", action: "read-one", notificationId});
+    return result;
+  },
 
-  markAllNotificationsRead: () =>
-    call<{success: boolean; marked: number}>("markAllDriverWorkspaceNotificationsRead"),
+  markAllNotificationsRead: async () => {
+    const result = await call<{success: boolean; marked: number}>("markAllDriverWorkspaceNotificationsRead");
+    publishNotificationMutation({workspace: "driver", action: "read-all"});
+    return result;
+  },
 
-  clearNotifications: () =>
-    call("clearDriverWorkspaceNotifications"),
+  clearNotifications: async () => {
+    const result = await call("clearDriverWorkspaceNotifications");
+    publishNotificationMutation({workspace: "driver", action: "clear-all"});
+    return result;
+  },
 
   submitDocumentReplacement: async (input: {
     field:

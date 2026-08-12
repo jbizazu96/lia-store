@@ -37,6 +37,7 @@ import {
   getStoreApplicationPolicy,
   type StoreApplicationPolicy,
 } from "../admin/storeApplicationPolicy";
+import {enforceCallableAbuseProtection} from "../security/callableAbuseProtection";
 
 if (admin.apps.length === 0) {
   admin.initializeApp();
@@ -46,15 +47,12 @@ const db = getFirestore("default");
 const googleMapsApiKey = defineSecret("GOOGLE_MAPS_API_KEY");
 const defaultMinimumOrder = 30;
 
-const storeImageFields = [
-  "logo",
-  "banner",
-  "owner-photo-id",
-  "front",
-  "inside",
-] as const;
-
-type StoreImageField = (typeof storeImageFields)[number];
+type StoreImageField =
+  | "logo"
+  | "banner"
+  | "owner-photo-id"
+  | "front"
+  | "inside";
 type StoreOnboardingStep =
   | "owner"
   | "store-information"
@@ -363,6 +361,7 @@ export const ensureStoreOnboardingDraft = onCall({ region: "us-central1" }, asyn
 
 export const saveStoreOnboardingOwner = onCall({ region: "us-central1", secrets: [googleMapsApiKey] }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in to save owner information.");
+  await enforceCallableAbuseProtection({operation: "store-owner-geocode", uid: request.auth.uid, appCheckVerified: Boolean(request.app), maximumRequests: 10, windowSeconds: 3_600});
   await requireStoreOwner(request.auth.uid);
   const input = requireRecord(requireRecord(request.data).owner);
   const state = normalizeState(text(input.state));
@@ -398,6 +397,7 @@ export const saveStoreOnboardingOwner = onCall({ region: "us-central1", secrets:
 
 export const saveStoreOnboardingStoreInformation = onCall({ region: "us-central1", secrets: [googleMapsApiKey] }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in to save store information.");
+  await enforceCallableAbuseProtection({operation: "store-address-geocode", uid: request.auth.uid, appCheckVerified: Boolean(request.app), maximumRequests: 10, windowSeconds: 3_600});
   await requireStoreOwner(request.auth.uid);
   const input = requireRecord(request.data);
   const state = normalizeState(text(input.state));

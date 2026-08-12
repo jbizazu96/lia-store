@@ -21,6 +21,7 @@ import {
   HttpsError,
   onCall,
 } from "firebase-functions/v2/https";
+import {enforceCallableAbuseProtection} from "../security/callableAbuseProtection";
 
 if (admin.apps.length === 0) {
   admin.initializeApp();
@@ -261,6 +262,14 @@ export const sendTestNotification = onCall(
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "Sign in to test notifications.");
     }
+
+    await enforceCallableAbuseProtection({
+      operation: "send-test-notification",
+      uid: request.auth.uid,
+      appCheckVerified: Boolean(request.app),
+      maximumRequests: 5,
+      windowSeconds: 600,
+    });
 
     const deviceId = text(record(request.data).deviceId);
     if (!validDeviceId(deviceId)) {

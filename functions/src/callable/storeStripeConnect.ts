@@ -28,6 +28,7 @@ import {
 import {
   stripeConnectPersistence,
 } from "../stripe/stripeConnectPersistence";
+import {enforceCallableAbuseProtection} from "../security/callableAbuseProtection";
 
 if (admin.apps.length === 0) {
   admin.initializeApp();
@@ -197,6 +198,7 @@ export const createOrRetrieveStoreStripeAccount = onCall({
   secrets: [stripeSecretKey],
 }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in before managing Stripe.");
+  await enforceCallableAbuseProtection({operation: "store-stripe-account", uid: request.auth.uid, appCheckVerified: Boolean(request.app), maximumRequests: 5, windowSeconds: 3_600});
   try {
     const storeId = requireStoreId(request.data);
     const store = await requireOwnedStore(request.auth.uid, storeId);
@@ -223,6 +225,7 @@ export const getStoreStripeAccountStatus = onCall({
   secrets: [stripeSecretKey],
 }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in before managing Stripe.");
+  await enforceCallableAbuseProtection({operation: "store-stripe-status", uid: request.auth.uid, appCheckVerified: Boolean(request.app), maximumRequests: 30, windowSeconds: 600});
   try {
     const storeId = requireStoreId(request.data);
     const store = await requireOwnedStore(request.auth.uid, storeId);
@@ -245,6 +248,7 @@ export const createStoreStripeOnboardingLink = onCall({
   secrets: [stripeSecretKey],
 }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in before managing Stripe.");
+  await enforceCallableAbuseProtection({operation: "store-stripe-onboarding-link", uid: request.auth.uid, appCheckVerified: Boolean(request.app), maximumRequests: 10, windowSeconds: 600});
   try {
     const storeId = requireStoreId(request.data);
     const returnContext = isRecord(request.data) && request.data.returnContext === "onboarding" ? "onboarding" : "settings";

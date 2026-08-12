@@ -19,6 +19,7 @@ import {
   HttpsError,
   onCall,
 } from "firebase-functions/v2/https";
+import {enforceCallableAbuseProtection} from "../security/callableAbuseProtection";
 
 if (admin.apps.length === 0) {
   admin.initializeApp();
@@ -151,6 +152,14 @@ export const createCustomerOrderSupportRequest =
           "Sign in to request order support."
         );
       }
+
+      await enforceCallableAbuseProtection({
+        operation: "customer-order-support-request",
+        uid: request.auth.uid,
+        appCheckVerified: Boolean(request.app),
+        maximumRequests: 10,
+        windowSeconds: 3_600,
+      });
 
       const customerId = request.auth.uid;
       await requireActiveCustomer(customerId);

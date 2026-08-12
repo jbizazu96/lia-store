@@ -70,6 +70,10 @@ export function nativeCustomerDestination(
   candidate: string,
   fallback = "/home",
 ): string {
+  if (!candidate.startsWith("/") || candidate.startsWith("//") || candidate.includes("\\")) {
+    return fallback;
+  }
+
   try {
     const parsed = new URL(candidate, "https://lia.invalid");
     return isNativeCustomerPath(parsed.pathname)

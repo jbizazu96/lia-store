@@ -56,6 +56,7 @@ import {
   getFirestore,
 } from "firebase-admin/firestore";
 import {requireAccountOperational} from "../../accountDeletion/accountDeletionAccessService";
+import {enforceCallableAbuseProtection} from "../../security/callableAbuseProtection";
 
 import {
   checkoutDataService,
@@ -585,6 +586,14 @@ export const prepareCheckoutPayment =
           "You must sign in before preparing payment."
         );
       }
+
+      await enforceCallableAbuseProtection({
+        operation: "prepare-checkout-payment",
+        uid: request.auth.uid,
+        appCheckVerified: Boolean(request.app),
+        maximumRequests: 10,
+        windowSeconds: 300,
+      });
 
       await requireAccountOperational(request.auth.uid);
 

@@ -21,6 +21,7 @@ import {
   getDriverApplicationPolicy,
   type DriverApplicationPolicy,
 } from "../admin/driverApplicationPolicy";
+import {enforceCallableAbuseProtection} from "../security/callableAbuseProtection";
 
 if (admin.apps.length === 0) admin.initializeApp();
 
@@ -107,6 +108,7 @@ export const saveDriverPersonalInformation = onCall({ region: "us-central1" }, a
 
 export const saveDriverAddressAndServiceArea = onCall({ region: "us-central1", secrets: [googleMapsApiKey] }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in to save onboarding.");
+  await enforceCallableAbuseProtection({operation: "driver-address-geocode", uid: request.auth.uid, appCheckVerified: Boolean(request.app), maximumRequests: 10, windowSeconds: 3_600});
   const input = record(request.data) ? request.data : {}; const address = record(input.address) ? input.address : {}; const area = record(input.serviceArea) ? input.serviceArea : {}; const addressState = state(address.state); const areaState = state(area.state); const radius = typeof area.preferredRadiusMiles === "number" ? area.preferredRadiusMiles : null;
   const policy = await getDriverApplicationPolicy();
   if (!text(address.street) || !text(address.city) || !addressState || !text(address.zip) || !text(area.city) || !areaState || !radius || radius <= 0 || radius > policy.maximumPreferredRadiusMiles) throw new HttpsError("invalid-argument", `Select a preferred service radius between 1 and ${policy.maximumPreferredRadiusMiles} miles.`);
@@ -125,6 +127,7 @@ export const saveDriverVehicleInformation = onCall({ region: "us-central1" }, as
 
 export const prepareDriverImageUpload = onCall({ region: "us-central1" }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in before uploading.");
+  await enforceCallableAbuseProtection({operation: "driver-image-upload", uid: request.auth.uid, appCheckVerified: Boolean(request.app), maximumRequests: 30, windowSeconds: 3_600});
   const input = record(request.data) ? request.data : {}; const field = text(input.field) as ImageField; const extension = text(input.extension).replace(/[^a-z0-9]/gi, "").toLowerCase(); const contentType = text(input.contentType);
   if (!imageFields.includes(field) || !["jpg", "jpeg", "png", "webp", "avif", "heic", "heif"].includes(extension) || !/^image\/(jpeg|png|webp|avif|heic|heif)$/.test(contentType)) throw new HttpsError("invalid-argument", "Choose a supported image file.");
   const { driver } = await driverFor(request.auth.uid); const uploadId = crypto.randomUUID(); const path = `drivers/${request.auth.uid}/images/originals/${field}/${uploadId}.${extension}`;

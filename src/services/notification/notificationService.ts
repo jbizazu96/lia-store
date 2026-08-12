@@ -38,6 +38,7 @@ import type {
 import {
   mapFirestoreNotification,
 } from "./notificationMapper";
+import {publishNotificationMutation} from "./notificationSync";
 
 export class NotificationService {
 
@@ -158,6 +159,12 @@ export class NotificationService {
 
     );
 
+    publishNotificationMutation({
+      workspace: "user",
+      action: "read-one",
+      notificationId,
+    });
+
   }
 
   /** Marks every unread notification for one user as read in safe batches. */
@@ -183,6 +190,8 @@ export class NotificationService {
 
       await batch.commit();
     }
+
+    publishNotificationMutation({workspace: "user", action: "read-all"});
   }
 
   /** Deletes one notification owned by the current user. */
@@ -200,6 +209,12 @@ export class NotificationService {
         notificationId
       )
     );
+
+    publishNotificationMutation({
+      workspace: "user",
+      action: "read-one",
+      notificationId,
+    });
   }
 
   /** Removes every notification for one user in Firestore-safe batches. */
@@ -228,6 +243,8 @@ export class NotificationService {
 
       await batch.commit();
     }
+
+    publishNotificationMutation({workspace: "user", action: "clear-all"});
   }
 
   /**

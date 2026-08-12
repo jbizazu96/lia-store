@@ -1,4 +1,10 @@
+import {notFound} from "next/navigation";
+
 export default function DebugPage() {
+  if (process.env.NODE_ENV !== "development") {
+    notFound();
+  }
+
   return (
     <div style={{ padding: 20 }}>
       <h1>Debug</h1>

@@ -340,6 +340,7 @@ function StoreLayoutContent({ children }: { children: React.ReactNode }) {
       await notificationService.markAsRead(user.uid, notification.id);
       // ✅ Remove from unread list immediately
       setUnreadNotifications(prev => prev.filter(n => n.id !== notification.id));
+      setUnreadNotificationCount((count) => Math.max(0, count - 1));
     }
     
     if (notification.deepLink) {
@@ -354,6 +355,8 @@ function StoreLayoutContent({ children }: { children: React.ReactNode }) {
     if (!user || unreadNotificationCount === 0) return;
 
     await notificationService.markAllAsRead(user.uid);
+    setUnreadNotifications([]);
+    setUnreadNotificationCount(0);
   };
 
   // ✅ Format time

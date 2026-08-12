@@ -28,6 +28,7 @@ import {
 import type {
   AdminNotification,
 } from "@/types/adminNotification";
+import {listenForNotificationMutations} from "@/services/notification/notificationSync";
 
 function relativeDate(value: string): string {
   const date = new Date(value);
@@ -56,6 +57,14 @@ export function AdminNotificationBell() {
     return () => window.clearInterval(interval);
   }, []);
 
+  useEffect(() => listenForNotificationMutations("admin", (mutation) => {
+    setNotifications((current) => mutation.action === "read-one"
+      ? current.map((item) => item.id === mutation.notificationId ? {...item, read: true} : item)
+      : mutation.action === "clear-all"
+        ? []
+        : current.map((item) => ({...item, read: true})));
+  }), []);
+
   useEffect(() => {
     const close = (event: MouseEvent) => {
       if (reference.current && !reference.current.contains(event.target as Node)) {
@@ -71,8 +80,10 @@ export function AdminNotificationBell() {
 
   const openNotification = (notification: AdminNotification) => {
     setOpen(false);
+    setNotifications((current) => current.map((item) => item.id === notification.id
+      ? {...item, read: true}
+      : item));
     void adminNotificationClientService.markRead(notification.id)
-      .then(load)
       .catch(() => undefined);
 
     if (notification.deepLink) router.push(notification.deepLink);

@@ -17,6 +17,7 @@ import {
 import type {
   AdminNotification,
 } from "@/types/adminNotification";
+import {publishNotificationMutation} from "@/services/notification/notificationSync";
 
 async function call<T>(name: string, data?: unknown): Promise<T> {
   const result = await httpsCallable<unknown, T>(functions, name)(data);
@@ -28,18 +29,25 @@ export const adminNotificationClientService = {
     "getAdminNotifications"
   ),
 
-  markRead: (notificationId: string) => call<{success: boolean}>(
-    "markAdminNotificationRead",
-    {notificationId}
-  ),
+  markRead: async (notificationId: string) => {
+    const result = await call<{success: boolean}>("markAdminNotificationRead", {notificationId});
+    publishNotificationMutation({workspace: "admin", action: "read-one", notificationId});
+    return result;
+  },
 
-  markAllRead: () => call<{success: boolean; marked: number}>(
-    "markAllAdminNotificationsRead"
-  ),
+  markAllRead: async () => {
+    const result = await call<{success: boolean; marked: number}>("markAllAdminNotificationsRead");
+    publishNotificationMutation({workspace: "admin", action: "read-all"});
+    return result;
+  },
 
-  clear: () => call<{
+  clear: async () => {
+    const result = await call<{
     success: boolean;
     cleared: number;
     hasMore: boolean;
-  }>("clearAdminNotifications"),
+    }>("clearAdminNotifications");
+    publishNotificationMutation({workspace: "admin", action: "clear-all"});
+    return result;
+  },
 };

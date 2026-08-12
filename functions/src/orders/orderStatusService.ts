@@ -39,6 +39,7 @@ import {
   UpdateData,
   getFirestore,
 } from "firebase-admin/firestore";
+import {isAllowedStoreOrderTransition} from "./orderStatusTransitions";
 
 
 const db =
@@ -290,42 +291,6 @@ function isStoreControlledOrderStatus(
 | • Modify an already cancelled order
 |
 */
-
-function isAllowedTransition(
-  currentStatus: BackendOrderStatus,
-  newStatus: StoreControlledOrderStatus
-): boolean {
-  if (newStatus === "cancelled") {
-    return (
-      currentStatus === "pending" ||
-      currentStatus === "accepted" ||
-      currentStatus === "preparing" ||
-      currentStatus === "ready_for_pickup"
-    );
-  }
-
-  const allowedTransitions: Partial<
-    Record<
-      BackendOrderStatus,
-      StoreControlledOrderStatus
-    >
-  > = {
-    pending:
-      "accepted",
-
-    accepted:
-      "preparing",
-
-    preparing:
-      "ready_for_pickup",
-  };
-
-  return (
-    allowedTransitions[currentStatus] ===
-    newStatus
-  );
-}
-
 
 /*
 |--------------------------------------------------------------------------
@@ -607,7 +572,7 @@ async function updateStoreOrderStatus(
       }
 
       if (
-        !isAllowedTransition(
+        !isAllowedStoreOrderTransition(
           previousStatus,
           newStatus
         )

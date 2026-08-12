@@ -232,7 +232,10 @@ export default function StoreNotificationsPage() {
                         if (!user) return;
                         setMarkingAll(true);
                         void notificationService.markAllAsRead(user.uid)
-                          .then(() => showSuccess("All notifications marked as read."))
+                          .then(() => {
+                            setNotifications((current) => current.map((item) => ({...item, read: true})));
+                            showSuccess("All notifications marked as read.");
+                          })
                           .finally(() => setMarkingAll(false));
                       }}
                       className="text-xs text-orange-600 font-medium hover:text-orange-700 transition"

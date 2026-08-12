@@ -436,7 +436,13 @@ service cloud.firestore {
           "updatedAt",
         ]);
 
-      allow delete: if isOperationalAccount(userId) || isAdmin();
+      /*
+       * Account removal must always run through the reviewed, resumable
+       * deletion engine. The engine uses the Admin SDK and therefore does
+       * not need a client-rule exception. This also prevents an administrator
+       * browser session from bypassing cleanup and audit steps.
+       */
+      allow delete: if false;
 
       match /addresses/{addressId} {
         allow read: if isOperationalAccount(userId) || isAdmin();
