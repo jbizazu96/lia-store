@@ -64,6 +64,27 @@ export function toSafeLiaPath(
   }
 }
 
+/**
+ * Order notification documents carry the Firestore order ID separately from
+ * their deep link. Prefer that structured field so older malformed or missing
+ * links still open the customer's order-details route.
+ */
+export function customerNotificationPath(
+  deepLink: unknown,
+  orderId: unknown,
+): string | null {
+  if (
+    typeof orderId === "string" &&
+    orderId.trim() &&
+    !orderId.includes("/") &&
+    !orderId.includes("\\")
+  ) {
+    return `/orders/${encodeURIComponent(orderId.trim())}`;
+  }
+
+  return toSafeLiaPath(deepLink);
+}
+
 export function openLiaDeepLink(
   candidate: unknown,
   fallback = "/home",

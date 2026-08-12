@@ -33,7 +33,7 @@ import {
 } from "@/components/notifications/NotificationCard";
 import { useConfirmation } from "@/context/ConfirmationContext";
 import { useSuccessToast } from "@/context/SuccessToastContext";
-import {toSafeLiaPath} from "@/services/notification/notificationDeepLink";
+import {customerNotificationPath} from "@/services/notification/notificationDeepLink";
 import {nativeCustomerDestination} from "@/services/navigation/nativeCustomerRoutes";
 
 export default function NotificationsPage() {
@@ -296,11 +296,12 @@ export default function NotificationsPage() {
                       setNotifications((current) => current.map((item) =>
                         item.id === notification.id ? {...item, read: true} : item
                       ));
-                      if (notification.deepLink) {
-                        const safePath = toSafeLiaPath(notification.deepLink);
-                        if (safePath) {
-                          router.push(nativeCustomerDestination(safePath));
-                        }
+                      const safePath = customerNotificationPath(
+                        notification.deepLink,
+                        notification.orderId,
+                      );
+                      if (safePath) {
+                        router.push(nativeCustomerDestination(safePath));
                       }
                     }}
                   />
@@ -335,11 +336,12 @@ export default function NotificationsPage() {
                       setNotifications((current) => current.map((item) =>
                         item.id === notification.id ? {...item, read: true} : item
                       ));
-                      if (notification.deepLink) {
-                        const safePath = toSafeLiaPath(notification.deepLink);
-                        if (safePath) {
-                          router.push(nativeCustomerDestination(safePath));
-                        }
+                      const safePath = customerNotificationPath(
+                        notification.deepLink,
+                        notification.orderId,
+                      );
+                      if (safePath) {
+                        router.push(nativeCustomerDestination(safePath));
                       }
                     }}
                   />

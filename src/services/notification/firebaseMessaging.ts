@@ -45,6 +45,12 @@ export class FirebaseMessaging {
   private foregroundMessageUnsubscribe: Unsubscribe | null = null;
   private registrationRefreshStarted = false;
 
+  /** Native push does not use the browser VAPID key. Hosted PWA builds do. */
+  isPushConfigured(): boolean {
+    return capacitorNotificationAdapter.isNativeApp() ||
+      Boolean(process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY?.trim());
+  }
+
   private deviceId(): string {
     const key = "lia.notification-device-id";
     const existing = window.localStorage.getItem(key);

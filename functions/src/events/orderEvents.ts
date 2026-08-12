@@ -156,7 +156,7 @@ export class OrderEvents {
       icon: "check-circle",
       color: "green",
       orderId,
-      navigationPath: `/orders/${orderId}`,
+      navigationPath: "/orders",
     });
 
     await notificationService.sendToUser(

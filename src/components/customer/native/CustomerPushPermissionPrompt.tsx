@@ -16,7 +16,7 @@ export function CustomerPushPermissionPrompt() {
     if (loading || !user) return;
     const eligible = Capacitor.isNativePlatform() ||
       firebaseMessaging.isInstalledWebApp();
-    if (!eligible) return;
+    if (!eligible || !firebaseMessaging.isPushConfigured()) return;
     let active = true;
     void firebaseMessaging.getPermissionStatus().then(async (permission) => {
       if (!active) return;
