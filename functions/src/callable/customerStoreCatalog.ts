@@ -28,7 +28,16 @@ if (admin.apps.length === 0) {
 }
 
 const db = getFirestore("default");
-const MAXIMUM_CATALOG_STORES = 200;
+const DEFAULT_CATALOG_PAGE_SIZE = 40;
+const MAXIMUM_CATALOG_PAGE_SIZE = 100;
+
+function pageSize(value: unknown): number {
+  const requested = typeof value === "number" ? Math.floor(value) : 0;
+  return Math.min(
+    MAXIMUM_CATALOG_PAGE_SIZE,
+    Math.max(1, requested || DEFAULT_CATALOG_PAGE_SIZE)
+  );
+}
 
 function text(value: unknown): string {
   return typeof value === "string" ? value : "";
@@ -117,17 +126,31 @@ export const getCustomerStoreCatalog = onCall(
   {
     region: "us-central1",
   },
-  async () => {
-    const snapshot = await db
+  async (request) => {
+    const size = pageSize(request.data?.pageSize);
+    const cursorName = text(request.data?.cursor?.name).trim();
+    const cursorId = text(request.data?.cursor?.id).trim();
+    let catalogQuery = db
       .collection("storePublicProfiles")
       .orderBy("name", "asc")
-      .limit(MAXIMUM_CATALOG_STORES)
-      .get();
+      .orderBy(admin.firestore.FieldPath.documentId(), "asc");
+
+    if (cursorName && cursorId) {
+      catalogQuery = catalogQuery.startAfter(cursorName, cursorId);
+    }
+
+    const snapshot = await catalogQuery.limit(size + 1).get();
+    const pageDocuments = snapshot.docs.slice(0, size);
+    const lastDocument = pageDocuments.at(-1);
 
     return {
-      stores: snapshot.docs.map((store) =>
+      stores: pageDocuments.map((store) =>
         publicStore(store.id, store.data())
       ),
+      hasMore: snapshot.docs.length > size,
+      nextCursor: lastDocument
+        ? {name: text(lastDocument.data().name), id: lastDocument.id}
+        : null,
     };
   }
 );

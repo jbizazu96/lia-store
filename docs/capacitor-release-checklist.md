@@ -19,8 +19,12 @@ Complete these checks during native development and repeat them on release candi
 
 ## Push and deep-link tests
 
-- On the first authenticated customer app open, confirm the LIA notification explanation appears once before the native permission dialog.
-- Test both first-open choices. “Not now” must leave notification controls available in Profile; “Allow notifications” must register an FCM token and show the enabled confirmation.
+- On the first authenticated customer app or installed PWA open, confirm the LIA notification explanation appears once before the system permission dialog.
+- Test both first-open choices. “Not now” must leave notification controls available in Profile; “Allow notifications” must register the current installation on the server before showing the enabled confirmation.
+- In Profile > Notifications, verify the server-confirmed registration time appears. Use “Send test notification” and confirm the push-service acceptance time updates.
+- Run the test notification on an installed iPhone PWA, Android PWA, native iOS app, and native Android app in each state: foreground, background, device locked, and app fully closed.
+- For the foreground test, keep LIA visible. For the remaining tests, send the test from another signed-in session so closing or backgrounding the target installation does not prevent initiating the test.
+- Confirm an expired or deleted server registration changes the profile state to “not registered” rather than “enabled.”
 - Tap each push type from background and terminated states: store, product, order, claim, refund, and promotion.
 - Verify each opens only an internal LIA path and the correct account type; sign out, switch account, and confirm the old account no longer receives pushes.
 - Test denied permission, later enabling it in system Settings, a token refresh, and reinstalling the app.

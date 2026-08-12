@@ -11,9 +11,6 @@ import {
   Capacitor,
 } from "@capacitor/core";
 import {
-  App,
-} from "@capacitor/app";
-import {
   FirebaseMessaging as NativeFirebaseMessaging,
 } from "@capacitor-firebase/messaging";
 import {
@@ -60,9 +57,12 @@ async function initializeNativeListeners(): Promise<void> {
 
   initialized = true;
 
-  await App.addListener("appUrlOpen", ({ url }) => {
-    openLiaDeepLink(url);
-  });
+  await NativeFirebaseMessaging.addListener(
+    "tokenReceived",
+    () => {
+      window.dispatchEvent(new Event("lia:native-notification-token-refresh"));
+    },
+  );
 
   await NativeFirebaseMessaging.addListener(
     "notificationActionPerformed",
@@ -74,11 +74,6 @@ async function initializeNativeListeners(): Promise<void> {
     },
   );
 
-  /* A cold app launch can carry the original notification URL. */
-  const launch = await App.getLaunchUrl();
-  if (launch?.url) {
-    openLiaDeepLink(launch.url);
-  }
 }
 
 async function nativePermission(): Promise<NotificationPermissionState> {

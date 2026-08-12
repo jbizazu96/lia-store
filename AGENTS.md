@@ -2,12 +2,12 @@
 
 ## Project Overview
 
-LIA is a multi-vendor African grocery delivery platform.
+LIA is a multi-vendor delivery marketplace for independent local and international stores. African markets are the initial specialty focus, with broader marketplace support built into the platform.
 
 The platform connects:
 
 * Customers
-* African Grocery Stores
+* Independent Grocery and Specialty Stores
 * Delivery Drivers
 * Platform Administrators
 
@@ -281,7 +281,7 @@ White
 
 Brand:
 
-African Grocery Delivery Platform
+Independent Local Marketplace and Delivery Platform
 
 All pages should work well on:
 

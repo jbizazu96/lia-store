@@ -8,6 +8,7 @@
 */
 import { auth, functions } from "@/lib/firebase";
 import {
+  deleteToken as deleteWebToken,
   getToken,
   onMessage,
   type Unsubscribe,
@@ -28,10 +29,21 @@ export type {
 
 export type NativeNotificationPreference = "accepted" | "declined" | null;
 
+export interface NotificationDeviceStatus {
+  registered: boolean;
+  active: boolean;
+  platform: string | null;
+  lastRegisteredAt: string | null;
+  lastPushAcceptedAt: string | null;
+  lastPushErrorAt: string | null;
+  lastPushErrorCode: string | null;
+}
+
 export const NATIVE_NOTIFICATION_STATE_EVENT = "lia:native-notification-state";
 
 export class FirebaseMessaging {
   private foregroundMessageUnsubscribe: Unsubscribe | null = null;
+  private registrationRefreshStarted = false;
 
   private deviceId(): string {
     const key = "lia.notification-device-id";
@@ -65,6 +77,16 @@ export class FirebaseMessaging {
     window.dispatchEvent(new Event(NATIVE_NOTIFICATION_STATE_EVENT));
   }
 
+  isInstalledWebApp(): boolean {
+    if (typeof window === "undefined" || capacitorNotificationAdapter.isNativeApp()) {
+      return false;
+    }
+
+    return window.matchMedia("(display-mode: standalone)").matches ||
+      ("standalone" in navigator &&
+        (navigator as Navigator & {standalone?: boolean}).standalone === true);
+  }
+
   private startForegroundMessageListener(): void {
     if (this.foregroundMessageUnsubscribe) {
       return;
@@ -82,8 +104,8 @@ export class FirebaseMessaging {
             return;
           }
 
-          const title = payload.notification?.title ?? "LIA";
-          const body = payload.notification?.body ??
+          const title = payload.data?.title ?? payload.notification?.title ?? "LIA";
+          const body = payload.data?.body ?? payload.notification?.body ??
             "You have a new update.";
           const notification = new Notification(title, {
             body,
@@ -274,7 +296,43 @@ export class FirebaseMessaging {
     });
 
     window.localStorage.setItem(cacheKey, registrationValue);
+    window.localStorage.setItem("lia.notification-last-refresh", String(Date.now()));
+    window.dispatchEvent(new Event(NATIVE_NOTIFICATION_STATE_EVENT));
     return true;
+  }
+
+  async getDeviceStatus(): Promise<NotificationDeviceStatus> {
+    const empty: NotificationDeviceStatus = {
+      registered: false,
+      active: false,
+      platform: null,
+      lastRegisteredAt: null,
+      lastPushAcceptedAt: null,
+      lastPushErrorAt: null,
+      lastPushErrorCode: null,
+    };
+
+    if (typeof window === "undefined" || !auth.currentUser) return empty;
+
+    const getStatus = httpsCallable<
+      {deviceId: string},
+      NotificationDeviceStatus
+    >(functions, "getNotificationDeviceStatus");
+    const result = await getStatus({deviceId: this.deviceId()});
+    return result.data;
+  }
+
+  async sendTestNotification(): Promise<void> {
+    if (typeof window === "undefined" || !auth.currentUser) {
+      throw new Error("Sign in before testing notifications.");
+    }
+
+    const sendTest = httpsCallable<
+      {deviceId: string},
+      {accepted: boolean; messageId: string}
+    >(functions, "sendTestNotification");
+    await sendTest({deviceId: this.deviceId()});
+    window.dispatchEvent(new Event(NATIVE_NOTIFICATION_STATE_EVENT));
   }
 
   async enableNativeNotifications(): Promise<NotificationPermissionState> {
@@ -317,7 +375,6 @@ export class FirebaseMessaging {
 
   async declineNativeNotifications(): Promise<void> {
     this.setNativePreference("declined");
-    if (!capacitorNotificationAdapter.isNativeApp()) return;
     const user = auth.currentUser;
     if (user) {
       const deactivate = httpsCallable<
@@ -328,7 +385,12 @@ export class FirebaseMessaging {
       window.localStorage.removeItem("lia.notification-device:" + user.uid);
     }
     if (await this.getPermissionStatus() === "granted") {
-      await capacitorNotificationAdapter.deleteToken();
+      if (capacitorNotificationAdapter.isNativeApp()) {
+        await capacitorNotificationAdapter.deleteToken();
+      } else {
+        const messaging = await getFirebaseMessaging();
+        if (messaging) await deleteWebToken(messaging);
+      }
     }
     window.dispatchEvent(new Event(NATIVE_NOTIFICATION_STATE_EVENT));
   }
@@ -346,12 +408,43 @@ export class FirebaseMessaging {
   async initialize(): Promise<void> {
     if (capacitorNotificationAdapter.isNativeApp()) {
       await capacitorNotificationAdapter.initialize();
+      this.startAutomaticRegistrationRefresh();
       return;
     }
 
     if (typeof window !== "undefined" && Notification.permission === "granted") {
       this.startForegroundMessageListener();
     }
+
+    this.startAutomaticRegistrationRefresh();
+  }
+
+  private startAutomaticRegistrationRefresh(): void {
+    if (typeof window === "undefined" || this.registrationRefreshStarted) return;
+    this.registrationRefreshStarted = true;
+
+    const refresh = () => {
+      if (!navigator.onLine || document.visibilityState === "hidden") return;
+      const lastRefresh = Number(
+        window.localStorage.getItem("lia.notification-last-refresh") ?? "0",
+      );
+      if (Number.isFinite(lastRefresh) && Date.now() - lastRefresh < 6 * 60 * 60 * 1000) {
+        return;
+      }
+      void this.registerDevice({requestPermission: false}).catch((error) => {
+        console.error("Unable to refresh notification registration:", error);
+      });
+    };
+
+    window.addEventListener("online", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    window.addEventListener("lia:native-notification-token-refresh", () => {
+      if (this.getNativePreference() !== "accepted") return;
+      void this.registerDevice({explicitUserAction: true}).catch((error) => {
+        console.error("Unable to save the refreshed notification token:", error);
+      });
+    });
+    window.setInterval(refresh, 6 * 60 * 60 * 1000);
   }
 
 }

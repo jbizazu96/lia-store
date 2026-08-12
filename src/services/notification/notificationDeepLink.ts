@@ -4,6 +4,11 @@
  * redirect.
  */
 
+import {Capacitor} from "@capacitor/core";
+import {
+  nativeCustomerDestination,
+} from "@/services/navigation/nativeCustomerRoutes";
+
 function configuredAppHost(): string | null {
   const configured = process.env.NEXT_PUBLIC_APP_URL?.trim();
 
@@ -67,7 +72,10 @@ export function openLiaDeepLink(
     return;
   }
 
+  const safePath = toSafeLiaPath(candidate) ?? fallback;
   window.location.assign(
-    toSafeLiaPath(candidate) ?? fallback,
+    Capacitor.isNativePlatform()
+      ? nativeCustomerDestination(safePath, fallback)
+      : safePath,
   );
 }

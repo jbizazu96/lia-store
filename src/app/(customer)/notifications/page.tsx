@@ -33,6 +33,8 @@ import {
 } from "@/components/notifications/NotificationCard";
 import { useConfirmation } from "@/context/ConfirmationContext";
 import { useSuccessToast } from "@/context/SuccessToastContext";
+import {toSafeLiaPath} from "@/services/notification/notificationDeepLink";
+import {nativeCustomerDestination} from "@/services/navigation/nativeCustomerRoutes";
 
 export default function NotificationsPage() {
   const {
@@ -45,6 +47,9 @@ export default function NotificationsPage() {
   const [listenerError, setListenerError] = useState<string | null>(null);
   const [clearing, setClearing] = useState(false);
   const [markingAll, setMarkingAll] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
+  const [nextCursor, setNextCursor] = useState<{createdAt: Date; id: string} | null>(null);
   const { confirm } = useConfirmation();
   const { showSuccess } = useSuccessToast();
 
@@ -62,6 +67,7 @@ export default function NotificationsPage() {
     if (!confirmed) return;
 
     await notificationService.deleteNotification(user.uid, notification.id);
+    setNotifications((current) => current.filter((item) => item.id !== notification.id));
     showSuccess("Notification deleted.");
   };
 
@@ -81,6 +87,9 @@ export default function NotificationsPage() {
     try {
       setClearing(true);
       await notificationService.clearAllNotifications(user.uid);
+      setNotifications([]);
+      setHasMore(false);
+      setNextCursor(null);
       showSuccess("All notifications cleared.");
     } finally {
       setClearing(false);
@@ -92,6 +101,7 @@ export default function NotificationsPage() {
     try {
       setMarkingAll(true);
       await notificationService.markAllAsRead(user.uid);
+      setNotifications((current) => current.map((notification) => ({...notification, read: true})));
       showSuccess("All notifications marked as read.");
     } finally {
       setMarkingAll(false);
@@ -104,26 +114,49 @@ export default function NotificationsPage() {
       return;
     }
 
-    queueMicrotask(() => {
-      setLoading(true);
-      setListenerError(null);
-    });
-
-    const unsubscribe = notificationService.listenForNotifications(
-      user.uid,
-      (notifications) => {
-        setNotifications(notifications);
-        setLoading(false);
-      },
-      (error) => {
+    let active = true;
+    void notificationService.getNotifications(user.uid, {pageSize: 25})
+      .then((page) => {
+        if (!active) return;
+        setNotifications(page.notifications);
+        setHasMore(page.hasMore);
+        setNextCursor(page.nextCursor);
+      })
+      .catch((error) => {
+        if (!active) return;
         console.error("Failed to load customer notifications:", error);
         setListenerError("We couldn't load your notifications. Please try again.");
-        setLoading(false);
-      }
-    );
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
 
-    return unsubscribe;
+    return () => {
+      active = false;
+    };
   }, [authLoading, user]);
+
+  const loadMoreNotifications = async () => {
+    if (!user || !hasMore || !nextCursor || loadingMore) return;
+    try {
+      setLoadingMore(true);
+      const page = await notificationService.getNotifications(user.uid, {
+        pageSize: 25,
+        cursor: nextCursor,
+      });
+      setNotifications((current) => {
+        const known = new Set(current.map((notification) => notification.id));
+        return [...current, ...page.notifications.filter((notification) => !known.has(notification.id))];
+      });
+      setHasMore(page.hasMore);
+      setNextCursor(page.nextCursor);
+    } catch (error) {
+      console.error("Failed to load more customer notifications:", error);
+      setListenerError("We couldn't load more notifications. Please try again.");
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   if (loading) {
     return <CustomerPageSkeleton variant="orders" />;
@@ -260,8 +293,14 @@ export default function NotificationsPage() {
                         user.uid,
                         notification.id
                       );
+                      setNotifications((current) => current.map((item) =>
+                        item.id === notification.id ? {...item, read: true} : item
+                      ));
                       if (notification.deepLink) {
-                        router.push(notification.deepLink);
+                        const safePath = toSafeLiaPath(notification.deepLink);
+                        if (safePath) {
+                          router.push(nativeCustomerDestination(safePath));
+                        }
                       }
                     }}
                   />
@@ -293,14 +332,30 @@ export default function NotificationsPage() {
                         user.uid,
                         notification.id
                       );
+                      setNotifications((current) => current.map((item) =>
+                        item.id === notification.id ? {...item, read: true} : item
+                      ));
                       if (notification.deepLink) {
-                        router.push(notification.deepLink);
+                        const safePath = toSafeLiaPath(notification.deepLink);
+                        if (safePath) {
+                          router.push(nativeCustomerDestination(safePath));
+                        }
                       }
                     }}
                   />
                 </motion.div>
               ))}
             </div>
+            {hasMore && (
+              <button
+                type="button"
+                onClick={() => void loadMoreNotifications()}
+                disabled={loadingMore}
+                className="mx-auto mt-6 block rounded-full border border-gray-200 bg-white px-5 py-2.5 text-sm font-bold text-gray-700 shadow-sm transition hover:bg-gray-50 disabled:opacity-50"
+              >
+                {loadingMore ? "Loading…" : "Load earlier notifications"}
+              </button>
+            )}
           </AnimatePresence>
         )}
       </div>

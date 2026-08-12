@@ -6,7 +6,7 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: "LIA Marketplace",
     short_name: "LIA",
-    description: "African groceries delivered from local stores.",
+    description: "Local and international products delivered from independent stores.",
     start_url: "/home",
     display: "standalone",
     background_color: "#f9fafb",

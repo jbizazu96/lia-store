@@ -219,7 +219,7 @@ export default function OrdersPage() {
             </h2>
             <p className="text-gray-500 text-sm mb-6 max-w-xs mx-auto">
               Start shopping and your orders will appear here. 
-              Fresh African groceries Completed to your door!
+              Local favorites delivered to your door!
             </p>
 
             <Link

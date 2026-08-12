@@ -2,7 +2,7 @@ import type {
   Metadata,
   Viewport,
 } from "next";
-import {Inter} from "next/font/google";
+import "@fontsource-variable/inter";
 import "./globals.css";
 import {AuthProvider} from "@/context/AuthContext";
 import {NotificationProvider} from "@/context/NotificationContext";
@@ -11,11 +11,9 @@ import {ConfirmationProvider} from "@/context/ConfirmationContext";
 import {SuccessToastProvider} from "@/context/SuccessToastContext";
 import {NativeCustomerBridge} from "@/components/customer/native/NativeCustomerBridge";
 
-const inter = Inter({subsets: ["latin"]});
-
 export const metadata: Metadata = {
-  title: "LIA - Local International African Marketplace",
-  description: "African groceries delivered from local stores",
+  title: "LIA Marketplace | Local delivery for independent stores",
+  description: "Shop local and international products from independent stores, delivered to your door.",
   applicationName: "LIA Marketplace",
   manifest: "/manifest.webmanifest",
   appleWebApp: {
@@ -52,7 +50,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={inter.className}>
+      <body>
         <AuthProvider>
           <NotificationProvider>
             <ConfirmationProvider>

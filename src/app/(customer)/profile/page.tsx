@@ -34,6 +34,7 @@ import {
   firebaseMessaging,
   NATIVE_NOTIFICATION_STATE_EVENT,
   type NativeNotificationPreference,
+  type NotificationDeviceStatus,
   type NotificationPermissionState,
 } from "@/services/notification/firebaseMessaging";
 
@@ -60,6 +61,9 @@ export default function ProfilePage() {
     useState<NotificationPermissionState>("prompt");
   const [nativeNotificationPreference, setNativeNotificationPreference] =
     useState<NativeNotificationPreference>(null);
+  const [notificationDeviceStatus, setNotificationDeviceStatus] =
+    useState<NotificationDeviceStatus | null>(null);
+  const [notificationStatusLoading, setNotificationStatusLoading] = useState(false);
 
   /*
     Get current user and profile data.
@@ -87,15 +91,28 @@ export default function ProfilePage() {
   }, [router]);
 
   useEffect(() => {
-    const refresh = () => {
+    const refresh = async () => {
       setNativeNotificationPreference(firebaseMessaging.getNativePreference());
-      void firebaseMessaging.getPermissionStatus()
-        .then(setNotificationPermission)
-        .catch(() => setNotificationPermission("unsupported"));
+      setNotificationStatusLoading(true);
+      try {
+        const [permission, status] = await Promise.all([
+          firebaseMessaging.getPermissionStatus(),
+          firebaseMessaging.getDeviceStatus(),
+        ]);
+        setNotificationPermission(permission);
+        setNotificationDeviceStatus(status);
+      } catch {
+        setNotificationPermission(await firebaseMessaging.getPermissionStatus()
+          .catch(() => "unsupported" as const));
+        setNotificationDeviceStatus(null);
+      } finally {
+        setNotificationStatusLoading(false);
+      }
     };
-    refresh();
-    window.addEventListener(NATIVE_NOTIFICATION_STATE_EVENT, refresh);
-    return () => window.removeEventListener(NATIVE_NOTIFICATION_STATE_EVENT, refresh);
+    void refresh();
+    const handleRefresh = () => void refresh();
+    window.addEventListener(NATIVE_NOTIFICATION_STATE_EVENT, handleRefresh);
+    return () => window.removeEventListener(NATIVE_NOTIFICATION_STATE_EVENT, handleRefresh);
   }, [user]);
 
   async function enableNotifications() {
@@ -104,12 +121,19 @@ export default function ProfilePage() {
     setNotificationPermission(
       await firebaseMessaging.getPermissionStatus(),
     );
+    setNotificationDeviceStatus(await firebaseMessaging.getDeviceStatus());
   }
 
   async function declineNotifications() {
     await firebaseMessaging.declineNativeNotifications();
     setNativeNotificationPreference(firebaseMessaging.getNativePreference());
     setNotificationPermission(await firebaseMessaging.getPermissionStatus());
+    setNotificationDeviceStatus(await firebaseMessaging.getDeviceStatus());
+  }
+
+  async function sendTestNotification() {
+    await firebaseMessaging.sendTestNotification();
+    setNotificationDeviceStatus(await firebaseMessaging.getDeviceStatus());
   }
 
   async function handleProfileImageUpload(file: File) {
@@ -423,9 +447,12 @@ export default function ProfilePage() {
             preferences={profileData.notificationPreferences}
             permission={notificationPermission}
             devicePreference={nativeNotificationPreference}
+            deviceStatus={notificationDeviceStatus}
+            statusLoading={notificationStatusLoading}
             onClose={() => setShowNotificationSettings(false)}
             onEnableDeviceNotifications={enableNotifications}
             onDeclineDeviceNotifications={declineNotifications}
+            onSendTestNotification={sendTestNotification}
             onSave={async (preferences) => {
               const saved = await updateCustomerNotificationPreferences(
                 preferences,

@@ -406,6 +406,52 @@ primaryImageId:
  * Product service used throughout the application.
  */
 export const productService = {
+  async getStoreProductsPage(
+    storeId: string,
+    options: {
+      cursor?: {name: string; id: string} | null;
+      pageSize?: number;
+      categoryValues?: string[];
+    } = {},
+  ): Promise<{
+    products: Product[];
+    hasMore: boolean;
+    nextCursor: {name: string; id: string} | null;
+  }> {
+    if (!storeId.trim()) {
+      return {products: [], hasMore: false, nextCursor: null};
+    }
+
+    const result = await httpsCallable<
+      {
+        storeId: string;
+        cursor: {name: string; id: string} | null;
+        pageSize: number;
+        categoryValues?: string[];
+      },
+      {
+        products: Array<{id: string} & DocumentData>;
+        hasMore: boolean;
+        nextCursor: {name: string; id: string} | null;
+      }
+    >(functions, "getCustomerStoreProducts")({
+      storeId,
+      cursor: options.cursor ?? null,
+      pageSize: options.pageSize ?? 60,
+      ...(options.categoryValues?.length
+        ? {categoryValues: options.categoryValues}
+        : {}),
+    });
+
+    return {
+      products: result.data.products.map((product) =>
+        mapProductDocument(product.id, product)
+      ),
+      hasMore: result.data.hasMore === true,
+      nextCursor: result.data.nextCursor,
+    };
+  },
+
   async getStoreProductSizeUnits(): Promise<Array<{value: string; label: string}>> {
     const result = await httpsCallable<unknown, {units: Array<{id: string; label: string}>}>(
       functions,
@@ -456,19 +502,17 @@ export const productService = {
     }
 
     const loadProducts = async () => {
-      const snapshot = await getDocs(
-        query(
-          collection(db, "productPublicProfiles"),
-          where("storeId", "==", storeId),
-        ),
-      );
-
-      return snapshot.docs.map((productDocument) =>
-        mapProductDocument(
-          productDocument.id,
-          productDocument.data(),
-        ),
-      );
+      const products: Product[] = [];
+      let cursor: {name: string; id: string} | null = null;
+      do {
+        const page = await productService.getStoreProductsPage(storeId, {
+          cursor,
+          pageSize: 100,
+        });
+        products.push(...page.products);
+        cursor = page.hasMore ? page.nextCursor : null;
+      } while (cursor);
+      return products;
     };
 
     if (forceRefresh) {

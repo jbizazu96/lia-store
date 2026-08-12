@@ -13,7 +13,10 @@ export function CustomerPushPermissionPrompt() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (!Capacitor.isNativePlatform() || loading || !user) return;
+    if (loading || !user) return;
+    const eligible = Capacitor.isNativePlatform() ||
+      firebaseMessaging.isInstalledWebApp();
+    if (!eligible) return;
     let active = true;
     void firebaseMessaging.getPermissionStatus().then(async (permission) => {
       if (!active) return;
@@ -21,7 +24,10 @@ export function CustomerPushPermissionPrompt() {
         await firebaseMessaging.recoverNativeRegistration();
         return;
       }
-      setVisible(firebaseMessaging.getNativePreference() === null);
+      setVisible(
+        permission === "prompt" &&
+        firebaseMessaging.getNativePreference() === null,
+      );
     }).catch(() => {});
     return () => {active = false;};
   }, [loading, user]);
@@ -32,8 +38,12 @@ export function CustomerPushPermissionPrompt() {
     setWorking(true);
     setError("");
     try {
-      await firebaseMessaging.enableNativeNotifications();
-      setVisible(false);
+      const permission = await firebaseMessaging.enableNativeNotifications();
+      if (permission === "granted") {
+        setVisible(false);
+      } else {
+        setError("Notifications were not enabled. You can try again from Profile.");
+      }
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Unable to enable notifications.");
     } finally {

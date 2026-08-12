@@ -7,6 +7,7 @@ import type {
 } from "@/services/user/customerProfileClientService";
 import type {
   NativeNotificationPreference,
+  NotificationDeviceStatus,
   NotificationPermissionState,
 } from "@/services/notification/firebaseMessaging";
 
@@ -14,12 +15,15 @@ interface NotificationSettingsModalProps {
   preferences: CustomerNotificationPreferences;
   permission: NotificationPermissionState;
   devicePreference: NativeNotificationPreference;
+  deviceStatus: NotificationDeviceStatus | null;
+  statusLoading: boolean;
   onClose: () => void;
   onSave: (
     preferences: CustomerNotificationPreferences,
   ) => Promise<CustomerNotificationPreferences>;
   onEnableDeviceNotifications: () => Promise<void>;
   onDeclineDeviceNotifications: () => Promise<void>;
+  onSendTestNotification: () => Promise<void>;
 }
 
 const settings = [
@@ -58,9 +62,14 @@ const settings = [
 function permissionDescription(
   permission: NotificationPermissionState,
   preference: NativeNotificationPreference,
+  registered: boolean,
 ): string {
-  if (permission === "granted" && preference === "accepted") {
+  if (permission === "granted" && registered) {
     return "Notifications are enabled. LIA can send the notification types selected below.";
+  }
+
+  if (permission === "granted") {
+    return "Your device allows notifications, but it is not currently registered with LIA. Register it again below.";
   }
 
   if (permission === "denied") {
@@ -76,21 +85,40 @@ function permissionDescription(
     : "Allow device notifications to receive alerts outside the app.";
 }
 
+function formatStatusDate(value: string | null): string {
+  if (!value) return "Not yet";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? "Unavailable"
+    : new Intl.DateTimeFormat("en-US", {
+        dateStyle: "medium",
+        timeStyle: "short",
+      }).format(date);
+}
+
 export function NotificationSettingsModal({
   preferences,
   permission,
   devicePreference,
+  deviceStatus,
+  statusLoading,
   onClose,
   onSave,
   onEnableDeviceNotifications,
   onDeclineDeviceNotifications,
+  onSendTestNotification,
 }: NotificationSettingsModalProps) {
   const [values, setValues] = useState(preferences);
   const [saving, setSaving] = useState<keyof CustomerNotificationPreferences | null>(null);
   const [enabling, setEnabling] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [confirmation, setConfirmation] = useState("");
   const [error, setError] = useState("");
   const deviceNotificationsEnabled =
-    permission === "granted" && devicePreference !== "declined";
+    permission === "granted" &&
+    devicePreference !== "declined" &&
+    deviceStatus?.registered === true &&
+    deviceStatus.active === true;
 
   const update = async (
     key: keyof CustomerNotificationPreferences,
@@ -141,17 +169,63 @@ export function NotificationSettingsModal({
               Device notifications
             </p>
             <p className="mt-1 text-xs leading-5 text-gray-500">
-              {permissionDescription(permission, devicePreference)}
+              {statusLoading
+                ? "Checking this device with LIA…"
+                : permissionDescription(
+                    permission,
+                    devicePreference,
+                    deviceStatus?.registered === true && deviceStatus.active === true,
+                  )}
             </p>
             {deviceNotificationsEnabled ? (
-              <button
-                type="button"
-                disabled
-                className="mt-3 rounded-full bg-green-100 px-3 py-2 text-sm font-bold text-green-700"
-              >
-                Notifications enabled
-              </button>
-            ) : permission !== "unsupported" && (
+              <div className="mt-3">
+                <span className="inline-flex rounded-full bg-green-100 px-3 py-2 text-sm font-bold text-green-700">
+                  Notifications enabled
+                </span>
+                <dl className="mt-3 space-y-1 text-xs text-gray-500">
+                  <div className="flex justify-between gap-4">
+                    <dt>Last registered</dt>
+                    <dd className="text-right font-medium text-gray-700">
+                      {formatStatusDate(deviceStatus.lastRegisteredAt)}
+                    </dd>
+                  </div>
+                  <div className="flex justify-between gap-4">
+                    <dt>Last accepted by push service</dt>
+                    <dd className="text-right font-medium text-gray-700">
+                      {formatStatusDate(deviceStatus.lastPushAcceptedAt)}
+                    </dd>
+                  </div>
+                  {deviceStatus.lastPushErrorAt && (
+                    <div className="flex justify-between gap-4 text-red-600">
+                      <dt>Last delivery error</dt>
+                      <dd className="text-right font-medium">
+                        {formatStatusDate(deviceStatus.lastPushErrorAt)}
+                      </dd>
+                    </div>
+                  )}
+                </dl>
+                <button
+                  type="button"
+                  disabled={testing}
+                  onClick={async () => {
+                    setTesting(true);
+                    setError("");
+                    setConfirmation("");
+                    try {
+                      await onSendTestNotification();
+                      setConfirmation("Test sent. Lock your phone or leave LIA to confirm background delivery.");
+                    } catch (reason) {
+                      setError(reason instanceof Error ? reason.message : "Unable to send a test notification.");
+                    } finally {
+                      setTesting(false);
+                    }
+                  }}
+                  className="mt-3 rounded-full bg-orange-500 px-4 py-2 text-sm font-bold text-white disabled:opacity-60"
+                >
+                  {testing ? "Sending…" : "Send test notification"}
+                </button>
+              </div>
+            ) : !statusLoading && permission !== "unsupported" && (
               <div className="mt-3 flex flex-wrap gap-2">
               <button
                 type="button"
@@ -160,6 +234,7 @@ export function NotificationSettingsModal({
                   setEnabling(true);
                   setError("");
                   try {
+                    setConfirmation("");
                     await onEnableDeviceNotifications();
                   } catch (reason) {
                     setError(
@@ -200,6 +275,11 @@ export function NotificationSettingsModal({
           {error && (
             <p className="mt-4 rounded-xl bg-red-50 p-3 text-sm text-red-700">
               {error}
+            </p>
+          )}
+          {confirmation && (
+            <p className="mt-4 rounded-xl bg-green-50 p-3 text-sm text-green-700">
+              {confirmation}
             </p>
           )}
 

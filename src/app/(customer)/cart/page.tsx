@@ -192,7 +192,7 @@ export default function CartPage() {
           </h2>
           <p className="text-gray-500 text-sm mb-8">
             Looks like you haven&apos;t added anything to your cart yet.
-            Browse our stores and discover amazing African groceries!
+            Browse independent stores and discover something great nearby!
           </p>
 
           <Link

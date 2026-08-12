@@ -273,6 +273,7 @@ export {
 } from "./callable/adminStoreBranding";
 export { processStoreImage } from "./images/processStoreImage";
 export {remindOutOfStockProducts} from "./scheduler/remindOutOfStockProducts";
+export {cleanupUserNotifications} from "./scheduler/cleanupUserNotifications";
 export {
   storePublicProfileSync,
 } from "./triggers/storePublicProfileSync";
@@ -638,7 +639,9 @@ export {
 } from "./callable/customerDeliveryProof";
 export {
   deactivateNotificationDevice,
+  getNotificationDeviceStatus,
   registerNotificationDevice,
+  sendTestNotification,
 } from "./callable/notificationDevice";
 export {
   getAdminOrderSupportRequest,

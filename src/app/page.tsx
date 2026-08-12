@@ -1,10 +1,10 @@
 import Link from "next/link";
 import Image from "next/image";
 import {
-  Store, Truck, Users, TrendingUp, Clock, Shield,
-  ArrowRight, Star, Phone, Mail, Map, CreditCard,
-  Package, Headphones, Award, Globe, CheckCircle,
-  Building, FileText, Camera, Layout, BarChart3,
+  Store, Truck, Users, TrendingUp,
+  ArrowRight, Phone,
+  CheckCircle,
+  FileText, Camera, Layout, BarChart3,
   ShoppingBag
 } from "lucide-react";
 
@@ -20,7 +20,7 @@ export default function HomePage() {
               <div className="relative w-10 h-10">
                 <Image
                   src="/icon/icon-512.png"
-                  alt="LIA - Local International African Marketplace"
+                  alt="LIA Marketplace"
                   fill
                   sizes="40px"
                   className="object-contain"
@@ -74,19 +74,18 @@ export default function HomePage() {
             <div className="space-y-8">
               <div className="inline-flex items-center gap-2 bg-orange-100 text-orange-700 px-4 py-2 rounded-full text-sm font-medium">
                 <Store className="w-4 h-4" />
-                <span>Grow Your African Grocery Business</span>
+                <span>Delivery built for independent stores</span>
               </div>
 
               <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-gray-900 leading-tight">
                 Grow Your Business with{" "}
-                <span className="text-orange-600">LIA's</span>
+                <span className="text-orange-600">LIA&apos;s</span>
                 <br />
                 Delivery Platform
               </h1>
 
               <p className="text-xl text-gray-600 max-w-lg">
-                Join the platform that connects you to thousands of customers looking for 
-                authentic African groceries. Get more orders, expand your reach, and grow your business.
+                Reach nearby customers with delivery designed for independent markets and specialty stores—without the high commissions charged by larger platforms.
               </p>
 
               <div className="flex flex-wrap gap-4">
@@ -172,7 +171,7 @@ export default function HomePage() {
               Get Your Store Online in 3 Steps
             </h2>
             <p className="text-xl text-gray-600 mt-4">
-              Start selling your African groceries to thousands of customers in your area.
+              Bring your products online and reach more customers in your area.
             </p>
           </div>
 
@@ -272,7 +271,7 @@ export default function HomePage() {
               From Order to Delivery
             </h2>
             <p className="text-xl text-gray-600 mt-4">
-              See how customers discover, order, and receive their African groceries.
+              See how customers discover, order, and receive products from independent local stores.
             </p>
           </div>
 
@@ -281,7 +280,7 @@ export default function HomePage() {
               {
                 icon: Store,
                 title: "Discover Your Store",
-                description: "Customers browse African grocery stores in their area and find your products."
+                description: "Customers browse independent stores in their area and discover your products."
               },
               {
                 icon: ShoppingBag,
@@ -318,7 +317,7 @@ export default function HomePage() {
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center max-w-3xl mx-auto mb-16">
             <p className="text-sm font-semibold uppercase tracking-wide text-orange-600">
-              Questions? We've Got Answers
+              Questions? We&apos;ve Got Answers
             </p>
             <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mt-2">
               Frequently Asked Questions
@@ -406,7 +405,7 @@ export default function HomePage() {
                 <span className="text-xl font-bold text-white">LIA</span>
               </div>
               <p className="text-sm text-gray-400">
-                Connecting African grocery stores with customers for fast and reliable delivery.
+                Helping independent stores reach local customers through reliable delivery.
               </p>
               <div className="flex items-center gap-4 mt-4">
                 <a href="#" className="text-gray-400 hover:text-white transition">

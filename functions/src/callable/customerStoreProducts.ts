@@ -24,7 +24,16 @@ if (admin.apps.length === 0) {
 }
 
 const db = getFirestore("default");
-const MAXIMUM_STORE_PRODUCTS = 500;
+const DEFAULT_PRODUCT_PAGE_SIZE = 60;
+const MAXIMUM_PRODUCT_PAGE_SIZE = 100;
+
+function pageSize(value: unknown): number {
+  const requested = typeof value === "number" ? Math.floor(value) : 0;
+  return Math.min(
+    MAXIMUM_PRODUCT_PAGE_SIZE,
+    Math.max(1, requested || DEFAULT_PRODUCT_PAGE_SIZE)
+  );
+}
 
 function text(value: unknown): string {
   return typeof value === "string" ? value : "";
@@ -90,6 +99,15 @@ export const getCustomerStoreProducts = onCall(
     const storeId = typeof request.data?.storeId === "string"
       ? request.data.storeId.trim()
       : "";
+    const categoryValues = Array.isArray(request.data?.categoryValues)
+      ? Array.from(new Set(request.data.categoryValues
+        .map((value: unknown) => text(value).trim())
+        .filter(Boolean)))
+        .slice(0, 10)
+      : [];
+    const cursorName = text(request.data?.cursor?.name).trim();
+    const cursorId = text(request.data?.cursor?.id).trim();
+    const size = pageSize(request.data?.pageSize);
 
     if (!storeId || storeId.length > 200) {
       throw new HttpsError("invalid-argument", "The store ID is invalid.");
@@ -108,16 +126,34 @@ export const getCustomerStoreProducts = onCall(
       throw new HttpsError("not-found", "This store is not available.");
     }
 
-    const products = await db
+    let productQuery = db
       .collection("productPublicProfiles")
       .where("storeId", "==", storeId)
-      .limit(MAXIMUM_STORE_PRODUCTS)
-      .get();
+      .orderBy("name", "asc")
+      .orderBy(admin.firestore.FieldPath.documentId(), "asc");
+
+    if (categoryValues.length === 1) {
+      productQuery = productQuery.where("category", "==", categoryValues[0]);
+    } else if (categoryValues.length > 1) {
+      productQuery = productQuery.where("category", "in", categoryValues);
+    }
+
+    if (cursorName && cursorId) {
+      productQuery = productQuery.startAfter(cursorName, cursorId);
+    }
+
+    const products = await productQuery.limit(size + 1).get();
+    const pageDocuments = products.docs.slice(0, size);
+    const lastDocument = pageDocuments.at(-1);
 
     return {
-      products: products.docs.map((product) =>
+      products: pageDocuments.map((product) =>
         publicProduct(product.id, product.data())
       ),
+      hasMore: products.docs.length > size,
+      nextCursor: lastDocument
+        ? {name: text(lastDocument.data().name), id: lastDocument.id}
+        : null,
     };
   }
 );

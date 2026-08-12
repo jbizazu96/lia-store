@@ -42,7 +42,7 @@ export function LoginForm({
         <motion.div whileHover={{scale: 1.05}} className="relative w-20 h-20">
           <Image
             src="/icon/icon-512.png"
-            alt="LIA - Local International African Marketplace"
+            alt="LIA Marketplace"
             fill
             sizes="80px"
             className="object-contain"
@@ -60,7 +60,7 @@ export function LoginForm({
         Welcome Back
       </motion.h1>
       <p className="text-center text-gray-500 mb-8">
-        Your African grocery delivery platform
+        Local delivery from independent stores
       </p>
 
       {error && (
@@ -183,7 +183,7 @@ export function LoginForm({
       </motion.button>
 
       <p className="text-center text-sm text-gray-600 mt-6">
-        Don't have an account?{" "}
+        Don&apos;t have an account?{" "}
         <a
           href="/register"
           className="text-orange-600 font-semibold hover:underline"

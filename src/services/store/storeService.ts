@@ -21,18 +21,25 @@ import {
   collection,
   doc,
   getDoc,
-  getDocs,
   onSnapshot,
 } from "firebase/firestore";
 import { isStoreActive, isStoreApproved } from "./storeAvailability";
 
 import { db } from "@/lib/firebase";
+import { functions } from "@/lib/firebase";
+import { httpsCallable } from "firebase/functions";
 import {
   loadCached,
 } from "@/services/cache/clientDataCache";
 import type { Store } from "@/types/store";
 
 type PublicStoreDocument = Record<string, unknown>;
+export interface StoreCatalogCursor { name: string; id: string }
+export interface StoreCatalogPage {
+  stores: Store[];
+  hasMore: boolean;
+  nextCursor: StoreCatalogCursor | null;
+}
 
 function text(value: unknown): string {
   return typeof value === "string" ? value : "";
@@ -156,6 +163,24 @@ function mapStoreDocument(
 }
 
 export const storeService = {
+  async getStoresPage(
+    cursor: StoreCatalogCursor | null = null,
+    pageSize = 40,
+  ): Promise<StoreCatalogPage> {
+    const result = await httpsCallable<
+      {cursor: StoreCatalogCursor | null; pageSize: number},
+      {stores: Array<{id: string} & PublicStoreDocument>; hasMore: boolean; nextCursor: StoreCatalogCursor | null}
+    >(functions, "getCustomerStoreCatalog")({cursor, pageSize});
+
+    return {
+      stores: result.data.stores.map((store) =>
+        mapStoreDocument(store.id, store)
+      ),
+      hasMore: result.data.hasMore === true,
+      nextCursor: result.data.nextCursor,
+    };
+  },
+
   /**
    * Get all customer-visible stores from the server-managed public
    * projection. No private stores/{storeId} data is available to the browser.
@@ -164,16 +189,14 @@ export const storeService = {
     return loadCached(
       "customer-store-catalog",
       async () => {
-        const snapshot = await getDocs(
-          collection(db, "storePublicProfiles")
-        );
-
-        return snapshot.docs.map((storeDocument) =>
-          mapStoreDocument(
-            storeDocument.id,
-            storeDocument.data()
-          )
-        );
+        const stores: Store[] = [];
+        let cursor: StoreCatalogCursor | null = null;
+        do {
+          const page: StoreCatalogPage = await storeService.getStoresPage(cursor, 100);
+          stores.push(...page.stores);
+          cursor = page.hasMore ? page.nextCursor : null;
+        } while (cursor);
+        return stores;
       },
       { ttlMs: 15_000, scope: "public" },
     );

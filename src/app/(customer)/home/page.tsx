@@ -9,6 +9,7 @@ import type { CustomerStore } from "@/types/view-models/customerStore";
 import type { Store } from "@/types/store";
 import { storeMapper } from "@/mappers/storeMapper";
 import { storeService } from "@/services/store/storeService";
+import type { StoreCatalogCursor } from "@/services/store/storeService";
 import { isStoreCustomerVisible } from "@/services/store/storeAvailability";
 import {
   calculateDeliveryFee,
@@ -63,6 +64,10 @@ export default function CustomerHomePage() {
   const [storeFilter, setStoreFilter] = useState<"all" | "favorites">("all");
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [catalogStores, setCatalogStores] = useState<Store[]>([]);
+  const [storeCursor, setStoreCursor] = useState<StoreCatalogCursor | null>(null);
+  const [hasMoreStores, setHasMoreStores] = useState(false);
+  const [loadingMoreStores, setLoadingMoreStores] = useState(false);
   const endOfListRef = useRef<HTMLDivElement>(null);
   const hasLoadedStoresRef = useRef(false);
 
@@ -162,6 +167,41 @@ export default function CustomerHomePage() {
 
     return () => unsubscribe();
   }, [router]);
+
+  useEffect(() => {
+    let active = true;
+    void storeService.getStoresPage(null, 40)
+      .then((page) => {
+        if (!active) return;
+        setCatalogStores(page.stores);
+        setStoreCursor(page.nextCursor);
+        setHasMoreStores(page.hasMore);
+      })
+      .catch((error) => {
+        console.error("Unable to load the store catalog:", error);
+        if (active) setDistanceError("We could not load stores. Please try again.");
+      });
+    return () => { active = false; };
+  }, []);
+
+  const loadMoreStores = async () => {
+    if (!storeCursor || !hasMoreStores || loadingMoreStores) return;
+    try {
+      setLoadingMoreStores(true);
+      const page = await storeService.getStoresPage(storeCursor, 40);
+      setCatalogStores((current) => {
+        const known = new Set(current.map((store) => store.id));
+        return [...current, ...page.stores.filter((store) => !known.has(store.id))];
+      });
+      setStoreCursor(page.nextCursor);
+      setHasMoreStores(page.hasMore);
+    } catch (error) {
+      console.error("Unable to load more stores:", error);
+      setDistanceError("We could not load more stores. Please try again.");
+    } finally {
+      setLoadingMoreStores(false);
+    }
+  };
 
   // Keep customer store discovery synchronized with newly activated stores.
   useEffect(() => {
@@ -322,23 +362,12 @@ export default function CustomerHomePage() {
       };
     }
 
-    const unsubscribe = storeService.listenToStores(
-      (stores) => {
-        void updateStores(stores);
-      },
-      (error) => {
-        console.error("Error listening to stores:", error);
-        if (isMounted) {
-          setLoading(false);
-        }
-      }
-    );
+    void updateStores(catalogStores);
 
     return () => {
       isMounted = false;
-      unsubscribe();
     };
-  }, [locationReady, userLocation, marketplacePolicy, orderDeliveryPolicy]);
+  }, [catalogStores, locationReady, userLocation, marketplacePolicy, orderDeliveryPolicy]);
 
   // Handle store click
   const handleStoreClick = (store: CustomerStore) => {
@@ -577,8 +606,19 @@ export default function CustomerHomePage() {
               </div>
             )}
 
+            {hasMoreStores && storeFilter === "all" && selectedCategory === null && (
+              <button
+                type="button"
+                onClick={() => void loadMoreStores()}
+                disabled={loadingMoreStores}
+                className="mx-auto mt-8 block rounded-full border border-gray-200 bg-white px-6 py-3 text-sm font-bold text-gray-800 shadow-sm transition hover:bg-gray-50 disabled:opacity-50"
+              >
+                {loadingMoreStores ? "Loading…" : "Load more stores"}
+              </button>
+            )}
+
             {/* End of List Indicator */}
-            {!loading && (
+            {!loading && !hasMoreStores && (
               <div ref={endOfListRef} className="mt-10 text-center">
                 <div className="flex items-center gap-3 justify-center">
                   <div className="flex-1 max-w-12 h-px bg-gray-200" />

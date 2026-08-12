@@ -40,6 +40,7 @@ import {
   CurrentAccountClientError,
 } from "@/services/user/currentAccountClientService";
 import { googleAuthenticationService } from "@/services/auth/googleAuthenticationService";
+import {Capacitor} from "@capacitor/core";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -112,6 +113,14 @@ export default function LoginPage() {
       }
 
       throw accountError;
+    }
+
+    if (Capacitor.isNativePlatform() && accountType !== "customer") {
+      await signOut(auth);
+      setError(
+        "The LIA mobile app is for customer accounts. Store owners, drivers, and administrators can sign in through the LIA website.",
+      );
+      return;
     }
 
     /*

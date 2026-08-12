@@ -14,7 +14,9 @@ import * as admin from "firebase-admin";
 import {
   FieldValue,
   getFirestore,
+  Timestamp,
 } from "firebase-admin/firestore";
+import {getMessaging} from "firebase-admin/messaging";
 import {
   HttpsError,
   onCall,
@@ -44,6 +46,18 @@ function validDeviceId(value: string): boolean {
 
 function validToken(value: string): boolean {
   return value.length >= 32 && value.length <= 4_096;
+}
+
+function timestamp(value: unknown): string | null {
+  if (value instanceof Timestamp) {
+    return value.toDate().toISOString();
+  }
+
+  return null;
+}
+
+function deviceReference(uid: string, deviceId: string) {
+  return db.collection("notificationDevices").doc(`${uid}_${deviceId}`);
 }
 
 export const registerNotificationDevice = onCall(
@@ -79,10 +93,8 @@ export const registerNotificationDevice = onCall(
       );
     }
 
-    const deviceReference = db
-      .collection("notificationDevices")
-      .doc(`${request.auth.uid}_${deviceId}`);
-    const current = await deviceReference.get();
+    const reference = deviceReference(request.auth.uid, deviceId);
+    const current = await reference.get();
     const currentToken = text(current.data()?.token);
     const currentUid = text(current.data()?.uid);
 
@@ -98,7 +110,7 @@ export const registerNotificationDevice = onCall(
     const tokenChanged = currentToken !== token;
 
     if (!current.exists) {
-      await deviceReference.create({
+      await reference.create({
         uid: request.auth.uid,
         deviceId,
         token,
@@ -110,7 +122,7 @@ export const registerNotificationDevice = onCall(
         updatedAt: FieldValue.serverTimestamp(),
       });
     } else {
-      await deviceReference.set({
+      await reference.set({
         token,
         active: true,
         platform,
@@ -129,7 +141,7 @@ export const registerNotificationDevice = onCall(
       .where("uid", "==", request.auth.uid)
       .get();
     const duplicates = devicesForUser.docs.filter((document) => {
-      if (document.id === deviceReference.id) {
+      if (document.id === reference.id) {
         return false;
       }
 
@@ -157,7 +169,7 @@ export const registerNotificationDevice = onCall(
       .where("deviceId", "==", deviceId)
       .get();
     const previousAccounts = registrationsForDevice.docs.filter((document) =>
-      document.id !== deviceReference.id &&
+      document.id !== reference.id &&
       document.data().active === true,
     );
 
@@ -189,8 +201,7 @@ export const deactivateNotificationDevice = onCall(
     if (!validDeviceId(deviceId)) {
       throw new HttpsError("invalid-argument", "A valid notification device is required.");
     }
-    const reference = db.collection("notificationDevices")
-      .doc(`${request.auth.uid}_${deviceId}`);
+    const reference = deviceReference(request.auth.uid, deviceId);
     const snapshot = await reference.get();
     if (snapshot.exists && text(snapshot.data()?.uid) !== request.auth.uid) {
       throw new HttpsError("permission-denied", "This notification device belongs to another account.");
@@ -202,5 +213,137 @@ export const deactivateNotificationDevice = onCall(
       });
     }
     return {deactivated: snapshot.exists};
+  },
+);
+
+export const getNotificationDeviceStatus = onCall(
+  {region: "us-central1"},
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Sign in to check notification access.");
+    }
+
+    const deviceId = text(record(request.data).deviceId);
+    if (!validDeviceId(deviceId)) {
+      throw new HttpsError("invalid-argument", "A valid notification device is required.");
+    }
+
+    const snapshot = await deviceReference(request.auth.uid, deviceId).get();
+    const data = snapshot.data();
+
+    if (!snapshot.exists || text(data?.uid) !== request.auth.uid) {
+      return {
+        registered: false,
+        active: false,
+        platform: null,
+        lastRegisteredAt: null,
+        lastPushAcceptedAt: null,
+        lastPushErrorAt: null,
+        lastPushErrorCode: null,
+      };
+    }
+
+    return {
+      registered: true,
+      active: data?.active === true,
+      platform: text(data?.platform) || null,
+      lastRegisteredAt: timestamp(data?.lastRegisteredAt),
+      lastPushAcceptedAt: timestamp(data?.lastPushAcceptedAt),
+      lastPushErrorAt: timestamp(data?.lastPushErrorAt),
+      lastPushErrorCode: text(data?.lastPushErrorCode) || null,
+    };
+  },
+);
+
+export const sendTestNotification = onCall(
+  {region: "us-central1"},
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Sign in to test notifications.");
+    }
+
+    const deviceId = text(record(request.data).deviceId);
+    if (!validDeviceId(deviceId)) {
+      throw new HttpsError("invalid-argument", "A valid notification device is required.");
+    }
+
+    const reference = deviceReference(request.auth.uid, deviceId);
+    const token = await db.runTransaction(async (transaction) => {
+      const snapshot = await transaction.get(reference);
+      const data = snapshot.data();
+      const registeredToken = text(data?.token);
+
+      if (!snapshot.exists || data?.active !== true || !validToken(registeredToken)) {
+        throw new HttpsError(
+          "failed-precondition",
+          "This device is not registered for notifications. Enable notifications and try again.",
+        );
+      }
+
+      const lastTest = data?.lastTestNotificationAt instanceof Timestamp
+        ? data.lastTestNotificationAt.toMillis()
+        : 0;
+      if (Date.now() - lastTest < 30_000) {
+        throw new HttpsError(
+          "resource-exhausted",
+          "Wait 30 seconds before sending another test notification.",
+        );
+      }
+
+      transaction.set(reference, {
+        lastTestNotificationAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      }, {merge: true});
+      return {
+        token: registeredToken,
+        platform: text(data?.platform),
+      };
+    });
+
+    try {
+      const messageId = await getMessaging().send({
+        token: token.token,
+        ...(token.platform === "capacitor"
+          ? {
+            notification: {
+              title: "LIA notifications are working",
+              body: "This device is ready to receive your LIA updates.",
+            },
+          }
+          : {}),
+        data: {
+          title: "LIA notifications are working",
+          body: "This device is ready to receive your LIA updates.",
+          deepLink: "/notifications",
+        },
+      });
+      await reference.set({
+        lastPushAcceptedAt: FieldValue.serverTimestamp(),
+        lastPushErrorCode: null,
+        updatedAt: FieldValue.serverTimestamp(),
+      }, {merge: true});
+      return {accepted: true, messageId};
+    } catch (error) {
+      const code = text((error as {code?: unknown}).code) || "unknown";
+      const invalidToken = code === "messaging/registration-token-not-registered" ||
+        code === "messaging/invalid-registration-token";
+
+      if (invalidToken) {
+        await reference.delete();
+      } else {
+        await reference.set({
+          lastPushErrorAt: FieldValue.serverTimestamp(),
+          lastPushErrorCode: code,
+          updatedAt: FieldValue.serverTimestamp(),
+        }, {merge: true});
+      }
+
+      throw new HttpsError(
+        "unavailable",
+        invalidToken
+          ? "This notification registration expired. Enable notifications again."
+          : "Firebase could not send the test notification. Try again shortly.",
+      );
+    }
   },
 );

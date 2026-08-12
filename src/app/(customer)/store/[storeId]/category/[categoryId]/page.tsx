@@ -12,6 +12,7 @@
 
 import {
   use,
+  useEffect,
   useState,
 } from "react";
 import { useRouter } from "next/navigation";
@@ -25,6 +26,7 @@ import { AnimatePresence } from "framer-motion";
 import { useCart } from "@/context/CartContext";
 import { useCustomerStore } from "@/hooks/useCustomerStore";
 import { promotionService } from "@/services/promotion/promotionService";
+import { productService } from "@/services/product/productService";
 import { DistanceWarningModal } from "@/components/customer/store/DistanceWarningModal";
 import { BottomBar } from "@/components/customer/store/BottomBar";
 import { ProductCard } from "@/components/customer/store/ProductCard";
@@ -44,11 +46,14 @@ export default function StoreCategoryPage({
   const { storeId, categoryId } = use(params);
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
+  const [categoryProducts, setCategoryProducts] = useState<Product[]>([]);
+  const [productCursor, setProductCursor] = useState<{name: string; id: string} | null>(null);
+  const [hasMoreProducts, setHasMoreProducts] = useState(false);
+  const [loadingMoreProducts, setLoadingMoreProducts] = useState(false);
 
   const {
     store,
     categories,
-    products,
     loading,
     resolvedStoreId,
     error,
@@ -83,16 +88,56 @@ export default function StoreCategoryPage({
   const isDealsPage =
     categoryId === "deals";
 
+  useEffect(() => {
+    if (loading || resolvedStoreId !== storeId) return;
+    let active = true;
+
+    void productService.getStoreProductsPage(storeId, {
+      pageSize: 40,
+      categoryValues: isDealsPage
+        ? undefined
+        : Array.from(new Set([categoryId, category?.name].filter((value): value is string => Boolean(value)))),
+    }).then((page) => {
+      if (!active) return;
+      setCategoryProducts(page.products);
+      setProductCursor(page.nextCursor);
+      setHasMoreProducts(page.hasMore);
+    }).catch((loadError) => {
+      console.error("Unable to load category products:", loadError);
+    });
+
+    return () => { active = false; };
+  }, [category?.name, categoryId, isDealsPage, loading, resolvedStoreId, storeId]);
+
   const pageProducts =
     isDealsPage
-      ? products.filter(
+      ? categoryProducts.filter(
           (product) =>
             product.promotion !== undefined &&
             promotionService.isActive(
               product.promotion
             )
         )
-      : category?.products ?? [];
+      : categoryProducts;
+
+  const loadMoreProducts = async () => {
+    if (!productCursor || !hasMoreProducts || loadingMoreProducts) return;
+    try {
+      setLoadingMoreProducts(true);
+      const page = await productService.getStoreProductsPage(storeId, {
+        cursor: productCursor,
+        pageSize: 40,
+        categoryValues: isDealsPage
+          ? undefined
+          : Array.from(new Set([categoryId, category?.name].filter((value): value is string => Boolean(value)))),
+      });
+      setCategoryProducts((current) => [...current, ...page.products]);
+      setProductCursor(page.nextCursor);
+      setHasMoreProducts(page.hasMore);
+    } finally {
+      setLoadingMoreProducts(false);
+    }
+  };
 
   const hasFreshProducts =
     category?.freshnessEligible === true && pageProducts.length > 0;
@@ -227,8 +272,7 @@ export default function StoreCategoryPage({
         </div>
       )}
 
-      {(!isDealsPage && !category) ||
-      displayedProducts.length === 0 ? (
+      {displayedProducts.length === 0 ? (
         <section className="flex min-h-[55vh] flex-col items-center justify-center px-6 text-center">
           <div className="mb-5 flex h-20 w-20 items-center justify-center rounded-full bg-orange-50">
             <PackageOpen className="h-10 w-10 text-orange-400" />
@@ -252,8 +296,9 @@ export default function StoreCategoryPage({
           </button>
         </section>
       ) : (
-        <div className="grid grid-cols-2 gap-x-3 gap-y-7 sm:gap-x-5 sm:gap-y-8">
-          {displayedProducts.map((product) => (
+        <>
+          <div className="grid grid-cols-2 gap-x-3 gap-y-7 sm:gap-x-5 sm:gap-y-8">
+            {displayedProducts.map((product) => (
             <ProductCard
               key={product.id}
               product={product}
@@ -262,8 +307,19 @@ export default function StoreCategoryPage({
               onQuantityChange={handleQuantityChange}
               quantity={getItemQuantity(product.id)}
             />
-          ))}
-        </div>
+            ))}
+          </div>
+          {hasMoreProducts && !normalizedSearch && (
+            <button
+              type="button"
+              onClick={() => void loadMoreProducts()}
+              disabled={loadingMoreProducts}
+              className="mx-auto mt-8 block rounded-full border border-gray-200 bg-white px-6 py-3 text-sm font-bold text-gray-800 shadow-sm transition hover:bg-gray-50 disabled:opacity-50"
+            >
+              {loadingMoreProducts ? "Loading…" : "Load more products"}
+            </button>
+          )}
+        </>
       )}
 
       <BottomBar

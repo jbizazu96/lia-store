@@ -51,7 +51,7 @@ export const Step1StoreInfo = memo(({
     className="space-y-4"
   >
     <h2 className="text-xl font-bold text-gray-800">Store Information</h2>
-    <p className="text-gray-500 text-sm">Tell us about your African grocery store</p>
+    <p className="text-gray-500 text-sm">Tell us about your independent store</p>
 
     {/* Store Name */}
     <div>
@@ -63,7 +63,7 @@ export const Step1StoreInfo = memo(({
           value={name}
           onChange={(e) => setName(e.target.value)}
           className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500"
-          placeholder="African Grocery Store"
+          placeholder="Your store name"
         />
       </div>
     </div>

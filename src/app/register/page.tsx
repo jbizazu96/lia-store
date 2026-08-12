@@ -212,7 +212,7 @@ export default function RegisterPage() {
                 <div>
                   <h3 className="font-semibold text-gray-800">Customer</h3>
                   <p className="text-sm text-gray-500">
-                    Shop for African groceries and get delivery
+                    Shop independent local stores and get delivery
                   </p>
                 </div>
               </div>
@@ -256,7 +256,7 @@ export default function RegisterPage() {
                 <div>
                   <h3 className="font-semibold text-gray-800">Store Owner</h3>
                   <p className="text-sm text-gray-500">
-                    Sell your African products to the community
+                    Reach local customers without big-platform commissions
                   </p>
                 </div>
               </div>

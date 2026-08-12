@@ -17,8 +17,12 @@ import {
   deleteDoc,
   doc,
   getDocs,
+  getCountFromServer,
+  documentId,
+  limit,
   orderBy,
   query,
+  startAfter,
   updateDoc,
   where,
   onSnapshot,
@@ -46,14 +50,29 @@ export class NotificationService {
     return uid;
   }
 
-  /**
-   * Returns every notification for a user.
-   */
+  /** Returns one bounded page. The timestamp/id pair is a stable cursor. */
   async getNotifications(
-    uid: string
-  ): Promise<Notification[]> {
+    uid: string,
+    options: {
+      pageSize?: number;
+      cursor?: {createdAt: Date; id: string} | null;
+    } = {},
+  ): Promise<{
+    notifications: Notification[];
+    hasMore: boolean;
+    nextCursor: {createdAt: Date; id: string} | null;
+  }> {
 
     const currentUid = this.requireCurrentUser(uid);
+    const requestedSize = Math.min(50, Math.max(1, options.pageSize ?? 25));
+    const constraints = [
+      orderBy("createdAt", "desc"),
+      orderBy(documentId(), "desc"),
+      ...(options.cursor
+        ? [startAfter(options.cursor.createdAt, options.cursor.id)]
+        : []),
+      limit(requestedSize + 1),
+    ];
     const q = query(
 
       collection(
@@ -63,19 +82,22 @@ export class NotificationService {
         "notifications"
       ),
 
-      orderBy(
-        "createdAt",
-        "desc"
-      )
-
+      ...constraints
     );
 
     const snapshot =
       await getDocs(q);
 
-    return snapshot.docs.map(
-      mapFirestoreNotification
-    );
+    const pageDocuments = snapshot.docs.slice(0, requestedSize);
+    const notifications = pageDocuments.map(mapFirestoreNotification);
+    const lastNotification = notifications.at(-1);
+    return {
+      notifications,
+      hasMore: snapshot.docs.length > requestedSize,
+      nextCursor: lastNotification
+        ? {createdAt: lastNotification.createdAt, id: lastNotification.id}
+        : null,
+    };
 
   }
 
@@ -104,10 +126,8 @@ export class NotificationService {
 
     );
 
-    const snapshot =
-      await getDocs(q);
-
-    return snapshot.size;
+    const snapshot = await getCountFromServer(q);
+    return snapshot.data().count;
 
   }
 
@@ -232,7 +252,8 @@ listenForUnreadCount(
       "read",
       "==",
       false
-    )
+    ),
+    limit(1)
 
   );
 
@@ -240,12 +261,10 @@ listenForUnreadCount(
 
     q,
 
-    (snapshot) => {
-
-      callback(
-        snapshot.size
-      );
-
+    () => {
+      void this.getUnreadCount(currentUid).then(callback).catch((error) => {
+        console.error("Unable to count unread notifications:", error);
+      });
     }
 
   );
@@ -274,7 +293,8 @@ listenForNotifications(
     orderBy(
       "createdAt",
       "desc"
-    )
+    ),
+    limit(50)
 
   );
 

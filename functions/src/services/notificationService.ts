@@ -83,27 +83,20 @@ export class NotificationService {
     title: string,
     body: string,
     deepLink?: string,
+    platform?: string,
   ): Promise<void> {
 
     await getMessaging().send({
 
       token,
-
-      notification: {
-
-        title,
-
-        body,
-
-      },
-
-      ...(deepLink
-        ? {
-          data: {
-            deepLink,
-          },
-        }
+      ...(platform === "capacitor"
+        ? {notification: {title, body}}
         : {}),
+      data: {
+        title,
+        body,
+        ...(deepLink ? {deepLink} : {}),
+      },
 
     });
 
@@ -159,7 +152,10 @@ async sendToUser(
     Array.from(devicesByToken.entries()).map(
       async ([token, documents]) => {
         try {
-          await this.sendToDevice(token, title, body, deepLink);
+          const platform = typeof documents[0]?.data().platform === "string"
+            ? documents[0].data().platform
+            : undefined;
+          await this.sendToDevice(token, title, body, deepLink, platform);
           const batch = db.batch();
           documents.forEach((document) => {
             batch.set(document.ref, {

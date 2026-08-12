@@ -36,7 +36,7 @@ self.addEventListener("activate", (event) => {
 });
 
 messaging.onBackgroundMessage((payload) => {
-  const notificationTitle = payload.notification?.title ?? "LIA";
+  const notificationTitle = payload.data?.title ?? payload.notification?.title ?? "LIA";
   const candidate = payload.data?.deepLink;
   const deepLink = typeof candidate === "string" &&
     candidate.startsWith("/") &&
@@ -45,7 +45,7 @@ messaging.onBackgroundMessage((payload) => {
     : "/home";
 
   return self.registration.showNotification(notificationTitle, {
-    body: payload.notification?.body,
+    body: payload.data?.body ?? payload.notification?.body,
     icon: "/icon/icon-192.png",
     badge: "/icon/icon-192.png",
     data: {deepLink},
