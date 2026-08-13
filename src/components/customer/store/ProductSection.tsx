@@ -47,9 +47,14 @@ export function ProductSection({
           {category.iconUrl && (
             <Image src={category.iconUrl} alt="" width={28} height={28} sizes="28px" className="h-7 w-7 object-contain" />
           )}
-          <h3 className="text-xl font-black tracking-[-0.02em] text-[#172217]">
-            {capitalize(category.name)}
-          </h3>
+          <div>
+            <h3 className="text-xl font-black tracking-[-0.02em] text-[#172217]">
+              {capitalize(category.name)}
+            </h3>
+            <p className="mt-0.5 text-xs font-medium text-gray-500">
+              {category.productCount ?? products.length} product{(category.productCount ?? products.length) === 1 ? "" : "s"}
+            </p>
+          </div>
         </div>
         <button
           type="button"

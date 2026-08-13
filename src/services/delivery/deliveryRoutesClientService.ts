@@ -17,6 +17,7 @@ import {
   readCached,
   writeCached,
 } from "@/services/cache/clientDataCache";
+import {reportClientIssue} from "@/services/monitoring/clientErrorReporter";
 
 export interface DeliveryRouteCoordinates {
   latitude: number;
@@ -92,6 +93,7 @@ export async function getStoreDeliveryRoutes(
   storeIds: string[],
   destination: DeliveryRouteCoordinates
 ): Promise<StoreDeliveryRoute[]> {
+  const startedAt = performance.now();
   const callable = httpsCallable<
     {
       storeIds: string[];
@@ -105,22 +107,36 @@ export async function getStoreDeliveryRoutes(
 
   const routeBatches: StoreDeliveryRoute[] = [];
 
-  for (
-    let start = 0;
-    start < storeIds.length;
-    start += MAX_STORES_PER_REQUEST
-  ) {
-    const response = await callable({
-      storeIds: storeIds.slice(
-        start,
-        start + MAX_STORES_PER_REQUEST
-      ),
-      destination,
+  try {
+    for (
+      let start = 0;
+      start < storeIds.length;
+      start += MAX_STORES_PER_REQUEST
+    ) {
+      const response = await callable({
+        storeIds: storeIds.slice(start, start + MAX_STORES_PER_REQUEST),
+        destination,
+      });
+      routeBatches.push(...response.data.routes);
+    }
+  } catch (error) {
+    reportClientIssue({
+      area: "delivery.route_calculation",
+      message: "Delivery route calculation failed",
+      error,
+      metadata: {storeCount: storeIds.length},
     });
+    throw error;
+  }
 
-    routeBatches.push(
-      ...response.data.routes
-    );
+  const durationMs = Math.round(performance.now() - startedAt);
+  if (durationMs >= 2_500) {
+    reportClientIssue({
+      area: "delivery.route_latency",
+      message: "Delivery route calculation was slow",
+      severity: "warning",
+      metadata: {durationMs, storeCount: storeIds.length},
+    });
   }
 
   return routeBatches;

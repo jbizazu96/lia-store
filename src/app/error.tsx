@@ -6,6 +6,7 @@ import {
 import {
   RefreshCw,
 } from "lucide-react";
+import {reportClientIssue} from "@/services/monitoring/clientErrorReporter";
 
 export default function RootError({
   error,
@@ -16,6 +17,13 @@ export default function RootError({
 }) {
   useEffect(() => {
     console.error("Application route error:", error);
+    reportClientIssue({
+      area: "react.route_error_boundary",
+      message: error.message || "Application route failed to render",
+      severity: "fatal",
+      error,
+      metadata: {digest: error.digest ?? ""},
+    });
   }, [error]);
 
   return (

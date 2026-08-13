@@ -38,6 +38,7 @@ import {
 import {
   checkoutPaymentReturnUrl,
 } from "@/services/payment/checkoutReturnUrl";
+import {reportClientIssue} from "@/services/monitoring/clientErrorReporter";
 
 
 /*
@@ -253,6 +254,12 @@ export function CheckoutPaymentForm({
         if (
           confirmationResult.error
         ) {
+          reportClientIssue({
+            area: "checkout.stripe_confirmation",
+            message: "Stripe rejected payment confirmation",
+            error: confirmationResult.error,
+            metadata: {orderId},
+          });
           const message =
             getPaymentErrorMessage(
               confirmationResult
@@ -271,6 +278,11 @@ export function CheckoutPaymentForm({
             .paymentIntent;
 
         if (!paymentIntent) {
+          reportClientIssue({
+            area: "checkout.stripe_confirmation",
+            message: "Stripe confirmation returned no PaymentIntent",
+            metadata: {orderId},
+          });
           const message =
             "Stripe did not return the payment status. Please check your orders before trying again.";
 
@@ -318,6 +330,12 @@ export function CheckoutPaymentForm({
           "Stripe payment confirmation failed:",
           error
         );
+        reportClientIssue({
+          area: "checkout.stripe_confirmation",
+          message: "Stripe payment confirmation failed",
+          error,
+          metadata: {orderId},
+        });
 
         const message =
           "Your payment could not be completed. Please try again.";

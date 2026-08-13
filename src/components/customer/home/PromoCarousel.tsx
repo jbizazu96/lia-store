@@ -7,6 +7,8 @@ import {Gift, Percent, Tag, Truck} from "lucide-react";
 import {homePromotionClientService} from "@/services/promotion/homePromotionClientService";
 import type {HomePromotion} from "@/types/homePromotion";
 
+const PROMOTION_REFRESH_INTERVAL_MS = 10 * 60 * 1000;
+
 const THEME = {
   orange: {color: "from-orange-500 to-orange-600", icon: Truck},
   green: {color: "from-green-500 to-green-600", icon: Percent},
@@ -25,10 +27,12 @@ export function PromoCarousel() {
 
   useEffect(() => {
     let active = true;
-    const load = async () => {
+    let lastLoadedAt = 0;
+    const load = async (forceRefresh = false) => {
       try {
-        const result = await homePromotionClientService.getActive();
+        const result = await homePromotionClientService.getActive(forceRefresh);
         if (active) {
+          lastLoadedAt = Date.now();
           setPromotions(result);
           setCurrentIndex((current) => Math.min(current, Math.max(result.length - 1, 0)));
         }
@@ -37,8 +41,28 @@ export function PromoCarousel() {
       }
     };
     void load();
-    const interval = window.setInterval(() => { void load(); }, 60_000);
-    return () => { active = false; window.clearInterval(interval); };
+    const refreshWhenVisible = () => {
+      if (
+        document.visibilityState === "visible" &&
+        navigator.onLine &&
+        Date.now() - lastLoadedAt >= 5 * 60 * 1000
+      ) {
+        void load(true);
+      }
+    };
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === "visible" && navigator.onLine) {
+        void load(true);
+      }
+    }, PROMOTION_REFRESH_INTERVAL_MS);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    window.addEventListener("focus", refreshWhenVisible);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+      window.removeEventListener("focus", refreshWhenVisible);
+    };
   }, []);
 
   useEffect(() => {

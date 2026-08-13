@@ -27,9 +27,6 @@ import {
 
 import { auth } from "@/lib/firebase";
 
-import {
-  categoryService,
-} from "@/services/category/categoryService";
 import { storeMapper } from "@/mappers/storeMapper";
 
 import { productService } from "@/services/product/productService";
@@ -135,21 +132,6 @@ function parseNumber(
 }
 
 /**
- * Customers only see image-bearing products once the optimized image is
- * ready. Legacy and intentionally image-less products remain available.
- */
-function isCustomerVisibleProduct(
-  product: Product
-): boolean {
-  return (
-    product.isAvailable &&
-    (product.imageStatus === undefined ||
-      product.imageStatus === "none" ||
-      product.imageStatus === "ready")
-  );
-}
-
-/**
  * Product promotions are the store promotions customers can currently use.
  * Keep every active product offer as its own carousel item so a store can
  * advertise multiple discounts, BOGO offers, or delivery offers at once.
@@ -223,8 +205,8 @@ export function useCustomerStore({
 
   useEffect(() => {
     let isMounted = true;
-    let unsubscribeProducts: (() => void) | null = null;
     let unsubscribeStore: (() => void) | null = null;
+    let removeCatalogRefresh: (() => void) | null = null;
 
     /*
     |--------------------------------------------------------------------------
@@ -299,28 +281,14 @@ export function useCustomerStore({
         |--------------------------------------------------------------------------
         */
 
-        const [
-          storeProducts,
-          categoryDefinitions,
-          customerLocation,
-        ] = await Promise.all([
-          productService.getStoreProducts(
-            storeId
-          ),
-          categoryService.getCategories(),
+        const [storeCategories, customerLocation] = await Promise.all([
+          productService.getStoreProductPreview(storeId),
           customerLocationRequest,
         ]);
 
-        const customerProducts =
-          storeProducts.filter(
-            isCustomerVisibleProduct
-          );
-
-        const storeCategories =
-          categoryService.groupCategoriesWithProducts(
-            categoryDefinitions,
-            customerProducts
-          );
+        const previewProducts = storeCategories.flatMap(
+          (category) => category.products,
+        );
 
         /*
         |--------------------------------------------------------------------------
@@ -453,7 +421,7 @@ export function useCustomerStore({
 
               promotions:
                 getActiveStorePromotions(
-                  customerProducts
+                  previewProducts
                 ),
 
               isFavorite: false,
@@ -474,7 +442,7 @@ export function useCustomerStore({
         }
 
         setStore(customerStore);
-        setProducts(customerProducts);
+        setProducts(previewProducts);
         setCategories(storeCategories);
         setResolvedStoreId(storeId);
 
@@ -531,6 +499,35 @@ export function useCustomerStore({
           }
         );
 
+        /* Refresh only the bounded category previews when a customer returns
+         * to the app. This catches stock and image changes without installing
+         * an unbounded listener over the store's complete inventory. */
+        let lastCatalogRefreshAt = Date.now();
+        const refreshCatalogWhenVisible = () => {
+          if (document.visibilityState !== "visible" ||
+              Date.now() - lastCatalogRefreshAt < 30_000) return;
+          lastCatalogRefreshAt = Date.now();
+          void productService.getStoreProductPreview(storeId, true).then((updatedCategories) => {
+            if (!isMounted) return;
+            const updatedProducts = updatedCategories.flatMap((category) => category.products);
+            setCategories(updatedCategories);
+            setProducts(updatedProducts);
+            setStore((current) => current ? {
+              ...current,
+              categories: updatedCategories,
+              promotions: getActiveStorePromotions(updatedProducts),
+            } : current);
+          }).catch((refreshError) => {
+            console.error("Unable to refresh the store catalog preview:", refreshError);
+          });
+        };
+        document.addEventListener("visibilitychange", refreshCatalogWhenVisible);
+        window.addEventListener("focus", refreshCatalogWhenVisible);
+        removeCatalogRefresh = () => {
+          document.removeEventListener("visibilitychange", refreshCatalogWhenVisible);
+          window.removeEventListener("focus", refreshCatalogWhenVisible);
+        };
+
         const exceedsDeliveryRadius =
           applicablePricing?.decision?.zoneAccessType !== "customer_order_zone" &&
           distance > marketplacePolicy.maxRadiusMiles;
@@ -543,45 +540,6 @@ export function useCustomerStore({
           !skipDistanceWarning
         );
 
-        unsubscribeProducts =
-          productService.listenToStoreProducts(
-            storeId,
-            (liveProducts) => {
-              if (!isMounted) {
-                return;
-              }
-
-              const visibleProducts =
-                liveProducts.filter(
-                  isCustomerVisibleProduct
-                );
-
-              setProducts(visibleProducts);
-              setStore((currentStore) =>
-                currentStore
-                  ? {
-                    ...currentStore,
-                    promotions:
-                      getActiveStorePromotions(
-                        visibleProducts
-                      ),
-                  }
-                  : currentStore
-              );
-              setCategories(
-                categoryService.groupCategoriesWithProducts(
-                  categoryDefinitions,
-                  visibleProducts
-                )
-              );
-            },
-            (listenerError) => {
-              console.error(
-                "Error receiving customer store products:",
-                listenerError
-              );
-            }
-          );
       } catch (loadError) {
         console.error(
           "Error loading customer store:",
@@ -620,7 +578,7 @@ export function useCustomerStore({
     return () => {
       isMounted = false;
       unsubscribeStore?.();
-      unsubscribeProducts?.();
+      removeCatalogRefresh?.();
     };
   }, [
     storeId,

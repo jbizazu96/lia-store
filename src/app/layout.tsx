@@ -10,6 +10,7 @@ import {CartProvider} from "@/context/CartContext";
 import {ConfirmationProvider} from "@/context/ConfirmationContext";
 import {SuccessToastProvider} from "@/context/SuccessToastContext";
 import {NativeCustomerBridge} from "@/components/customer/native/NativeCustomerBridge";
+import {GlobalClientErrorReporter} from "@/components/monitoring/GlobalClientErrorReporter";
 
 export const metadata: Metadata = {
   title: "LIA Marketplace | Local delivery for independent stores",
@@ -57,6 +58,7 @@ export default function RootLayout({
               <SuccessToastProvider>
                 <CartProvider>
                   <NativeCustomerBridge />
+                  <GlobalClientErrorReporter />
                   <div className="min-h-screen flex flex-col">
                     <main className="flex-1">
                       {children}

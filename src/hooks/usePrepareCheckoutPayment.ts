@@ -44,6 +44,7 @@ import type {
 import type {
   PrepareCheckoutPaymentResult,
 } from "@/types/checkoutPayment";
+import {reportClientIssue} from "@/services/monitoring/clientErrorReporter";
 
 
 /*
@@ -199,6 +200,12 @@ UsePrepareCheckoutPaymentResult {
           "Unable to prepare Stripe checkout:",
           preparationError
         );
+        reportClientIssue({
+          area: "checkout.payment_preparation",
+          message: "Unable to prepare Stripe checkout",
+          error: preparationError,
+          metadata: {storeId: input.storeId},
+        });
 
         const message =
           getPaymentPreparationErrorMessage(

@@ -5,6 +5,7 @@ import {Capacitor} from "@capacitor/core";
 import {BellRing} from "lucide-react";
 import {useAuth} from "@/context/AuthContext";
 import {firebaseMessaging} from "@/services/notification/firebaseMessaging";
+import {reportClientIssue} from "@/services/monitoring/clientErrorReporter";
 
 export function CustomerPushPermissionPrompt() {
   const {user, loading} = useAuth();
@@ -45,6 +46,11 @@ export function CustomerPushPermissionPrompt() {
         setError("Notifications were not enabled. You can try again from Profile.");
       }
     } catch (reason) {
+      reportClientIssue({
+        area: "notifications.permission_registration",
+        message: "Push notification registration failed",
+        error: reason,
+      });
       setError(reason instanceof Error ? reason.message : "Unable to enable notifications.");
     } finally {
       setWorking(false);

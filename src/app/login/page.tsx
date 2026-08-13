@@ -41,6 +41,7 @@ import {
 } from "@/services/user/currentAccountClientService";
 import { googleAuthenticationService } from "@/services/auth/googleAuthenticationService";
 import {Capacitor} from "@capacitor/core";
+import {reportClientIssue} from "@/services/monitoring/clientErrorReporter";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -216,6 +217,12 @@ export default function LoginPage() {
       const code = error && typeof error === "object" && "code" in error
         ? String(error.code)
         : "";
+      reportClientIssue({
+        area: "authentication.email_sign_in",
+        message: "Email sign-in failed",
+        error,
+        metadata: {code},
+      });
       if (code === "auth/user-not-found") {
         setError("No account found with this email.");
       } else if (code === "auth/wrong-password") {
@@ -258,6 +265,11 @@ export default function LoginPage() {
       await handlePostLogin(user.uid);
     } catch (error) {
       console.error("Post-login account setup failed:", error);
+      reportClientIssue({
+        area: "authentication.post_login_setup",
+        message: "Post-login account setup failed",
+        error,
+      });
       setError(
         error instanceof CurrentAccountClientError
           ? "We couldn't load your account right now. Please try again."
@@ -287,6 +299,11 @@ export default function LoginPage() {
       await handlePostLogin(user.uid);
     } catch (error) {
       console.error(error);
+      reportClientIssue({
+        area: "authentication.google_sign_in",
+        message: "Google sign-in failed",
+        error,
+      });
       setError("Google sign in failed.");
     } finally {
       setLoading(false);

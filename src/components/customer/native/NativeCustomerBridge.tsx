@@ -11,6 +11,7 @@ import {
   isNativeCustomerPath,
   nativeCustomerDestination,
 } from "@/services/navigation/nativeCustomerRoutes";
+import {reportClientIssue} from "@/services/monitoring/clientErrorReporter";
 
 export function NativeCustomerBridge() {
   const pathname = usePathname();
@@ -48,6 +49,10 @@ export function NativeCustomerBridge() {
         }
       } catch {
         event.preventDefault();
+        reportClientIssue({
+          area: "navigation.native_link",
+          message: "Native link could not be parsed",
+        });
       }
     };
 
@@ -61,6 +66,13 @@ export function NativeCustomerBridge() {
     const open = (candidate: string) => {
       const fallback = user ? "/home" : "/login";
       const internalPath = toSafeLiaPath(candidate);
+      if (!internalPath) {
+        reportClientIssue({
+          area: "navigation.deep_link",
+          message: "Native deep link was rejected",
+          metadata: {scheme: candidate.split(":", 1)[0]?.slice(0, 30) ?? "unknown"},
+        });
+      }
       router.replace(
         internalPath
           ? nativeCustomerDestination(internalPath, fallback)

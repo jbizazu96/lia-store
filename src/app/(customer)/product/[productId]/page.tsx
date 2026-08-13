@@ -166,9 +166,12 @@ export default function ProductPage({ params }: ProductPageProps) {
           return;
         }
 
-        const [storeData, storeProducts] = await Promise.all([
+        const [storeData, relatedPage] = await Promise.all([
           storeService.getStore(productData.storeId),
-          productService.getStoreProducts(productData.storeId),
+          productService.getStoreProductsPage(productData.storeId, {
+            categoryValues: [productData.category],
+            pageSize: 8,
+          }),
         ]);
 
         if (!active) return;
@@ -184,7 +187,7 @@ export default function ProductPage({ params }: ProductPageProps) {
         setSelectedImageIndex(0);
         setSelectedQuantity(1);
         setRelatedProducts(
-          storeProducts
+          relatedPage.products
             .filter(
               (candidate) =>
                 candidate.id !== productData.id &&

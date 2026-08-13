@@ -31,6 +31,9 @@ export interface Category {
 
   freshnessEligible: boolean;
 
+  /** Total available products; previews may contain only the first row. */
+  productCount?: number;
+
   /**
    * Products belonging to this category.
    */

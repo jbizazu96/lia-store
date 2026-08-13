@@ -18,6 +18,7 @@ import {
   HttpsError,
   onCall,
 } from "firebase-functions/v2/https";
+import {normalizeCatalogSearchText} from "../services/catalog/catalogSearchTokens";
 
 if (admin.apps.length === 0) {
   admin.initializeApp();
@@ -26,6 +27,8 @@ if (admin.apps.length === 0) {
 const db = getFirestore("default");
 const DEFAULT_PRODUCT_PAGE_SIZE = 60;
 const MAXIMUM_PRODUCT_PAGE_SIZE = 100;
+const STORE_PREVIEW_PRODUCTS_PER_CATEGORY = 8;
+const MAXIMUM_STORE_PREVIEW_CATEGORIES = 50;
 
 function pageSize(value: unknown): number {
   const requested = typeof value === "number" ? Math.floor(value) : 0;
@@ -105,6 +108,7 @@ export const getCustomerStoreProducts = onCall(
         .filter(Boolean)))
         .slice(0, 10)
       : [];
+    const searchTerm = normalizeCatalogSearchText(request.data?.searchTerm);
     const cursorName = text(request.data?.cursor?.name).trim();
     const cursorId = text(request.data?.cursor?.id).trim();
     const size = pageSize(request.data?.pageSize);
@@ -137,6 +141,11 @@ export const getCustomerStoreProducts = onCall(
     } else if (categoryValues.length > 1) {
       productQuery = productQuery.where("category", "in", categoryValues);
     }
+    if (searchTerm.length >= 2) {
+      productQuery = productQuery
+        .where("searchTokens", "array-contains", searchTerm)
+        .where("isAvailable", "==", true);
+    }
 
     if (cursorName && cursorId) {
       productQuery = productQuery.startAfter(cursorName, cursorId);
@@ -156,4 +165,66 @@ export const getCustomerStoreProducts = onCall(
         : null,
     };
   }
+);
+
+/**
+ * Returns a bounded store landing-page catalog. Counts use Firestore's
+ * aggregation API, while only a small first row of products is transferred
+ * for each admin-managed category. Full category catalogs remain paginated by
+ * getCustomerStoreProducts.
+ */
+export const getCustomerStoreProductPreview = onCall(
+  {region: "us-central1"},
+  async (request) => {
+    const storeId = typeof request.data?.storeId === "string"
+      ? request.data.storeId.trim()
+      : "";
+
+    if (!storeId || storeId.length > 200) {
+      throw new HttpsError("invalid-argument", "The store ID is invalid.");
+    }
+
+    const [store, categories] = await Promise.all([
+      db.collection("storePublicProfiles").doc(storeId).get(),
+      db.collection("categories")
+        .orderBy("name", "asc")
+        .limit(MAXIMUM_STORE_PREVIEW_CATEGORIES)
+        .get(),
+    ]);
+
+    if (!store.exists) {
+      throw new HttpsError("not-found", "This store is not available.");
+    }
+
+    const previews = await Promise.all(categories.docs.map(async (category) => {
+      const products = db.collection("productPublicProfiles")
+        .where("storeId", "==", storeId)
+        .where("category", "==", category.id)
+        .where("isAvailable", "==", true);
+      const [count, sample] = await Promise.all([
+        products.count().get(),
+        products
+          .orderBy("name", "asc")
+          .orderBy(admin.firestore.FieldPath.documentId(), "asc")
+          .limit(STORE_PREVIEW_PRODUCTS_PER_CATEGORY)
+          .get(),
+      ]);
+
+      return {
+        id: category.id,
+        name: text(category.get("name")) || category.id,
+        iconUrl: text(category.get("iconUrl")),
+        freshnessEligible: category.get("freshnessEligible") === true,
+        productCount: count.data().count,
+        products: sample.docs.map((product) =>
+          publicProduct(product.id, product.data())
+        ),
+      };
+    }));
+
+    return {
+      categories: previews.filter((category) => category.productCount > 0),
+      previewLimit: STORE_PREVIEW_PRODUCTS_PER_CATEGORY,
+    };
+  },
 );

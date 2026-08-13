@@ -27,12 +27,22 @@ import { functions } from "@/lib/firebase";
 import { httpsCallable } from "firebase/functions";
 import {
   loadCached,
+  writeCached,
 } from "@/services/cache/clientDataCache";
 import type {
   Product,
   ProductGalleryImage,
   ProductImageVariants,
 } from "@/types/product";
+import type {Category} from "@/types/category";
+
+function isCustomerVisibleProduct(product: Product): boolean {
+  return product.isAvailable && (
+    product.imageStatus === undefined ||
+    product.imageStatus === "none" ||
+    product.imageStatus === "ready"
+  );
+}
 
 /** Firestore does not accept undefined values, including inside nested data. */
 function removeUndefinedFields(
@@ -406,12 +416,56 @@ primaryImageId:
  * Product service used throughout the application.
  */
 export const productService = {
+  async getStoreProductPreview(storeId: string, forceRefresh = false): Promise<Category[]> {
+    if (!storeId.trim()) return [];
+
+    const cacheKey = `customer-store-product-preview:${storeId}`;
+    const loadPreview = async () => {
+        const result = await httpsCallable<
+          {storeId: string},
+          {
+            categories: Array<{
+              id: string;
+              name: string;
+              iconUrl: string;
+              freshnessEligible: boolean;
+              productCount: number;
+              products: Array<{id: string} & DocumentData>;
+            }>;
+          }
+        >(functions, "getCustomerStoreProductPreview")({storeId});
+
+        return result.data.categories.map((category) => ({
+          id: category.id,
+          name: category.name,
+          iconUrl: category.iconUrl,
+          freshnessEligible: category.freshnessEligible,
+          productCount: category.productCount,
+          products: category.products
+            .map((product) => mapProductDocument(product.id, product))
+            .filter(isCustomerVisibleProduct),
+        })).filter((category) => category.productCount > 0);
+    };
+
+    if (forceRefresh) {
+      const categories = await loadPreview();
+      return writeCached(cacheKey, categories, {ttlMs: 30_000, scope: "public"});
+    }
+
+    return loadCached(
+      cacheKey,
+      loadPreview,
+      {ttlMs: 30_000, scope: "public"},
+    );
+  },
+
   async getStoreProductsPage(
     storeId: string,
     options: {
       cursor?: {name: string; id: string} | null;
       pageSize?: number;
       categoryValues?: string[];
+      searchTerm?: string;
     } = {},
   ): Promise<{
     products: Product[];
@@ -428,6 +482,7 @@ export const productService = {
         cursor: {name: string; id: string} | null;
         pageSize: number;
         categoryValues?: string[];
+        searchTerm?: string;
       },
       {
         products: Array<{id: string} & DocumentData>;
@@ -440,6 +495,9 @@ export const productService = {
       pageSize: options.pageSize ?? 60,
       ...(options.categoryValues?.length
         ? {categoryValues: options.categoryValues}
+        : {}),
+      ...(options.searchTerm?.trim()
+        ? {searchTerm: options.searchTerm.trim()}
         : {}),
     });
 

@@ -22,6 +22,7 @@ import {
 import {
   openLiaDeepLink,
 } from "./notificationDeepLink";
+import {reportClientIssue} from "@/services/monitoring/clientErrorReporter";
 
 export type {
   NotificationPermissionState,
@@ -439,6 +440,11 @@ export class FirebaseMessaging {
       }
       void this.registerDevice({requestPermission: false}).catch((error) => {
         console.error("Unable to refresh notification registration:", error);
+        reportClientIssue({
+          area: "notifications.token_refresh",
+          message: "Unable to refresh notification registration",
+          error,
+        });
       });
     };
 
@@ -448,6 +454,11 @@ export class FirebaseMessaging {
       if (this.getNativePreference() !== "accepted") return;
       void this.registerDevice({explicitUserAction: true}).catch((error) => {
         console.error("Unable to save the refreshed notification token:", error);
+        reportClientIssue({
+          area: "notifications.token_refresh",
+          message: "Unable to save refreshed notification token",
+          error,
+        });
       });
     });
     window.setInterval(refresh, 6 * 60 * 60 * 1000);

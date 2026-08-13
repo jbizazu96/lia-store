@@ -13,8 +13,8 @@
 
 import {
   use,
+  useEffect,
   useLayoutEffect,
-  useMemo,
   useRef,
   useState,
 } from "react";
@@ -53,6 +53,7 @@ import { CustomerPageSkeleton } from "@/components/customer/ui/CustomerPageSkele
 import type {
   Product,
 } from "@/types/product";
+import {productService} from "@/services/product/productService";
 
 interface StoreSearchPageProps {
   params: Promise<{
@@ -78,11 +79,15 @@ export default function StoreSearchPage({
   } = use(params);
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
+  const [displayedProducts, setDisplayedProducts] = useState<Product[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [searchCursor, setSearchCursor] = useState<{name: string; id: string} | null>(null);
+  const [hasMore, setHasMore] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   const {
     store,
-    products,
     loading,
     resolvedStoreId,
     error,
@@ -136,25 +141,59 @@ export default function StoreSearchPage({
 
   const normalizedQuery = normalizeSearchText(searchQuery);
 
-  const displayedProducts = useMemo(() => {
-    if (!normalizedQuery) {
-      return [];
+  useEffect(() => {
+    if (normalizedQuery.length < 2) {
+      queueMicrotask(() => {
+        setDisplayedProducts([]);
+        setSearching(false);
+        setSearchCursor(null);
+        setHasMore(false);
+      });
+      return;
     }
 
-    return products.filter((product) =>
-      [
-        product.name,
-        product.description ?? "",
-        product.category,
-      ]
-        .join(" ")
-        .toLocaleLowerCase()
-        .includes(normalizedQuery)
-    );
-  }, [
-    normalizedQuery,
-    products,
-  ]);
+    let active = true;
+    const timer = window.setTimeout(() => {
+      setSearching(true);
+      void productService.getStoreProductsPage(storeId, {
+        pageSize: 60,
+        searchTerm: normalizedQuery,
+      }).then((page) => {
+        if (active) {
+          setDisplayedProducts(page.products);
+          setSearchCursor(page.nextCursor);
+          setHasMore(page.hasMore);
+        }
+      }).catch((searchError) => {
+        console.error("Unable to search store products:", searchError);
+        if (active) setDisplayedProducts([]);
+      }).finally(() => {
+        if (active) setSearching(false);
+      });
+    }, 250);
+
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [normalizedQuery, storeId]);
+
+  const loadMoreResults = async () => {
+    if (!searchCursor || !hasMore || loadingMore) return;
+    try {
+      setLoadingMore(true);
+      const page = await productService.getStoreProductsPage(storeId, {
+        cursor: searchCursor,
+        pageSize: 60,
+        searchTerm: normalizedQuery,
+      });
+      setDisplayedProducts((current) => [...current, ...page.products]);
+      setSearchCursor(page.nextCursor);
+      setHasMore(page.hasMore);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   const handleAddToCart = (
     product: Product
@@ -317,19 +356,33 @@ export default function StoreSearchPage({
               </p>
             </div>
 
-            {displayedProducts.length > 0 ? (
-              <div className="grid grid-cols-2 gap-x-3 gap-y-7 sm:gap-x-5 sm:gap-y-8">
-                {displayedProducts.map((product) => (
-                  <ProductCard
-                    key={product.id}
-                    product={product}
-                    layout="grid"
-                    onAddToCart={handleAddToCart}
-                    onQuantityChange={handleQuantityChange}
-                    quantity={getItemQuantity(product.id)}
-                  />
-                ))}
-              </div>
+            {searching ? (
+              <CustomerPageSkeleton variant="search" />
+            ) : displayedProducts.length > 0 ? (
+              <>
+                <div className="grid grid-cols-2 gap-x-3 gap-y-7 sm:gap-x-5 sm:gap-y-8">
+                  {displayedProducts.map((product) => (
+                    <ProductCard
+                      key={product.id}
+                      product={product}
+                      layout="grid"
+                      onAddToCart={handleAddToCart}
+                      onQuantityChange={handleQuantityChange}
+                      quantity={getItemQuantity(product.id)}
+                    />
+                  ))}
+                </div>
+                {hasMore && (
+                  <button
+                    type="button"
+                    disabled={loadingMore}
+                    onClick={() => void loadMoreResults()}
+                    className="mx-auto mt-8 block rounded-full bg-gray-100 px-6 py-3 text-sm font-bold text-gray-800 transition hover:bg-gray-200 disabled:opacity-60"
+                  >
+                    {loadingMore ? "Loading…" : "Load more"}
+                  </button>
+                )}
+              </>
             ) : (
               <SearchEmptyState query={searchQuery} />
             )}

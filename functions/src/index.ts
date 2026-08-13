@@ -179,6 +179,10 @@ export {
 } from "./callable/adminCatalogSearchReindex";
 export {getMarketplacePricing} from "./callable/marketplacePricing";
 export {
+  cleanupClientErrorReports,
+  reportClientError,
+} from "./callable/clientErrorReports";
+export {
   deleteAdminHomePromotion,
   getAdminHomePromotions,
   getCustomerHomePromotions,
@@ -219,6 +223,7 @@ export {
   getCustomerStorePublicProfile,
 } from "./callable/customerStoreCatalog";
 export {
+  getCustomerStoreProductPreview,
   getCustomerStoreProducts,
 } from "./callable/customerStoreProducts";
 export {
