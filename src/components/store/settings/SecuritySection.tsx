@@ -18,12 +18,7 @@ import {updatePassword, reauthenticateWithCredential, EmailAuthProvider} from "f
 import {auth} from "@/lib/firebase";
 import { useConfirmation } from "@/context/ConfirmationContext";
 
-interface SecuritySectionProps {
-  userData: any;
-  setUserData: (data: any) => void;
-}
-
-export function SecuritySection({userData, setUserData}: SecuritySectionProps) {
+export function SecuritySection() {
   const { confirm } = useConfirmation();
   const [showPasswordForm, setShowPasswordForm] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -38,14 +33,21 @@ export function SecuritySection({userData, setUserData}: SecuritySectionProps) {
     newPassword: "",
     confirmPassword: "",
   });
+  const passwordManagedByLia = auth.currentUser?.providerData.some((provider) => provider.providerId === "password") === true;
+  const providerNames = auth.currentUser?.providerData.map((provider) => provider.providerId === "google.com" ? "Google" : provider.providerId === "apple.com" ? "Apple" : provider.providerId).join(", ") || "your sign-in provider";
+  const closePasswordForm = () => {
+    setShowPasswordForm(false);
+    setFormData({currentPassword: "", newPassword: "", confirmPassword: ""});
+    setError("");
+  };
 
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setMessage("");
 
-    if (formData.newPassword.length < 6) {
-      setError("Password must be at least 6 characters");
+    if (formData.newPassword.length < 12 || !/[a-z]/.test(formData.newPassword) || !/[A-Z]/.test(formData.newPassword) || !/\d/.test(formData.newPassword)) {
+      setError("Use at least 12 characters with uppercase, lowercase, and a number.");
       return;
     }
 
@@ -59,7 +61,6 @@ export function SecuritySection({userData, setUserData}: SecuritySectionProps) {
       message: "Your current password will be replaced with the new one.",
       confirmLabel: "Update password",
       cancelLabel: "Keep editing",
-      destructive: true,
     });
 
     if (!confirmed) return;
@@ -90,10 +91,15 @@ export function SecuritySection({userData, setUserData}: SecuritySectionProps) {
       });
       setShowPasswordForm(false);
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Password update error:", error);
-      if (error.code === "auth/wrong-password") {
-        setError("Current password is incorrect");
+      const code = typeof error === "object" && error !== null && "code" in error ? String(error.code) : "";
+      if (code === "auth/wrong-password" || code === "auth/invalid-credential") {
+        setError("Current password is incorrect.");
+      } else if (code === "auth/too-many-requests") {
+        setError("Too many attempts. Wait a few minutes before trying again.");
+      } else if (code === "auth/requires-recent-login") {
+        setError("Sign out, sign in again, and then retry the password change.");
       } else {
         setError("Failed to update password. Please try again.");
       }
@@ -119,12 +125,12 @@ export function SecuritySection({userData, setUserData}: SecuritySectionProps) {
                 {showPasswordForm ? "Enter your new password" : "Change your password to keep your account secure"}
               </p>
             </div>
-            <button
-              onClick={() => setShowPasswordForm(!showPasswordForm)}
+            {passwordManagedByLia ? <button
+              onClick={() => showPasswordForm ? closePasswordForm() : setShowPasswordForm(true)}
               className="px-4 py-2 text-sm font-medium text-orange-600 hover:bg-orange-50 rounded-xl transition"
             >
               {showPasswordForm ? "Cancel" : "Change Password"}
-            </button>
+            </button> : <span className="rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-gray-600">Managed by {providerNames}</span>}
           </div>
 
           {showPasswordForm && (
@@ -182,7 +188,7 @@ export function SecuritySection({userData, setUserData}: SecuritySectionProps) {
                     value={formData.newPassword}
                     onChange={(e) => setFormData({...formData, newPassword: e.target.value})}
                     className="w-full pl-10 pr-12 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500"
-                    placeholder="Min 6 characters"
+                    placeholder="At least 12 characters"
                     required
                   />
                   <button
@@ -222,7 +228,7 @@ export function SecuritySection({userData, setUserData}: SecuritySectionProps) {
               <div className="flex gap-3 pt-2">
                 <button
                   type="button"
-                  onClick={() => setShowPasswordForm(false)}
+                  onClick={closePasswordForm}
                   className="flex-1 py-2.5 border border-gray-200 rounded-xl text-gray-600 font-medium hover:bg-gray-50 transition"
                 >
                   Cancel
@@ -239,14 +245,13 @@ export function SecuritySection({userData, setUserData}: SecuritySectionProps) {
           )}
         </div>
 
-        {/* Two-Factor Authentication (Coming Soon) */}
-        <div className="bg-gray-50 rounded-xl p-4 mt-3 opacity-50">
+        <div className="bg-gray-50 rounded-xl p-4 mt-3">
           <div className="flex items-center justify-between">
             <div>
-              <p className="font-medium text-gray-800 text-sm">Two-Factor Authentication</p>
-              <p className="text-xs text-gray-500">Coming soon - Add an extra layer of security</p>
+              <p className="font-medium text-gray-800 text-sm">Account protection</p>
+              <p className="text-xs text-gray-500">Multi-factor security is managed through {passwordManagedByLia ? "Firebase Authentication" : providerNames}.</p>
             </div>
-            <span className="text-xs bg-gray-200 text-gray-500 px-3 py-1 rounded-full">Coming Soon</span>
+            <span className="text-xs bg-gray-200 text-gray-600 px-3 py-1 rounded-full">{passwordManagedByLia ? "LIA account" : "Provider account"}</span>
           </div>
         </div>
       </div>

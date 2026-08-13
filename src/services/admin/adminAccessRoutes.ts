@@ -14,6 +14,7 @@ export function requiredAdminPermission(pathname: string): AdminPermission | "ma
   if (pathname.startsWith("/admin/orders")) return "orders";
   if (pathname.startsWith("/admin/finance")) return "finance";
   if (pathname.startsWith("/admin/refund-claims")) return "refunds";
+  if (pathname.startsWith("/admin/support")) return "support";
   if (pathname.startsWith("/admin/promotions")) return "promotions";
   if (pathname.startsWith("/admin/settings")) return "settings";
   if (pathname.startsWith("/admin/notifications")) return null;

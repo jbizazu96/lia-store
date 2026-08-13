@@ -13,7 +13,7 @@ import {
 } from "@/lib/firebase";
 import {
   ref,
-  uploadBytes,
+  uploadBytesResumable,
 } from "firebase/storage";
 
 export type StoreImageField = "logo" | "banner" | "owner-photo-id" | "front" | "inside";
@@ -22,6 +22,7 @@ interface UploadStoreImageParams {
   storeId: string;
   field: StoreImageField;
   file: File;
+  onProgress?: (progress: number) => void;
 }
 
 export const storeImageService = {
@@ -29,7 +30,8 @@ export const storeImageService = {
     storeId,
     field,
     file,
-  }: UploadStoreImageParams): Promise<void> {
+    onProgress,
+  }: UploadStoreImageParams): Promise<{imageId: string}> {
     if (!storeId.trim()) {
       throw new Error("A store ID is required.");
     }
@@ -70,15 +72,22 @@ export const storeImageService = {
       `${imageId}.${extension}`,
     ].join("/");
 
-    await uploadBytes(ref(storage, originalPath), file, {
-      contentType: file.type,
-      cacheControl: "private, max-age=0, no-cache",
-      customMetadata: {
-        storeId,
-        imageId,
-        imageField: field,
-        processingType: "store-image-original",
-      },
+    const upload = uploadBytesResumable(ref(storage, originalPath), file, {
+        contentType: file.type,
+        cacheControl: "private, max-age=0, no-cache",
+        customMetadata: {
+          storeId,
+          imageId,
+          imageField: field,
+          processingType: "store-image-original",
+        },
     });
+
+    await new Promise<void>((resolve, reject) => {
+      upload.on("state_changed", (snapshot) => {
+        onProgress?.(Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100));
+      }, reject, resolve);
+    });
+    return {imageId};
   },
 };

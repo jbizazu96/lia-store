@@ -26,10 +26,10 @@ import {
   updateDoc,
   where,
   onSnapshot,
-  writeBatch,
 } from "firebase/firestore";
+import {httpsCallable} from "firebase/functions";
 
-import { auth, db } from "@/lib/firebase";
+import { auth, db, functions } from "@/lib/firebase";
 
 import type {
   Notification,
@@ -132,6 +132,14 @@ export class NotificationService {
 
   }
 
+  async getTotalCount(uid: string): Promise<number> {
+    const currentUid = this.requireCurrentUser(uid);
+    const snapshot = await getCountFromServer(
+      collection(db, "users", currentUid, "notifications"),
+    );
+    return snapshot.data().count;
+  }
+
   /**
    * Marks one notification as read.
    */
@@ -171,25 +179,8 @@ export class NotificationService {
   async markAllAsRead(
     uid: string
   ): Promise<void> {
-    const currentUid = this.requireCurrentUser(uid);
-    const unreadQuery = query(
-      collection(db, "users", currentUid, "notifications"),
-      where("read", "==", false)
-    );
-
-    const snapshot = await getDocs(unreadQuery);
-
-    for (let start = 0; start < snapshot.docs.length; start += 450) {
-      const batch = writeBatch(db);
-
-      snapshot.docs
-        .slice(start, start + 450)
-        .forEach((notificationDocument) => {
-          batch.update(notificationDocument.ref, { read: true });
-        });
-
-      await batch.commit();
-    }
+    this.requireCurrentUser(uid);
+    await this.runBulkAction("mark-read");
 
     publishNotificationMutation({workspace: "user", action: "read-all"});
   }
@@ -221,30 +212,26 @@ export class NotificationService {
   async clearAllNotifications(
     uid: string
   ): Promise<void> {
-    const currentUid = this.requireCurrentUser(uid);
-    const notificationsReference = collection(
-      db,
-      "users",
-      currentUid,
-      "notifications"
-    );
-
-    const snapshot = await getDocs(notificationsReference);
-    const notificationDocuments = snapshot.docs;
-
-    for (let start = 0; start < notificationDocuments.length; start += 450) {
-      const batch = writeBatch(db);
-
-      notificationDocuments
-        .slice(start, start + 450)
-        .forEach((notificationDocument) => {
-          batch.delete(notificationDocument.ref);
-        });
-
-      await batch.commit();
-    }
+    this.requireCurrentUser(uid);
+    await this.runBulkAction("clear");
 
     publishNotificationMutation({workspace: "user", action: "clear-all"});
+  }
+
+  private async runBulkAction(action: "mark-read" | "clear"): Promise<void> {
+    const callable = httpsCallable<
+      {action: "mark-read" | "clear"},
+      {processed: number; hasMore: boolean}
+    >(functions, "processUserNotificationBatch");
+
+    // Each request is independently safe and resumable. A failure leaves the
+    // already-processed batches committed; retrying continues with the rest.
+    for (let batch = 0; batch < 100; batch += 1) {
+      const response = await callable({action});
+      if (!response.data.hasMore) return;
+    }
+
+    throw new Error("Notification cleanup is still running. Please try again.");
   }
 
   /**

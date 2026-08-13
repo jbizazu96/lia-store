@@ -13,7 +13,7 @@
 */
 
 import { useEffect, useState } from "react";
-import { ArrowLeft, Bell, Package, Clock } from "lucide-react";
+import { ArrowLeft, Bell, Package, Clock, LoaderCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -41,6 +41,12 @@ export default function StoreNotificationsPage() {
   const [loading, setLoading] = useState(true);
   const [clearing, setClearing] = useState(false);
   const [markingAll, setMarkingAll] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
+  const [cursor, setCursor] = useState<{createdAt: Date; id: string} | null>(null);
+  const [totalCount, setTotalCount] = useState(0);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const { confirm } = useConfirmation();
   const { showSuccess } = useSuccessToast();
 
@@ -58,11 +64,24 @@ export default function StoreNotificationsPage() {
     if (!confirmed) return;
 
     await notificationService.deleteNotification(user.uid, notification.id);
+    setNotifications((current) => current.filter((item) => item.id !== notification.id));
+    setTotalCount((count) => Math.max(0, count - 1));
+    if (!notification.read) setUnreadCount((count) => Math.max(0, count - 1));
     showSuccess("Notification deleted.");
   };
 
+  const openNotification = async (notification: Notification) => {
+    if (!user) return;
+    if (!notification.read) {
+      await notificationService.markAsRead(user.uid, notification.id);
+      setNotifications((current) => current.map((item) => item.id === notification.id ? {...item, read: true} : item));
+      setUnreadCount((count) => Math.max(0, count - 1));
+    }
+    if (notification.deepLink) router.push(notification.deepLink);
+  };
+
   const clearAllNotifications = async () => {
-    if (!user || notifications.length === 0) return;
+    if (!user || totalCount === 0) return;
 
     const confirmed = await confirm({
       title: "Clear all notifications?",
@@ -77,6 +96,11 @@ export default function StoreNotificationsPage() {
     try {
       setClearing(true);
       await notificationService.clearAllNotifications(user.uid);
+      setNotifications([]);
+      setTotalCount(0);
+      setUnreadCount(0);
+      setHasMore(false);
+      setCursor(null);
       showSuccess("All notifications cleared.");
     } finally {
       setClearing(false);
@@ -92,16 +116,44 @@ export default function StoreNotificationsPage() {
       return;
     }
 
-    const unsubscribe = notificationService.listenForNotifications(
-      user.uid,
-      (notifications) => {
-        setNotifications(notifications);
-        setLoading(false);
-      }
-    );
+    let cancelled = false;
+    void Promise.all([
+      notificationService.getNotifications(user.uid),
+      notificationService.getTotalCount(user.uid),
+      notificationService.getUnreadCount(user.uid),
+    ]).then(([page, total, unread]) => {
+      if (cancelled) return;
+      setNotifications(page.notifications);
+      setCursor(page.nextCursor);
+      setHasMore(page.hasMore);
+      setTotalCount(total);
+      setUnreadCount(unread);
+      setLoadError(null);
+    }).catch((error) => {
+      console.error("Unable to load store notifications:", error);
+      if (!cancelled) setLoadError("Notifications could not be loaded. Check your connection and try again.");
+    }).finally(() => {
+      if (!cancelled) setLoading(false);
+    });
 
-    return unsubscribe;
+    return () => { cancelled = true; };
   }, [user]);
+
+  const loadMore = async () => {
+    if (!user || !cursor || loadingMore) return;
+    setLoadingMore(true);
+    try {
+      const page = await notificationService.getNotifications(user.uid, {cursor});
+      setNotifications((current) => {
+        const known = new Set(current.map((item) => item.id));
+        return [...current, ...page.notifications.filter((item) => !known.has(item.id))];
+      });
+      setCursor(page.nextCursor);
+      setHasMore(page.hasMore);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   if (loading) {
     return <BrandedLoader message="Loading Notifications" />;
@@ -128,7 +180,7 @@ export default function StoreNotificationsPage() {
             <h1 className="text-xl font-bold text-gray-800">Notifications</h1>
           </div>
           <span className="text-xs text-gray-400 ml-auto bg-gray-100 px-3 py-1 rounded-full">
-            {notifications.length} total
+            {totalCount} total
           </span>
         </div>
       </div>
@@ -143,7 +195,7 @@ export default function StoreNotificationsPage() {
               </div>
               <div>
                 <p className="text-xs text-gray-400">Total</p>
-                <p className="text-lg font-bold text-gray-800">{notifications.length}</p>
+                <p className="text-lg font-bold text-gray-800">{totalCount}</p>
               </div>
             </div>
           </div>
@@ -154,7 +206,7 @@ export default function StoreNotificationsPage() {
               </div>
               <div>
                 <p className="text-xs text-gray-400">Unread</p>
-                <p className="text-lg font-bold text-blue-600">{unreadNotifications.length}</p>
+                <p className="text-lg font-bold text-blue-600">{unreadCount}</p>
               </div>
             </div>
           </div>
@@ -165,13 +217,18 @@ export default function StoreNotificationsPage() {
               </div>
               <div>
                 <p className="text-xs text-gray-400">Read</p>
-                <p className="text-lg font-bold text-green-600">{readNotifications.length}</p>
+                <p className="text-lg font-bold text-green-600">{Math.max(0, totalCount - unreadCount)}</p>
               </div>
             </div>
           </div>
         </div>
 
-        {notifications.length === 0 ? (
+        {loadError ? (
+          <div className="rounded-xl border border-red-100 bg-white p-8 text-center">
+            <p className="text-sm text-red-700">{loadError}</p>
+            <button type="button" onClick={() => window.location.reload()} className="mt-4 rounded-xl bg-orange-500 px-5 py-2.5 text-sm font-semibold text-white">Try again</button>
+          </div>
+        ) : notifications.length === 0 ? (
           // ✅ Store Empty State
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -225,7 +282,7 @@ export default function StoreNotificationsPage() {
               <div className="flex items-center justify-between">
                 <h2 className="text-sm font-semibold text-gray-700">All Notifications</h2>
                 <div className="flex items-center gap-3">
-                  {unreadNotifications.length > 0 && (
+                  {unreadCount > 0 && (
                     <button
                       disabled={markingAll}
                       onClick={() => {
@@ -234,6 +291,7 @@ export default function StoreNotificationsPage() {
                         void notificationService.markAllAsRead(user.uid)
                           .then(() => {
                             setNotifications((current) => current.map((item) => ({...item, read: true})));
+                            setUnreadCount(0);
                             showSuccess("All notifications marked as read.");
                           })
                           .finally(() => setMarkingAll(false));
@@ -278,16 +336,7 @@ export default function StoreNotificationsPage() {
                     >
                       <NotificationCard
                         notification={notification}
-                        onClick={async () => {
-                          if (!user) return;
-                          await notificationService.markAsRead(
-                            user.uid,
-                            notification.id
-                          );
-                          if (notification.deepLink) {
-                            router.push(notification.deepLink);
-                          }
-                        }}
+                        onClick={() => void openNotification(notification)}
                       />
                     </motion.div>
                   ))}
@@ -313,21 +362,18 @@ export default function StoreNotificationsPage() {
                       <NotificationCard
                         notification={notification}
                         onDelete={() => deleteNotification(notification)}
-                        onClick={async () => {
-                          if (!user) return;
-                          await notificationService.markAsRead(
-                            user.uid,
-                            notification.id
-                          );
-                          if (notification.deepLink) {
-                            router.push(notification.deepLink);
-                          }
-                        }}
+                        onClick={() => void openNotification(notification)}
                       />
                     </motion.div>
                   ))}
                 </div>
               </AnimatePresence>
+              {hasMore && (
+                <button type="button" disabled={loadingMore} onClick={() => void loadMore()} className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl border border-gray-200 px-4 py-3 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60">
+                  {loadingMore && <LoaderCircle className="h-4 w-4 animate-spin" />}
+                  {loadingMore ? "Loading…" : "Load older notifications"}
+                </button>
+              )}
             </div>
           </div>
         )}

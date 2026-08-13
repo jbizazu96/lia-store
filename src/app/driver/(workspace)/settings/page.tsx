@@ -13,7 +13,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import {signOut} from "firebase/auth";
-import { AlertCircle, BadgeDollarSign, Camera, FileUp, HelpCircle, Mail, ShieldCheck, Trash2, UserRound } from "lucide-react";
+import { BadgeDollarSign, Camera, FileUp, HelpCircle, ShieldCheck, Trash2, UserRound } from "lucide-react";
 import { httpsCallable } from "firebase/functions";
 import { auth, functions } from "@/lib/firebase";
 import { PageContentSkeleton } from "@/components/ui/PageContentSkeleton";
@@ -25,6 +25,7 @@ import { driverImageService, type DriverImageField } from "@/services/driver/dri
 import { driverStripeConnectClientService } from "@/services/payment/driverStripeConnectClientService";
 import { driverWorkspaceClientService } from "@/services/driver/driverWorkspaceClientService";
 import type { DriverWorkspaceSummary } from "@/types/driverWorkspace";
+import {AccountSupportForm} from "@/components/support/AccountSupportForm";
 
 type ReviewableField = Exclude<DriverImageField, "profile-photo">;
 const replacements: { label: string; field: ReviewableField }[] = [
@@ -81,7 +82,8 @@ export default function DriverSettingsPage() {
     <article className="rounded-2xl bg-green-50 p-5 ring-1 ring-green-100"><p className="font-bold text-green-950">Delivery radius and payment policy</p><p className="mt-2 text-sm text-green-900">Your current {summary.profile.serviceArea.approvedRadiusMiles ? "approved" : "requested"} service radius is <strong>{radius ?? "not set"} miles</strong>. Final assignments are based on administrator approval and available delivery areas.</p><p className="mt-3 text-sm text-green-900">For each completed delivery, you receive <strong>70% of the delivery fee</strong> and <strong>100% of customer tips</strong>. LIA retains 30% of the delivery fee to operate the platform.</p></article>
     <article className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-100"><div className="flex items-center gap-3"><div className="rounded-full bg-orange-50 p-3"><BadgeDollarSign className="h-5 w-5 text-orange-600" /></div><div><p className="font-bold">Payout account</p><p className="text-sm text-slate-500">{stripeLabel(summary)}</p></div></div><div className="mt-4 flex flex-wrap gap-2"><button disabled={busy} onClick={() => void connectStripe()} className="rounded-xl bg-orange-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{summary.stripe.status === "not_started" ? "Connect Stripe" : "Update Stripe"}</button><button disabled={busy} onClick={() => void driverStripeConnectClientService.getAccountStatus().then(() => refresh()).catch((error) => setMessage(error.message))} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold">View payout status</button></div></article>
     <DriverPasswordSection onMessage={setMessage} />
-    <article className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-100"><p className="font-bold">Support</p><div className="mt-3 grid gap-2"><button type="button" onClick={() => setHelpCenterOpen(true)} className="flex items-center justify-between rounded-xl px-2 py-2 text-left text-sm font-medium hover:bg-slate-50">Help Center <HelpCircle className="h-4 w-4" /></button><a href="mailto:support@liamarketplace.com" className="flex items-center justify-between rounded-xl px-2 py-2 text-sm font-medium hover:bg-slate-50">Contact Support <Mail className="h-4 w-4" /></a><a href="mailto:support@liamarketplace.com?subject=Driver%20issue" className="flex items-center justify-between rounded-xl px-2 py-2 text-sm font-medium hover:bg-slate-50">Report an issue <AlertCircle className="h-4 w-4" /></a></div></article>
+    <article className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-100"><p className="font-bold">Support resources</p><div className="mt-3 grid gap-2"><button type="button" onClick={() => setHelpCenterOpen(true)} className="flex items-center justify-between rounded-xl px-2 py-2 text-left text-sm font-medium hover:bg-slate-50">Help Center <HelpCircle className="h-4 w-4" /></button></div></article>
+    <AccountSupportForm accountLabel="driver" />
     <article className="rounded-2xl border border-red-100 bg-red-50 p-5"><div className="flex gap-3"><ShieldCheck className="h-5 w-5 text-red-600" /><div><p className="font-bold text-red-900">Delete account</p><p className="mt-1 text-sm text-red-700">Your request is reviewed by LIA before any account deletion starts.</p><button disabled={busy} onClick={() => void requestDeletion()} className="mt-3 inline-flex items-center gap-2 rounded-xl bg-red-600 px-4 py-2 text-sm font-bold text-white"><Trash2 className="h-4 w-4" />Request deletion</button></div></div></article></div>
     {profileOpen && <DriverProfileEditModal profile={summary.profile} saving={busy} onClose={() => setProfileOpen(false)} onSave={(profile) => void saveProfile(profile)} />}
     {documentModal && <DriverDocumentReplaceModal label={documentModal.label} field={documentModal.field} currentExpirationDate={documentModal.expirationDate} saving={busy} onClose={() => setDocumentModal(null)} onSubmit={(values) => void submitDocument(values)} />}

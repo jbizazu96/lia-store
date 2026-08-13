@@ -39,35 +39,9 @@ import type {
   StripeConnectAccountSummary,
   StripeOnboardingStatus,
 } from "@/types/stripeConnect";
-
-
-/*
-  Minimal store information needed by this payment section.
-
-  We intentionally define only the fields used by this component
-  instead of accepting `any`.
-*/
-interface PaymentStoreData {
-  /*
-    Firestore store document ID.
-  */
-  id: string;
-
-  /*
-    Existing synchronized Stripe fields.
-
-    These fields can be undefined for stores created before Stripe
-    Connect was added.
-  */
-  stripeAccountId?: string;
-  stripeAccountStatus?: StripeOnboardingStatus;
-  stripeChargesEnabled?: boolean;
-  stripeTransfersEnabled?: boolean;
-  stripePayoutsEnabled?: boolean;
-  stripeDetailsSubmitted?: boolean;
-  stripeRequiresAction?: boolean;
-  stripeIsReady?: boolean;
-}
+import Link from "next/link";
+import type {Dispatch, SetStateAction} from "react";
+import type {StoreWorkspaceStore} from "@/services/store/storeWorkspaceClientService";
 
 
 /*
@@ -77,13 +51,8 @@ interface PaymentStoreData {
   after receiving a fresh Stripe account summary.
 */
 interface PaymentSectionProps {
-  storeData: PaymentStoreData;
-
-  setStoreData: (
-    data:
-      | PaymentStoreData
-      | ((current: PaymentStoreData) => PaymentStoreData)
-  ) => void;
+  storeData: StoreWorkspaceStore;
+  setStoreData: Dispatch<SetStateAction<StoreWorkspaceStore | null>>;
 }
 
 
@@ -185,9 +154,9 @@ function maskStripeAccountId(
   Firestore read.
 */
 function applyStripeSummary(
-  currentStore: PaymentStoreData,
+  currentStore: StoreWorkspaceStore,
   account: StripeConnectAccountSummary
-): PaymentStoreData {
+): StoreWorkspaceStore {
   return {
     ...currentStore,
     stripeAccountId: account.accountId,
@@ -301,10 +270,10 @@ export function PaymentSection({
               .createOrRetrieveAccount(storeData.id);
 
           setStoreData((currentStore) =>
-            applyStripeSummary(
+            currentStore ? applyStripeSummary(
               currentStore,
               accountResult.account
-            )
+            ) : currentStore
           );
 
           const onboardingResult =
@@ -349,10 +318,10 @@ export function PaymentSection({
 
         if (statusResult.account) {
           setStoreData((currentStore) =>
-            applyStripeSummary(
+            currentStore ? applyStripeSummary(
               currentStore,
               statusResult.account!
-            )
+            ) : currentStore
           );
         }
       } catch (error: unknown) {
@@ -397,7 +366,7 @@ export function PaymentSection({
 
         if (statusResult.account) {
           setStoreData((currentStore) =>
-            applyStripeSummary(currentStore, statusResult.account!)
+            currentStore ? applyStripeSummary(currentStore, statusResult.account!) : currentStore
           );
         }
       } catch (error: unknown) {
@@ -482,10 +451,10 @@ export function PaymentSection({
         The server has already persisted the same status to Firestore.
       */
       setStoreData((currentStore) =>
-        applyStripeSummary(
+        currentStore ? applyStripeSummary(
           currentStore,
           accountResult.account
-        )
+        ) : currentStore
       );
 
       /*
@@ -665,12 +634,12 @@ export function PaymentSection({
                 {buttonLabel}
               </button>
             ) : (
-              <a
+              <Link
                 href="/store/onboarding/stripe"
                 className="inline-flex items-center justify-center rounded-xl border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 transition hover:bg-blue-100"
               >
                 View onboarding
-              </a>
+              </Link>
             )}
           </div>
         </div>

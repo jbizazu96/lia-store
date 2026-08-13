@@ -8,7 +8,34 @@ service firebase.storage {
 
     function ownsStore(storeId) {
       return signedIn() &&
-        request.auth.token.storeUploadStoreId == storeId;
+        request.auth.token.storeUploadStoreId == storeId &&
+        firestore.exists(
+          /databases/(default)/documents/stores/$(storeId)
+        ) &&
+        firestore.get(
+          /databases/(default)/documents/stores/$(storeId)
+        ).data.ownerId == request.auth.uid;
+    }
+
+    function ownsApprovedStore(storeId) {
+      return ownsStore(storeId) &&
+        firestore.get(
+          /databases/(default)/documents/stores/$(storeId)
+        ).data.onboardingCompleted == true &&
+        firestore.get(
+          /databases/(default)/documents/stores/$(storeId)
+        ).data.isApproved == true;
+    }
+
+    function canManageStoreApplication(storeId) {
+      return ownsStore(storeId) && (
+        firestore.get(
+          /databases/(default)/documents/stores/$(storeId)
+        ).data.onboardingCompleted != true ||
+        firestore.get(
+          /databases/(default)/documents/stores/$(storeId)
+        ).data.isApproved == true
+      );
     }
 
     /*
@@ -97,14 +124,14 @@ service firebase.storage {
     |
     */
     match /stores/{storeId}/products/{productId}/gallery/{imageId}/{fileName} {
-      allow read: if ownsStore(storeId);
+      allow read: if ownsApprovedStore(storeId);
 
       /*
        * The owner can upload only a supported original under their own store
        * claim. Product ownership and the exact canonical path are verified by
        * the callable reservation and background processor.
        */
-      allow write: if ownsStore(storeId) &&
+      allow write: if ownsApprovedStore(storeId) &&
         isSupportedProductImage();
     }
 
@@ -114,8 +141,8 @@ service firebase.storage {
      * optimized files with the Admin SDK.
      */
     match /stores/{storeId}/images/originals/{imageField}/{fileName} {
-      allow read: if ownsStore(storeId);
-      allow write: if ownsStore(storeId) &&
+      allow read: if canManageStoreApplication(storeId);
+      allow write: if canManageStoreApplication(storeId) &&
         isStoreImageField(imageField) &&
         isSupportedStoreImage() &&
         request.resource.metadata.storeId == storeId &&
@@ -140,7 +167,7 @@ service firebase.storage {
 
     /* Owner verification images are never readable through Storage rules. */
     match /stores/{storeId}/images/optimized/owner-photo-id/{fileName} {
-      allow read: if ownsStore(storeId);
+      allow read: if canManageStoreApplication(storeId);
       allow write: if false;
     }
 

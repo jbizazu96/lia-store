@@ -126,6 +126,8 @@ ProductFormData = {
 
   stock: 0,
 
+  lowStockThreshold: 10,
+
   sku: "",
 
   /*
@@ -942,7 +944,7 @@ export function ProductForm({
         </div>
 
         {/* Stock and Size */}
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
           <div>
             <label className="mb-1 block text-sm font-medium text-gray-700">
               Stock Quantity *
@@ -974,6 +976,8 @@ export function ProductForm({
               />
             </div>
           </div>
+
+          <div><label className="mb-1 block text-sm font-medium text-gray-700">Low-stock alert at</label><input type="number" min="0" step="1" value={formData.lowStockThreshold} onChange={(event) => updateField("lowStockThreshold", Math.max(0, Number.parseInt(event.target.value || "0", 10)))} disabled={loading} className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 focus:ring-2 focus:ring-orange-500" /></div>
 
           <div>
             <label className="mb-1 block text-sm font-medium text-gray-700">

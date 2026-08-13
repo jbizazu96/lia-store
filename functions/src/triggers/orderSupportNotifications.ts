@@ -24,6 +24,7 @@ import {
 import {
   notificationService,
 } from "../services/notificationService";
+import {queueAdminActionEmail} from "../email/emailEventService";
 
 if (admin.apps.length === 0) {
   admin.initializeApp();
@@ -139,6 +140,14 @@ export const orderSupportRequestCreated =
           id: requestId,
         },
         dedupeKey: `order-support-${requestId}-created`,
+      });
+
+      await queueAdminActionEmail({
+        dedupeKey: `admin-support:${requestId}`,
+        category: "admin_support",
+        title: "New order support request",
+        summary: `Order #${orderNumber} has a new support request for ${topic}.`,
+        path: `/admin/orders/${encodeURIComponent(orderId)}`,
       });
 
     }

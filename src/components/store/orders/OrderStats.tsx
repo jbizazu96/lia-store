@@ -12,6 +12,7 @@ import {
   CheckCircle2,
   ChefHat,
   PackageCheck,
+  Truck,
   XCircle,
 } from "lucide-react";
 
@@ -21,6 +22,7 @@ interface OrderStatsProps {
   accepted: number;
   preparing: number;
   readyForPickup: number;
+  outForDelivery: number;
   completed: number;
   cancelled: number;
 }
@@ -31,6 +33,7 @@ export function OrderStats({
   accepted,
   preparing,
   readyForPickup,
+  outForDelivery,
   completed,
   cancelled,
 }: OrderStatsProps) {
@@ -71,6 +74,13 @@ export function OrderStats({
       textColor: "text-orange-600",
     },
     {
+      label: "Delivering",
+      value: outForDelivery,
+      icon: Truck,
+      bgColor: "bg-blue-50",
+      textColor: "text-blue-600",
+    },
+    {
       label: "Completed",
       value: completed,
       icon: CheckCircle,
@@ -87,7 +97,7 @@ export function OrderStats({
   ];
 
   return (
-    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-7">
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-8">
       {stats.map((stat, index) => (
         <motion.div
           key={stat.label}

@@ -236,6 +236,8 @@ export interface Product {
    */
   stock: number;
 
+  lowStockThreshold?: number;
+
   /*
   |--------------------------------------------------------------------------
   | Product Image Processing

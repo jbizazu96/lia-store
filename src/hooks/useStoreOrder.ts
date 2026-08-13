@@ -19,18 +19,11 @@ import {
 import {
   onAuthStateChanged,
 } from "firebase/auth";
+import {auth} from "@/lib/firebase";
 import {
-  doc,
-  getDoc,
-  onSnapshot,
-} from "firebase/firestore";
-import {
-  auth,
-  db,
-} from "@/lib/firebase";
-import {
-  mapFirestoreOrder,
+  mapOrderData,
 } from "@/mappers/orderMapper";
+import {storeWorkspaceClientService} from "@/services/store/storeWorkspaceClientService";
 import type {
   Order,
 } from "@/types/order";
@@ -53,32 +46,29 @@ export function useStoreOrder({ orderId }: UseStoreOrderParams): UseStoreOrderRe
   const [error, setError] = useState<string | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
-  const refreshOrder = useCallback(async (): Promise<void> => {
+  const loadOrder = useCallback(async (preserveCurrentOnError: boolean): Promise<void> => {
     if (!auth.currentUser || !orderId.trim()) return;
 
     try {
-      const snapshot = await getDoc(doc(db, "orders", orderId));
-      if (!snapshot.exists()) {
-        setOrder(null);
-        setError("Order not found.");
-        return;
-      }
-
-      setOrder(mapFirestoreOrder(snapshot));
+      const response = await storeWorkspaceClientService.getOrder(orderId);
+      setOrder(mapOrderData(response.order.id, response.order));
       setError(null);
     } catch (loadError) {
       console.error("Error refreshing store order:", loadError);
-      setOrder(null);
-      setError("Order not found.");
+      if (!preserveCurrentOnError) {
+        setOrder(null);
+        setError(loadError instanceof Error ? loadError.message : "The order could not be loaded.");
+      }
     }
   }, [orderId]);
 
-  useEffect(() => {
-    let unsubscribeOrder: (() => void) | null = null;
+  const refreshOrder = useCallback(
+    (): Promise<void> => loadOrder(true),
+    [loadOrder],
+  );
 
+  useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
-      unsubscribeOrder?.();
-      unsubscribeOrder = null;
       setIsAuthenticated(Boolean(user));
 
       if (!user) {
@@ -96,32 +86,19 @@ export function useStoreOrder({ orderId }: UseStoreOrderParams): UseStoreOrderRe
       }
 
       setLoading(true);
-      unsubscribeOrder = onSnapshot(
-        doc(db, "orders", orderId),
-        (snapshot) => {
-          if (!snapshot.exists()) {
-            setOrder(null);
-            setError("Order not found.");
-          } else {
-            setOrder(mapFirestoreOrder(snapshot));
-            setError(null);
-          }
-          setLoading(false);
-        },
-        (listenerError) => {
-          console.error("Error listening to store order:", listenerError);
-          setOrder(null);
-          setError("Order not found.");
-          setLoading(false);
-        },
-      );
+      void loadOrder(false).finally(() => setLoading(false));
     });
+
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible" && auth.currentUser) void refreshOrder();
+    };
+    document.addEventListener("visibilitychange", refreshWhenVisible);
 
     return () => {
       unsubscribeAuth();
-      unsubscribeOrder?.();
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
     };
-  }, [orderId]);
+  }, [loadOrder, orderId, refreshOrder]);
 
   return {
     order,

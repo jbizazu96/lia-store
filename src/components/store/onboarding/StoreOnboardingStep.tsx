@@ -9,7 +9,7 @@
 */
 import { useEffect, useState } from "react";
 import Image from "next/image";
-import { ArrowLeft, ArrowRight, CheckCircle2, Camera, Upload } from "lucide-react";
+import { ArrowLeft, ArrowRight, CheckCircle2, Camera, Upload, AlertTriangle, RefreshCw } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { BrandedLoader } from "@/components/ui/BrandedLoader";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
@@ -68,7 +68,7 @@ export function StoreOnboardingStep({ step }: { step: StoreOnboardingStep }) {
 }
 
 function StoreOnboardingStepContent({ step }: { step: StoreOnboardingStep }) {
-  const router = useRouter(); const searchParams = useSearchParams(); const { user, draft, loading, error } = useStoreOnboarding();
+  const router = useRouter(); const searchParams = useSearchParams(); const { user, draft, loading, error, refresh } = useStoreOnboarding();
   const [saving, setSaving] = useState(false); const [message, setMessage] = useState<string | null>(null);
   const [owner, setOwner] = useState({ firstName: "", lastName: "", email: "", phone: "", address: "", city: "", state: "", zip: "" }); const [photo, setPhoto] = useState<File | null>(null); const [photoPreview, setPhotoPreview] = useState("");
   const [store, setStore] = useState({ name: "", email: "", phone: "", description: "", address: "", city: "", state: "", zip: "" }); const [logo, setLogo] = useState<File | null>(null); const [banner, setBanner] = useState<File | null>(null); const [logoPreview, setLogoPreview] = useState(""); const [bannerPreview, setBannerPreview] = useState("");
@@ -76,7 +76,9 @@ function StoreOnboardingStepContent({ step }: { step: StoreOnboardingStep }) {
   const [stripeStatus, setStripeStatus] = useState(draft?.stripeAccountStatus); const [connecting, setConnecting] = useState(false);
   useEffect(() => { if (!draft) return; setOwner({ firstName: draft.owner.firstName, lastName: draft.owner.lastName, email: draft.owner.email, phone: draft.owner.phone, address: draft.owner.address, city: draft.owner.city, state: draft.owner.state, zip: draft.owner.zip }); setStore({ name: draft.name, email: draft.email, phone: draft.phone, description: draft.description, address: draft.address, city: draft.city, state: draft.state, zip: draft.zip }); setBusiness({ businessType: draft.businessType, registeredName: draft.registeredName, ein: draft.ein, businessStructure: draft.businessStructure }); setSchedule(draft.schedule); setStripeStatus(draft.stripeAccountStatus); }, [draft]);
   useEffect(() => { if (step !== "stripe" || searchParams.get("stripe") !== "return" || !draft?.storeId) return; void stripeConnectClientService.getAccountStatus(draft.storeId).then((result) => setStripeStatus(result.account?.onboardingStatus)).catch(() => setMessage("We couldn't refresh Stripe yet. Please try again.")); }, [draft?.storeId, searchParams, step]);
-  if (loading) return <BrandedLoader message="Loading store onboarding" />; if (!user || !draft) return null;
+  if (loading) return <BrandedLoader message="Loading store onboarding" />;
+  if (!user) return <div className="flex min-h-[60vh] items-center justify-center p-6"><div className="w-full max-w-md rounded-2xl border border-orange-100 bg-white p-8 text-center shadow-sm"><AlertTriangle className="mx-auto h-10 w-10 text-orange-500" /><h1 className="mt-4 text-xl font-bold text-gray-900">Sign in to continue</h1><p className="mt-2 text-sm text-gray-600">Your store onboarding session is no longer available.</p><button type="button" onClick={() => router.replace("/login")} className="mt-5 rounded-xl bg-orange-500 px-5 py-2.5 text-sm font-semibold text-white">Go to sign in</button></div></div>;
+  if (!draft) return <div className="flex min-h-[60vh] items-center justify-center p-6"><div className="w-full max-w-md rounded-2xl border border-red-100 bg-white p-8 text-center shadow-sm"><AlertTriangle className="mx-auto h-10 w-10 text-red-500" /><h1 className="mt-4 text-xl font-bold text-gray-900">Onboarding could not be loaded</h1><p className="mt-2 text-sm text-gray-600">{error ?? "Your store application is temporarily unavailable."}</p><button type="button" onClick={() => void refresh()} className="mt-5 inline-flex items-center gap-2 rounded-xl bg-orange-500 px-5 py-2.5 text-sm font-semibold text-white"><RefreshCw className="h-4 w-4" />Retry</button></div></div>;
   const policy = draft.applicationPolicy;
   const ownerPhotoRequired = policy?.requiredDocuments.ownerPhotoId ?? true;
   const logoRequired = policy?.requiredDocuments.logo ?? true;

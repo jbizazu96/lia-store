@@ -59,7 +59,7 @@ export function PayoutDetailModal({
         </div>
 
         <div className="mt-6 rounded-2xl bg-slate-50 p-4">
-          <p className="text-sm text-slate-500">Final store transfer</p>
+          <p className="text-sm text-slate-500">Net store earning after completed refunds</p>
           <p className="mt-1 text-3xl font-bold text-slate-900">${payout.amount.toFixed(2)}</p>
           <p className="mt-1 text-sm capitalize text-slate-500">{payout.status}</p>
         </div>
@@ -69,7 +69,9 @@ export function PayoutDetailModal({
           <div className="flex justify-between gap-4"><span className="text-slate-500">Sales tax passed to store</span><span className="font-medium">${payout.salesTax.toFixed(2)}</span></div>
           <div className="flex justify-between gap-4 border-t border-slate-100 pt-3"><span className="font-medium text-slate-700">Gross store order amount</span><span className="font-semibold">${payout.grossStoreOrderAmount.toFixed(2)}</span></div>
           <div className="flex justify-between gap-4 text-orange-700"><span>LIA commission</span><span>−${payout.liaCommission.toFixed(2)}</span></div>
-          <div className="flex justify-between gap-4 border-t border-slate-200 pt-3 text-base"><span className="font-bold">Your transfer</span><span className="font-bold text-green-700">${payout.amount.toFixed(2)}</span></div>
+          <div className="flex justify-between gap-4"><span className="text-slate-500">Original Stripe transfer</span><span className="font-medium">${payout.originalTransferAmount.toFixed(2)}</span></div>
+          {payout.refundedAmount > 0 && <div className="flex justify-between gap-4 text-red-700"><span>Completed refund reversal</span><span>−${payout.refundedAmount.toFixed(2)}</span></div>}
+          <div className="flex justify-between gap-4 border-t border-slate-200 pt-3 text-base"><span className="font-bold">Net store earning</span><span className="font-bold text-green-700">${payout.netAmount.toFixed(2)}</span></div>
         </div>
 
         <div className="mt-6 space-y-2 rounded-2xl border border-slate-100 p-4 text-sm">
@@ -79,7 +81,7 @@ export function PayoutDetailModal({
           <div className="flex justify-between gap-4"><span className="text-slate-500">Payout reference</span><span className="max-w-[60%] truncate font-medium">{payout.id}</span></div>
         </div>
 
-        <p className="mt-5 text-xs leading-5 text-slate-500">Delivery fees, service fees, and customer tips are not part of this store payout.</p>
+        <p className="mt-5 text-xs leading-5 text-slate-500">Delivery fees, service fees, customer tips, and Stripe processing fees are not deducted from the store. LIA pays Stripe processing fees.</p>
       </div>
     </div>
   );

@@ -38,6 +38,9 @@ interface ProductCardProps {
   onDelete: (id: string) => void;
   onDuplicate?: (product: Product) => void;
   categoryName?: string;
+  mutating?: boolean;
+  selected?: boolean;
+  onSelectionChange?: (selected: boolean) => void;
 }
 
 export function ProductCard({
@@ -47,6 +50,9 @@ export function ProductCard({
   onDelete,
   onDuplicate,
   categoryName,
+  mutating = false,
+  selected = false,
+  onSelectionChange,
 }: ProductCardProps) {
   const [showMenu, setShowMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -84,20 +90,19 @@ export function ProductCard({
   const isOnSale = discountedProductPrice < product.price;
   const hasActivePromotion = promotionService.isActive(product.promotion);
   const isOutOfStock = product.stock <= 0;
+  const lowStockThreshold = product.lowStockThreshold ?? 10;
 
   // Get stock color based on quantity
   const getStockColor = (stock: number) => {
-    if (stock > 40) return "bg-green-500 text-white";
-    if (stock > 20) return "bg-yellow-500 text-white";
+    if (stock > lowStockThreshold) return "bg-green-500 text-white";
     if (stock > 0) return "bg-orange-500 text-white";
     return "bg-red-500 text-white";
   };
 
   // Get stock label
   const getStockLabel = (stock: number) => {
-    if (stock > 40) return "In Stock";
-    if (stock > 20) return "Low Stock";
-    if (stock > 0) return "Very Low";
+    if (stock > lowStockThreshold) return "In Stock";
+    if (stock > 0) return "Low Stock";
     return "Out of Stock";
   };
 
@@ -113,6 +118,7 @@ export function ProductCard({
     >
       {/* Image - Fixed ratio with object-cover */}
       <div className={`relative w-full aspect-square overflow-visible rounded-t-xl ${isOutOfStock ? "bg-slate-200" : "bg-gray-50"}`}>
+        {onSelectionChange && <label className="absolute bottom-1.5 right-1.5 z-30 flex h-8 w-8 items-center justify-center rounded-full bg-white shadow"><input type="checkbox" checked={selected} onChange={(event) => onSelectionChange(event.target.checked)} className="h-4 w-4 accent-orange-500" aria-label={`Select ${product.name}`} /></label>}
         {product.imageUrl ? (
           <Image
             src={productImageSelector.getUrl(
@@ -151,6 +157,11 @@ export function ProductCard({
               {promotionService.getLabel(product.promotion)}
             </div>
           )}
+          {product.imageStatus && product.imageStatus !== "ready" && product.imageStatus !== "none" && (
+            <div className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold text-white ${product.imageStatus === "failed" ? "bg-red-600" : "bg-sky-600"}`}>
+              {product.imageStatus === "failed" ? "Image failed" : "Image processing"}
+            </div>
+          )}
         </div>
 
         {/* Stock Badge - Bottom Left with color */}
@@ -165,6 +176,7 @@ export function ProductCard({
         <div ref={menuRef} className="absolute right-1.5 top-1.5 z-30">
           <button
             onClick={toggleMenu}
+            disabled={mutating}
             className="flex h-9 w-9 items-center justify-center rounded-full bg-white/95 shadow-md backdrop-blur-sm transition hover:bg-white focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-1"
             aria-label="Product actions"
             aria-expanded={showMenu}
@@ -207,7 +219,7 @@ export function ProductCard({
                   className="flex min-h-10 w-full items-center gap-2 px-3 py-2 text-sm text-red-600 transition hover:bg-red-50"
                 >
                   <Trash2 className="h-4 w-4" />
-                  Delete
+                  Archive
                 </button>
               </motion.div>
             )}
@@ -257,6 +269,7 @@ export function ProductCard({
           {/* Active/Inactive Button */}
           <button
             onClick={() => onToggleActive(product.id, product.isAvailable)}
+            disabled={mutating}
             className={`flex-1 text-[10px] font-medium px-1.5 py-1 rounded-full transition ${
               product.isAvailable
                 ? "bg-green-100 text-green-700 hover:bg-green-200"
@@ -270,6 +283,7 @@ export function ProductCard({
           {/* Feature Button */}
           <button
             onClick={() => onToggleFeatured(product.id, product.featured)}
+            disabled={mutating}
             className={`flex-1 text-[10px] font-medium px-1.5 py-1 rounded-full transition flex items-center justify-center gap-0.5 ${
               product.featured
                 ? "bg-yellow-100 text-yellow-700 hover:bg-yellow-200"
@@ -282,7 +296,9 @@ export function ProductCard({
           </button>
 
         </div>
+        {product.imageStatus === "failed" && <Link href={`/store/products/${product.id}`} className="mt-2 block rounded-full bg-red-50 px-2 py-1 text-center text-[10px] font-semibold text-red-700">Retry image upload</Link>}
       </div>
+      {mutating && <div className="absolute inset-0 z-40 flex items-center justify-center rounded-xl bg-white/60 text-xs font-semibold text-gray-700 backdrop-blur-[1px]">Saving…</div>}
     </motion.div>
   );
 }

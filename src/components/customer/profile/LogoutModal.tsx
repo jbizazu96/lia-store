@@ -4,8 +4,7 @@ import {useState} from "react";
 import {motion} from "framer-motion";
 import {LogOut} from "lucide-react";
 import {useRouter} from "next/navigation";
-import {signOut} from "firebase/auth";
-import {auth} from "@/lib/firebase";
+import {customerLogoutService} from "@/services/auth/customerLogoutService";
 
 interface LogoutModalProps {
   onClose: () => void;
@@ -18,7 +17,7 @@ export function LogoutModal({onClose}: LogoutModalProps) {
   async function handleLogout() {
     try {
       setLoading(true);
-      await signOut(auth);
+      await customerLogoutService.logout();
       router.push("/login");
     } catch (error) {
       console.error("Error logging out:", error);

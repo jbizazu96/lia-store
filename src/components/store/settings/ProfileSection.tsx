@@ -5,80 +5,118 @@
   ✅ Displays existing store data.
 */
 
-import {useState, useRef, useEffect} from "react";
+import {useState, useRef, useEffect, type Dispatch, type SetStateAction} from "react";
 import Image from "next/image";
-import {motion} from "framer-motion";
 import {
   Store,
-  User,
   Mail,
   Phone,
   MapPin,
   Camera,
   Upload,
-  X,
+  LoaderCircle,
+  RotateCcw,
+  CheckCircle2,
+  AlertCircle,
 } from "lucide-react";
 import { storeImageService } from "@/services/store/storeImageService";
 import {formatPhoneNumber} from "@/utils/phone";
 import {UsStateSelect} from "@/components/ui/UsStateSelect";
+import {
+  storeWorkspaceClientService,
+  type StoreWorkspaceStore,
+} from "@/services/store/storeWorkspaceClientService";
 
 interface ProfileSectionProps {
-  storeData: any;
-  setStoreData: (data: any) => void;
-  userData: any;
-  setUserData: (data: any) => void;
+  storeData: StoreWorkspaceStore;
+  setStoreData: Dispatch<SetStateAction<StoreWorkspaceStore | null>>;
 }
+
+type UploadState = {status: "idle" | "uploading" | "processing" | "failed" | "ready"; progress: number; error?: string; file?: File};
+const IDLE_UPLOAD: UploadState = {status: "idle", progress: 0};
 
 export function ProfileSection({
   storeData,
   setStoreData,
-  userData,
-  setUserData,
 }: ProfileSectionProps) {
   const [logoPreview, setLogoPreview] = useState(storeData?.logoUrl || "");
   const [bannerPreview, setBannerPreview] = useState(storeData?.bannerUrl || "");
+  const [logoUpload, setLogoUpload] = useState<UploadState>(IDLE_UPLOAD);
+  const [bannerUpload, setBannerUpload] = useState<UploadState>(IDLE_UPLOAD);
   const logoInputRef = useRef<HTMLInputElement>(null);
   const bannerInputRef = useRef<HTMLInputElement>(null);
 
   // ✅ Update previews when storeData changes
   useEffect(() => {
-    setLogoPreview(storeData?.logoUrl || "");
-    setBannerPreview(storeData?.bannerUrl || "");
+    queueMicrotask(() => {
+      setLogoPreview(storeData?.logoUrl || "");
+      setBannerPreview(storeData?.bannerUrl || "");
+    });
   }, [storeData?.logoUrl, storeData?.bannerUrl]);
 
-  // Handle logo upload
-  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setLogoPreview(reader.result as string);
-    };
-    reader.readAsDataURL(file);
+  const uploadImage = async (field: "logo" | "banner", file: File) => {
+    const setUpload = field === "logo" ? setLogoUpload : setBannerUpload;
+    const setPreview = field === "logo" ? setLogoPreview : setBannerPreview;
+    const savedUrl = field === "logo" ? storeData.logoUrl : storeData.bannerUrl;
+    const temporaryUrl = URL.createObjectURL(file);
+    setPreview(temporaryUrl);
+    setUpload({status: "uploading", progress: 0, file});
 
-    await storeImageService.uploadOriginalImage({
-      storeId: storeData.id,
-      field: "logo",
-      file,
-    });
+    try {
+      const {imageId} = await storeImageService.uploadOriginalImage({
+        storeId: storeData.id,
+        field,
+        file,
+        onProgress: (progress) => setUpload({status: "uploading", progress, file}),
+      });
+      setUpload({status: "processing", progress: 100, file});
+
+      for (let attempt = 0; attempt < 12; attempt += 1) {
+        const delayMs = Math.min(1_000 * Math.pow(1.5, attempt), 5_000);
+        await new Promise((resolve) => window.setTimeout(resolve, delayMs));
+        const workspace = await storeWorkspaceClientService.getSettings(true);
+        const status = field === "logo" ? workspace.store.logoImageStatus : workspace.store.bannerImageStatus;
+        const currentImageId = field === "logo" ? workspace.store.logoImageId : workspace.store.bannerImageId;
+        if (currentImageId !== imageId) continue;
+        if (status === "failed") throw new Error("LIA could not process this image. Please try another image.");
+        if (status === "ready") {
+          setStoreData(workspace.store);
+          setPreview(field === "logo" ? workspace.store.logoUrl : workspace.store.bannerUrl);
+          setUpload({status: "ready", progress: 100});
+          window.setTimeout(() => setUpload(IDLE_UPLOAD), 3_000);
+          return;
+        }
+      }
+      throw new Error("Image processing is taking longer than expected. Retry to check again.");
+    } catch (error) {
+      setPreview(savedUrl);
+      setUpload({status: "failed", progress: 0, file, error: error instanceof Error ? error.message : "Image upload failed."});
+    } finally {
+      URL.revokeObjectURL(temporaryUrl);
+    }
   };
 
-  // Handle banner upload
-  const handleBannerUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setBannerPreview(reader.result as string);
-    };
-    reader.readAsDataURL(file);
-
-    await storeImageService.uploadOriginalImage({
-      storeId: storeData.id,
-      field: "banner",
-      file,
-    });
+    e.target.value = "";
+    if (file) void uploadImage("logo", file);
   };
+
+  const handleBannerUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (file) void uploadImage("banner", file);
+  };
+
+  const uploadStatus = (state: UploadState, field: "logo" | "banner") => state.status === "idle" ? null : (
+    <div className={`mt-3 flex items-center justify-between rounded-xl px-3 py-2 text-xs ${state.status === "failed" ? "bg-red-50 text-red-700" : state.status === "ready" ? "bg-green-50 text-green-700" : "bg-orange-50 text-orange-800"}`}>
+      <span className="flex items-center gap-2">
+        {state.status === "failed" ? <AlertCircle className="h-4 w-4" /> : state.status === "ready" ? <CheckCircle2 className="h-4 w-4" /> : <LoaderCircle className="h-4 w-4 animate-spin" />}
+        {state.status === "uploading" ? `Uploading ${state.progress}%` : state.status === "processing" ? "Creating optimized image sizes…" : state.status === "ready" ? "Image saved and ready." : state.error}
+      </span>
+      {state.status === "failed" && state.file && <button type="button" onClick={() => void uploadImage(field, state.file!)} className="ml-3 flex items-center gap-1 font-bold"><RotateCcw className="h-3.5 w-3.5" />Retry</button>}
+    </div>
+  );
 
   // If no storeData, show a message
   if (!storeData) {
@@ -111,6 +149,7 @@ export function ProfileSection({
           <button
             type="button"
             onClick={() => bannerInputRef.current?.click()}
+            disabled={bannerUpload.status === "uploading" || bannerUpload.status === "processing"}
             className="absolute bottom-4 right-4 px-4 py-2 bg-white text-black text-sm font-medium rounded-xl hover:bg-black/80 transition flex items-center gap-2"
             aria-label="Change store cover image"
           >
@@ -120,11 +159,12 @@ export function ProfileSection({
           <input
             ref={bannerInputRef}
             type="file"
-            accept="image/*"
+            accept="image/jpeg,image/png,image/webp,image/avif,image/heic,image/heif"
             className="hidden"
             onChange={handleBannerUpload}
           />
         </div>
+        {uploadStatus(bannerUpload, "banner")}
       </div>
 
       {/* Store Info */}
@@ -148,6 +188,7 @@ export function ProfileSection({
             <button
               type="button"
               onClick={() => logoInputRef.current?.click()}
+              disabled={logoUpload.status === "uploading" || logoUpload.status === "processing"}
               className="absolute inset-0 bg-black/50 opacity-0 hover:opacity-100 transition flex items-center justify-center"
               aria-label="Change store logo"
             >
@@ -156,14 +197,16 @@ export function ProfileSection({
             <input
               ref={logoInputRef}
               type="file"
-              accept="image/*"
+              accept="image/jpeg,image/png,image/webp,image/avif,image/heic,image/heif"
               className="hidden"
               onChange={handleLogoUpload}
             />
           </div>
+          <div className="min-w-0 flex-1">
+            {uploadStatus(logoUpload, "logo")}
 
           {/* Form Fields */}
-          <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Store Name *
@@ -172,6 +215,7 @@ export function ProfileSection({
                 <Store className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <input
                   type="text"
+                  maxLength={120}
                   value={storeData?.name || ""}
                   onChange={(e) => setStoreData({...storeData, name: e.target.value})}
                   className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500"
@@ -187,6 +231,7 @@ export function ProfileSection({
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <input
                   type="email"
+                  maxLength={254}
                   value={storeData?.email || ""}
                   onChange={(e) => setStoreData({...storeData, email: e.target.value})}
                   className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500"
@@ -202,6 +247,7 @@ export function ProfileSection({
                 <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <input
                   type="tel"
+                  maxLength={30}
                   value={storeData?.phone || ""}
                   onChange={(e) => setStoreData({...storeData, phone: formatPhoneNumber(e.target.value)})}
                   className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500"
@@ -217,10 +263,12 @@ export function ProfileSection({
                 value={storeData?.description || ""}
                 onChange={(e) => setStoreData({...storeData, description: e.target.value})}
                 rows={1}
+                maxLength={1500}
                 className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500"
                 placeholder="Describe your store..."
               />
             </div>
+          </div>
           </div>
         </div>
       </div>
@@ -237,6 +285,7 @@ export function ProfileSection({
               <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <input
                 type="text"
+                maxLength={200}
                 value={storeData?.address || ""}
                 onChange={(e) => setStoreData({...storeData, address: e.target.value})}
                 className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500"
@@ -250,6 +299,7 @@ export function ProfileSection({
             </label>
             <input
               type="text"
+              maxLength={100}
               value={storeData?.city || ""}
               onChange={(e) => setStoreData({...storeData, city: e.target.value})}
               className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500"
@@ -272,6 +322,7 @@ export function ProfileSection({
             </label>
             <input
               type="text"
+              maxLength={10}
               value={storeData?.zip || ""}
               onChange={(e) => setStoreData({...storeData, zip: e.target.value})}
               className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500"

@@ -104,7 +104,7 @@ export default function OrderDetailsPage({params}: OrderDetailsPageProps) {
       
     } catch (error) {
       console.error("Error updating order:", error);
-      alert("Failed to update order status");
+      alert(error instanceof Error ? error.message : "Failed to update order status");
     } finally {
       setUpdating(false);
     }
@@ -124,9 +124,6 @@ export default function OrderDetailsPage({params}: OrderDetailsPageProps) {
 
     return ORDER_STATUS_CONFIG.pending;
   };
-
-  // ✅ Calculate store total (products + tax only)
-  const storeTotal = (order?.pricing.subtotal || 0) + (order?.pricing.tax || 0);
 
   if (!loading && !isAuthenticated) {
     router.push("/login");
@@ -181,16 +178,16 @@ export default function OrderDetailsPage({params}: OrderDetailsPageProps) {
             <span className="text-sm text-gray-400">
               <Calendar className="w-3.5 h-3.5 inline mr-1" />
              {formatOrderDate(
-                order.createdAt
+                order.payment?.paidAt ?? order.createdAt
               )} 
             </span>
             <span className="text-sm text-gray-400">
               <Store className="w-3.5 h-3.5 inline mr-1" />
-              {order.items.length} items
+              {order.items.length} products · {order.items.reduce((total, item) => total + Math.max(0, item.quantity || 0), 0)} units
             </span>
           </div>
         </div>
-        <button className="ml-auto px-4 py-2 border border-gray-200 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50 transition flex items-center gap-2">
+        <button type="button" onClick={() => window.print()} className="print:hidden ml-auto px-4 py-2 border border-gray-200 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50 transition flex items-center gap-2">
           <Printer className="w-4 h-4" />
           Print
         </button>
@@ -243,7 +240,7 @@ export default function OrderDetailsPage({params}: OrderDetailsPageProps) {
         {/* ✅ Note about LIA handling delivery */}
         <div className="mt-4 pt-4 border-t border-gray-100">
           <p className="text-xs text-gray-400 text-center">
-            📦 LIA handles delivery. Updates for "Out for Delivery" and "completed" are automatic.
+            📦 LIA handles delivery. Updates for &quot;Out for Delivery&quot; and &quot;Completed&quot; are automatic.
           </p>
         </div>
       </div>
@@ -328,22 +325,35 @@ export default function OrderDetailsPage({params}: OrderDetailsPageProps) {
             </div>
           </div>
 
-          {/* ✅ Payment Summary - Store View (No Delivery Fee) */}
+          {/* Customer delivery and service fees are excluded from store accounting. */}
           <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-            <h3 className="font-bold text-gray-800 mb-4">Payment Summary</h3>
+            <h3 className="font-bold text-gray-800 mb-4">Store Accounting</h3>
             <div className="space-y-2">
               <div className="flex justify-between text-sm">
                 <span className="text-gray-500">Subtotal (Products)</span>
-                <span className="text-gray-800">${(order.pricing.subtotal || 0).toFixed(2)}</span>
+                <span className="text-gray-800">{formatOrderCurrency(order.storeFinancials?.merchandiseSubtotal ?? order.pricing.subtotal)}</span>
               </div>
               {/* ✅ DELIVERY FEE REMOVED - Handled by LIA */}
               <div className="flex justify-between text-sm">
                 <span className="text-gray-500">Tax</span>
-                <span className="text-gray-800">${(order.pricing.tax || 0).toFixed(2)}</span>
+                <span className="text-gray-800">{formatOrderCurrency(order.storeFinancials?.salesTax ?? order.pricing.tax)}</span>
               </div>
+              <div className="flex justify-between border-t border-gray-100 pt-2 text-sm font-medium">
+                <span className="text-gray-600">Gross store amount</span>
+                <span>{formatOrderCurrency(order.storeFinancials?.grossStoreAmount ?? order.pricing.subtotal + order.pricing.tax)}</span>
+              </div>
+              {order.storeFinancials?.liaCommission !== null && order.storeFinancials?.liaCommission !== undefined && <div className="flex justify-between text-sm"><span className="text-gray-500">LIA commission</span><span className="text-red-600">−{formatOrderCurrency(order.storeFinancials.liaCommission)}</span></div>}
+              {Boolean(order.storeFinancials?.storeRefundReversal) && <div className="flex justify-between text-sm"><span className="text-gray-500">Refund adjustment</span><span className="text-red-600">−{formatOrderCurrency(order.storeFinancials?.storeRefundReversal ?? 0)}</span></div>}
+              {Boolean(order.storeFinancials?.refundedMerchandise) && <div className="flex justify-between text-xs"><span className="text-gray-500">Refunded merchandise</span><span>{formatOrderCurrency(order.storeFinancials?.refundedMerchandise ?? 0)}</span></div>}
+              {Boolean(order.storeFinancials?.refundedSalesTax) && <div className="flex justify-between text-xs"><span className="text-gray-500">Refunded sales tax</span><span>{formatOrderCurrency(order.storeFinancials?.refundedSalesTax ?? 0)}</span></div>}
               <div className="flex justify-between text-lg font-bold pt-2 border-t border-gray-200">
-                <span className="text-gray-800">Store Total</span>
-                <span className="text-green-600">${storeTotal.toFixed(2)}</span>
+                <span className="text-gray-800">Net store earning</span>
+                <span className="text-green-600">{order.storeFinancials?.netStoreEarning === null || order.storeFinancials?.netStoreEarning === undefined ? "Pending completion" : formatOrderCurrency(order.storeFinancials.netStoreEarning)}</span>
+              </div>
+              <div className="mt-3 space-y-1 rounded-lg bg-gray-50 p-3 text-xs text-gray-600">
+                <div className="flex justify-between"><span>Settlement</span><span className="font-medium capitalize">{(order.storeFinancials?.settlementStatus ?? "not_created").replaceAll("_", " ")}</span></div>
+                <div className="flex justify-between"><span>Stripe transfer</span><span className="font-medium capitalize">{(order.storeFinancials?.transferStatus ?? "not_created").replaceAll("_", " ")}</span></div>
+                {order.storeFinancials?.refundStatus && <div className="flex justify-between"><span>Refund</span><span className="font-medium capitalize">{order.storeFinancials.refundStatus.replaceAll("_", " ")}</span></div>}
               </div>
             </div>
           </div>

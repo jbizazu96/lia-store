@@ -18,13 +18,11 @@ import {SearchResults} from "./components/SearchResults";
 import {SearchResult, StoreGroup} from "./types";
 
 // Services
-import {performSearch, groupResultsByStore, searchStoresByName} from "./services/searchService";
+import {enrichSearchResults, performSearch, groupResultsByStore, searchStoresByName} from "./services/searchService";
 import {loadRecentSearches, saveRecentSearch} from "./services/recentSearchService";
-import {useMarketplacePricingPolicy} from "@/hooks/useMarketplacePricingPolicy";
 import {BrandedLoader} from "@/components/ui/BrandedLoader";
 
 function SearchPageContent() {
-  const marketplacePolicy = useMarketplacePricingPolicy();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [searchQuery, setSearchQuery] = useState(() => searchParams.get("q")?.trim() ?? "");
@@ -34,6 +32,7 @@ function SearchPageContent() {
   const [searchError, setSearchError] = useState<string | null>(null);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const [userLocation, setUserLocation] = useState<{lat: number; lng: number} | null>(null);
+  const [locationReady, setLocationReady] = useState(false);
 
   // Load user data
   useEffect(() => {
@@ -60,6 +59,8 @@ function SearchPageContent() {
         }
       } catch (error) {
         console.error("Error loading user data:", error);
+      } finally {
+        setLocationReady(true);
       }
     };
     loadUserData();
@@ -89,9 +90,7 @@ function SearchPageContent() {
       setSearchError(null);
     });
 
-    if (!marketplacePolicy) {
-      return;
-    }
+    if (!locationReady) return;
 
     let active = true;
 
@@ -99,10 +98,20 @@ function SearchPageContent() {
       const runSearch = async () => {
         try {
           // Search both products and stores.
-          const [productResults, storeResults] = await Promise.all([
-            performSearch(normalizedQuery, userLocation, marketplacePolicy),
-            searchStoresByName(normalizedQuery, userLocation, marketplacePolicy),
+          const [rawProductResults, rawStoreResults] = await Promise.all([
+            performSearch(normalizedQuery),
+            searchStoresByName(normalizedQuery),
           ]);
+          const enrichedResults = await enrichSearchResults(
+            [...rawProductResults, ...rawStoreResults],
+            userLocation,
+          );
+          const productResults = enrichedResults.filter(
+            (result) => result.resultType === "product",
+          );
+          const storeResults = enrichedResults.filter(
+            (result) => result.resultType === "store",
+          );
 
           if (!active) {
             return;
@@ -171,7 +180,7 @@ function SearchPageContent() {
       active = false;
       clearTimeout(timer);
     };
-  }, [searchQuery, userLocation, marketplacePolicy]);
+  }, [locationReady, searchQuery, userLocation]);
 
   const handleClear = () => {
     setSearchQuery("");

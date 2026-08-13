@@ -30,9 +30,13 @@ interface OrderCardProps {
 }
 
 export function OrderCard({order, index}: OrderCardProps) {
-    const storeTotal =
-      order.pricing.subtotal +
-      order.pricing.tax;
+  const grossStoreAmount = order.storeFinancials?.grossStoreAmount ??
+    order.pricing.subtotal + order.pricing.tax;
+  const unitCount = order.items.reduce((total, item) => total + Math.max(0, item.quantity || 0), 0);
+  const financialAmount = order.storeFinancials?.netStoreEarning ?? grossStoreAmount;
+  const financialLabel = order.storeFinancials?.netStoreEarning === null || order.storeFinancials?.netStoreEarning === undefined
+    ? "Gross store amount"
+    : "Net store earning";
 
   return (
     <Link
@@ -59,7 +63,7 @@ export function OrderCard({order, index}: OrderCardProps) {
               compact
             />
             <span className="text-sm text-gray-400">
-              {formatOrderDate(order.createdAt)}
+              {formatOrderDate(order.payment?.paidAt ?? order.createdAt)}
             </span>
           </div>
 
@@ -70,7 +74,7 @@ export function OrderCard({order, index}: OrderCardProps) {
             </div>
             <div className="flex items-center gap-1.5 text-gray-600">
               <Package className="w-4 h-4" />
-              {order.items.length} items
+              {order.items.length} product{order.items.length === 1 ? "" : "s"} · {unitCount} unit{unitCount === 1 ? "" : "s"}
             </div>
             <div className="flex items-center gap-1.5 text-gray-600">
               <MapPin className="w-4 h-4" />
@@ -79,7 +83,7 @@ export function OrderCard({order, index}: OrderCardProps) {
             {/* ✅ Show calculated store total */}
             <div className="flex items-center gap-1.5 text-green-600 font-medium">
               <DollarSign className="w-4 h-4" />
-              {formatOrderCurrency(storeTotal)}
+              <span title={financialLabel}>{formatOrderCurrency(financialAmount)}</span>
             </div>
           </div>
         </div>

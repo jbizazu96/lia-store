@@ -402,6 +402,21 @@ export class FirebaseMessaging {
     window.dispatchEvent(new Event(NATIVE_NOTIFICATION_STATE_EVENT));
   }
 
+  /** Deactivate this account's server registration without changing the
+   * installation's OS permission or the customer's notification preference. */
+  async deactivateCurrentDeviceRegistration(): Promise<void> {
+    if (typeof window === "undefined") return;
+    const user = auth.currentUser;
+    if (!user) return;
+    const deactivate = httpsCallable<
+      {deviceId: string},
+      {deactivated: boolean}
+    >(functions, "deactivateNotificationDevice");
+    await deactivate({deviceId: this.deviceId()});
+    window.localStorage.removeItem("lia.notification-device:" + user.uid);
+    window.dispatchEvent(new Event(NATIVE_NOTIFICATION_STATE_EVENT));
+  }
+
   async recoverNativeRegistration(): Promise<NotificationPermissionState> {
     const permission = await this.getPermissionStatus();
     if (permission === "granted") {

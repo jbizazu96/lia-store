@@ -187,6 +187,24 @@ export interface PaymentInfo {
   paidAt?: Date;
 }
 
+/** Authoritative store-facing accounting assembled by the backend. */
+export interface StoreOrderFinancials {
+  currency: string;
+  merchandiseSubtotal: number;
+  salesTax: number;
+  grossStoreAmount: number;
+  liaCommission: number | null;
+  originalStoreEarning: number | null;
+  refundedMerchandise: number;
+  refundedSalesTax: number;
+  storeRefundReversal: number;
+  netStoreEarning: number | null;
+  customerRefundTotal: number;
+  refundStatus: string | null;
+  settlementStatus: string;
+  transferStatus: string;
+}
+
 /* ==========================================================================
    SHIPDAY
    ========================================================================== */
@@ -335,6 +353,8 @@ export interface Order {
    * Stripe information.
    */
   payment?: PaymentInfo;
+
+  storeFinancials?: StoreOrderFinancials;
 
   /**
    * Shipday delivery information.

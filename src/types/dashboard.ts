@@ -23,11 +23,13 @@ export interface DashboardStats {
   totalOrders: number;
 
   /*
-   * Revenue earned by the store.
-   *
-   * Delivery fees are excluded.
+   * Net settlement earnings after completed store refund reversals.
    */
-  totalRevenue: number;
+  netStoreEarnings: number;
+
+  currentWeekNetEarnings: number;
+
+  refundDeductions: number;
 
   /*
    * Number of unique customers.
@@ -44,6 +46,8 @@ export interface DashboardStats {
    */
   pendingOrders: number;
 
+  activeOrders: number;
+
   /*
    * Orders received today.
    */
@@ -55,9 +59,9 @@ export interface DashboardStats {
   weeklyGrowth: number;
 
   /*
-   * Weekly revenue growth percentage.
+   * Calendar-week net-earnings growth against the previous week.
    */
-  revenueGrowth: number;
+  earningsGrowth: number;
 }
 
 /*
@@ -81,7 +85,13 @@ export interface DashboardRecentOrder {
    * Gross order amount shown on the store order page: merchandise subtotal
    * plus sales tax, before the marketplace commission is deducted.
    */
-  storeTotal: number;
+  grossStoreOrderAmount: number;
+
+  /** Same amount displayed by the store Orders card. */
+  displayStoreAmount: number;
+
+  /** Gross until settlement exists; net afterward. */
+  amountType: "gross" | "net";
 
   /*
    * Current order status.
@@ -89,9 +99,9 @@ export interface DashboardRecentOrder {
   status: string;
 
   /*
-   * ISO date string.
+   * Trusted Stripe payment timestamp as an ISO string.
    */
-  createdAt: string;
+  paidAt: string;
 
   /*
    * Number of products purchased.
@@ -110,6 +120,8 @@ export interface DashboardData {
    * Store name.
    */
   storeName: string;
+
+  timeZone: string;
 
   /*
    * Dashboard statistics.

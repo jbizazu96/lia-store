@@ -6,13 +6,14 @@ import {X, Trash2} from "lucide-react";
 import {
   reauthenticateWithCredential,
   EmailAuthProvider,
-  signOut,
 } from "firebase/auth";
 import {auth} from "@/lib/firebase";
 import {
   customerProfileClientService,
 } from "@/services/user/customerProfileClientService";
 import { googleAuthenticationService } from "@/services/auth/googleAuthenticationService";
+import {appleAuthenticationService} from "@/services/auth/appleAuthenticationService";
+import {customerLogoutService} from "@/services/auth/customerLogoutService";
 
 interface DeleteAccountModalProps {
   onClose: () => void;
@@ -26,6 +27,9 @@ export function DeleteAccountModal({onClose}: DeleteAccountModalProps) {
   const usesPasswordProvider = auth.currentUser?.providerData.some(
     (provider) => provider.providerId === "password"
   ) ?? true;
+  const usesAppleProvider = auth.currentUser?.providerData.some(
+    (provider) => provider.providerId === "apple.com"
+  ) ?? false;
 
   async function handleDeleteAccount() {
     try {
@@ -40,6 +44,8 @@ export function DeleteAccountModal({onClose}: DeleteAccountModalProps) {
       if (usesPasswordProvider) {
         const credential = EmailAuthProvider.credential(user.email, password);
         await reauthenticateWithCredential(user, credential);
+      } else if (usesAppleProvider) {
+        await appleAuthenticationService.reauthenticate(user);
       } else {
         await googleAuthenticationService.reauthenticate(user);
       }
@@ -52,7 +58,7 @@ export function DeleteAccountModal({onClose}: DeleteAccountModalProps) {
       await customerProfileClientService.requestAccountDeletion();
 
       setPassword("");
-      await signOut(auth);
+      await customerLogoutService.logout();
       window.location.assign("/login?accountDeletion=review");
 
     } catch (error: unknown) {

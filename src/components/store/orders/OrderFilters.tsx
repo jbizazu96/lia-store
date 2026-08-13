@@ -7,7 +7,7 @@
 import {
   ORDER_STATUS_CONFIG,
 } from "@/config/orderStatus";
-import {Search, Filter, X} from "lucide-react";
+import {Search, X} from "lucide-react";
 
 interface OrderFiltersProps {
   searchQuery: string;
@@ -16,6 +16,11 @@ interface OrderFiltersProps {
   onStatusChange: (value: string) => void;
   onClearFilters: () => void;
   hasFilters: boolean;
+  fromDate: string;
+  toDate: string;
+  onFromDateChange: (value: string) => void;
+  onToDateChange: (value: string) => void;
+  onExport: () => void;
 }
 
 const statusOptions = [
@@ -41,6 +46,11 @@ export function OrderFilters({
   onStatusChange,
   onClearFilters,
   hasFilters,
+  fromDate,
+  toDate,
+  onFromDateChange,
+  onToDateChange,
+  onExport,
 }: OrderFiltersProps) {
   return (
     <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
@@ -80,6 +90,11 @@ export function OrderFilters({
             Clear
           </button>
         )}
+      </div>
+      <div className="mt-3 flex flex-wrap items-end gap-3 border-t border-gray-100 pt-3">
+        <label className="text-xs text-gray-500">Paid from<input type="date" value={fromDate} max={toDate || undefined} onChange={(event) => onFromDateChange(event.target.value)} className="mt-1 block rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700" /></label>
+        <label className="text-xs text-gray-500">Paid through<input type="date" value={toDate} min={fromDate || undefined} onChange={(event) => onToDateChange(event.target.value)} className="mt-1 block rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700" /></label>
+        <button type="button" onClick={onExport} className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Export loaded CSV</button>
       </div>
     </div>
   );

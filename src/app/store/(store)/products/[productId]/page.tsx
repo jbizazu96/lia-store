@@ -366,6 +366,8 @@ async ({
         stock:
           data.stock,
 
+        lowStockThreshold: data.lowStockThreshold,
+
         sku:
           data.sku,
 
@@ -380,7 +382,8 @@ async ({
 
         promotion:
           data.promotion,
-      }
+      },
+      product.stock,
     );
 
     /*

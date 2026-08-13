@@ -1,6 +1,11 @@
 
 import Stripe from "stripe";
 
+export {cleanupEmailJobs, deliverQueuedEmail, retryQueuedEmails} from "./email/resendEmailDelivery";
+export {resendEmailWebhook} from "./email/resendWebhook";
+export {sendStoreInventoryEmailDigest} from "./email/inventoryEmailDigest";
+export {orderTransactionalEmails} from "./email/transactionalEmailEvents";
+
 import {
   defineSecret,
 } from "firebase-functions/params";
@@ -229,8 +234,10 @@ export {
 export {
   getOwnedStoreProduct,
   getOwnedStoreProducts,
+  getStoreInventoryAudit,
   mutateStoreProduct,
 } from "./callable/storeProducts";
+export {storeProductCategorySummarySync} from "./triggers/storeProductCategorySummary";
 export {
   failStoreProductGalleryImageUpload,
   getOwnedStoreProductImages,
@@ -268,10 +275,12 @@ export {
   getStoreWorkspaceEntry,
   getStoreWorkspaceDashboard,
   getStoreWorkspaceFinancials,
+  getStoreWorkspaceAnalytics,
   getStoreWorkspacePayouts,
   getStoreWorkspaceOrder,
   getStoreWorkspaceOrders,
   getStoreWorkspaceSettings,
+  getStoreSettingsAudit,
   saveStoreWorkspaceSchedule,
   saveStoreWorkspaceSettings,
 } from "./callable/storeWorkspace";
@@ -674,10 +683,17 @@ export {
   registerNotificationDevice,
   sendTestNotification,
 } from "./callable/notificationDevice";
+export {processUserNotificationBatch} from "./callable/userNotifications";
 export {
   getAdminOrderSupportRequest,
   respondAdminOrderSupportRequest,
 } from "./callable/adminOrderSupport";
+export {
+  createAccountSupportRequest,
+  getAdminAccountSupportRequests,
+  respondAdminAccountSupportRequest,
+} from "./callable/accountSupport";
+export {accountSupportRequestCreated} from "./triggers/accountSupportNotifications";
 export {
   orderSupportRequestCreated,
   orderSupportResponseNotification,

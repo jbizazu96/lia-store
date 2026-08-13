@@ -5,37 +5,24 @@
   Allows store owners to set their operating hours for each day of the week.
 */
 
-import { useState, useEffect } from "react";
-import { Clock, Save, Edit, AlertCircle, CheckCircle, X } from "lucide-react";
+import { useState, useEffect, type Dispatch, type SetStateAction } from "react";
+import { Clock, Save, Edit, AlertCircle, CheckCircle } from "lucide-react";
 import {
   storeWorkspaceClientService,
 } from "@/services/store/storeWorkspaceClientService";
+import type {StoreWorkspaceStore} from "@/services/store/storeWorkspaceClientService";
 import { useUnsavedChanges } from "@/hooks/useUnsavedChanges";
 import { useConfirmation } from "@/context/ConfirmationContext";
 import { useSuccessToast } from "@/context/SuccessToastContext";
+import {getStoreScheduleValidationError} from "@/services/store/storeScheduleValidation";
 
-interface ScheduleDay {
-  day: string;
-  open: string;
-  close: string;
-  isClosed: boolean;
-}
+type ScheduleDay = StoreWorkspaceStore["schedule"][number];
 
 interface StoreScheduleProps {
-  storeData: any;
-  setStoreData: (data: any) => void;
+  storeData: StoreWorkspaceStore;
+  setStoreData: Dispatch<SetStateAction<StoreWorkspaceStore | null>>;
   storeId: string;
 }
-
-const DAYS_OF_WEEK = [
-  "Monday",
-  "Tuesday",
-  "Wednesday",
-  "Thursday",
-  "Friday",
-  "Saturday",
-  "Sunday"
-];
 
 const DEFAULT_SCHEDULE: ScheduleDay[] = [
   { day: "Monday", open: "09:00", close: "18:00", isClosed: false },
@@ -66,13 +53,15 @@ export function StoreSchedule({ storeData, setStoreData, storeId }: StoreSchedul
   // Load schedule from storeData
   useEffect(() => {
     if (storeData?.schedule && Array.isArray(storeData.schedule)) {
-      setSchedule(storeData.schedule);
-      setTempSchedule(storeData.schedule);
+      queueMicrotask(() => {
+        setSchedule(storeData.schedule);
+        setTempSchedule(storeData.schedule);
+      });
     }
   }, [storeData]);
 
   // Handle input change for a specific day
-  const handleScheduleChange = (index: number, field: keyof ScheduleDay, value: any) => {
+  const handleScheduleChange = <Key extends keyof ScheduleDay>(index: number, field: Key, value: ScheduleDay[Key]) => {
     const updated = [...tempSchedule];
     updated[index] = { ...updated[index], [field]: value };
     setTempSchedule(updated);
@@ -101,6 +90,11 @@ export function StoreSchedule({ storeData, setStoreData, storeId }: StoreSchedul
 
       if (!storeId) {
         setSaveError("Store ID not found. Please try again.");
+        return;
+      }
+      const validationError = getStoreScheduleValidationError(tempSchedule);
+      if (validationError) {
+        setSaveError(validationError);
         return;
       }
 
@@ -132,9 +126,9 @@ export function StoreSchedule({ storeData, setStoreData, storeId }: StoreSchedul
       
       // Hide success message after 3 seconds
       setTimeout(() => setSaveSuccess(false), 3000);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error saving schedule:", error);
-      setSaveError(error.message || "Failed to save schedule. Please try again.");
+      setSaveError(error instanceof Error ? error.message : "Failed to save schedule. Please try again.");
     } finally {
       setSaving(false);
     }
@@ -383,7 +377,7 @@ export function StoreSchedule({ storeData, setStoreData, storeId }: StoreSchedul
         <div className="mt-4 p-3 bg-blue-50 rounded-xl border border-blue-100">
           <p className="text-xs text-blue-600 flex items-center gap-2">
             <AlertCircle className="w-3.5 h-3.5" />
-            Click the day's status button to toggle between open/closed. 
+            Click the day&apos;s status button to toggle between open/closed. 
             Use the time inputs to set your opening and closing hours.
           </p>
         </div>

@@ -165,6 +165,7 @@ export default function DashboardPage() {
 
   const {
     storeName,
+    timeZone,
     stats,
     recentOrders,
   } = data;
@@ -178,7 +179,7 @@ export default function DashboardPage() {
   const statCards = [
     {
       title:
-        "Total Orders",
+        "Paid Orders",
 
       value:
         stats.totalOrders,
@@ -195,11 +196,11 @@ export default function DashboardPage() {
 
     {
       title:
-        "Revenue",
+        "Net Store Earnings",
 
       value:
         formatOrderCurrency(
-          stats.totalRevenue
+          stats.netStoreEarnings
         ),
 
       icon:
@@ -212,7 +213,7 @@ export default function DashboardPage() {
         "text-green-600",
 
       growth:
-        stats.revenueGrowth,
+        stats.earningsGrowth,
     },
 
     {
@@ -279,9 +280,7 @@ export default function DashboardPage() {
             </h2>
 
             <p className="mt-1 text-orange-100">
-              Here&apos;s what&apos;s
-              happening with your store
-              today
+              Current paid-order activity · {timeZone.replaceAll("_", " ")}
             </p>
           </div>
 
@@ -289,8 +288,7 @@ export default function DashboardPage() {
             <Clock className="h-5 w-5" />
 
             <span className="font-medium">
-              {stats.todayOrders} orders
-              today
+              {stats.todayOrders} paid orders today
             </span>
           </div>
         </div>
@@ -334,8 +332,7 @@ export default function DashboardPage() {
                       {stat.growth >= 0
                         ? "+"
                         : ""}
-                      {stat.growth}% this
-                      week
+                      {stat.growth.toFixed(1)}% vs last week
                     </p>
                   )}
                 </div>
@@ -485,9 +482,9 @@ export default function DashboardPage() {
 
                           <p className="text-sm text-gray-500">
                             {formatOrderDate(
-                              order.createdAt
+                              order.paidAt
                                 ? new Date(
-                                    order.createdAt
+                                    order.paidAt
                                   )
                                 : null
                             )}{" "}
@@ -502,7 +499,7 @@ export default function DashboardPage() {
 
                       <p className="ml-3 flex-shrink-0 font-bold text-gray-800">
                         {formatOrderCurrency(
-                          order.storeTotal
+                          order.displayStoreAmount
                         )}
                       </p>
                     </Link>
@@ -529,7 +526,7 @@ export default function DashboardPage() {
           className="rounded-2xl bg-white p-6 shadow-sm"
         >
           <h3 className="mb-4 font-bold text-gray-800">
-            Pending Orders
+            Orders Waiting for Acceptance
           </h3>
 
           {stats.pendingOrders >
@@ -583,7 +580,7 @@ export default function DashboardPage() {
           <div className="mt-6 grid grid-cols-2 gap-3">
             <div className="rounded-xl bg-gray-50 p-3">
               <p className="text-xs text-gray-500">
-                Today&apos;s Orders
+                Today&apos;s Paid Orders
               </p>
 
               <p className="text-lg font-bold text-gray-800">
@@ -593,7 +590,7 @@ export default function DashboardPage() {
 
             <div className="rounded-xl bg-gray-50 p-3">
               <p className="text-xs text-gray-500">
-                This Week
+                Paid Order Growth
               </p>
 
               <p className="text-lg font-bold text-gray-800">
@@ -601,9 +598,16 @@ export default function DashboardPage() {
                 0
                   ? "+"
                   : ""}
-                {stats.weeklyGrowth}%
+                {stats.weeklyGrowth.toFixed(1)}%
               </p>
             </div>
+          </div>
+          <div className="mt-3 rounded-xl bg-emerald-50 p-3 text-sm">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-emerald-800">Current calendar-week net earnings</span>
+              <span className="font-bold text-emerald-900">{formatOrderCurrency(stats.currentWeekNetEarnings)}</span>
+            </div>
+            {stats.refundDeductions > 0 && <div className="mt-2 flex items-center justify-between gap-3 text-xs text-emerald-700"><span>Lifetime completed refund deductions</span><span>−{formatOrderCurrency(stats.refundDeductions)}</span></div>}
           </div>
         </motion.div>
       </div>

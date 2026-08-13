@@ -1,261 +1,165 @@
 "use client";
 
-/*
-|--------------------------------------------------------------------------
-| useStoreProducts Hook
-|--------------------------------------------------------------------------
-|
-| Connects the product service to the store products page.
-|
-| Responsibilities:
-| - Wait for authentication.
-| - Resolve the signed-in user's store.
-| - Load the store's products.
-| - Expose loading, error, and refresh state.
-|
-| Product writes remain in productService.
-|
-*/
+import {useCallback, useEffect, useRef, useState} from "react";
+import {auth} from "@/lib/firebase";
+import {useStoreWorkspace} from "@/context/StoreWorkspaceContext";
+import {productService} from "@/services/product/productService";
+import type {Product} from "@/types/product";
 
-import {
-  useCallback,
-  useEffect,
-  useState,
-} from "react";
-
-import {
-  onAuthStateChanged,
-} from "firebase/auth";
-
-import {
-  auth,
-} from "@/lib/firebase";
-
-import {
-  productService,
-} from "@/services/product/productService";
-
-import type {
-  Product,
-} from "@/types/product";
-
-interface UseStoreProductsResult {
+export interface StoreProductCategoryRow {
+  id: string;
+  name: string;
+  count: number;
   products: Product[];
-
-  storeId: string | null;
-
-  loading: boolean;
-
-  error: string | null;
-
-  isAuthenticated: boolean;
-
-  needsStoreSetup: boolean;
-
-  refreshProducts: () => Promise<void>;
 }
 
-export function useStoreProducts():
-UseStoreProductsResult {
-  const [
-    products,
-    setProducts,
-  ] = useState<Product[]>([]);
+export interface StoreProductStats {
+  totalProducts: number;
+  activeProducts: number;
+  featuredProducts: number;
+  totalStock: number;
+  totalValue: number;
+  outOfStockProducts: number;
+  imageIssueProducts: number;
+}
 
-  const [
-    storeId,
-    setStoreId,
-  ] = useState<string | null>(null);
+interface UseStoreProductsOptions {
+  mode?: "overview" | "page";
+  category?: string;
+  status?: "all" | "active" | "inactive" | "out_of_stock" | "low_stock" | "image_issues";
+  search?: string;
+  pageSize?: number;
+  sort?: "name" | "stock_asc" | "stock_desc" | "price_asc" | "price_desc" | "updated_desc";
+}
 
-  const [
-    loading,
-    setLoading,
-  ] = useState(true);
+const emptyStats: StoreProductStats = {
+  totalProducts: 0,
+  activeProducts: 0,
+  featuredProducts: 0,
+  totalStock: 0,
+  totalValue: 0,
+  outOfStockProducts: 0,
+  imageIssueProducts: 0,
+};
 
-  const [
-    error,
-    setError,
-  ] = useState<string | null>(null);
+export function useStoreProducts(options: UseStoreProductsOptions = {}) {
+  const {entry, loading: workspaceLoading} = useStoreWorkspace();
+  const mode = options.mode ?? "overview";
+  const category = options.category ?? "all";
+  const status = options.status ?? "all";
+  const search = options.search?.trim() ?? "";
+  const pageSize = options.pageSize ?? 25;
+  const sort = options.sort ?? "name";
+  const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<StoreProductCategoryRow[]>([]);
+  const [stats, setStats] = useState<StoreProductStats>(emptyStats);
+  const [storeId, setStoreId] = useState<string | null>(null);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [filteredCount, setFilteredCount] = useState(0);
+  const [filteredStats, setFilteredStats] = useState({active: 0, outOfStock: 0, imageIssues: 0});
+  const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [needsStoreSetup, setNeedsStoreSetup] = useState(false);
+  const requestId = useRef(0);
+  const lastVisibleRefreshAt = useRef(0);
 
-  const [
-    isAuthenticated,
-    setIsAuthenticated,
-  ] = useState(false);
-
-  const [
-    needsStoreSetup,
-    setNeedsStoreSetup,
-  ] = useState(false);
-
-  const loadProducts =
-    useCallback(
-      async (
-        resolvedStoreId: string,
-        showLoading = true
-      ): Promise<void> => {
-        if (showLoading) {
-          setLoading(true);
-        }
-
-        try {
-          setError(null);
-
-          const ownedInventory =
-            await productService
-              .getOwnedStoreProducts();
-
-          if (
-            ownedInventory.storeId !==
-            resolvedStoreId
-          ) {
-            throw new Error(
-              "The store inventory could not be verified."
-            );
-          }
-
-          setProducts(
-            ownedInventory.products
-          );
-        } catch (loadError) {
-          console.error(
-            "Error loading store products:",
-            loadError
-          );
-
-          setProducts([]);
-
-          setError(
-            "Failed to load products."
-          );
-        } finally {
-          if (showLoading) {
-            setLoading(false);
-          }
-        }
-      },
-      []
-    );
+  const load = useCallback(async (cursor?: string, append = false, showLoading = true) => {
+    const currentRequest = ++requestId.current;
+    if (showLoading) setLoading(true);
+    if (append) setLoadingMore(true);
+    try {
+      setError(null);
+      const inventory = await productService.getOwnedStoreProducts({
+        mode,
+        category,
+        status,
+        search,
+        pageSize,
+        sort,
+        ...(cursor ? {cursor} : {}),
+      });
+      if (currentRequest !== requestId.current) return;
+      setStoreId(inventory.storeId);
+      setProducts((current) => append ? [...current, ...inventory.products] : inventory.products);
+      setCategories(inventory.categories);
+      setStats(inventory.stats);
+      setFilteredCount(inventory.filteredCount);
+      setFilteredStats(inventory.filteredStats);
+      setNextCursor(inventory.nextCursor);
+      setNeedsStoreSetup(false);
+    } catch (loadError) {
+      if (currentRequest !== requestId.current) return;
+      console.error("Error loading store products:", loadError);
+      // Background synchronization must never replace a usable inventory with
+      // an empty/error screen because of a temporary network failure.
+      if (!append && showLoading) {
+        setProducts([]);
+        setCategories([]);
+        setError("Failed to load products.");
+      }
+    } finally {
+      if (currentRequest === requestId.current) {
+        setLoading(false);
+        setLoadingMore(false);
+      }
+    }
+  }, [category, mode, pageSize, search, sort, status]);
 
   useEffect(() => {
-    let refreshTimer: ReturnType<
-      typeof setInterval
-    > | null = null;
+    if (workspaceLoading) return;
+    if (!auth.currentUser) {
+      requestId.current += 1;
+      queueMicrotask(() => {
+        setProducts([]); setCategories([]); setStoreId(null); setIsAuthenticated(false);
+        setError("You must sign in."); setLoading(false);
+      });
+      return;
+    }
+    if (!entry?.hasStore || !entry.store) {
+      queueMicrotask(() => {setNeedsStoreSetup(true); setLoading(false);});
+      return;
+    }
+    queueMicrotask(() => {setIsAuthenticated(true); void load();});
+  }, [entry, load, workspaceLoading]);
 
-    const unsubscribe =
-      onAuthStateChanged(
-        auth,
-        async (user) => {
-          if (!user) {
-            setProducts([]);
-            setStoreId(null);
-            setIsAuthenticated(false);
-            setNeedsStoreSetup(false);
-            setError(
-              "You must sign in."
-            );
-            setLoading(false);
-
-            return;
-          }
-
-          setIsAuthenticated(true);
-          setNeedsStoreSetup(false);
-          setLoading(true);
-          setError(null);
-
-          try {
-            const ownedInventory =
-              await productService
-                .getOwnedStoreProducts();
-
-            if (!ownedInventory.storeId) {
-              setProducts([]);
-              setStoreId(null);
-              setNeedsStoreSetup(true);
-
-              setError(
-                "No store was found for this account."
-              );
-
-              setLoading(false);
-
-              return;
-            }
-
-            setStoreId(
-              ownedInventory.storeId
-            );
-
-            setProducts(
-              ownedInventory.products
-            );
-
-            setError(null);
-            setLoading(false);
-
-            /*
-             * Inventory is private callable data. A bounded refresh keeps
-             * image-processing state current without maintaining a full
-             * Firestore collection listener for every open store tab.
-             */
-            refreshTimer = setInterval(
-              () => {
-                void loadProducts(
-                  ownedInventory.storeId,
-                  false
-                );
-              },
-              30_000
-            );
-          } catch (loadError) {
-            console.error(
-              "Error preparing store products:",
-              loadError
-            );
-
-            setProducts([]);
-            setStoreId(null);
-
-            setError(
-              "Failed to load products."
-            );
-
-            setLoading(false);
-          }
-        }
-      );
-
-    return () => {
-      unsubscribe();
-
-      if (refreshTimer) {
-        clearInterval(refreshTimer);
-      }
+  useEffect(() => {
+    const refreshVisibleInventory = () => {
+      if (document.visibilityState !== "visible" || !auth.currentUser) return;
+      const now = Date.now();
+      if (now - lastVisibleRefreshAt.current < 1_000) return;
+      lastVisibleRefreshAt.current = now;
+      void load(undefined, false, false);
     };
-  }, [loadProducts]);
+    document.addEventListener("visibilitychange", refreshVisibleInventory);
+    window.addEventListener("lia:store-inventory-changed", refreshVisibleInventory);
+    return () => {
+      document.removeEventListener("visibilitychange", refreshVisibleInventory);
+      window.removeEventListener("lia:store-inventory-changed", refreshVisibleInventory);
+    };
+  }, [load]);
 
-  const refreshProducts =
-    useCallback(async (): Promise<void> => {
-      if (!storeId) {
-        return;
-      }
-
-      await loadProducts(
-        storeId,
-        false
-      );
-    }, [
-      loadProducts,
-      storeId,
-    ]);
+  const refreshProducts = useCallback(() => load(undefined, false, false), [load]);
+  const loadMore = useCallback(async () => {
+    if (!nextCursor || loadingMore) return;
+    await load(nextCursor, true, false);
+  }, [load, loadingMore, nextCursor]);
 
   return {
     products,
+    categories,
+    stats,
+    filteredCount,
+    filteredStats,
     storeId,
     loading,
+    loadingMore,
     error,
     isAuthenticated,
     needsStoreSetup,
+    hasMore: nextCursor !== null,
+    loadMore,
     refreshProducts,
   };
 }

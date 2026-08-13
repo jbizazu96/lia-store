@@ -108,7 +108,22 @@ export const processStoreImage = onObjectFinalized(
       return;
     }
 
+    const storeReference = getFirestore("default")
+      .collection("stores")
+      .doc(metadata.storeId);
+    const statusFieldName: Record<StoreImageField, string> = {
+      logo: "logoImageStatus", banner: "bannerImageStatus",
+      front: "storeFrontImageStatus", inside: "storeInsideImageStatus",
+      "owner-photo-id": "ownerPhotoIdImageStatus",
+    };
+    const imageIdFieldName = `${metadata.imageField}ImageId`;
+
     try {
+      await storeReference.set({
+        [statusFieldName[metadata.imageField]]: "processing",
+        [imageIdFieldName]: metadata.imageId,
+        updatedAt: FieldValue.serverTimestamp(),
+      }, {merge: true});
       const original = await downloadOriginalImage(bucketName, originalPath);
       const publicVariants = metadata.imageField === "logo" || metadata.imageField === "banner" ?
         await createPublicStoreVariants({
@@ -148,24 +163,17 @@ export const processStoreImage = onObjectFinalized(
         logo: "logoImagePath", banner: "bannerImagePath", front: "storeFrontImagePath",
         inside: "storeInsideImagePath", "owner-photo-id": "ownerPhotoIdImagePath",
       }[metadata.imageField];
-      const statusFieldName: Record<StoreImageField, string> = {
-        logo: "logoImageStatus",
-        banner: "bannerImageStatus",
-        front: "storeFrontImageStatus",
-        inside: "storeInsideImageStatus",
-        "owner-photo-id": "ownerPhotoIdImageStatus",
-      };
       const imageUrl = publicVariants ? publicVariants.urls[
         metadata.imageField === "logo" ? "medium" : "large"
       ] : downloadUrl(bucketName, optimizedPath, token);
-      const storeReference = getFirestore("default")
-        .collection("stores")
-        .doc(metadata.storeId);
-
       const oldPaths = await getFirestore("default").runTransaction(async (transaction) => {
         const storeSnapshot = await transaction.get(storeReference);
         if (!storeSnapshot.exists) {
           throw new Error(`Store not found: ${metadata.storeId}`);
+        }
+
+        if (storeSnapshot.data()?.[imageIdFieldName] !== metadata.imageId) {
+          return [];
         }
 
         const previousPath = storeSnapshot.data()?.[pathFieldName];
@@ -180,6 +188,14 @@ export const processStoreImage = onObjectFinalized(
           } : {}),
           [statusFieldName[metadata.imageField]]: "ready",
           updatedAt: FieldValue.serverTimestamp(),
+        });
+        transaction.create(storeReference.collection("settingsAuditLogs").doc(), {
+          storeId: metadata.storeId,
+          actorUid: typeof storeSnapshot.data()?.ownerId === "string" ? storeSnapshot.data()!.ownerId : "system",
+          actorType: "store_owner",
+          action: `settings_${metadata.imageField}_updated`,
+          changedFields: [fieldName],
+          createdAt: FieldValue.serverTimestamp(),
         });
 
         return [
@@ -202,6 +218,13 @@ export const processStoreImage = onObjectFinalized(
         })));
     } catch (error) {
       logger.error("Store image processing failed.", { originalPath, error });
+      const current = await storeReference.get();
+      if (current.data()?.[imageIdFieldName] === metadata.imageId) {
+        await storeReference.set({
+          [statusFieldName[metadata.imageField]]: "failed",
+          updatedAt: FieldValue.serverTimestamp(),
+        }, {merge: true});
+      }
       throw error;
     }
   }

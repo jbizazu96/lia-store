@@ -3,6 +3,7 @@ import {FieldValue, getFirestore} from "firebase-admin/firestore";
 import {HttpsError, onCall} from "firebase-functions/v2/https";
 import {notifyActiveAdministrators} from "../admin/adminNotificationService";
 import {enforceCallableAbuseProtection} from "../security/callableAbuseProtection";
+import {queueAdminActionEmail} from "../email/emailEventService";
 
 if (admin.apps.length === 0) admin.initializeApp();
 const db = getFirestore("default");
@@ -63,6 +64,13 @@ export const createCustomerOrderZoneRequest = onCall(
       deepLink: `/admin/customers?customerId=${encodeURIComponent(request.auth.uid)}&orderZoneRequestId=${encodeURIComponent(reference.id)}`,
       subject: {type: "order_zone_request", id: reference.id},
       dedupeKey: `order-zone-${reference.id}`,
+    });
+    await queueAdminActionEmail({
+      dedupeKey: `admin-order-zone:${reference.id}`,
+      category: "admin_order_zone",
+      title: "New Order Zone request",
+      summary: `${text(customerData.displayName, 100) || "A customer"} requested ordering access for ${requestedStoreCity}.`,
+      path: `/admin/customers?customerId=${encodeURIComponent(request.auth.uid)}&orderZoneRequestId=${encodeURIComponent(reference.id)}`,
     });
     return {success: true, requestId: reference.id};
   },

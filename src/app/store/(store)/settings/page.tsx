@@ -7,7 +7,7 @@
 */
 
 import { PageContentSkeleton } from "@/components/ui/PageContentSkeleton";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import {
   useRouter,
   useSearchParams,
@@ -15,21 +15,22 @@ import {
 import { motion } from "framer-motion";
 import {
   Store,
-  User,
   Shield,
   Bell,
   CreditCard,
-  Truck,
   Building,
   AlertTriangle,
   ChevronRight,
   Save,
-  Settings as SettingsIcon,
   Clock,
+  History,
+  Headphones,
 } from "lucide-react";
 import { auth } from "@/lib/firebase";
 import {
   storeWorkspaceClientService,
+  type StoreWorkspaceStore,
+  type StoreWorkspaceUser,
 } from "@/services/store/storeWorkspaceClientService";
 
 // Components
@@ -40,6 +41,8 @@ import { PaymentSection } from "@/components/store/settings/PaymentSection";
 import { BusinessSection } from "@/components/store/settings/BusinessSection";
 import { DangerSection } from "@/components/store/settings/DangerSection";
 import { StoreSchedule } from "@/components/store/settings/StoreSchedule";
+import {SettingsActivitySection} from "@/components/store/settings/SettingsActivitySection";
+import {AccountSupportForm} from "@/components/support/AccountSupportForm";
 import { useUnsavedChanges } from "@/hooks/useUnsavedChanges";
 import { useConfirmation } from "@/context/ConfirmationContext";
 import { useSuccessToast } from "@/context/SuccessToastContext";
@@ -57,6 +60,8 @@ type SettingsSection =
   | "payment"
   | "notifications"
   | "security"
+  | "activity"
+  | "support"
   | "danger";
 
 
@@ -81,6 +86,8 @@ function isSettingsSection(
     value === "payment" ||
     value === "notifications" ||
     value === "security" ||
+    value === "activity" ||
+    value === "support" ||
     value === "danger"
   );
 }
@@ -91,39 +98,47 @@ function isSettingsSection(
   never make the page look dirty. Only compare fields this settings UI can
   actually edit and save through saveStoreWorkspaceSettings().
 */
-function settingsEditFingerprint(
-  storeData: object | null,
-  userData: object | null,
-): string {
-  const store = (storeData ?? {}) as Record<string, unknown>;
-  const user = (userData ?? {}) as Record<string, unknown>;
+type SavableSettingsSection = "profile" | "business" | "notifications";
 
-  return JSON.stringify({
-    store: {
-      name: store.name ?? "",
-      email: store.email ?? "",
-      phone: store.phone ?? "",
-      description: store.description ?? "",
-      address: store.address ?? "",
-      city: store.city ?? "",
-      state: store.state ?? "",
-      zip: store.zip ?? "",
-      businessType: store.businessType ?? "",
-      registeredName: store.registeredName ?? "",
-      ein: store.ein ?? "",
-      businessStructure: store.businessStructure ?? "",
-      orderNotifications: store.orderNotifications !== false,
-      paymentNotifications: store.paymentNotifications !== false,
-      productStockNotifications: store.productStockNotifications !== false,
-      emailNotifications: store.emailNotifications !== false,
-      pushNotifications: store.pushNotifications !== false,
-    },
-    user: {
-      displayName: user.displayName ?? "",
-      phone: user.phone ?? "",
-      language: user.language ?? "",
-    },
+function sectionFingerprint(
+  section: SavableSettingsSection,
+  store: StoreWorkspaceStore | null,
+  user: StoreWorkspaceUser | null,
+): string {
+  if (!store) return "";
+  if (section === "profile") return JSON.stringify({
+    name: store.name, email: store.email, phone: store.phone,
+    description: store.description, address: store.address, city: store.city,
+    state: store.state, zip: store.zip,
+    displayName: user?.displayName ?? "", userPhone: user?.phone ?? "",
+    language: user?.language ?? "",
   });
+  if (section === "business") return JSON.stringify({
+    businessType: store.businessType, registeredName: store.registeredName,
+    ein: store.ein, businessStructure: store.businessStructure,
+  });
+  return JSON.stringify({
+    orderNotifications: store.orderNotifications,
+    paymentNotifications: store.paymentNotifications,
+    productStockNotifications: store.productStockNotifications,
+    emailNotifications: store.emailNotifications,
+    pushNotifications: store.pushNotifications,
+  });
+}
+
+function mergeSavedSection(
+  current: StoreWorkspaceStore,
+  saved: StoreWorkspaceStore,
+  section: SavableSettingsSection,
+): StoreWorkspaceStore {
+  const fields: Record<SavableSettingsSection, Array<keyof StoreWorkspaceStore>> = {
+    profile: ["name", "email", "phone", "description", "address", "city", "state", "zip", "country", "formattedAddress", "latitude", "longitude", "placeId"],
+    business: ["businessType", "registeredName", "ein", "businessStructure"],
+    notifications: ["orderNotifications", "paymentNotifications", "productStockNotifications", "emailNotifications", "pushNotifications"],
+  };
+  const next = {...current};
+  for (const field of fields[section]) Object.assign(next, {[field]: saved[field]});
+  return next;
 }
 
 export default function SettingsPage() {
@@ -142,18 +157,21 @@ export default function SettingsPage() {
   */
   const searchParams = useSearchParams();
   const [loading, setLoading] = useState(true);
-  const [storeData, setStoreData] = useState<any>(null);
+  const [storeData, setStoreData] = useState<StoreWorkspaceStore | null>(null);
   const [storeId, setStoreId] = useState<string>("");
-  const [userData, setUserData] = useState<any>(null);
-  const [activeSection, setActiveSection] = useState<SettingsSection>("profile");
+  const [userData, setUserData] = useState<StoreWorkspaceUser | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
+  const [activeSection, setActiveSection] = useState<SettingsSection>(() => {
+    const requested = searchParams.get("section");
+    return isSettingsSection(requested) ? requested : "profile";
+  });
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
-  const initialSettingsFingerprint = useRef<string | null>(null);
-
-  const hasUnsavedChanges =
-    initialSettingsFingerprint.current !== null &&
-    settingsEditFingerprint(storeData, userData) !==
-      initialSettingsFingerprint.current;
+  const [savedFingerprints, setSavedFingerprints] = useState<Record<SavableSettingsSection, string> | null>(null);
+  const savableSection = activeSection === "profile" || activeSection === "business" || activeSection === "notifications" ? activeSection : null;
+  const activeSectionIsDirty = Boolean(savableSection && savedFingerprints && sectionFingerprint(savableSection, storeData, userData) !== savedFingerprints[savableSection]);
+  const hasUnsavedChanges = Boolean(savedFingerprints && storeData && (["profile", "business", "notifications"] as const).some((section) => sectionFingerprint(section, storeData, userData) !== savedFingerprints[section]));
 
   useUnsavedChanges(hasUnsavedChanges);
   const { confirm } = useConfirmation();
@@ -178,40 +196,23 @@ export default function SettingsPage() {
         setStoreId(workspace.store.id);
         setStoreData(workspace.store);
         setUserData(workspace.user);
-        initialSettingsFingerprint.current = settingsEditFingerprint(
-          workspace.store,
-          workspace.user,
-        );
+        setLoadError(null);
+        setSavedFingerprints({
+          profile: sectionFingerprint("profile", workspace.store, workspace.user),
+          business: sectionFingerprint("business", workspace.store, workspace.user),
+          notifications: sectionFingerprint("notifications", workspace.store, workspace.user),
+        });
 
       } catch (error) {
         console.error("Error fetching settings:", error);
+        setLoadError("Store settings could not be loaded. Check your connection and try again.");
       } finally {
         setLoading(false);
       }
     };
 
     fetchData();
-  }, [router, searchParams]);
-
-  /*
-    Open the settings section requested by the URL.
-
-    This is especially important after Stripe-hosted onboarding because
-    Stripe redirects the store owner back to:
-
-    /store/settings?section=payment&stripe=return
-
-    Without this effect, the page would return to the default Profile
-    section instead of showing the Stripe account status.
-  */
-  useEffect(() => {
-    const requestedSection =
-      searchParams.get("section");
-
-    if (isSettingsSection(requestedSection)) {
-      setActiveSection(requestedSection);
-    }
-  }, [searchParams]);
+  }, [reloadKey, router, searchParams]);
 
   // Save settings
   const handleSave = async () => {
@@ -220,10 +221,11 @@ export default function SettingsPage() {
       setSaveMessage("");
 
       if (!auth.currentUser || !storeData) return;
+      if (activeSection !== "profile" && activeSection !== "business" && activeSection !== "notifications") return;
 
       const confirmed = await confirm({
           title: "Save store changes?",
-          message: "Your updated store details and location will be saved.",
+          message: activeSection === "profile" ? "Your updated store profile and location will be saved." : activeSection === "business" ? "Your updated business information will be saved." : "Your notification preferences will be saved.",
           confirmLabel: "Save changes",
           cancelLabel: "Keep editing",
         });
@@ -233,15 +235,15 @@ export default function SettingsPage() {
       /* Server verifies and geocodes the address before persisting it. */
       const workspace =
         await storeWorkspaceClientService
-          .saveSettings(storeData, userData ?? {});
+          .saveSettings(storeData, userData ?? {}, activeSection);
 
       setStoreId(workspace.store.id);
-      setStoreData(workspace.store);
-      setUserData(workspace.user);
-      initialSettingsFingerprint.current = settingsEditFingerprint(
-        workspace.store,
-        workspace.user,
-      );
+      setStoreData((current) => current ? mergeSavedSection(current, workspace.store, activeSection) : workspace.store);
+      if (activeSection === "profile") setUserData(workspace.user);
+      setSavedFingerprints((current) => current ? {
+        ...current,
+        [activeSection]: sectionFingerprint(activeSection, workspace.store, workspace.user),
+      } : current);
 
       setSaveMessage("Settings saved successfully! ✅");
       showSuccess("Store settings saved successfully.");
@@ -249,7 +251,7 @@ export default function SettingsPage() {
 
     } catch (error) {
       console.error("Error saving settings:", error);
-      setSaveMessage("Failed to save settings ❌");
+      setSaveMessage(error instanceof Error ? error.message : "Failed to save settings.");
     } finally {
       setSaving(false);
     }
@@ -262,6 +264,10 @@ export default function SettingsPage() {
     return (
       <PageContentSkeleton cards={2} rows={4} />
     );
+  }
+
+  if (loadError || !storeData || !userData) {
+    return <div className="rounded-xl border border-red-100 bg-white p-8 text-center"><p className="text-sm text-red-700">{loadError ?? "Store settings are unavailable."}</p><button type="button" onClick={() => {setLoading(true); setReloadKey((key) => key + 1);}} className="mt-4 rounded-xl bg-orange-500 px-5 py-2.5 text-sm font-semibold text-white">Try again</button></div>;
   }
 
   /*
@@ -284,6 +290,8 @@ export default function SettingsPage() {
     { id: "payment", label: "Payment & Payouts", icon: CreditCard },
     { id: "notifications", label: "Notifications", icon: Bell },
     { id: "security", label: "Security", icon: Shield },
+    { id: "support", label: "LIA Support", icon: Headphones },
+    { id: "activity", label: "Settings Activity", icon: History },
     { id: "danger", label: "Danger Zone", icon: AlertTriangle },
   ];
 
@@ -295,16 +303,16 @@ export default function SettingsPage() {
           <h1 className="text-2xl font-bold text-gray-800">Settings</h1>
           <p className="text-gray-500 text-sm">Manage your store and account settings</p>
         </div>
-        <button
+        {(activeSection === "profile" || activeSection === "business" || activeSection === "notifications") && <button
           type="button"
           onClick={handleSave}
-          disabled={saving}
+          disabled={saving || !activeSectionIsDirty}
           className="px-4 py-2.5 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-xl font-semibold hover:shadow-lg hover:from-orange-600 hover:to-orange-700 transition flex items-center gap-2 text-sm disabled:opacity-50"
           aria-label="Save all settings"
         >
           <Save className="w-4 h-4" />
           {saving ? "Saving..." : "Save Changes"}
-        </button>
+        </button>}
       </div>
 
       {/* Save Message */}
@@ -326,16 +334,33 @@ export default function SettingsPage() {
       <div className="grid lg:grid-cols-4 gap-6">
         {/* Sidebar */}
         <div className="lg:col-span-1">
-          <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 sticky top-20">
-            <div className="space-y-1">
+          <div className="sticky top-20 overflow-x-auto rounded-2xl border border-gray-100 bg-white p-3 shadow-sm lg:overflow-visible lg:p-4">
+            <div className="flex min-w-max gap-1 lg:min-w-0 lg:flex-col">
               {sections.map((section) => {
                 const Icon = section.icon;
                 const isActive = activeSection === section.id;
                 return (
                   <button
                     key={section.id}
-                    onClick={() => setActiveSection(section.id)}
-                    className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl transition text-sm ${
+                    onClick={async () => {
+                      if (section.id === activeSection) return;
+                      if (activeSectionIsDirty) {
+                        const leave = await confirm({
+                          title: "Leave without saving?",
+                          message: "Changes in this settings section have not been saved.",
+                          confirmLabel: "Discard changes",
+                          cancelLabel: "Keep editing",
+                          destructive: true,
+                        });
+                        if (!leave) return;
+                        const workspace = await storeWorkspaceClientService.getSettings(true);
+                        setStoreData((current) => current && savableSection ? mergeSavedSection(current, workspace.store, savableSection) : workspace.store);
+                        if (savableSection === "profile") setUserData(workspace.user);
+                        if (savableSection) setSavedFingerprints((current) => current ? {...current, [savableSection]: sectionFingerprint(savableSection, workspace.store, workspace.user)} : current);
+                      }
+                      setActiveSection(section.id);
+                    }}
+                    className={`flex shrink-0 items-center justify-between rounded-xl px-3 py-2.5 text-sm transition lg:w-full ${
                       isActive
                         ? "bg-orange-50 text-orange-600 font-medium"
                         : "text-gray-600 hover:bg-gray-50"
@@ -345,7 +370,7 @@ export default function SettingsPage() {
                       <Icon className={`w-4 h-4 ${isActive ? "text-orange-600" : "text-gray-400"}`} />
                       <span>{section.label}</span>
                     </div>
-                    <ChevronRight className={`w-4 h-4 ${isActive ? "text-orange-600" : "text-gray-300"}`} />
+                    <ChevronRight className={`hidden h-4 w-4 lg:block ${isActive ? "text-orange-600" : "text-gray-300"}`} />
                   </button>
                 );
               })}
@@ -355,18 +380,11 @@ export default function SettingsPage() {
 
         {/* Content */}
         <div className="lg:col-span-3 space-y-4">
-          <motion.div
-            key={activeSection}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3 }}
-          >
+          <div key={activeSection}>
             {activeSection === "profile" && (
               <ProfileSection 
                 storeData={storeData}
                 setStoreData={setStoreData}
-                userData={userData}
-                setUserData={setUserData}
               />
             )}
             {activeSection === "business" && (
@@ -395,15 +413,14 @@ export default function SettingsPage() {
               />
             )}
             {activeSection === "security" && (
-              <SecuritySection 
-                userData={userData}
-                setUserData={setUserData}
-              />
+              <SecuritySection />
             )}
+            {activeSection === "activity" && <SettingsActivitySection />}
+            {activeSection === "support" && <AccountSupportForm accountLabel="store" />}
             {activeSection === "danger" && (
               <DangerSection />
             )}
-          </motion.div>
+          </div>
         </div>
       </div>
     </div>

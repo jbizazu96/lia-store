@@ -12,6 +12,10 @@ Complete these checks during native development and repeat them on release candi
 - Configure Firebase Android (`google-services.json`) and iOS (`GoogleService-Info.plist`) applications separately from the web app.
 - Enable Google as a Firebase Authentication provider. Add the Android SHA-1 fingerprint and enable the plugin's Google dependencies in `android/variables.gradle` after creating Android.
 - Add the reversed Google client ID URL scheme and the Firebase Authentication Google pod configuration after creating iOS.
+- Configure Sign in with Apple in the Apple Developer portal and Firebase Authentication using the final App ID, Services ID, Team ID, Key ID, and private key.
+- Add the Sign in with Apple capability to the iOS target. Verify Apple and Google are displayed as equivalent login choices and test Apple private-email relay accounts.
+- Register the Firebase authentication email sender or custom email domain with Apple Private Email Relay so verification and account emails reach customers using Hide My Email.
+- Test Apple reauthentication and access-token revocation as part of the in-app account deletion release flow before App Store submission.
 - Configure APNs credentials in Firebase for iOS, then confirm that FCM tokens can receive an APNs notification.
 - After creating each native project, run `npx cap sync`. Confirm that `@capacitor-firebase/messaging` and `capacitor-native-settings` appear in the synchronized plugin list.
 - Follow the Firebase Messaging iOS setup in the plugin documentation: forward remote-notification registration and receipt callbacks from `AppDelegate.swift`. Do not reinstall `@capacitor/push-notifications`; it conflicts with the Firebase Messaging plugin used to obtain iOS FCM tokens.

@@ -29,6 +29,7 @@ import {
   stripeConnectPersistence,
 } from "../stripe/stripeConnectPersistence";
 import {enforceCallableAbuseProtection} from "../security/callableAbuseProtection";
+import {requireStripeAccess} from "../services/store/storeAccessService";
 
 if (admin.apps.length === 0) {
   admin.initializeApp();
@@ -203,6 +204,7 @@ export const createOrRetrieveStoreStripeAccount = onCall({
     const storeId = requireStoreId(request.data);
     const store = await requireOwnedStore(request.auth.uid, storeId);
     const data = store.data() ?? {};
+    requireStripeAccess(store, data.onboardingCompleted === true ? "settings" : "onboarding");
     const existingAccountId = text(data.stripeAccountId);
     if (existingAccountId && text(data.stripeConnectApiVersion) !== "v2") {
       throw new HttpsError("failed-precondition", "This store has a legacy Stripe connection. Reconnect Stripe to use the current payment setup.");
@@ -230,6 +232,7 @@ export const getStoreStripeAccountStatus = onCall({
     const storeId = requireStoreId(request.data);
     const store = await requireOwnedStore(request.auth.uid, storeId);
     const data = store.data() ?? {};
+    requireStripeAccess(store, data.onboardingCompleted === true ? "settings" : "onboarding");
     const accountId = text(data.stripeAccountId);
     if (!accountId) return { account: null, connected: false };
     if (text(data.stripeConnectApiVersion) !== "v2") {
@@ -254,6 +257,7 @@ export const createStoreStripeOnboardingLink = onCall({
     const returnContext = isRecord(request.data) && request.data.returnContext === "onboarding" ? "onboarding" : "settings";
     const store = await requireOwnedStore(request.auth.uid, storeId);
     const data = store.data() ?? {};
+    requireStripeAccess(store, returnContext);
     const accountId = text(data.stripeAccountId);
     if (!accountId) throw new HttpsError("failed-precondition", "Create the store's Stripe account before starting onboarding.");
     if (text(data.stripeConnectApiVersion) !== "v2") throw new HttpsError("failed-precondition", "This store has a legacy Stripe connection. Reconnect Stripe to use the current payment setup.");

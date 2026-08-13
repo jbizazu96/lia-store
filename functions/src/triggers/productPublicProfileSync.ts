@@ -134,7 +134,7 @@ export const productPublicProfileSync = onDocumentWritten(
 
     const store = await publicStoreSource(storeId);
 
-    if (!store) {
+    if (!store || product.isArchived === true) {
       await deletePublicProductProfile(event.params.productId);
       return;
     }

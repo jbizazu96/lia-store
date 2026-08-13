@@ -19,7 +19,9 @@
 */
 
 import {
+  useDeferredValue,
   useEffect,
+  useState,
 } from "react";
 
 import {
@@ -34,10 +36,6 @@ import {
 import {
   useStoreOrders,
 } from "@/hooks/useStoreOrders";
-
-import {
-  useStoreOrderFilters,
-} from "@/hooks/useStoreOrderFilters";
 
 import {
   BrandedLoader,
@@ -70,6 +68,15 @@ export default function StoreOrdersPage() {
 
   const searchParams =
     useSearchParams();
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState(searchParams.get("status") ?? "all");
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
+  const deferredSearchValue = useDeferredValue(searchQuery.trim());
+  const deferredSearch = deferredSearchValue.length >= 2 ? deferredSearchValue : "";
+  const hasFilters = Boolean(deferredSearch || fromDate || toDate) || statusFilter !== "all";
+  const from = fromDate ? new Date(`${fromDate}T00:00:00`).toISOString() : "";
+  const to = toDate ? new Date(`${toDate}T23:59:59.999`).toISOString() : "";
 
   /*
   |--------------------------------------------------------------------------
@@ -79,34 +86,46 @@ export default function StoreOrdersPage() {
 
   const {
     orders,
+    stats,
     loading,
+    loadingMore,
     error,
     isAuthenticated,
     needsStoreSetup,
-  } = useStoreOrders();
-
-  /*
-  |--------------------------------------------------------------------------
-  | Store Order Filters
-  |--------------------------------------------------------------------------
-  */
-
-  const {
-    filteredOrders,
-    searchQuery,
-    statusFilter,
-    hasFilters,
-    stats,
-    setSearchQuery,
-    setStatusFilter,
-    clearFilters,
-  } = useStoreOrderFilters({
-    orders,
-
-    initialStatus:
-      searchParams.get("status") ??
-      "all",
-  });
+    hasMore,
+    loadMore,
+    refreshOrders,
+  } = useStoreOrders({status: statusFilter, search: deferredSearch, from, to});
+  const clearFilters = () => {
+    setSearchQuery("");
+    setStatusFilter("all");
+    setFromDate("");
+    setToDate("");
+  };
+  const exportLoadedOrders = () => {
+    const quote = (value: unknown) => `"${String(value ?? "").replaceAll('"', '""')}"`;
+    const rows = orders.map((order) => [
+      order.orderNumber,
+      order.payment?.paidAt?.toISOString() ?? order.createdAt.toISOString(),
+      order.customer.name,
+      order.status,
+      order.items.reduce((sum, item) => sum + Math.max(0, item.quantity || 0), 0),
+      order.storeFinancials?.grossStoreAmount ?? order.pricing.subtotal + order.pricing.tax,
+      order.storeFinancials?.liaCommission ?? "",
+      order.storeFinancials?.storeRefundReversal ?? 0,
+      order.storeFinancials?.netStoreEarning ?? "",
+      order.storeFinancials?.settlementStatus ?? "not_created",
+      order.storeFinancials?.transferStatus ?? "not_created",
+    ]);
+    const csv = [["Order", "Paid at", "Customer", "Status", "Units", "Gross store amount", "LIA commission", "Refund adjustment", "Net store earning", "Settlement", "Transfer"], ...rows]
+      .map((row) => row.map(quote).join(",")).join("\n");
+    const url = URL.createObjectURL(new Blob([csv], {type: "text/csv;charset=utf-8"}));
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `store-orders-${new Date().toISOString().slice(0, 10)}.csv`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
 
   /*
   |--------------------------------------------------------------------------
@@ -176,9 +195,7 @@ export default function StoreOrdersPage() {
 
         <button
           type="button"
-          onClick={() =>
-            router.refresh()
-          }
+          onClick={() => void refreshOrders()}
           className="mt-4 rounded-xl bg-orange-500 px-6 py-2 font-semibold text-white transition hover:bg-orange-600"
         >
           Try Again
@@ -219,13 +236,15 @@ export default function StoreOrdersPage() {
         onStatusChange={setStatusFilter}
         onClearFilters={clearFilters}
         hasFilters={hasFilters}
+        fromDate={fromDate}
+        toDate={toDate}
+        onFromDateChange={setFromDate}
+        onToDateChange={setToDate}
+        onExport={exportLoadedOrders}
       />
 
       {/* Orders */}
-      {orders.length === 0 ? (
-        <EmptyOrders />
-      ) : filteredOrders.length ===
-        0 ? (
+      {orders.length === 0 && hasFilters ? (
         <div className="rounded-2xl border border-gray-100 bg-white p-12 text-center">
           <p className="text-lg text-gray-500">
             No orders found
@@ -247,16 +266,17 @@ export default function StoreOrdersPage() {
             </button>
           )}
         </div>
+      ) : orders.length === 0 ? (
+        <EmptyOrders />
       ) : (
         <div className="space-y-3">
           <p className="text-sm text-gray-400">
             Showing{" "}
-            {filteredOrders.length} of{" "}
-            {orders.length} orders
+            {orders.length} loaded order{orders.length === 1 ? "" : "s"}
           </p>
 
           <AnimatePresence mode="popLayout">
-            {filteredOrders.map(
+            {orders.map(
               (order, index) => (
                 <OrderCard
                   key={order.id}
@@ -266,6 +286,7 @@ export default function StoreOrdersPage() {
               )
             )}
           </AnimatePresence>
+          {hasMore && <div className="flex justify-center pt-3"><button type="button" disabled={loadingMore} onClick={() => void loadMore()} className="rounded-xl bg-gray-900 px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-60">{loadingMore ? "Loading…" : "Load more orders"}</button></div>}
         </div>
       )}
     </div>

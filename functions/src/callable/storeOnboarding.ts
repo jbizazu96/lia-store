@@ -38,6 +38,7 @@ import {
   type StoreApplicationPolicy,
 } from "../admin/storeApplicationPolicy";
 import {enforceCallableAbuseProtection} from "../security/callableAbuseProtection";
+import {canEditStoreApplication} from "../services/store/storeApprovalPolicy";
 
 if (admin.apps.length === 0) {
   admin.initializeApp();
@@ -191,6 +192,15 @@ async function requireOwnedStore(uid: string) {
   return store;
 }
 
+function requireApplicationEditable(store: FirebaseFirestore.DocumentSnapshot) {
+  if (!canEditStoreApplication(store.data() ?? {})) {
+    throw new HttpsError(
+      "failed-precondition",
+      "This store application has already been submitted. Contact LIA support if a correction is required.",
+    );
+  }
+}
+
 function mapDraft(storeId: string | null, ownerId: string, value?: Record<string, unknown>) {
   const data = value ?? {};
   const owner = isRecord(data.owner) ? data.owner : {};
@@ -327,6 +337,7 @@ export const getStoreOnboardingDraft = onCall({ region: "us-central1" }, async (
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in to open store onboarding.");
   await requireStoreOwner(request.auth.uid);
   const store = await ownedStore(request.auth.uid);
+  if (store) requireApplicationEditable(store);
   return {
     ...mapDraft(store?.id ?? null, request.auth.uid, store?.data()),
     applicationPolicy: await getStoreApplicationPolicy(),
@@ -338,6 +349,7 @@ export const ensureStoreOnboardingDraft = onCall({ region: "us-central1" }, asyn
   await requireStoreOwner(request.auth.uid);
   const existing = await ownedStore(request.auth.uid);
   if (existing) {
+    requireApplicationEditable(existing);
     await grantStoreUploadClaim(request.auth.uid, existing.id);
     return mapDraft(existing.id, request.auth.uid, existing.data());
   }
@@ -367,6 +379,7 @@ export const saveStoreOnboardingOwner = onCall({ region: "us-central1", secrets:
   const state = normalizeState(text(input.state));
   if (!text(input.firstName).trim() || !text(input.lastName).trim() || !text(input.email).trim() || !text(input.phone).trim() || !text(input.address).trim() || !text(input.city).trim() || !state || !text(input.zip).trim()) throw new HttpsError("invalid-argument", "Complete every required owner field with a valid two-letter state.");
   const store = await requireOwnedStore(request.auth.uid);
+  requireApplicationEditable(store);
   const data = store.data() ?? {};
   const owner = isRecord(data.owner) ? data.owner : {};
   const policy = await getStoreApplicationPolicy();
@@ -403,6 +416,7 @@ export const saveStoreOnboardingStoreInformation = onCall({ region: "us-central1
   const state = normalizeState(text(input.state));
   if (!text(input.name).trim() || !text(input.email).trim() || !text(input.phone).trim() || !text(input.description).trim() || !text(input.address).trim() || !text(input.city).trim() || !state || !text(input.zip).trim()) throw new HttpsError("invalid-argument", "Complete every required store field with a valid two-letter state.");
   const store = await requireOwnedStore(request.auth.uid);
+  requireApplicationEditable(store);
   const data = store.data() ?? {};
   const policy = await getStoreApplicationPolicy();
   if (policy.requiredDocuments.logo && !(await hasUploadedImage(store.id, "logo")) && !text(data.logoUrl)) throw new HttpsError("failed-precondition", "Upload a store logo.");
@@ -433,6 +447,7 @@ export const saveStoreOnboardingBusinessInformation = onCall({ region: "us-centr
   const input = requireRecord(request.data);
   if (!text(input.businessType) || !text(input.registeredName).trim() || !text(input.businessStructure)) throw new HttpsError("invalid-argument", "Complete every required business field.");
   const store = await requireOwnedStore(request.auth.uid);
+  requireApplicationEditable(store);
   const data = store.data() ?? {};
   const policy = await getStoreApplicationPolicy();
   const missingStoreFront = policy.requiredDocuments.storeFront && !(await hasUploadedImage(store.id, "front")) && !text(data.storeFrontUrl);
@@ -460,6 +475,7 @@ export const saveStoreOnboardingSchedule = onCall({ region: "us-central1" }, asy
   const error = scheduleError(schedule);
   if (error) throw new HttpsError("invalid-argument", error);
   const store = await requireOwnedStore(request.auth.uid);
+  requireApplicationEditable(store);
   const data = store.data() ?? {};
   await store.ref.update({ schedule, isOpen: data.onboardingCompleted === true ? data.isOpen === true : false, onboardingStep: data.onboardingCompleted === true ? text(data.onboardingStep) || "stripe" : "stripe", updatedAt: FieldValue.serverTimestamp() });
   const updated = await store.ref.get();
@@ -470,6 +486,7 @@ export const completeStoreOnboarding = onCall({ region: "us-central1" }, async (
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in to complete store onboarding.");
   await requireStoreOwner(request.auth.uid);
   const store = await requireOwnedStore(request.auth.uid);
+  requireApplicationEditable(store);
   const data = store.data() ?? {};
   requireCompleteApplication(
     mapDraft(store.id, request.auth.uid, data),

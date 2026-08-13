@@ -10,6 +10,7 @@ export const ADMIN_PERMISSIONS = [
   "orders",
   "finance",
   "refunds",
+  "support",
   "promotions",
   "settings",
 ] as const;
@@ -30,6 +31,7 @@ export const ADMIN_PERMISSION_LABELS: Record<AdminPermission, string> = {
   orders: "Orders and delivery",
   finance: "Finance",
   refunds: "Refund claims",
+  support: "Support requests",
   promotions: "Home promotions",
   settings: "Platform settings",
 };

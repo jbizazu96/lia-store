@@ -227,6 +227,12 @@ export const updateAdminProductCategory = onCall({region: "us-central1"}, async 
   if (!existing.exists) throw new HttpsError("not-found", "Product category not found.");
   await requireUniqueName(name, id);
   await reference.update({name, freshnessEligible, normalizedName: name.toLowerCase(), icon: FieldValue.delete(), updatedAt: FieldValue.serverTimestamp(), updatedBy: administrator.uid});
+  const summaries = await db.collectionGroup("productCategorySummaries").where("categoryId", "==", id).get();
+  if (!summaries.empty) {
+    const writer = db.bulkWriter();
+    summaries.docs.forEach((summary) => writer.update(summary.ref, {name, updatedAt: FieldValue.serverTimestamp()}));
+    await writer.close();
+  }
   await writeAdminAuditLog(administrator, {action: "product_category.renamed", targetType: "productCategory", targetId: id, details: {previousName: text(existing.data()?.name), name}});
   return {success: true};
 });

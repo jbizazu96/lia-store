@@ -305,6 +305,8 @@ function mapProductDocument(
    */
   stock: data.stock ?? 0,
 
+  lowStockThreshold: data.lowStockThreshold ?? 10,
+
   /**
    * Product image saleed to customers.
    */
@@ -620,20 +622,64 @@ export const productService = {
   |--------------------------------------------------------------------------
   */
 
-  async getOwnedStoreProducts(): Promise<{
+  async getOwnedStoreProducts(options: {
+    mode?: "overview" | "page";
+    category?: string;
+    status?: "all" | "active" | "inactive" | "out_of_stock" | "low_stock" | "image_issues";
+    search?: string;
+    pageSize?: number;
+    cursor?: string;
+    sort?: "name" | "stock_asc" | "stock_desc" | "price_asc" | "price_desc" | "updated_desc";
+  } = {}): Promise<{
     storeId: string;
     products: Product[];
+    categories: Array<{
+      id: string;
+      name: string;
+      count: number;
+      products: Product[];
+    }>;
+    stats: {
+      totalProducts: number;
+      activeProducts: number;
+      featuredProducts: number;
+      totalStock: number;
+        totalValue: number;
+        outOfStockProducts: number;
+        imageIssueProducts: number;
+      };
+    filteredCount: number;
+    filteredStats: {active: number; outOfStock: number; imageIssues: number};
+    nextCursor: string | null;
   }> {
     const result = await httpsCallable<
-      unknown,
+      typeof options,
       {
         storeId: string;
         products: Array<Record<string, unknown> & { id: string }>;
+        categories: Array<{
+          id: string;
+          name: string;
+          count: number;
+          products: Array<Record<string, unknown> & {id: string}>;
+        }>;
+        stats: {
+          totalProducts: number;
+          activeProducts: number;
+          featuredProducts: number;
+          totalStock: number;
+          totalValue: number;
+          outOfStockProducts: number;
+          imageIssueProducts: number;
+        };
+        filteredCount: number;
+        filteredStats: {active: number; outOfStock: number; imageIssues: number};
+        nextCursor: string | null;
       }
     >(
       functions,
       "getOwnedStoreProducts"
-    )();
+    )(options);
 
     return {
       storeId: result.data.storeId,
@@ -644,6 +690,17 @@ export const productService = {
             product as DocumentData
           )
       ),
+      categories: result.data.categories.map((category) => ({
+        ...category,
+        products: category.products.map((product) => mapProductDocument(
+          product.id,
+          product as DocumentData,
+        )),
+      })),
+      stats: result.data.stats,
+      filteredCount: result.data.filteredCount,
+      filteredStats: result.data.filteredStats,
+      nextCursor: result.data.nextCursor,
     };
   },
 
@@ -670,6 +727,11 @@ export const productService = {
       result.data.product.id,
       result.data.product as DocumentData
     );
+  },
+
+  async getStoreInventoryAudit(pageSize = 10): Promise<Array<{id: string; productName: string; action: string; createdAt: string; previous?: Record<string, unknown>; next?: Record<string, unknown>}>> {
+    const result = await httpsCallable<{pageSize: number}, {entries: Array<{id: string; productName: string; action: string; createdAt: string; previous?: Record<string, unknown>; next?: Record<string, unknown>}>}>(functions, "getStoreInventoryAudit")({pageSize});
+    return result.data.entries;
   },
 
   /*
@@ -744,7 +806,8 @@ async updateProduct(
       "createdAt" |
       "updatedAt"
     >
-  >
+  >,
+  expectedStock?: number,
 ): Promise<void> {
   if (!productId.trim()) {
     throw new Error(
@@ -752,7 +815,7 @@ async updateProduct(
     );
   }
 
-  await httpsCallable(functions, "mutateStoreProduct")({ action: "update", productId, product: removeUndefinedFields(updates) });
+  await httpsCallable(functions, "mutateStoreProduct")({ action: "update", productId, product: removeUndefinedFields(updates), ...(expectedStock !== undefined ? {expectedStock} : {}) });
 },
 
 /*
@@ -773,6 +836,10 @@ async deleteProduct(
   await httpsCallable(functions, "mutateStoreProduct")({ action: "delete", productId });
 },
 
+async discardFailedCreation(productId: string): Promise<void> {
+  await httpsCallable(functions, "mutateStoreProduct")({action: "discard_failed_creation", productId});
+},
+
 /*
 |--------------------------------------------------------------------------
 | Duplicate Product
@@ -784,6 +851,14 @@ async duplicateProduct(
 ): Promise<string> {
   const result = await httpsCallable<unknown, { productId: string }>(functions, "mutateStoreProduct")({ action: "duplicate", productId: product.id });
   return result.data.productId;
+},
+
+async bulkUpdateAvailability(productIds: string[], isAvailable: boolean): Promise<void> {
+  await httpsCallable(functions, "mutateStoreProduct")({action: "bulk_update", productIds, isAvailable});
+},
+
+async importInventory(rows: Array<{productId: string; stock?: number; price?: number}>): Promise<void> {
+  await httpsCallable(functions, "mutateStoreProduct")({action: "bulk_inventory", rows});
 },
 
   /**

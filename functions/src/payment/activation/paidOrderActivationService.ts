@@ -220,9 +220,13 @@ function getOrderItems(
 
 function hasCrossedLowStockThreshold(
   previousStock: number,
-  remainingStock: number
+  remainingStock: number,
+  configuredThreshold?: number,
 ): boolean {
-  return LOW_STOCK_THRESHOLDS.some(
+  const thresholds = Number.isSafeInteger(configuredThreshold) && Number(configuredThreshold) >= 0
+    ? [Number(configuredThreshold), 0]
+    : LOW_STOCK_THRESHOLDS;
+  return thresholds.some(
     (
       threshold
     ) =>
@@ -796,16 +800,41 @@ async function activatePaidOrder(
                 stock:
                   remainingStock,
 
+                /* Keep the aggregate-backed retail inventory valuation in
+                 * sync with the same authoritative stock transaction. */
+                inventoryValue:
+                  Math.max(0, Number(productData.price) || 0) * remainingStock,
+
+                isLowStock:
+                  remainingStock > 0 && remainingStock <= (Number.isSafeInteger(Number(productData.lowStockThreshold)) ? Number(productData.lowStockThreshold) : 10),
+
                 updatedAt:
                   FieldValue
                     .serverTimestamp(),
               }
             );
 
+            transaction.set(
+              db.collection("storeInventoryAuditLogs").doc(),
+              {
+                storeId: orderData.store?.id,
+                productId: productSnapshot.id,
+                productName: typeof productData.name === "string" ? productData.name : "Product",
+                action: "checkout_stock_deduction",
+                source: "checkout",
+                orderId,
+                previousStock: availableStock,
+                nextStock: remainingStock,
+                quantityChange: -orderedQuantity,
+                createdAt: FieldValue.serverTimestamp(),
+              },
+            );
+
             if (
               hasCrossedLowStockThreshold(
                 availableStock,
-                remainingStock
+                remainingStock,
+                Number(productData.lowStockThreshold),
               )
             ) {
               lowStockAlerts.push({

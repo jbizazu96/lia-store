@@ -23,18 +23,30 @@ import Link from "next/link";
 export default function EarningsPage() {
   const [stats, setStats] = useState({
     totalEarnings: 0,
-    availableBalance: 0,
+    grossStoreEarnings: 0,
+    storeCommission: 0,
+    refundDeductions: 0,
+    grossMerchandiseSales: 0,
+    salesTax: 0,
+    availableBalance: null as number | null,
+    stripePendingBalance: null as number | null,
     pendingBalance: 0,
     weeklyEarnings: 0,
     monthlyEarnings: 0,
+    timeZone: "America/Chicago",
+    stripe: {accountId: null as string | null, status: "not_started", isReady: false, payoutsEnabled: false, requiresAction: false},
   });
   const [payouts, setPayouts] = useState<StoreWorkspacePayout[]>([]);
   const [selectedPayout, setSelectedPayout] = useState<StoreWorkspacePayout | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<{title: string; message: string} | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
+        setLoading(true);
+        setError(null);
         const financials =
           await storeWorkspaceClientService
             .getFinancials();
@@ -42,21 +54,35 @@ export default function EarningsPage() {
         setPayouts(financials.earnings.payouts);
         setStats({
           totalEarnings: financials.earnings.totalEarnings,
+          grossStoreEarnings: financials.earnings.grossStoreEarnings,
+          storeCommission: financials.earnings.storeCommission,
+          refundDeductions: financials.earnings.refundDeductions,
+          grossMerchandiseSales: financials.earnings.grossMerchandiseSales,
+          salesTax: financials.earnings.salesTax,
           availableBalance: financials.earnings.availableBalance,
+          stripePendingBalance: financials.earnings.stripePendingBalance,
           pendingBalance: financials.earnings.pendingBalance,
           weeklyEarnings: financials.earnings.weeklyEarnings,
           monthlyEarnings: financials.earnings.monthlyEarnings,
+          timeZone: financials.earnings.timeZone,
+          stripe: financials.earnings.stripe,
         });
 
       } catch (error) {
         console.error("Error fetching earnings:", error);
+        const code = typeof error === "object" && error !== null && "code" in error ? String(error.code) : "";
+        setError(!navigator.onLine
+          ? {title: "You’re offline", message: "Internet connection is required to load current earnings."}
+          : code.includes("permission-denied")
+            ? {title: "Earnings access unavailable", message: "Your store account does not currently have permission to view financial data."}
+            : {title: "Earnings could not be loaded", message: "A temporary server problem prevented current totals from loading. Your balances have not been replaced with zero."});
       } finally {
         setLoading(false);
       }
     };
 
     fetchData();
-  }, []);
+  }, [reloadKey]);
 
   /* ==========================================
      LOADING STATE - WHITE BRANDED LOADER
@@ -66,23 +92,47 @@ export default function EarningsPage() {
   return <PageContentSkeleton />;
 }
 
+  if (error) {
+    return <div className="rounded-xl border border-red-100 bg-white p-8 text-center"><h2 className="font-bold text-gray-900">{error.title}</h2><p className="mt-2 text-sm text-gray-600">{error.message}</p><button type="button" onClick={() => setReloadKey((key) => key + 1)} className="mt-4 rounded-xl bg-orange-500 px-5 py-2.5 text-sm font-semibold text-white">Retry</button></div>;
+  }
+
+  const exportEarnings = () => {
+    const rows = [
+      ["Metric", "USD"],
+      ["Timezone", stats.timeZone],
+      ["Gross merchandise sales", stats.grossMerchandiseSales.toFixed(2)],
+      ["Sales tax passed to store", stats.salesTax.toFixed(2)],
+      ["Gross store earnings", stats.grossStoreEarnings.toFixed(2)],
+      ["LIA commission", stats.storeCommission.toFixed(2)],
+      ["Completed refund deductions", stats.refundDeductions.toFixed(2)],
+      ["Net lifetime earnings", stats.totalEarnings.toFixed(2)],
+      ["Pending LIA transfers", stats.pendingBalance.toFixed(2)],
+      ["Stripe available balance", stats.availableBalance?.toFixed(2) ?? "Unavailable"],
+      ["Stripe pending balance", stats.stripePendingBalance?.toFixed(2) ?? "Unavailable"],
+      ["Current calendar week earnings", stats.weeklyEarnings.toFixed(2)],
+      ["Current calendar month earnings", stats.monthlyEarnings.toFixed(2)],
+    ];
+    const csv = rows.map((row) => row.map((value) => `"${String(value).replaceAll('"', '""')}"`).join(",")).join("\n");
+    const url = URL.createObjectURL(new Blob([csv], {type: "text/csv;charset=utf-8"}));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "store-earnings.csv";
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-800">Earnings</h1>
-          <p className="text-gray-500 text-sm">Track your store revenue and payouts</p>
+          <p className="text-gray-500 text-sm">Reconciled earnings and payouts · {stats.timeZone.replaceAll("_", " ")}</p>
         </div>
         <div className="flex gap-2">
           <button 
-            className="px-4 py-2 border border-gray-200 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50 transition flex items-center gap-2"
-            aria-label="Filter earnings by date"
-          >
-            <Calendar className="w-4 h-4" />
-            Filter
-          </button>
-          <button 
+            type="button"
+            onClick={exportEarnings}
             className="px-4 py-2 border border-gray-200 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50 transition flex items-center gap-2"
             aria-label="Export earnings data"
           >
@@ -96,7 +146,7 @@ export default function EarningsPage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {[
           {
-            title: "Total Earnings",
+            title: "Net Lifetime Earnings",
             value: `$${stats.totalEarnings.toFixed(2)}`,
             icon: DollarSign,
             color: "bg-blue-500",
@@ -112,7 +162,7 @@ export default function EarningsPage() {
             textColor: "text-green-600",
           },
           {
-            title: "Pending Balance",
+            title: "Pending LIA Transfer",
             value: `$${stats.pendingBalance.toFixed(2)}`,
             icon: TrendingDown,
             color: "bg-yellow-500",
@@ -146,6 +196,31 @@ export default function EarningsPage() {
             </div>
           </motion.div>
         ))}
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <div className="rounded-2xl bg-white p-6 shadow-sm">
+          <h3 className="font-bold text-gray-800">Store earnings reconciliation</h3>
+          <p className="mt-1 text-xs leading-5 text-gray-500">The store receives merchandise and sales tax, less LIA commission and completed store refund reversals. Stripe processing fees are paid entirely by LIA.</p>
+          <dl className="mt-4 divide-y divide-gray-100 text-sm">
+            {[
+              ["Gross merchandise sales", stats.grossMerchandiseSales, false],
+              ["Sales tax passed to store", stats.salesTax, false],
+              ["LIA commission", stats.storeCommission, true],
+              ["Completed refund deductions", stats.refundDeductions, true],
+              ["Net lifetime earnings", stats.totalEarnings, false],
+            ].map(([label, amount, deduction]) => <div key={String(label)} className="flex justify-between py-3"><dt className="text-gray-600">{label}</dt><dd className="font-semibold text-gray-900">{deduction && Number(amount) > 0 ? "−" : ""}${Number(amount).toFixed(2)}</dd></div>)}
+          </dl>
+        </div>
+        <div className="rounded-2xl bg-white p-6 shadow-sm">
+          <h3 className="font-bold text-gray-800">Balance reconciliation</h3>
+          <p className="mt-1 text-xs leading-5 text-gray-500">LIA transfer obligations and the connected Stripe account balance are different stages of the payout flow.</p>
+          <dl className="mt-4 divide-y divide-gray-100 text-sm">
+            <div className="flex justify-between py-3"><dt className="text-gray-600">Pending from LIA</dt><dd className="font-semibold text-gray-900">${stats.pendingBalance.toFixed(2)}</dd></div>
+            <div className="flex justify-between py-3"><dt className="text-gray-600">Available in Stripe</dt><dd className="font-semibold text-gray-900">{stats.availableBalance === null ? "Unavailable" : `$${stats.availableBalance.toFixed(2)}`}</dd></div>
+            <div className="flex justify-between py-3"><dt className="text-gray-600">Pending in Stripe</dt><dd className="font-semibold text-gray-900">{stats.stripePendingBalance === null ? "Unavailable" : `$${stats.stripePendingBalance.toFixed(2)}`}</dd></div>
+          </dl>
+        </div>
       </div>
 
       {/* Payout History */}
@@ -208,8 +283,11 @@ export default function EarningsPage() {
           <div>
             <h3 className="font-bold text-blue-800">Stripe Connect</h3>
             <p className="text-blue-700 text-sm">
-              Your account is connected and ready to receive payments.
-              Payouts are processed every Monday.
+              {stats.stripe.isReady && stats.stripe.payoutsEnabled
+                ? "Your Stripe account is connected and enabled for payouts. Stripe controls the final bank payout timing."
+                : stats.stripe.requiresAction
+                  ? "Stripe needs additional information before payouts can continue."
+                  : "Complete Stripe setup before store payouts can be received."}
             </p>
             <Link
               href="/store/settings?section=payment"

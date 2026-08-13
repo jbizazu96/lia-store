@@ -28,19 +28,14 @@ import {
   CheckCircle,
 } from "lucide-react";
 import { auth } from "@/lib/firebase";
-import { onAuthStateChanged } from "firebase/auth";
-import {
-  doc,
-  onSnapshot,
-} from "firebase/firestore";
-import { db } from "@/lib/firebase";
 import Image from "next/image";
 import Link from "next/link";
 import { notificationService } from "@/services/notification/notificationService";
 import type { Notification } from "@/services/notification/notificationTypes";
 import {
-  storeWorkspaceClientService,
-} from "@/services/store/storeWorkspaceClientService";
+  StoreWorkspaceProvider,
+  useStoreWorkspace,
+} from "@/context/StoreWorkspaceContext";
 import {
   RoleGuard,
 } from "@/components/auth/RoleGuard";
@@ -62,6 +57,7 @@ function StoreLayoutContent({ children }: { children: React.ReactNode }) {
   const sidebarRef = useRef<HTMLDivElement>(null);
   const [isMobile, setIsMobile] = useState(false);
   const { user } = useAuth();
+  const {entry, loading: workspaceLoading, error: workspaceError, refresh: refreshWorkspace} = useStoreWorkspace();
   
   // ✅ Notification dropdown state
   const [showNotifications, setShowNotifications] = useState(false);
@@ -162,47 +158,38 @@ function StoreLayoutContent({ children }: { children: React.ReactNode }) {
         const sorted = unread.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
         const visibleUnread = sorted.slice(0, 4);
         setUnreadNotifications(visibleUnread);
-        setUnreadNotificationCount(unread.length);
         setNotificationsLoading(false);
+        if (unread.some((notification) => notification.deepLink?.startsWith("/store/store-orders"))) {
+          void refreshWorkspace();
+        }
+        if (unread.some((notification) => notification.type === "inventory")) {
+          window.dispatchEvent(new Event("lia:store-inventory-changed"));
+        }
 
       },
       (error) => {
         console.error("Failed to load store notifications:", error);
         setUnreadNotifications([]);
-        setUnreadNotificationCount(0);
         setNotificationsLoading(false);
         setNotificationsError(true);
       }
     );
 
     return unsubscribe;
+  }, [refreshWorkspace, user]);
+
+  useEffect(() => {
+    if (!user) return;
+    try {
+      return notificationService.listenForUnreadCount(user.uid, setUnreadNotificationCount, (error) => {
+        console.error("Failed to count store notifications:", error);
+      });
+    } catch (error) {
+      console.error("Failed to start the store notification count:", error);
+    }
   }, [user]);
 
-  // ✅ Fetch pending orders count
-  useEffect(() => {
-    const fetchPendingOrders = async () => {
-      try {
-        const user = auth.currentUser;
-        if (!user) return;
-
-        const entry =
-          await storeWorkspaceClientService
-            .getEntry();
-
-        setPendingOrdersCount(
-          entry.pendingOrderCount
-        );
-        
-      } catch (error) {
-        console.error("Error fetching pending orders:", error);
-      }
-    };
-
-    fetchPendingOrders();
-
-    const interval = setInterval(fetchPendingOrders, 30000);
-    return () => clearInterval(interval);
-  }, []);
+  useEffect(() => setPendingOrdersCount(entry?.pendingOrderCount ?? 0), [entry?.pendingOrderCount]);
 
   // Navigation items with dynamic badge
   const navItems = [
@@ -210,101 +197,21 @@ function StoreLayoutContent({ children }: { children: React.ReactNode }) {
     { name: "Orders", icon: ShoppingBag, href: "/store/store-orders", badge: pendingOrdersCount > 0 ? pendingOrdersCount.toString() : undefined },
     { name: "Products", icon: Package, href: "/store/products" },
     { name: "Earnings", icon: DollarSign, href: "/store/earnings" },
+    { name: "Analytics", icon: BarChart3, href: "/store/analytics" },
     { name: "Settings", icon: Settings, href: "/store/settings" },
   ];
 
-  // Check auth and get store data
+  // Route from the shared workspace entry; child hooks reuse the same result.
   useEffect(() => {
-    const loadStoreWorkspaceEntry = async () => {
-      const currentUser = auth.currentUser;
-
-      if (!currentUser) {
-        router.push("/login");
-        return;
-      }
-
-      try {
-        const entry =
-          await storeWorkspaceClientService
-            .getEntry();
-
-        if (!entry.hasStore || !entry.store) {
-          router.push("/store/onboarding/owner");
-          return;
-        }
-
-        const data = entry.store;
-
-        if (!data.onboardingCompleted) {
-          router.push(`/store/onboarding/${data.onboardingStep || "owner"}`);
-          return;
-        }
-
-        /* Approval grants workspace access; activation grants customer visibility. */
-        if (data.isApproved !== true) {
-          router.replace("/store/pending-approval");
-          return;
-        }
-
-        setStoreData({
-          id: data.id,
-          name: data.name,
-          logoUrl: data.logoUrl,
-          isApproved: true,
-          isActive: data.isActive === true,
-        });
-      } catch (error) {
-        console.error("Error fetching store:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (!user) {
-        router.push("/login");
-        return;
-      }
-
-      await loadStoreWorkspaceEntry();
-    });
-
-    return () => {
-      unsubscribe();
-    };
-  }, [router]);
-
-  /*
-   * A server-managed projection makes admin lifecycle changes visible right
-   * away. The private stores document (which contains Stripe, documents, and
-   * business registration data) is never read by this browser listener.
-   */
-  useEffect(() => {
-    if (!user || !storeData) {
-      return;
-    }
-
-    return onSnapshot(
-      doc(db, "storeWorkspaceStatuses", user.uid),
-      (snapshot) => {
-        if (!snapshot.exists()) {
-          return;
-        }
-
-        const status = snapshot.data();
-        setStoreData((current) => current
-          ? {
-              ...current,
-              isApproved: status.isApproved === true,
-              isActive: status.isActive === true,
-            }
-          : current);
-      },
-      (listenerError) => {
-        console.error("Unable to listen to store workspace status:", listenerError);
-      },
-    );
-  }, [storeData?.id, user]);
+    if (workspaceLoading) return;
+    if (!user) { router.replace("/login"); return; }
+    if (!entry?.hasStore || !entry.store) { router.replace("/store/onboarding/owner"); return; }
+    const data = entry.store;
+    if (!data.onboardingCompleted) { router.replace(`/store/onboarding/${data.onboardingStep || "owner"}`); return; }
+    if (!data.isApproved) { router.replace("/store/pending-approval"); return; }
+    setStoreData({id: data.id, name: data.name, logoUrl: data.logoUrl, isApproved: true, isActive: data.isActive});
+    setLoading(false);
+  }, [entry, router, user, workspaceLoading]);
 
   // Handle logout
   const handleLogout = async () => {
@@ -375,7 +282,11 @@ function StoreLayoutContent({ children }: { children: React.ReactNode }) {
   };
 
   // ✅ Branded Loading Screen with Logo and Orbit
-  if (loading) {
+  if (workspaceError && !workspaceLoading) {
+    return <div className="flex min-h-screen items-center justify-center bg-gray-50 p-6"><div className="max-w-md rounded-xl border border-red-100 bg-white p-8 text-center shadow-sm"><p className="font-semibold text-gray-800">{workspaceError}</p><button type="button" onClick={() => void refreshWorkspace()} className="mt-4 rounded-xl bg-orange-500 px-5 py-2.5 text-sm font-semibold text-white">Try again</button></div></div>;
+  }
+
+  if (loading || workspaceLoading || entry?.store?.isApproved === false) {
     return (
       <div className="min-h-screen bg-white flex flex-col justify-center items-center relative overflow-hidden">
         {/* Ambient Glows (Soft Yellow accents on white background) */}
@@ -747,9 +658,11 @@ export default function StoreLayout({
         "store_owner",
       ]}
     >
-      <StoreLayoutContent>
-        {children}
-      </StoreLayoutContent>
+      <StoreWorkspaceProvider>
+        <StoreLayoutContent>
+          {children}
+        </StoreLayoutContent>
+      </StoreWorkspaceProvider>
     </RoleGuard>
   );
 }

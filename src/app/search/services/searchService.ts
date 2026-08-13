@@ -19,10 +19,7 @@ import {
 import {
   db,
 } from "@/lib/firebase";
-import {
-  calculateDistance,
-  getEstimatedTimeNumber,
-} from "@/services/delivery/distance";
+import {getEstimatedTimeNumber} from "@/services/delivery/distance";
 import {
   calculateDeliveryFee,
 } from "@/services/delivery/deliveryPricing";
@@ -30,9 +27,8 @@ import {
   getStoreStatus,
   type ScheduleDay,
 } from "@/services/store/storeSchedule";
-import type {
-  MarketplacePricingPolicy,
-} from "@/services/pricing/marketplacePricingClientService";
+import {marketplacePricingClientService} from "@/services/pricing/marketplacePricingClientService";
+import {getCachedStoreDeliveryRoutes} from "@/services/delivery/deliveryRoutesClientService";
 import type {
   SearchResult,
   StoreData,
@@ -109,19 +105,9 @@ function isCustomerVisibleStore(
 function storeData(
   id: string,
   data: Data,
-  userLocation: {lat: number; lng: number} | null,
-  marketplacePolicy: MarketplacePricingPolicy
 ): StoreData {
   const latitude = number(data.latitude);
   const longitude = number(data.longitude);
-  const distance = userLocation && latitude && longitude
-    ? calculateDistance(
-      userLocation.lat,
-      userLocation.lng,
-      latitude,
-      longitude
-    )
-    : 0;
   const isOpen = getStoreStatus(
     schedule(data.schedule),
     data.isOpen === true
@@ -141,14 +127,8 @@ function storeData(
     longitude,
     address: text(data.formattedAddress) || text(data.address),
     phone: text(data.phone),
-    deliveryFee: number(data.deliveryFee) ||
-      calculateDeliveryFee(
-        distance,
-        0,
-        marketplacePolicy
-      ).deliveryFee,
-    estimatedPrepTime: number(data.estimatedPrepTime) ||
-      getEstimatedTimeNumber(distance),
+    deliveryFee: 0,
+    estimatedPrepTime: number(data.estimatedPrepTime),
     isOpen,
   };
 }
@@ -191,8 +171,6 @@ async function matchingStoreDocuments(
 
 export async function performSearch(
   searchTerm: string,
-  userLocation: {lat: number; lng: number} | null,
-  marketplacePolicy: MarketplacePricingPolicy
 ): Promise<SearchResult[]> {
   const term = normalize(searchTerm);
 
@@ -223,22 +201,10 @@ export async function performSearch(
       const store = storeData(
         storeId,
         storeSummary,
-        userLocation,
-        marketplacePolicy,
       );
 
-      const distance = userLocation &&
-        store.latitude &&
-        store.longitude
-        ? calculateDistance(
-          userLocation.lat,
-          userLocation.lng,
-          store.latitude,
-          store.longitude
-        )
-        : 0;
-
       return [{
+        resultType: "product" as const,
         id: document.id,
         name: text(product.name) || "Unnamed Product",
         description: text(product.description),
@@ -250,7 +216,7 @@ export async function performSearch(
         storeId,
         storeName: store.name,
         storeRating: store.rating,
-        storeDistance: distance,
+        storeDistance: 0,
         deliveryFee: store.deliveryFee,
         estimatedTime: store.estimatedPrepTime,
         storeLogo: store.logoUrl,
@@ -301,8 +267,6 @@ export function groupResultsByStore(
 
 export async function searchStoresByName(
   searchTerm: string,
-  userLocation: {lat: number; lng: number} | null,
-  marketplacePolicy: MarketplacePricingPolicy
 ): Promise<SearchResult[]> {
   const term = normalize(searchTerm);
 
@@ -323,21 +287,10 @@ export async function searchStoresByName(
       const store = storeData(
         document.id,
         data,
-        userLocation,
-        marketplacePolicy
       );
-      const distance = userLocation &&
-        store.latitude &&
-        store.longitude
-        ? calculateDistance(
-          userLocation.lat,
-          userLocation.lng,
-          store.latitude,
-          store.longitude
-        )
-        : 0;
 
       return [{
+        resultType: "store" as const,
         id: store.id,
         name: store.name,
         description: "Store",
@@ -348,7 +301,7 @@ export async function searchStoresByName(
         storeId: store.id,
         storeName: store.name,
         storeRating: store.rating,
-        storeDistance: distance,
+        storeDistance: 0,
         deliveryFee: store.deliveryFee,
         estimatedTime: store.estimatedPrepTime,
         storeLogo: store.logoUrl,
@@ -363,4 +316,71 @@ export async function searchStoresByName(
     console.error("Customer store search failed.", error);
     return [];
   }
+}
+
+/** Apply the same zone decision, driving route, peak policy, and delivery
+ * estimate used by Home to all Search results in one batched pass. */
+export async function enrichSearchResults(
+  results: SearchResult[],
+  userLocation: {lat: number; lng: number} | null,
+): Promise<SearchResult[]> {
+  if (results.length === 0) return [];
+
+  const stores = new Map<string, {
+    id: string;
+    latitude: number;
+    longitude: number;
+  }>();
+  results.forEach((result) => {
+    if (result.storeLatitude && result.storeLongitude) {
+      stores.set(result.storeId, {
+        id: result.storeId,
+        latitude: result.storeLatitude,
+        longitude: result.storeLongitude,
+      });
+    }
+  });
+
+  const storeIds = [...new Set(results.map((result) => result.storeId))];
+  const [bootstrap, routes] = await Promise.all([
+    marketplacePricingClientService.getHomeBootstrap(storeIds),
+    userLocation && stores.size > 0
+      ? getCachedStoreDeliveryRoutes(
+          [...stores.values()],
+          {latitude: userLocation.lat, longitude: userLocation.lng},
+        )
+      : Promise.resolve([]),
+  ]);
+  const distanceByStoreId = new Map(
+    routes.map((route) => [route.storeId, route.distanceMiles]),
+  );
+
+  return results.flatMap((result) => {
+    const distance = distanceByStoreId.get(result.storeId);
+    if (userLocation && distance === undefined) return [];
+    const applicable = bootstrap.byStoreId[result.storeId];
+    const policy = applicable?.policy ?? bootstrap.policy;
+    const isOrderZone =
+      applicable?.decision?.zoneAccessType === "customer_order_zone";
+    const routeDistance = distance ?? 0;
+    const deliveryFee = calculateDeliveryFee(
+      routeDistance,
+      0,
+      policy,
+      policy.peakSurchargeEnabled,
+      !isOrderZone,
+    ).deliveryFee;
+
+    return [{
+      ...result,
+      storeDistance: routeDistance,
+      deliveryFee,
+      estimatedTime: getEstimatedTimeNumber(
+        routeDistance,
+        bootstrap.orderDeliveryPolicy,
+      ),
+      zoneAccessAllowed: applicable?.decision?.allowed ?? true,
+      zoneAccessType: applicable?.decision?.zoneAccessType ?? "default_pricing",
+    }];
+  });
 }

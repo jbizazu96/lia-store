@@ -18,6 +18,8 @@ interface ProductFiltersProps {
   onCategoryChange: (value: string) => void;
   statusFilter: string;
   onStatusChange: (value: string) => void;
+  sort: string;
+  onSortChange: (value: string) => void;
   viewMode?: "grid" | "list";
   onViewModeChange?: (mode: "grid" | "list") => void;
 }
@@ -29,6 +31,8 @@ export function ProductFilters({
   onCategoryChange,
   statusFilter,
   onStatusChange,
+  sort,
+  onSortChange,
   viewMode = "grid",
   onViewModeChange,
 }: ProductFiltersProps) {
@@ -75,6 +79,13 @@ export function ProductFilters({
           <option value="all">All Status</option>
           <option value="active">Active</option>
           <option value="inactive">Inactive</option>
+          <option value="out_of_stock">Out of Stock</option>
+          <option value="low_stock">Low Stock</option>
+          <option value="image_issues">Image Issues</option>
+        </select>
+
+        <select value={sort} onChange={(event) => onSortChange(event.target.value)} className="min-w-[145px] rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm focus:ring-2 focus:ring-orange-500">
+          <option value="name">Name A–Z</option><option value="stock_asc">Stock: Low first</option><option value="stock_desc">Stock: High first</option><option value="price_asc">Price: Low first</option><option value="price_desc">Price: High first</option><option value="updated_desc">Recently updated</option>
         </select>
 
         {/* View Toggle */}

@@ -283,6 +283,8 @@ async ({
           stock:
             data.stock,
 
+          lowStockThreshold: data.lowStockThreshold,
+
           imageUrl:
             "",
 
@@ -432,7 +434,7 @@ async ({
      */
     if (createdProductId) {
       try {
-        await productService.deleteProduct(
+        await productService.discardFailedCreation(
           createdProductId
         );
       } catch (rollbackError) {

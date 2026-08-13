@@ -14,6 +14,7 @@ import {
 } from "firebase-functions/v2/firestore";
 import {
   recordCustomerDailyReport,
+  synchronizeStoreCustomerRelationship,
   synchronizeOrderDailyReport,
 } from "../reporting/platformDailyReportService";
 
@@ -24,12 +25,13 @@ export const platformOrderDailyReport = onDocumentWritten(
     database: "default",
   },
   async (event) => {
-    await synchronizeOrderDailyReport(
-      event.params.orderId,
-      event.data?.after.exists
-        ? event.data.after.data() as Record<string, unknown>
-        : null,
-    );
+    const after = event.data?.after.exists
+      ? event.data.after.data() as Record<string, unknown>
+      : null;
+    await Promise.all([
+      synchronizeOrderDailyReport(event.params.orderId, after),
+      synchronizeStoreCustomerRelationship(event.params.orderId, after),
+    ]);
   }
 );
 

@@ -13,6 +13,8 @@ interface ProductStatsProps {
   featuredProducts: number;
   totalValue: number;
   totalStock: number;
+  outOfStockProducts: number;
+  imageIssueProducts: number;
 }
 
 export function ProductStats({
@@ -21,6 +23,8 @@ export function ProductStats({
   featuredProducts,
   totalValue,
   totalStock,
+  outOfStockProducts,
+  imageIssueProducts,
 }: ProductStatsProps) {
   const stats = [
     {
@@ -32,7 +36,7 @@ export function ProductStats({
       textColor: "text-blue-600",
     },
     {
-      label: "Active",
+      label: "Enabled",
       value: activeProducts,
       icon: Tag,
       color: "bg-green-500",
@@ -56,17 +60,19 @@ export function ProductStats({
       textColor: "text-purple-600",
     },
     {
-      label: "Inventory Value",
+      label: "Retail Inventory Value",
       value: `$${totalValue.toFixed(2)}`,
       icon: DollarSign,
       color: "bg-indigo-500",
       bgColor: "bg-indigo-50",
       textColor: "text-indigo-600",
     },
+    {label: "Out of Stock", value: outOfStockProducts, icon: Package, color: "bg-red-500", bgColor: "bg-red-50", textColor: "text-red-600"},
+    {label: "Image Issues", value: imageIssueProducts, icon: Package, color: "bg-amber-500", bgColor: "bg-amber-50", textColor: "text-amber-600"},
   ];
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
       {stats.map((stat, index) => (
         <motion.div
           key={stat.label}

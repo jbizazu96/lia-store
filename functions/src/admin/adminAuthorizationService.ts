@@ -47,6 +47,7 @@ export const ADMIN_PERMISSIONS = [
   "orders",
   "finance",
   "refunds",
+  "support",
   "promotions",
   "settings",
 ] as const;

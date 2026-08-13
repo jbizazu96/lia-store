@@ -101,6 +101,11 @@ export function mapFirestoreOrder(
     );
   }
 
+  return mapOrderData(document.id, data);
+}
+
+/** Maps the serialized order returned by callable pagination endpoints. */
+export function mapOrderData(id: string, data: DocumentData): Order {
   const statusHistory: StatusHistory[] = (
     data.statusHistory ?? []
   ).map((history: DocumentData) => ({
@@ -137,7 +142,7 @@ export function mapFirestoreOrder(
     : undefined;
 
   return {
-    id: document.id,
+    id,
 
     orderNumber: data.orderNumber ?? "",
 
@@ -165,6 +170,8 @@ export function mapFirestoreOrder(
           ),
         }
       : undefined,
+
+    storeFinancials: data.storeFinancials ?? undefined,
 
     shipday: data.shipday
       ? {

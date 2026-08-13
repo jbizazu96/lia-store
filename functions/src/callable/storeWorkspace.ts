@@ -11,10 +11,13 @@
 */
 
 import * as admin from "firebase-admin";
+import Stripe from "stripe";
 import {
   AggregateField,
+  type DocumentData,
   FieldValue,
   getFirestore,
+  type UpdateData,
 } from "firebase-admin/firestore";
 import {
   HttpsError,
@@ -28,6 +31,17 @@ import {
 } from "../services/store/storeUploadClaimService";
 import {PLATFORM_REPORTING_TIME_ZONE} from "../payment/pricing/paymentPricingConfig";
 import {resolveDeliveryZoneForAddress} from "../delivery/deliveryZoneAssignmentService";
+import {createCatalogSearchTokens, normalizeCatalogSearchText} from "../services/catalog/catalogSearchTokens";
+import {requireApprovedStore, requireOwnedStore} from "../services/store/storeAccessService";
+import {enforceCallableAbuseProtection} from "../security/callableAbuseProtection";
+import {hasStoreAddressChanged} from "../services/store/storeSettingsPolicy";
+import {
+  localDateKey,
+  localHour,
+  storeAnalyticsRange,
+  type StoreAnalyticsPeriod,
+} from "../reporting/storeAnalyticsPeriod";
+import {calculateStoreAnalyticsAccounting} from "../reporting/storeAnalyticsAccounting";
 
 if (admin.apps.length === 0) {
   admin.initializeApp();
@@ -35,6 +49,7 @@ if (admin.apps.length === 0) {
 
 const db = getFirestore("default");
 const googleMapsApiKey = defineSecret("GOOGLE_MAPS_API_KEY");
+const stripeSecretKey = defineSecret("STRIPE_SECRET_KEY");
 const scheduleDays = [
   "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday",
 ] as const;
@@ -42,6 +57,14 @@ const businessTypes = new Set([
   "grocery",
   "market",
   "specialty_food",
+  "international_grocery",
+  "asian_market",
+  "latin_market",
+  "convenience_store",
+  "specialty_retail",
+  "restaurant",
+  "bakery",
+  "pharmacy_health",
   "african_grocery",
   "african_restaurant",
   "home_based",
@@ -80,25 +103,196 @@ function normalizeEin(value: string): string | null {
   return `${digits.slice(0, 2)}-${digits.slice(2)}`;
 }
 
-async function requireOwnedStore(uid: string) {
-  const user = await db.collection("users").doc(uid).get();
-  if (user.data()?.accountType !== "store_owner") {
-    throw new HttpsError("permission-denied", "Only store owners can access this workspace.");
+function requiredText(value: unknown, field: string, maximumLength: number): string {
+  const normalized = text(value);
+  if (!normalized) throw new HttpsError("invalid-argument", `${field} is required.`);
+  if (normalized.length > maximumLength || /[\u0000-\u0008\u000B\u000C\u000E-\u001F]/.test(normalized)) {
+    throw new HttpsError("invalid-argument", `${field} is too long or contains unsupported characters.`);
   }
-  if (["deletion_pending", "deletion_processing"].includes(user.data()?.accountDeletionState)) {
-    throw new HttpsError("permission-denied", "Your account deletion request is under review. Store account access is unavailable.");
-  }
+  return normalized;
+}
 
-  const storedId = text(user.data()?.storeId);
-  if (storedId) {
-    const store = await db.collection("stores").doc(storedId).get();
-    if (store.exists && store.data()?.ownerId === uid) return store;
-  }
+function settingsAuditData(params: {
+  storeId: string;
+  actorUid: string;
+  action: string;
+  changedFields: string[];
+}) {
+  return {
+    storeId: params.storeId,
+    actorUid: params.actorUid,
+    actorType: "store_owner",
+    action: params.action,
+    changedFields: params.changedFields,
+    createdAt: FieldValue.serverTimestamp(),
+  };
+}
 
-  const stores = await db.collection("stores").where("ownerId", "==", uid).limit(1).get();
-  const store = stores.docs[0];
-  if (!store) throw new HttpsError("not-found", "No store was found for this account.");
-  return store;
+const STORE_ORDER_INDEX_VERSION = 1;
+const storeOrderStatuses = ["pending", "accepted", "preparing", "ready_for_pickup", "out_for_delivery", "completed", "cancelled"] as const;
+
+function orderSearchFields(id: string, data: Record<string, unknown>) {
+  const customer = isRecord(data.customer) ? data.customer : {};
+  return {
+    storeSearchTokens: createCatalogSearchTokens([
+      id,
+      data.orderNumber,
+      customer.name,
+      customer.email,
+    ]),
+  };
+}
+
+async function ensureStoreOrderIndex(store: FirebaseFirestore.DocumentSnapshot) {
+  if (store.data()?.orderIndexVersion === STORE_ORDER_INDEX_VERSION) return;
+  let cursor: FirebaseFirestore.QueryDocumentSnapshot | null = null;
+  while (true) {
+    let query = db.collection("orders")
+      .where("store.id", "==", store.id)
+      .where("checkoutStatus", "==", "confirmed")
+      .orderBy("__name__")
+      .limit(400);
+    if (cursor) query = query.startAfter(cursor);
+    const page = await query.get();
+    if (page.empty) break;
+    const batch = db.batch();
+    const customers = new Map<string, Record<string, unknown>>();
+    page.docs.forEach((order) => {
+      batch.update(order.ref, orderSearchFields(order.id, order.data()));
+      const customer = isRecord(order.data().customer) ? order.data().customer : {};
+      const customerId = text(customer.uid);
+      if (customerId) customers.set(customerId, customer);
+    });
+    await batch.commit();
+    const customerRows = Array.from(customers.entries());
+    for (let index = 0; index < customerRows.length; index += 400) {
+      const customerBatch = db.batch();
+      customerRows.slice(index, index + 400).forEach(([customerId, customer]) => customerBatch.set(
+        store.ref.collection("customers").doc(customerId),
+        {customerId, name: text(customer.name), firstOrderBackfilledAt: FieldValue.serverTimestamp()},
+        {merge: true},
+      ));
+      await customerBatch.commit();
+    }
+    cursor = page.docs.at(-1) ?? null;
+    if (page.size < 400) break;
+  }
+  await store.ref.set({orderIndexVersion: STORE_ORDER_INDEX_VERSION}, {merge: true});
+}
+
+async function storeOrderCounts(storeId: string) {
+  const orders = db.collection("orders")
+    .where("store.id", "==", storeId)
+    .where("checkoutStatus", "==", "confirmed")
+    .where("payment.status", "==", "paid");
+  const [total, ...statuses] = await Promise.all([
+    orders.count().get(),
+    ...storeOrderStatuses.map((status) => orders.where("status", "==", status).count().get()),
+  ]);
+  const counts = Object.fromEntries(storeOrderStatuses.map((status, index) => [status, statuses[index].data().count]));
+  return {
+    total: total.data().count,
+    pending: counts.pending,
+    accepted: counts.accepted,
+    preparing: counts.preparing,
+    readyForPickup: counts.ready_for_pickup,
+    outForDelivery: counts.out_for_delivery,
+    completed: counts.completed,
+    cancelled: counts.cancelled,
+  };
+}
+
+type StoreOrderFinancialSummary = {
+  currency: string;
+  merchandiseSubtotal: number;
+  salesTax: number;
+  grossStoreAmount: number;
+  liaCommission: number | null;
+  originalStoreEarning: number | null;
+  refundedMerchandise: number;
+  refundedSalesTax: number;
+  storeRefundReversal: number;
+  netStoreEarning: number | null;
+  customerRefundTotal: number;
+  refundStatus: string | null;
+  settlementStatus: string;
+  transferStatus: string;
+};
+
+/* Build an order-level financial projection only from immutable pricing,
+ * settlement, refund and transfer records. Values returned to the browser
+ * are dollars; all calculations remain integer cents here. */
+async function storeOrderFinancialSummaries(
+  storeId: string,
+  orders: FirebaseFirestore.DocumentSnapshot[],
+): Promise<Map<string, StoreOrderFinancialSummary>> {
+  const orderIds = orders.map((order) => order.id);
+  if (orderIds.length === 0) return new Map();
+  const [settlements, refunds, transfers] = await Promise.all([
+    documentsByReferences(orderIds.map((id) => db.collection("paymentSettlements").doc(id))),
+    refundsForOrders(orderIds),
+    documentsByReferences(orderIds.map((id) => db.collection("paymentTransfers").doc(`${id}_store`))),
+  ]);
+  const settlementByOrder = new Map(settlements.filter((item) => item.exists).map((item) => [item.id, item.data() ?? {}]));
+  const transferByOrder = new Map(transfers.filter((item) => item.exists && item.data()?.recipient?.id === storeId).map((item) => [text(item.data()?.orderId) || item.id.replace(/_store$/, ""), item.data() ?? {}]));
+  const refundsByOrder = new Map<string, FirebaseFirestore.DocumentData[]>();
+  refunds.forEach((refund) => {
+    const orderId = text(refund.data().orderId);
+    refundsByOrder.set(orderId, [...(refundsByOrder.get(orderId) ?? []), refund.data()]);
+  });
+
+  return new Map(orders.map((order) => {
+    const data = order.data() ?? {};
+    const pricing = isRecord(data.pricing) ? data.pricing : {};
+    const merchandise = nonNegativeCentAmount(pricing.subtotalAmount);
+    const tax = nonNegativeCentAmount(pricing.taxAmount);
+    const gross = merchandise + tax;
+    const settlement = settlementByOrder.get(order.id);
+    const transfer = transferByOrder.get(order.id);
+    const storeAmount = settlement ? nonNegativeCentAmount(settlement.storeAmount) : null;
+    let refundedMerchandise = 0;
+    let refundedTax = 0;
+    let storeReversal = 0;
+    let customerRefundTotal = 0;
+    const refundStatuses = new Set<string>();
+    (refundsByOrder.get(order.id) ?? []).forEach((refund) => {
+      const status = text(refund.status);
+      if (status) refundStatuses.add(status);
+      if (status === "completed" || status === "partially_completed") {
+        const allocation = isRecord(refund.allocation) ? refund.allocation : {};
+        refundedMerchandise += nonNegativeCentAmount(allocation.merchandiseAmount);
+        refundedTax += nonNegativeCentAmount(allocation.taxAmount);
+        customerRefundTotal += nonNegativeCentAmount(allocation.totalAmount);
+      }
+      const reversals = Array.isArray(refund.reversals) ? refund.reversals : [];
+      storeReversal += reversals
+        .filter((entry: unknown) => isRecord(entry) && entry.recipientType === "store" && entry.status === "completed")
+        .reduce((sum: number, entry: unknown) => sum + nonNegativeCentAmount(isRecord(entry) ? entry.amount : 0), 0);
+    });
+    const refundStatus = refundStatuses.size === 0
+      ? null
+      : refundStatuses.has("processing") || refundStatuses.has("pending") || refundStatuses.has("eligible")
+        ? "processing"
+        : refundStatuses.has("failed") ? "failed"
+          : refundStatuses.has("partially_completed") ? "partially_completed" : "completed";
+    const summary: StoreOrderFinancialSummary = {
+      currency: text(pricing.currency) || "usd",
+      merchandiseSubtotal: merchandise / 100,
+      salesTax: tax / 100,
+      grossStoreAmount: gross / 100,
+      liaCommission: storeAmount === null ? null : Math.max(0, gross - storeAmount) / 100,
+      originalStoreEarning: storeAmount === null ? null : storeAmount / 100,
+      refundedMerchandise: refundedMerchandise / 100,
+      refundedSalesTax: refundedTax / 100,
+      storeRefundReversal: storeReversal / 100,
+      netStoreEarning: storeAmount === null ? null : Math.max(0, storeAmount - storeReversal) / 100,
+      customerRefundTotal: customerRefundTotal / 100,
+      refundStatus,
+      settlementStatus: settlement ? text(settlement.status) || "pending" : "not_created",
+      transferStatus: transfer ? text(transfer.status) || "pending" : "not_created",
+    };
+    return [order.id, summary];
+  }));
 }
 
 /*
@@ -159,6 +353,22 @@ async function buildStorePayoutDetails(
   const orders = orderReferences.length > 0
     ? await db.getAll(...orderReferences)
     : [];
+  const orderRefunds = await refundsForOrders(
+    orderReferences.map((reference) => reference.id),
+  );
+  const reversalByOrder = new Map<string, number>();
+  orderRefunds.forEach((refund) => {
+    const data = refund.data();
+    const orderId = text(data.orderId);
+    const reversals = Array.isArray(data.reversals) ? data.reversals.map((value: unknown) => isRecord(value) ? value : {}) : [];
+    const completedStoreReversal = reversals
+      .filter((reversal) => reversal.recipientType === "store" && reversal.status === "completed")
+      .reduce((sum, reversal) => sum + nonNegativeCentAmount(reversal.amount), 0);
+    reversalByOrder.set(
+      orderId,
+      (reversalByOrder.get(orderId) ?? 0) + completedStoreReversal,
+    );
+  });
   const orderDetailsById = new Map(
     orders
       .filter((order) => order.exists && order.data()?.store?.id === storeId)
@@ -177,12 +387,20 @@ async function buildStorePayoutDetails(
     const salesTax = nonNegativeCentAmount(pricing?.taxAmount);
     const grossStoreOrderAmount = merchandiseSubtotal + salesTax;
     const transferAmount = nonNegativeCentAmount(data.amount);
+    const reversedAmount = Math.min(
+      transferAmount,
+      reversalByOrder.get(orderId) ?? 0,
+    );
+    const netAmount = Math.max(0, transferAmount - reversedAmount);
 
     return {
       id: transfer.id,
       orderId,
       orderNumber: order?.orderNumber ?? null,
-      amount: transferAmount / 100,
+      amount: netAmount / 100,
+      originalTransferAmount: transferAmount / 100,
+      refundedAmount: reversedAmount / 100,
+      netAmount: netAmount / 100,
       merchandiseSubtotal: merchandiseSubtotal / 100,
       salesTax: salesTax / 100,
       grossStoreOrderAmount: grossStoreOrderAmount / 100,
@@ -267,40 +485,8 @@ function startOfDayInTimeZone(
   return candidate;
 }
 
-function currentEarningsPeriodStarts(): {
-  weekStart: Date;
-  monthStart: Date;
-} {
-  const timeZone = PLATFORM_REPORTING_TIME_ZONE;
-  const now = datePartsInTimeZone(new Date(), timeZone);
-  const weekdayOffset: Record<string, number> = {
-    Mon: 0,
-    Tue: 1,
-    Wed: 2,
-    Thu: 3,
-    Fri: 4,
-    Sat: 5,
-    Sun: 6,
-  };
-  const localToday = new Date(Date.UTC(now.year, now.month - 1, now.day));
-  localToday.setUTCDate(
-    localToday.getUTCDate() - (weekdayOffset[now.weekday] ?? 0),
-  );
-
-  return {
-    weekStart: startOfDayInTimeZone(
-      localToday.getUTCFullYear(),
-      localToday.getUTCMonth() + 1,
-      localToday.getUTCDate(),
-      timeZone,
-    ),
-    monthStart: startOfDayInTimeZone(
-      now.year,
-      now.month,
-      1,
-      timeZone,
-    ),
-  };
+function percentageGrowth(current: number, previous: number) {
+  return previous > 0 ? ((current - previous) / previous) * 100 : current > 0 ? 100 : 0;
 }
 
 function nonNegativeCentAmount(value: unknown): number {
@@ -324,6 +510,8 @@ function settingsStore(data: Record<string, unknown>, id: string) {
     formattedAddress: text(data.formattedAddress), latitude: typeof data.latitude === "number" ? data.latitude : 0,
     longitude: typeof data.longitude === "number" ? data.longitude : 0, placeId: text(data.placeId),
     logoUrl: text(data.logoUrl), bannerUrl: text(data.bannerUrl), category: text(data.category),
+    logoImageStatus: text(data.logoImageStatus), bannerImageStatus: text(data.bannerImageStatus),
+    logoImageId: text(data.logoImageId), bannerImageId: text(data.bannerImageId),
     rating: typeof data.rating === "number" ? data.rating : 0, isOpen: data.isOpen === true,
     schedule: Array.isArray(data.schedule) ? serialize(data.schedule) : [],
     isApproved: data.isApproved === true, isActive: data.isActive === true,
@@ -338,6 +526,14 @@ function settingsStore(data: Record<string, unknown>, id: string) {
     productStockNotifications: data.productStockNotifications !== false,
     emailNotifications: data.emailNotifications !== false,
     pushNotifications: data.pushNotifications !== false,
+    stripeAccountId: text(data.stripeAccountId),
+    stripeAccountStatus: text(data.stripeAccountStatus) || "not_started",
+    stripeChargesEnabled: data.stripeChargesEnabled === true,
+    stripeTransfersEnabled: data.stripeTransfersEnabled === true,
+    stripePayoutsEnabled: data.stripePayoutsEnabled === true,
+    stripeDetailsSubmitted: data.stripeDetailsSubmitted === true,
+    stripeRequiresAction: data.stripeRequiresAction === true,
+    stripeIsReady: data.stripeIsReady === true,
   };
 }
 
@@ -386,7 +582,7 @@ async function geocode(address: string) {
 
 export const getStoreWorkspaceSettings = onCall({ region: "us-central1" }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in to open store settings.");
-  const [store, user] = await Promise.all([requireOwnedStore(request.auth.uid), db.collection("users").doc(request.auth.uid).get()]);
+  const [store, user] = await Promise.all([requireApprovedStore(request.auth.uid), db.collection("users").doc(request.auth.uid).get()]);
   await refreshStoreUploadClaim(request.auth.uid, store.id);
   return { store: settingsStore(store.data() ?? {}, store.id), user: settingsUser(user.data() ?? {}) };
 });
@@ -402,9 +598,11 @@ export const getStoreWorkspaceEntry = onCall({ region: "us-central1" }, async (r
     const orders = await db.collection("orders")
       .where("store.id", "==", store.id)
       .where("checkoutStatus", "==", "confirmed")
+      .where("payment.status", "==", "paid")
       .where("status", "in", ["pending", "accepted", "preparing", "ready_for_pickup"])
+      .count()
       .get();
-    const pendingOrderCount = orders.size;
+    const pendingOrderCount = orders.data().count;
     return {
       hasStore: true,
       store: {
@@ -431,21 +629,53 @@ export const getStoreWorkspaceEntry = onCall({ region: "us-central1" }, async (r
  * after deriving the store from the authenticated owner; the browser never
  * queries orders/{orderId} or orders by store ID directly.
  */
-export const getStoreWorkspaceOrders = onCall({ region: "us-central1" }, async (request) => {
+export const getStoreWorkspaceOrders = onCall({region: "us-central1", timeoutSeconds: 300}, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in to view store orders.");
-  const store = await requireOwnedStore(request.auth.uid);
-  const orders = await db.collection("orders")
+  const input = isRecord(request.data) ? request.data : {};
+  const requestedSize = Number(input.pageSize);
+  const pageSize = Number.isInteger(requestedSize) ? Math.min(Math.max(requestedSize, 1), 50) : 25;
+  const status = text(input.status);
+  const search = normalizeCatalogSearchText(text(input.search));
+  const from = storedDate(input.from);
+  const to = storedDate(input.to);
+  const store = await requireApprovedStore(request.auth.uid);
+  await enforceCallableAbuseProtection({
+    operation: search ? "store-order-search" : "store-order-history",
+    uid: request.auth.uid,
+    appCheckVerified: Boolean(request.app),
+    maximumRequests: search ? 60 : 180,
+    windowSeconds: 600,
+  });
+  const searchToken = search.length >= 2 ? search.slice(0, 40) : "";
+  const cursor = text(input.cursor);
+  await ensureStoreOrderIndex(store);
+  let query: FirebaseFirestore.Query = db.collection("orders")
     .where("store.id", "==", store.id)
     .where("checkoutStatus", "==", "confirmed")
-    .orderBy("createdAt", "desc")
-    .limit(100)
-    .get();
+    .where("payment.status", "==", "paid");
+  if (storeOrderStatuses.includes(status as typeof storeOrderStatuses[number])) query = query.where("status", "==", status);
+  if (searchToken) query = query.where("storeSearchTokens", "array-contains", searchToken);
+  if (from) query = query.where("payment.paidAt", ">=", from);
+  if (to) query = query.where("payment.paidAt", "<=", to);
+  query = query.orderBy("payment.paidAt", "desc").limit(pageSize);
+  if (cursor) {
+    const cursorOrder = await db.collection("orders").doc(cursor).get();
+    if (!cursorOrder.exists || cursorOrder.data()?.store?.id !== store.id) {
+      throw new HttpsError("invalid-argument", "The order-history cursor is invalid.");
+    }
+    query = query.startAfter(cursorOrder);
+  }
+  const [orders, stats] = await Promise.all([query.get(), storeOrderCounts(store.id)]);
+  const financials = await storeOrderFinancialSummaries(store.id, orders.docs);
 
   return {
     orders: orders.docs.map((order) => ({
       id: order.id,
       ...(serialize(order.data()) as Record<string, unknown>),
+      storeFinancials: financials.get(order.id),
     })),
+    stats,
+    nextCursor: orders.size === pageSize ? orders.docs.at(-1)?.id ?? null : null,
   };
 });
 
@@ -455,153 +685,366 @@ export const getStoreWorkspaceOrder = onCall({ region: "us-central1" }, async (r
   const orderId = text(input.orderId);
   if (!orderId || orderId.includes("/")) throw new HttpsError("invalid-argument", "A valid order ID is required.");
 
-  const store = await requireOwnedStore(request.auth.uid);
+  const store = await requireApprovedStore(request.auth.uid);
   const order = await db.collection("orders").doc(orderId).get();
-  if (!order.exists || order.data()?.checkoutStatus !== "confirmed" || order.data()?.store?.id !== store.id) {
+  if (!order.exists || order.data()?.checkoutStatus !== "confirmed" || order.data()?.payment?.status !== "paid" || order.data()?.store?.id !== store.id) {
     throw new HttpsError("not-found", "The order could not be found.");
   }
+  await enforceCallableAbuseProtection({operation: "store-order-detail", uid: request.auth.uid, appCheckVerified: Boolean(request.app), maximumRequests: 240, windowSeconds: 600});
+  const financials = await storeOrderFinancialSummaries(store.id, [order]);
 
   return {
     order: {
       id: order.id,
       ...(serialize(order.data()) as Record<string, unknown>),
+      storeFinancials: financials.get(order.id),
     },
   };
 });
 
 /* Dashboard aggregates are computed server-side from confirmed orders and
  * completed store transfer obligations, never from customer checkout totals. */
-export const getStoreWorkspaceDashboard = onCall({ region: "us-central1" }, async (request) => {
+export const getStoreWorkspaceDashboard = onCall({region: "us-central1", timeoutSeconds: 300}, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in to view the store dashboard.");
-  const store = await requireOwnedStore(request.auth.uid);
+  await enforceCallableAbuseProtection({operation: "store-dashboard", uid: request.auth.uid, appCheckVerified: Boolean(request.app), maximumRequests: 240, windowSeconds: 3_600});
+  const store = await requireApprovedStore(request.auth.uid);
+  await ensureStoreOrderIndex(store);
   const storeData = store.data() ?? {};
+  const timeZone = await storeTimeZone(store);
+  const week = storeAnalyticsRange("week", timeZone);
+  const nowParts = datePartsInTimeZone(new Date(), timeZone);
+  const todayStart = startOfDayInTimeZone(nowParts.year, nowParts.month, nowParts.day, timeZone);
+  const tomorrowDate = new Date(Date.UTC(nowParts.year, nowParts.month - 1, nowParts.day + 1));
+  const tomorrowStart = startOfDayInTimeZone(tomorrowDate.getUTCFullYear(), tomorrowDate.getUTCMonth() + 1, tomorrowDate.getUTCDate(), timeZone);
   const confirmedOrders = db.collection("orders")
     .where("store.id", "==", store.id)
-    .where("checkoutStatus", "==", "confirmed");
-  const activeOrders = db.collection("orders")
-    .where("store.id", "==", store.id)
     .where("checkoutStatus", "==", "confirmed")
-    .where("status", "in", ["pending", "accepted", "preparing", "ready_for_pickup"]);
-
-  const [orderCount, pendingCount, recentOrders, completedTransfers] = await Promise.all([
-    confirmedOrders.count().get(),
-    activeOrders.count().get(),
-    confirmedOrders.orderBy("createdAt", "desc").limit(4).get(),
-    db.collection("paymentTransfers")
-      .where("recipient.id", "==", store.id)
-      .where("recipient.type", "==", "store")
-      .where("status", "==", "completed")
-      .aggregate({ total: AggregateField.sum("amount") })
-      .get(),
+    .where("payment.status", "==", "paid");
+  const [lifetimeOrders, currentWeekOrders, previousWeekOrders, todayOrders, pendingCount, activeCount, customerCount, recentOrders] = await Promise.all([
+    confirmedOrders.get(),
+    confirmedOrders.where("payment.paidAt", ">=", week.start).where("payment.paidAt", "<", week.end).get(),
+    confirmedOrders.where("payment.paidAt", ">=", week.previousStart).where("payment.paidAt", "<", week.previousEnd).get(),
+    confirmedOrders.where("payment.paidAt", ">=", todayStart).where("payment.paidAt", "<", tomorrowStart).get(),
+    confirmedOrders.where("status", "==", "pending").count().get(),
+    confirmedOrders.where("status", "in", ["pending", "accepted", "preparing", "ready_for_pickup", "out_for_delivery"]).count().get(),
+    store.ref.collection("customers").count().get(),
+    confirmedOrders.orderBy("payment.paidAt", "desc").limit(4).get(),
   ]);
-
-  const totalRevenueCents = completedTransfers.data().total ?? 0;
+  const [lifetimeAccounting, weekAccounting, previousWeekAccounting] = await Promise.all([
+    orderCohortAccounting(lifetimeOrders),
+    orderCohortAccounting(currentWeekOrders),
+    orderCohortAccounting(previousWeekOrders),
+  ]);
+  const recentFinancials = await storeOrderFinancialSummaries(store.id, recentOrders.docs);
   const recent = recentOrders.docs.map((order) => order.data());
-  const customerIds = new Set(recent.map((order) => text(isRecord(order.customer) ? order.customer.uid : "")).filter(Boolean));
+  const growth = (current: number, previous: number) => previous > 0 ? ((current - previous) / previous) * 100 : current > 0 ? 100 : 0;
+  const lifetimeNetEarnings = Math.max(0, lifetimeAccounting.grossStoreEntitlement - lifetimeAccounting.storeRefundImpact);
+  const weekNetEarnings = Math.max(0, weekAccounting.grossStoreEntitlement - weekAccounting.storeRefundImpact);
+  const previousWeekNetEarnings = Math.max(0, previousWeekAccounting.grossStoreEntitlement - previousWeekAccounting.storeRefundImpact);
 
   return {
     storeName: text(storeData.name) || "Your Store",
+    timeZone,
     stats: {
-      totalOrders: orderCount.data().count,
-      totalRevenue: totalRevenueCents / 100,
-      totalCustomers: customerIds.size,
+      totalOrders: lifetimeOrders.size,
+      netStoreEarnings: lifetimeNetEarnings / 100,
+      currentWeekNetEarnings: weekNetEarnings / 100,
+      refundDeductions: lifetimeAccounting.storeRefundImpact / 100,
+      totalCustomers: customerCount.data().count,
       averageRating: typeof storeData.rating === "number" ? storeData.rating : 0,
       pendingOrders: pendingCount.data().count,
-      todayOrders: recent.filter((order) => {
-        const createdAt = order.createdAt?.toDate?.();
-        return createdAt instanceof Date && createdAt.toDateString() === new Date().toDateString();
-      }).length,
-      weeklyGrowth: 0,
-      revenueGrowth: 0,
+      activeOrders: activeCount.data().count,
+      todayOrders: todayOrders.size,
+      weeklyGrowth: growth(currentWeekOrders.size, previousWeekOrders.size),
+      earningsGrowth: growth(weekNetEarnings, previousWeekNetEarnings),
     },
-    recentOrders: recent.map((order, index) => ({
-      id: recentOrders.docs[index].id,
+    recentOrders: recent.map((order, index) => {
+      const orderId = recentOrders.docs[index].id;
+      const financials = recentFinancials.get(orderId);
+      const grossStoreOrderAmount = financials?.grossStoreAmount ?? (
+        nonNegativeCentAmount(order.pricing?.subtotalAmount) +
+        nonNegativeCentAmount(order.pricing?.taxAmount)
+      ) / 100;
+      return {
+      id: orderId,
       customerName: text(isRecord(order.customer) ? order.customer.name : "") || "Customer",
-      /*
-       * Recent Orders shows the same gross store order amount as the store
-       * order-detail page: merchandise subtotal plus sales tax. This is not
-       * the eventual transfer amount, which is shown separately in Earnings
-       * after LIA's merchandise commission is applied.
-       */
-      storeTotal:
-        (typeof order.pricing?.subtotal === "number"
-          ? order.pricing.subtotal
-          : 0) +
-        (typeof order.pricing?.tax === "number"
-          ? order.pricing.tax
-          : 0),
+      grossStoreOrderAmount,
+      displayStoreAmount: financials?.netStoreEarning ?? grossStoreOrderAmount,
+      amountType: financials?.netStoreEarning === null || financials?.netStoreEarning === undefined ? "gross" : "net",
       status: text(order.status) || "pending",
-      createdAt: serialize(order.createdAt) as string,
+      paidAt: serialize(isRecord(order.payment) ? order.payment.paidAt : null) as string,
       itemCount: Array.isArray(order.items) ? order.items.length : 0,
-    })),
+    };}),
   };
 });
 
-export const getStoreWorkspaceFinancials = onCall({ region: "us-central1" }, async (request) => {
+export const getStoreWorkspaceFinancials = onCall({
+  region: "us-central1",
+  secrets: [stripeSecretKey],
+}, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in to view store financials.");
-  const store = await requireOwnedStore(request.auth.uid);
+  await enforceCallableAbuseProtection({
+    operation: "store-financials",
+    uid: request.auth.uid,
+    appCheckVerified: Boolean(request.app),
+    maximumRequests: 120,
+    windowSeconds: 3_600,
+  });
+  const store = await requireApprovedStore(request.auth.uid);
+  const data = store.data() ?? {};
+  const timeZone = await storeTimeZone(store);
+  const week = storeAnalyticsRange("week", timeZone);
+  const month = storeAnalyticsRange("month", timeZone);
   const transfers = db.collection("paymentTransfers")
     .where("recipient.id", "==", store.id)
     .where("recipient.type", "==", "store");
-  const confirmedOrders = db.collection("orders")
-    .where("store.id", "==", store.id)
-    .where("checkoutStatus", "==", "confirmed");
-  const completedStoreTransfers = transfers.where("status", "==", "completed");
-  const { weekStart, monthStart } = currentEarningsPeriodStarts();
-
   const [
-    completedTransfers,
+    lifetimeOrders,
+    weeklyOrders,
+    monthlyOrders,
     pendingTransfers,
-    weeklyTransfers,
-    monthlyTransfers,
     transferHistory,
-    orderCount,
-    recentOrders,
   ] = await Promise.all([
-    completedStoreTransfers.aggregate({ total: AggregateField.sum("amount") }).get(),
+    db.collection("orders").where("store.id", "==", store.id).where("checkoutStatus", "==", "confirmed").where("payment.status", "==", "paid").get(),
+    db.collection("orders").where("store.id", "==", store.id).where("checkoutStatus", "==", "confirmed").where("payment.status", "==", "paid").where("payment.paidAt", ">=", week.start).where("payment.paidAt", "<", week.end).get(),
+    db.collection("orders").where("store.id", "==", store.id).where("checkoutStatus", "==", "confirmed").where("payment.status", "==", "paid").where("payment.paidAt", ">=", month.start).where("payment.paidAt", "<", month.end).get(),
     transfers.where("status", "in", ["pending", "eligible", "processing"]).aggregate({ total: AggregateField.sum("amount") }).get(),
-    completedStoreTransfers
-      .where("completedAt", ">=", weekStart.toISOString())
-      .aggregate({ total: AggregateField.sum("amount") })
-      .get(),
-    completedStoreTransfers
-      .where("completedAt", ">=", monthStart.toISOString())
-      .aggregate({ total: AggregateField.sum("amount") })
-      .get(),
     /* The earnings dashboard previews only the ten most recent payouts. */
     transfers.orderBy("updatedAt", "desc").limit(10).get(),
-    confirmedOrders.count().get(),
-    confirmedOrders.orderBy("createdAt", "desc").limit(100).get(),
+  ]);
+  const [lifetime, weekly, monthly] = await Promise.all([
+    orderCohortAccounting(lifetimeOrders),
+    orderCohortAccounting(weeklyOrders),
+    orderCohortAccounting(monthlyOrders),
   ]);
 
-  const totalEarnings = (completedTransfers.data().total ?? 0) / 100;
+  const totalEarnings = Math.max(0, lifetime.grossStoreEntitlement - lifetime.storeRefundImpact) / 100;
   const pendingBalance = (pendingTransfers.data().total ?? 0) / 100;
-  const recent = recentOrders.docs.map((order) => order.data());
-  const customers = new Set(recent.map((order) => text(isRecord(order.customer) ? order.customer.uid : "")).filter(Boolean));
   const transferRows = transferHistory.docs.map((transfer) => ({
     id: transfer.id,
     data: transfer.data(),
   }));
   const payouts = await buildStorePayoutDetails(store.id, transferRows);
+  const stripeAccountId = text(data.stripeAccountId);
+  let stripeAvailableBalance: number | null = null;
+  let stripePendingBalance: number | null = null;
+  if (stripeAccountId && data.stripeIsReady === true) {
+    const balance = await new Stripe(stripeSecretKey.value()).balance.retrieve(
+      {},
+      {stripeAccount: stripeAccountId},
+    );
+    stripeAvailableBalance = balance.available
+      .filter((entry) => entry.currency === "usd")
+      .reduce((sum, entry) => sum + entry.amount, 0) / 100;
+    stripePendingBalance = balance.pending
+      .filter((entry) => entry.currency === "usd")
+      .reduce((sum, entry) => sum + entry.amount, 0) / 100;
+  }
 
   return {
-    analytics: {
-      totalOrders: orderCount.data().count,
-      totalRevenue: totalEarnings,
-      averageOrderValue: orderCount.data().count ? totalEarnings / orderCount.data().count : 0,
-      totalCustomers: customers.size,
-      averageRating: typeof store.data()?.rating === "number" ? store.data()?.rating : 0,
-      peakHours: Array(24).fill(0), dailyOrders: Array(7).fill(0), weeklyGrowth: 0, revenueGrowth: 0, topProducts: [],
-    },
     earnings: {
       totalEarnings,
-      /* Completed transfers have already left LIA's balance for the store. */
-      availableBalance: 0,
+      grossStoreEarnings: lifetime.grossStoreEntitlement / 100,
+      storeCommission: lifetime.storeCommission / 100,
+      refundDeductions: lifetime.storeRefundImpact / 100,
+      grossMerchandiseSales: lifetime.grossMerchandise / 100,
+      salesTax: lifetime.salesTax / 100,
+      availableBalance: stripeAvailableBalance,
+      stripePendingBalance,
       pendingBalance,
-      weeklyEarnings: (weeklyTransfers.data().total ?? 0) / 100,
-      monthlyEarnings: (monthlyTransfers.data().total ?? 0) / 100,
+      weeklyEarnings: Math.max(0, weekly.grossStoreEntitlement - weekly.storeRefundImpact) / 100,
+      monthlyEarnings: Math.max(0, monthly.grossStoreEntitlement - monthly.storeRefundImpact) / 100,
+      timeZone,
+      stripe: {
+        accountId: stripeAccountId || null,
+        status: text(data.stripeAccountStatus) || "not_started",
+        isReady: data.stripeIsReady === true,
+        payoutsEnabled: data.stripePayoutsEnabled === true,
+        requiresAction: data.stripeRequiresAction === true,
+      },
+      stripeProcessingFeesPaidBy: "lia_platform",
       payouts,
     },
+  };
+});
+
+function storedDate(value: unknown): Date | null {
+  if (value && typeof value === "object" && "toDate" in value && typeof value.toDate === "function") {
+    const date = value.toDate();
+    return date instanceof Date && !Number.isNaN(date.getTime()) ? date : null;
+  }
+  if (typeof value === "string") {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+  return null;
+}
+
+async function storeTimeZone(store: FirebaseFirestore.DocumentSnapshot): Promise<string> {
+  const zoneId = text(store.data()?.homeZoneId);
+  if (!zoneId) return PLATFORM_REPORTING_TIME_ZONE;
+  const zone = await db.collection("deliveryZones").doc(zoneId).get();
+  const candidate = text(zone.data()?.timeZone);
+  try {
+    new Intl.DateTimeFormat("en-US", {timeZone: candidate}).format();
+    return candidate;
+  } catch {
+    return PLATFORM_REPORTING_TIME_ZONE;
+  }
+}
+
+async function documentsByReferences(references: FirebaseFirestore.DocumentReference[]) {
+  const documents: FirebaseFirestore.DocumentSnapshot[] = [];
+  for (let index = 0; index < references.length; index += 300) {
+    documents.push(...await db.getAll(...references.slice(index, index + 300)));
+  }
+  return documents;
+}
+
+async function refundsForOrders(orderIds: string[]) {
+  const refunds: FirebaseFirestore.QueryDocumentSnapshot[] = [];
+  for (let index = 0; index < orderIds.length; index += 30) {
+    const ids = orderIds.slice(index, index + 30);
+    if (ids.length === 0) continue;
+    const result = await db.collection("paymentRefunds").where("orderId", "in", ids).get();
+    refunds.push(...result.docs);
+  }
+  return refunds;
+}
+
+async function orderCohortAccounting(orders: FirebaseFirestore.QuerySnapshot) {
+  const orderIds = orders.docs.map((document) => document.id);
+  const [settlements, refunds] = await Promise.all([
+    documentsByReferences(orderIds.map((id) => db.collection("paymentSettlements").doc(id))),
+    refundsForOrders(orderIds),
+  ]);
+  const settlementAmounts = new Map(settlements.filter((item) => item.exists).map((item) => [
+    item.id,
+    nonNegativeCentAmount(item.data()?.storeAmount),
+  ]));
+  const refundAmounts = refunds.map((document) => {
+    const data = document.data();
+    const allocation = isRecord(data.allocation) ? data.allocation : {};
+    const completed = data.status === "completed";
+    const reversals = Array.isArray(data.reversals) ? data.reversals.map((value: unknown) => isRecord(value) ? value : {}) : [];
+    const completedStoreReversal = reversals
+      .filter((reversal) => reversal.recipientType === "store" && reversal.status === "completed")
+      .reduce((sum, reversal) => sum + nonNegativeCentAmount(reversal.amount), 0);
+    return {
+      orderId: text(data.orderId),
+      merchandise: completed ? nonNegativeCentAmount(allocation.merchandiseAmount) : 0,
+      tax: completed ? nonNegativeCentAmount(allocation.taxAmount) : 0,
+      storeReversal: completedStoreReversal,
+      total: completed ? nonNegativeCentAmount(allocation.totalAmount) : 0,
+      completed,
+    };
+  });
+  const orderAmounts = orders.docs.map((document) => {
+    const pricing = isRecord(document.data().pricing) ? document.data().pricing : {};
+    return {
+      id: document.id,
+      merchandise: nonNegativeCentAmount(pricing.subtotalAmount),
+      tax: nonNegativeCentAmount(pricing.taxAmount),
+    };
+  });
+  return calculateStoreAnalyticsAccounting(orderAmounts, settlementAmounts, refundAmounts);
+}
+
+/* Calendar-period analytics use one paid-order cohort and immutable financial records. */
+export const getStoreWorkspaceAnalytics = onCall({region: "us-central1"}, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Sign in to view store analytics.");
+  const input = isRecord(request.data) ? request.data : {};
+  const requestedPeriod = text(input.period);
+  const period: StoreAnalyticsPeriod = requestedPeriod === "month" || requestedPeriod === "year" ? requestedPeriod : "week";
+  const store = await requireApprovedStore(request.auth.uid);
+  const timeZone = await storeTimeZone(store);
+  const {start, end, previousStart, previousEnd} = storeAnalyticsRange(period, timeZone);
+  const baseOrders = db.collection("orders")
+    .where("store.id", "==", store.id)
+    .where("checkoutStatus", "==", "confirmed")
+    .where("payment.status", "==", "paid");
+  const completedTransfers = db.collection("paymentTransfers")
+    .where("recipient.id", "==", store.id)
+    .where("recipient.type", "==", "store")
+    .where("status", "==", "completed");
+  const [currentOrders, previousOrders, completedPayouts] = await Promise.all([
+    baseOrders.where("payment.paidAt", ">=", start).where("payment.paidAt", "<", end).get(),
+    baseOrders.where("payment.paidAt", ">=", previousStart).where("payment.paidAt", "<", previousEnd).get(),
+    completedTransfers.where("completedAt", ">=", start.toISOString()).where("completedAt", "<", end.toISOString()).aggregate({total: AggregateField.sum("amount")}).get(),
+  ]);
+  const [accounting, previousAccounting] = await Promise.all([
+    orderCohortAccounting(currentOrders),
+    orderCohortAccounting(previousOrders),
+  ]);
+
+  const customers = new Set<string>();
+  const hours = Array(24).fill(0) as number[];
+  const products = new Map<string, {name: string; sales: number}>();
+  const buckets = new Map<string, number>();
+  currentOrders.docs.forEach((document) => {
+    const data = document.data();
+    const customerId = text(isRecord(data.customer) ? data.customer.uid : "");
+    if (customerId) customers.add(customerId);
+    const paidAt = storedDate(isRecord(data.payment) ? data.payment.paidAt : null);
+    if (paidAt) {
+      hours[localHour(paidAt, timeZone)] += 1;
+      const key = localDateKey(paidAt, timeZone, period === "year");
+      buckets.set(key, (buckets.get(key) ?? 0) + 1);
+    }
+    if (Array.isArray(data.items)) data.items.forEach((value: unknown) => {
+      const item = isRecord(value) ? value : {};
+      const id = text(item.id) || text(item.name);
+      if (!id) return;
+      const existing = products.get(id) ?? {name: text(item.name) || "Product", sales: 0};
+      existing.sales += typeof item.quantity === "number" ? Math.max(0, item.quantity) : 0;
+      products.set(id, existing);
+    });
+  });
+
+  const series: Array<{label: string; value: number}> = [];
+  const cursor = new Date(start);
+  while (cursor < end) {
+    const key = localDateKey(cursor, timeZone, period === "year");
+    if (!series.some((entry) => entry.label === key)) series.push({label: key, value: buckets.get(key) ?? 0});
+    if (period === "year") cursor.setUTCMonth(cursor.getUTCMonth() + 1);
+    else cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  const orderCount = currentOrders.size;
+  const netMerchandise = Math.max(0, accounting.grossMerchandise - accounting.refundedMerchandise);
+  const netStoreEarnings = Math.max(0, accounting.grossStoreEntitlement - accounting.storeRefundImpact);
+  const previousNetStoreEarnings = Math.max(0, previousAccounting.grossStoreEntitlement - previousAccounting.storeRefundImpact);
+  const statuses = currentOrders.docs.map((document) => text(document.data().status));
+
+  return {
+    period,
+    timeZone,
+    periodStart: start.toISOString(),
+    periodEnd: end.toISOString(),
+    totalOrders: orderCount,
+    completedOrders: statuses.filter((status) => status === "completed" || status === "delivered").length,
+    cancelledOrders: statuses.filter((status) => status === "cancelled").length,
+    openOrders: statuses.filter((status) => status !== "completed" && status !== "delivered" && status !== "cancelled").length,
+    grossMerchandiseSales: accounting.grossMerchandise / 100,
+    refundedMerchandise: accounting.refundedMerchandise / 100,
+    netMerchandiseSales: netMerchandise / 100,
+    salesTax: accounting.salesTax / 100,
+    refundedSalesTax: accounting.refundedSalesTax / 100,
+    netSalesTax: Math.max(0, accounting.salesTax - accounting.refundedSalesTax) / 100,
+    storeCommission: accounting.storeCommission / 100,
+    grossStoreEarnings: accounting.grossStoreEntitlement / 100,
+    storeRefundImpact: accounting.storeRefundImpact / 100,
+    netStoreEarnings: netStoreEarnings / 100,
+    completedPayouts: (completedPayouts.data().total ?? 0) / 100,
+    customerRefundTotal: accounting.customerRefundTotal / 100,
+    refundCount: accounting.refundCount,
+    averageOrderValue: orderCount ? netMerchandise / orderCount / 100 : 0,
+    totalCustomers: customers.size,
+    averageRating: typeof store.data()?.rating === "number" ? store.data()?.rating : 0,
+    peakHours: hours,
+    orderSeries: series,
+    orderGrowth: percentageGrowth(orderCount, previousOrders.size),
+    revenueGrowth: percentageGrowth(netStoreEarnings, previousNetStoreEarnings),
+    topProducts: Array.from(products.values()).sort((left, right) => right.sales - left.sales).slice(0, 5),
   };
 });
 
@@ -619,7 +1062,7 @@ export const getStoreWorkspacePayouts = onCall({ region: "us-central1" }, async 
     ? Math.min(Math.max(requestedPageSize, 1), 50)
     : 25;
   const cursor = text(input.cursor);
-  const store = await requireOwnedStore(request.auth.uid);
+  const store = await requireApprovedStore(request.auth.uid);
   let query = db.collection("paymentTransfers")
     .where("recipient.id", "==", store.id)
     .where("recipient.type", "==", "store")
@@ -654,59 +1097,143 @@ export const getStoreWorkspacePayouts = onCall({ region: "us-central1" }, async 
 
 export const saveStoreWorkspaceSettings = onCall({ region: "us-central1", secrets: [googleMapsApiKey] }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in to save store settings.");
+  await enforceCallableAbuseProtection({
+    operation: "store-settings-save",
+    uid: request.auth.uid,
+    appCheckVerified: Boolean(request.app),
+    maximumRequests: 60,
+    windowSeconds: 3_600,
+  });
   const payload = isRecord(request.data) ? request.data : {};
+  const section = text(payload.section);
+  if (!["profile", "business", "notifications"].includes(section)) {
+    throw new HttpsError("invalid-argument", "Choose a valid settings section to save.");
+  }
   const storeInput = isRecord(payload.store) ? payload.store : {};
   const userInput = isRecord(payload.user) ? payload.user : {};
-  const name = text(storeInput.name);
-  const email = text(storeInput.email);
-  const phone = text(storeInput.phone);
-  const description = text(storeInput.description);
-  const address = text(storeInput.address);
-  const city = text(storeInput.city);
+  const store = await requireApprovedStore(request.auth.uid);
+  const existing = store.data() ?? {};
+  const updates: Record<string, unknown> = {updatedAt: FieldValue.serverTimestamp()};
+  const userUpdates: Record<string, unknown> = {updatedAt: FieldValue.serverTimestamp()};
+
+  if (section === "profile") {
+  const name = requiredText(storeInput.name, "Store name", 120);
+  const email = requiredText(storeInput.email, "Store email", 254).toLowerCase();
+  const phone = requiredText(storeInput.phone, "Phone number", 30);
+  const description = requiredText(storeInput.description, "Store description", 1_500);
+  const address = requiredText(storeInput.address, "Street address", 200);
+  const city = requiredText(storeInput.city, "City", 100);
   const state = normalizeState(text(storeInput.state));
-  const zip = text(storeInput.zip);
-  const businessType = text(storeInput.businessType);
-  const registeredName = text(storeInput.registeredName);
-  const businessStructure = text(storeInput.businessStructure);
-  const ein = normalizeEin(text(storeInput.ein));
-  const notificationSettings = {
-    orderNotifications: storeInput.orderNotifications !== false,
-    paymentNotifications: storeInput.paymentNotifications !== false,
-    productStockNotifications: storeInput.productStockNotifications !== false,
-    emailNotifications: storeInput.emailNotifications !== false,
-    pushNotifications: storeInput.pushNotifications !== false,
-  };
-  if (!name || !email.includes("@") || !phone || !description || !address || !city || !state || !zip) {
+  const zip = requiredText(storeInput.zip, "ZIP code", 10);
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !state || !/^\d{5}(?:-\d{4})?$/.test(zip)) {
     throw new HttpsError("invalid-argument", "Complete all store details with a valid email and two-letter state.");
   }
-  if (!businessTypes.has(businessType) || !registeredName || !businessStructures.has(businessStructure) || ein === null) {
-    throw new HttpsError("invalid-argument", "Complete valid business information. An EIN must use the format 00-0000000.");
+    Object.assign(updates, {name, email, phone, description});
+    Object.assign(userUpdates, {
+      displayName: text(userInput.displayName),
+      phone: text(userInput.phone),
+      language: text(userInput.language),
+    });
+
+    const normalizedAddress = upper(address);
+    const normalizedCity = upper(city);
+    const normalizedZip = upper(zip);
+    const addressChanged = hasStoreAddressChanged(existing, {
+      address: normalizedAddress,
+      city: normalizedCity,
+      state,
+      zip: normalizedZip,
+    });
+
+    if (addressChanged) {
+      await enforceCallableAbuseProtection({
+        operation: "store-settings-address-geocode",
+        uid: request.auth.uid,
+        appCheckVerified: Boolean(request.app),
+        maximumRequests: 10,
+        windowSeconds: 3_600,
+      });
+      const location = await geocode(`${address}, ${city}, ${state} ${zip}`);
+      if (!location) throw new HttpsError("invalid-argument", "We could not verify the store address.");
+      const zone = await resolveDeliveryZoneForAddress(city, state, zip, location.placeId);
+      const hasAdminZoneOverride = text(existing.zoneAssignmentSource) === "admin";
+      Object.assign(updates, {
+        address: normalizedAddress, city: normalizedCity, state, zip: normalizedZip, country: "US",
+        formattedAddress: upper(location.formattedAddress), latitude: location.latitude, longitude: location.longitude,
+        placeId: location.placeId,
+        ...(hasAdminZoneOverride ? {
+          zoneReviewRequired: true,
+          suggestedHomeZoneId: zone?.id ?? null,
+          suggestedHomeZoneName: zone?.name ?? null,
+        } : {
+          homeZoneId: zone?.id ?? null,
+          homeZoneName: zone?.name ?? null,
+          zoneAssignmentSource: "automatic",
+          zoneReviewRequired: false,
+        }),
+      });
+    }
+  } else if (section === "business") {
+    const businessType = text(storeInput.businessType);
+    const registeredName = requiredText(storeInput.registeredName, "Registered business name", 160);
+    const businessStructure = text(storeInput.businessStructure);
+    const ein = normalizeEin(text(storeInput.ein));
+    if (!businessTypes.has(businessType) || !registeredName || !businessStructures.has(businessStructure) || ein === null) {
+      throw new HttpsError("invalid-argument", "Complete valid business information. An EIN must use the format 00-0000000.");
+    }
+    Object.assign(updates, {businessType, registeredName, ein, businessStructure});
+  } else {
+    Object.assign(updates, {
+      orderNotifications: storeInput.orderNotifications !== false,
+      paymentNotifications: storeInput.paymentNotifications !== false,
+      productStockNotifications: storeInput.productStockNotifications !== false,
+      emailNotifications: storeInput.emailNotifications !== false,
+      pushNotifications: storeInput.pushNotifications !== false,
+    });
   }
-  const location = await geocode(`${address}, ${city}, ${state} ${zip}`);
-  if (!location) throw new HttpsError("invalid-argument", "We could not verify the store address.");
-  const zone = await resolveDeliveryZoneForAddress(city, state, zip, location.placeId);
-  const store = await requireOwnedStore(request.auth.uid);
-  await store.ref.update({
-    name, email, phone, description,
-    address: upper(address), city: upper(city), state, zip: upper(zip), country: "US",
-    formattedAddress: upper(location.formattedAddress), latitude: location.latitude, longitude: location.longitude,
-    homeZoneId: zone?.id ?? null, homeZoneName: zone?.name ?? null, zoneAssignmentSource: "automatic",
-    businessType, registeredName, ein, businessStructure,
-    category: text(storeInput.category), isOpen: storeInput.isOpen === true,
-    ...notificationSettings,
-    updatedAt: FieldValue.serverTimestamp(),
-  });
-  await db.collection("users").doc(request.auth.uid).set({
-    displayName: text(userInput.displayName), phone: text(userInput.phone), language: text(userInput.language), updatedAt: FieldValue.serverTimestamp(),
-  }, { merge: true });
+
+  const changedFields = Object.keys(updates).filter((field) => field !== "updatedAt" && existing[field] !== updates[field]);
+  const batch = db.batch();
+  batch.update(store.ref, updates as UpdateData<DocumentData>);
+  if (section === "profile") {
+    batch.set(db.collection("users").doc(request.auth.uid), userUpdates, {merge: true});
+  }
+  batch.create(store.ref.collection("settingsAuditLogs").doc(), settingsAuditData({
+    storeId: store.id,
+    actorUid: request.auth.uid,
+    action: `settings_${section}_updated`,
+    changedFields,
+  }));
+  await batch.commit();
   const [updatedStore, updatedUser] = await Promise.all([store.ref.get(), db.collection("users").doc(request.auth.uid).get()]);
   return { store: settingsStore(updatedStore.data() ?? {}, store.id), user: settingsUser(updatedUser.data() ?? {}) };
 });
 
 export const saveStoreWorkspaceSchedule = onCall({ region: "us-central1" }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in to save store hours.");
+  await enforceCallableAbuseProtection({operation: "store-schedule-save", uid: request.auth.uid, appCheckVerified: Boolean(request.app), maximumRequests: 30, windowSeconds: 3_600});
   const schedule = validateSchedule(isRecord(request.data) ? request.data.schedule : undefined);
-  const store = await requireOwnedStore(request.auth.uid);
-  await store.ref.update({ schedule, updatedAt: FieldValue.serverTimestamp() });
+  const store = await requireApprovedStore(request.auth.uid);
+  const batch = db.batch();
+  batch.update(store.ref, { schedule, updatedAt: FieldValue.serverTimestamp() });
+  batch.create(store.ref.collection("settingsAuditLogs").doc(), settingsAuditData({
+    storeId: store.id,
+    actorUid: request.auth.uid,
+    action: "settings_schedule_updated",
+    changedFields: ["schedule"],
+  }));
+  await batch.commit();
   return { schedule };
+});
+
+export const getStoreSettingsAudit = onCall({region: "us-central1"}, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Sign in to view store activity.");
+  const store = await requireApprovedStore(request.auth.uid);
+  const snapshot = await store.ref.collection("settingsAuditLogs").orderBy("createdAt", "desc").limit(25).get();
+  return {entries: snapshot.docs.map((entry) => ({
+    id: entry.id,
+    action: text(entry.data().action),
+    changedFields: Array.isArray(entry.data().changedFields) ? entry.data().changedFields.filter((field: unknown): field is string => typeof field === "string") : [],
+    createdAt: entry.data().createdAt?.toDate?.().toISOString?.() ?? null,
+  }))};
 });

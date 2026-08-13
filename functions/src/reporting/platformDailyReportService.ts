@@ -239,3 +239,23 @@ export async function recordCustomerDailyReport(
     });
   });
 }
+
+/** Maintains an exact lifetime distinct-customer count for each store. */
+export async function synchronizeStoreCustomerRelationship(
+  orderId: string,
+  data: Data | null,
+): Promise<void> {
+  if (!data || data.checkoutStatus !== "confirmed" || record(data.payment).status !== "paid") return;
+  const storeId = text(record(data.store).id);
+  const customer = record(data.customer);
+  const customerId = text(customer.uid);
+  if (!storeId || !customerId) return;
+
+  await db.collection("stores").doc(storeId).collection("customers").doc(customerId).set({
+    customerId,
+    name: text(customer.name),
+    lastOrderId: orderId,
+    lastOrderAt: data.createdAt ?? FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  }, {merge: true});
+}

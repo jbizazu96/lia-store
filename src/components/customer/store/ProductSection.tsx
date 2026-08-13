@@ -90,6 +90,24 @@ export function ProductSection({
           </motion.div>
         ))}
 
+        <motion.button
+          type="button"
+          onClick={onViewAll}
+          initial={{opacity: 0, scale: 0.9}}
+          animate={{opacity: 1, scale: 1}}
+          transition={{delay: Math.min(products.length * 0.03, 0.3)}}
+          className="flex min-h-[230px] w-[135px] flex-shrink-0 snap-start flex-col items-center justify-center rounded-xl border border-gray-200/70 bg-gray-50/70 px-4 text-center text-gray-800 transition hover:border-gray-300 hover:bg-gray-100 sm:w-[148px]"
+          aria-label={`See all ${category.name} products`}
+        >
+          <span className="flex h-11 w-11 items-center justify-center rounded-full bg-white shadow-sm ring-1 ring-black/5">
+            <ArrowRight className="h-5 w-5" strokeWidth={2.5} />
+          </span>
+          <span className="mt-3 text-sm font-bold">See more</span>
+          <span className="mt-1 text-xs text-gray-500">
+            {category.productCount ?? products.length} products
+          </span>
+        </motion.button>
+
       </div>
     </section>
   );

@@ -7,6 +7,7 @@ import type {
 } from "@/types/product";
 
 export interface SearchResult {
+  resultType: "product" | "store";
   id: string;
   name: string;
   description: string;
@@ -21,6 +22,8 @@ export interface SearchResult {
   storeDistance: number;
   deliveryFee: number;
   estimatedTime: number;
+  zoneAccessAllowed?: boolean;
+  zoneAccessType?: string;
   storeLogo?: string;
   storeIsOpen?: boolean;
   storeAddress?: string;

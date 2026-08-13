@@ -34,6 +34,7 @@ import {
   ChartNoAxesCombined,
   RotateCcw,
   ListTree,
+  Headphones,
   X,
 } from "lucide-react";
 import {
@@ -72,6 +73,7 @@ export function AdminAppShell({
     {href: "/admin/orders", label: "Orders & delivery", icon: ClipboardList, permission: "orders"},
     {href: "/admin/finance", label: "Finance", icon: CircleDollarSign, permission: "finance"},
     {href: "/admin/refund-claims", label: "Refund claims", icon: RotateCcw, permission: "refunds"},
+    {href: "/admin/support", label: "Support requests", icon: Headphones, permission: "support"},
     {href: "/admin/promotions", label: "Home promotions", icon: Tag, permission: "promotions"},
     {href: "/admin/settings", label: "Platform settings", icon: Settings, permission: "settings"},
     {href: "/admin/users", label: "Admin users", icon: UserCog, permission: "master"},

@@ -384,7 +384,7 @@ service cloud.firestore {
      */
     function isPaidConfirmedStoreOrder(orderData) {
       return isStoreOwnerAccount() &&
-        ownsOrder(orderData) &&
+        ownsApprovedStore(orderData.store.id) &&
         orderData.keys().hasAll([
           "checkoutStatus",
           "payment",

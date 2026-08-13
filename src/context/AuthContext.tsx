@@ -41,6 +41,7 @@ import { User, onAuthStateChanged } from "firebase/auth";
 */
 import { auth } from "@/lib/firebase";
 import { firebaseMessaging } from "@/services/notification/firebaseMessaging";
+import {customerLogoutService} from "@/services/auth/customerLogoutService";
 import {
   clearClientDataCache,
 } from "@/services/cache/clientDataCache";
@@ -114,6 +115,7 @@ export function AuthProvider({
     Runs once when component mounts.
   */
   useEffect(() => {
+    const removeSessionCleanup = customerLogoutService.installSessionCleanup();
     /*
       Listen for authentication changes.
 
@@ -177,7 +179,10 @@ export function AuthProvider({
       the Firebase listener when component
       unmounts.
     */
-    return unsubscribe;
+    return () => {
+      removeSessionCleanup();
+      unsubscribe();
+    };
   }, []);
 
   /*

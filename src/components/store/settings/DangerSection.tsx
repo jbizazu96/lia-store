@@ -15,11 +15,11 @@ import {
 import {
   httpsCallable,
 } from "firebase/functions";
-import {signOut} from "firebase/auth";
 import {
   auth,
   functions,
 } from "@/lib/firebase";
+import {customerLogoutService} from "@/services/auth/customerLogoutService";
 
 export function DangerSection() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -50,7 +50,7 @@ export function DangerSection() {
         reasonDetails: null,
       });
 
-      await signOut(auth);
+      await customerLogoutService.logout();
       window.location.assign("/login?accountDeletion=review");
 
       setShowDeleteModal(false);
@@ -96,7 +96,7 @@ export function DangerSection() {
           </button>
         </div>
         {error && !showDeleteModal && (
-          <p className="mt-3 text-sm text-green-700">
+          <p className="mt-3 text-sm text-red-700">
             {error}
           </p>
         )}
@@ -120,6 +120,7 @@ export function DangerSection() {
               <button
                 type="button"
                 onClick={() => setShowDeleteModal(false)}
+                disabled={loading}
                 className="p-1 hover:bg-gray-100 rounded-lg transition"
                 aria-label="Close delete confirmation"
               >
@@ -136,6 +137,7 @@ export function DangerSection() {
                   <button
                     type="button"
                     onClick={() => setShowDeleteModal(false)}
+                    disabled={loading}
                     className="flex-1 py-3 border border-gray-200 rounded-xl text-gray-600 font-medium hover:bg-gray-50 transition"
                     aria-label="Cancel account deletion"
                   >
@@ -144,7 +146,8 @@ export function DangerSection() {
                   <button
                     type="button"
                     onClick={handleDeleteAccount}
-                    className="flex-1 py-3 bg-red-600 text-white rounded-xl font-semibold hover:bg-red-700 transition"
+                    disabled={loading}
+                    className="flex-1 py-3 bg-red-600 text-white rounded-xl font-semibold hover:bg-red-700 transition disabled:opacity-60"
                     aria-label="Continue to account deletion"
                   >
                     {loading ? "Sending request..." : "Request deletion"}

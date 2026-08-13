@@ -48,7 +48,8 @@ import {
   isShipdayFulfillmentError,
   shipdayFulfillmentService,
 } from "./shipdayFulfillmentService";
-import {requireAccountOperational} from "../accountDeletion/accountDeletionAccessService";
+import {requireApprovedStore} from "../services/store/storeAccessService";
+import {enforceCallableAbuseProtection} from "../security/callableAbuseProtection";
 
 
 /*
@@ -379,9 +380,15 @@ export const updateOrderStatus =
         );
       }
 
-      if (requestedStatus === "accepted") {
-        await requireAccountOperational(request.auth.uid);
-      }
+      /* Every fulfillment action requires current administrative approval. */
+      await requireApprovedStore(request.auth.uid);
+      await enforceCallableAbuseProtection({
+        operation: "store-order-status-update",
+        uid: request.auth.uid,
+        appCheckVerified: Boolean(request.app),
+        maximumRequests: 120,
+        windowSeconds: 600,
+      });
 
       const cancellationReason =
         readOptionalString(

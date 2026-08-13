@@ -39,6 +39,10 @@ export interface StoreWorkspaceStore {
   placeId: string;
   logoUrl: string;
   bannerUrl: string;
+  logoImageStatus: "" | "processing" | "ready" | "failed";
+  bannerImageStatus: "" | "processing" | "ready" | "failed";
+  logoImageId: string;
+  bannerImageId: string;
   category: string;
   rating: number;
   isOpen: boolean;
@@ -61,6 +65,14 @@ export interface StoreWorkspaceStore {
   productStockNotifications: boolean;
   emailNotifications: boolean;
   pushNotifications: boolean;
+  stripeAccountId?: string;
+  stripeAccountStatus?: import("@/types/stripeConnect").StripeOnboardingStatus;
+  stripeChargesEnabled?: boolean;
+  stripeTransfersEnabled?: boolean;
+  stripePayoutsEnabled?: boolean;
+  stripeDetailsSubmitted?: boolean;
+  stripeRequiresAction?: boolean;
+  stripeIsReady?: boolean;
 }
 
 export interface StoreWorkspaceUser {
@@ -70,11 +82,21 @@ export interface StoreWorkspaceUser {
   language: string;
 }
 
+export interface StoreSettingsAuditEntry {
+  id: string;
+  action: string;
+  changedFields: string[];
+  createdAt: string | null;
+}
+
 export interface StoreWorkspacePayout {
   id: string;
   orderId: string;
   orderNumber: string | null;
   amount: number;
+  originalTransferAmount: number;
+  refundedAmount: number;
+  netAmount: number;
   merchandiseSubtotal: number;
   salesTax: number;
   grossStoreOrderAmount: number;
@@ -91,6 +113,15 @@ interface SettingsResponse {
   user: StoreWorkspaceUser;
 }
 
+export interface StoreWorkspaceEntry {
+  hasStore: boolean;
+  store: (Pick<StoreWorkspaceStore, "id" | "name" | "logoUrl" | "isApproved" | "isActive"> & {
+    onboardingCompleted: boolean;
+    onboardingStep: string;
+  }) | null;
+  pendingOrderCount: number;
+}
+
 async function call<T>(
   name: string,
   data?: unknown
@@ -104,36 +135,77 @@ async function call<T>(
 }
 
 export const storeWorkspaceClientService = {
-  getEntry: () => loadCached(
-    "store-workspace-entry",
-    () => call<{
-      hasStore: boolean;
-      store: (Pick<StoreWorkspaceStore, "id" | "name" | "logoUrl" | "isApproved" | "isActive"> & {
-        onboardingCompleted: boolean;
-        onboardingStep: string;
-      }) | null;
-      pendingOrderCount: number;
-    }>("getStoreWorkspaceEntry"),
-    { ttlMs: 15_000 },
-  ),
+  getEntry: async (forceRefresh = false) => {
+    if (forceRefresh) {
+      return writeCached(
+        "store-workspace-entry",
+        await call<StoreWorkspaceEntry>("getStoreWorkspaceEntry"),
+        {ttlMs: 15_000},
+      );
+    }
+    return loadCached(
+      "store-workspace-entry",
+      () => call<StoreWorkspaceEntry>("getStoreWorkspaceEntry"),
+      {ttlMs: 15_000},
+    );
+  },
 
-  getFinancials: () => loadCached(
-    "store-workspace-financials",
-    () => call<{
-    analytics: {
-      totalOrders: number; totalRevenue: number; averageOrderValue: number;
-      totalCustomers: number; averageRating: number; peakHours: number[];
-      dailyOrders: number[]; weeklyGrowth: number; revenueGrowth: number;
-      topProducts: Array<{name: string; sales: number}>;
-    };
+  getFinancials: () => call<{
     earnings: {
-      totalEarnings: number; availableBalance: number; pendingBalance: number;
+      totalEarnings: number;
+      grossStoreEarnings: number;
+      storeCommission: number;
+      refundDeductions: number;
+      grossMerchandiseSales: number;
+      salesTax: number;
+      availableBalance: number | null;
+      stripePendingBalance: number | null;
+      pendingBalance: number;
       weeklyEarnings: number; monthlyEarnings: number;
+      timeZone: string;
+      stripe: {
+        accountId: string | null;
+        status: string;
+        isReady: boolean;
+        payoutsEnabled: boolean;
+        requiresAction: boolean;
+      };
+      stripeProcessingFeesPaidBy: "lia_platform";
       payouts: StoreWorkspacePayout[];
     };
     }>("getStoreWorkspaceFinancials"),
-    { ttlMs: 30_000 },
-  ),
+
+  getAnalytics: (period: "week" | "month" | "year") => call<{
+    period: "week" | "month" | "year";
+    timeZone: string;
+    periodStart: string;
+    periodEnd: string;
+    totalOrders: number;
+    completedOrders: number;
+    cancelledOrders: number;
+    openOrders: number;
+    grossMerchandiseSales: number;
+    refundedMerchandise: number;
+    netMerchandiseSales: number;
+    salesTax: number;
+    refundedSalesTax: number;
+    netSalesTax: number;
+    storeCommission: number;
+    grossStoreEarnings: number;
+    storeRefundImpact: number;
+    netStoreEarnings: number;
+    completedPayouts: number;
+    customerRefundTotal: number;
+    refundCount: number;
+    averageOrderValue: number;
+    totalCustomers: number;
+    averageRating: number;
+    peakHours: number[];
+    orderSeries: Array<{label: string; value: number}>;
+    orderGrowth: number;
+    revenueGrowth: number;
+    topProducts: Array<{name: string; sales: number}>;
+  }>("getStoreWorkspaceAnalytics", {period}),
 
   getPayouts: (
     pageSize = 25,
@@ -146,9 +218,27 @@ export const storeWorkspaceClientService = {
     ...(cursor ? { cursor } : {}),
   }),
 
-  getOrders: () => call<{
+  getOrders: (options: {
+    pageSize?: number;
+    cursor?: string;
+    status?: string;
+    search?: string;
+    from?: string;
+    to?: string;
+  } = {}) => call<{
     orders: Array<Record<string, unknown> & { id: string }>;
-  }>("getStoreWorkspaceOrders"),
+    stats: {
+      total: number;
+      pending: number;
+      accepted: number;
+      preparing: number;
+      readyForPickup: number;
+      outForDelivery: number;
+      completed: number;
+      cancelled: number;
+    };
+    nextCursor: string | null;
+  }>("getStoreWorkspaceOrders", options),
 
   getOrder: (
     orderId: string
@@ -156,31 +246,33 @@ export const storeWorkspaceClientService = {
     order: Record<string, unknown> & { id: string };
   }>("getStoreWorkspaceOrder", { orderId }),
 
-  getDashboard: () => loadCached(
-    "store-workspace-dashboard",
-    () => call<{
+  getDashboard: () => call<{
     storeName: string;
+    timeZone: string;
     stats: {
       totalOrders: number;
-      totalRevenue: number;
+      netStoreEarnings: number;
+      currentWeekNetEarnings: number;
+      refundDeductions: number;
       totalCustomers: number;
       averageRating: number;
       pendingOrders: number;
+      activeOrders: number;
       todayOrders: number;
       weeklyGrowth: number;
-      revenueGrowth: number;
+      earningsGrowth: number;
     };
     recentOrders: Array<{
       id: string;
       customerName: string;
-      storeTotal: number;
+      grossStoreOrderAmount: number;
+      displayStoreAmount: number;
+      amountType: "gross" | "net";
       status: string;
-      createdAt: string;
+      paidAt: string;
       itemCount: number;
     }>;
     }>("getStoreWorkspaceDashboard"),
-    { ttlMs: 15_000 },
-  ),
 
   getSettings: async (forceRefresh = false) => {
     if (forceRefresh) {
@@ -204,10 +296,11 @@ export const storeWorkspaceClientService = {
 
   saveSettings: (
     store: Partial<StoreWorkspaceStore>,
-    user: Partial<StoreWorkspaceUser>
+    user: Partial<StoreWorkspaceUser>,
+    section: "profile" | "business" | "notifications",
   ) => call<SettingsResponse>(
     "saveStoreWorkspaceSettings",
-    { store, user }
+    {store, user, section}
   ).then((workspace) => {
     invalidateCached("store-workspace-entry");
     invalidateCached("store-workspace-dashboard");
@@ -225,4 +318,6 @@ export const storeWorkspaceClientService = {
     invalidateCached("store-workspace-settings");
     return response;
   }),
+
+  getSettingsAudit: () => call<{entries: StoreSettingsAuditEntry[]}>("getStoreSettingsAudit"),
 };

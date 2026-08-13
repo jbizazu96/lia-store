@@ -18,6 +18,7 @@ interface LoginFormProps {
   showPassword?: boolean;
   onLogin: (e: React.FormEvent) => void;
   onGoogleLogin: () => void;
+  onAppleLogin: () => void;
   onForgotPassword: () => void;
   onTogglePassword?: () => void;
 }
@@ -32,6 +33,7 @@ export function LoginForm({
   showPassword = false,
   onLogin,
   onGoogleLogin,
+  onAppleLogin,
   onForgotPassword,
   onTogglePassword,
 }: LoginFormProps) {
@@ -157,9 +159,11 @@ export function LoginForm({
 
       {/* Google Button */}
       <motion.button
+        type="button"
         whileTap={{scale: 0.97}}
         onClick={onGoogleLogin}
-        className="w-full border border-gray-200 p-3 rounded-xl hover:bg-orange-50 hover:border-orange-300 transition flex items-center justify-center gap-3 font-medium"
+        disabled={loading}
+        className="w-full border border-gray-200 p-3 rounded-xl hover:bg-orange-50 hover:border-orange-300 transition flex items-center justify-center gap-3 font-medium disabled:opacity-50"
       >
         <svg className="w-5 h-5" viewBox="0 0 24 24">
           <path
@@ -180,6 +184,19 @@ export function LoginForm({
           />
         </svg>
         Continue with Google
+      </motion.button>
+
+      <motion.button
+        type="button"
+        whileTap={{scale: 0.97}}
+        onClick={onAppleLogin}
+        disabled={loading}
+        className="mt-3 flex w-full items-center justify-center gap-3 rounded-xl border border-black bg-black p-3 font-medium text-white transition hover:bg-gray-900 disabled:opacity-50"
+      >
+        <svg className="h-5 w-5 fill-current" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.79 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.53 4.1ZM12.03 7.25C11.88 5.02 13.69 3.18 15.77 3c.29 2.58-2.34 4.5-3.74 4.25Z" />
+        </svg>
+        Continue with Apple
       </motion.button>
 
       <p className="text-center text-sm text-gray-600 mt-6">

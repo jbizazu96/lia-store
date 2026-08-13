@@ -5,10 +5,12 @@
 */
 
 import {Building, FileText, Briefcase, Badge} from "lucide-react";
+import type {Dispatch, SetStateAction} from "react";
+import type {StoreWorkspaceStore} from "@/services/store/storeWorkspaceClientService";
 
 interface BusinessSectionProps {
-  storeData: any;
-  setStoreData: (data: any) => void;
+  storeData: StoreWorkspaceStore;
+  setStoreData: Dispatch<SetStateAction<StoreWorkspaceStore | null>>;
 }
 
 export function BusinessSection({storeData, setStoreData}: BusinessSectionProps) {
@@ -16,6 +18,14 @@ export function BusinessSection({storeData, setStoreData}: BusinessSectionProps)
     {value: "grocery", label: "Grocery Store"},
     {value: "market", label: "Market"},
     {value: "specialty_food", label: "Specialty Food Store"},
+    {value: "international_grocery", label: "International Grocery"},
+    {value: "asian_market", label: "Asian Market"},
+    {value: "latin_market", label: "Latin or Mexican Market"},
+    {value: "convenience_store", label: "Convenience Store"},
+    {value: "specialty_retail", label: "Specialty Retail"},
+    {value: "restaurant", label: "Restaurant"},
+    {value: "bakery", label: "Bakery"},
+    {value: "pharmacy_health", label: "Pharmacy or Health Store"},
     {value: "african_grocery", label: "African Grocery Store"},
     {value: "african_restaurant", label: "African Restaurant"},
     {value: "home_based", label: "Home-Based Business"},
@@ -64,6 +74,7 @@ export function BusinessSection({storeData, setStoreData}: BusinessSectionProps)
               <Building className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <input
                 type="text"
+                maxLength={160}
                 value={storeData?.registeredName || ""}
                 onChange={(e) => setStoreData({...storeData, registeredName: e.target.value})}
                 className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500"
@@ -79,6 +90,7 @@ export function BusinessSection({storeData, setStoreData}: BusinessSectionProps)
               <FileText className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <input
                 type="text"
+                maxLength={10}
                 value={storeData?.ein || ""}
                 onChange={(e) => setStoreData({...storeData, ein: e.target.value})}
                 className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500"

@@ -23,6 +23,7 @@ import {
 import {
   notifyActiveAdministrators,
 } from "../admin/adminNotificationService";
+import {queueAdminActionEmail, queueStoreRefundClaimEmail} from "../email/emailEventService";
 
 type Data = Record<string, unknown>;
 
@@ -307,6 +308,15 @@ export const adminRefundRequested = onDocumentCreated(
       subject: {type: "payment-refund", id: event.params.refundId},
       dedupeKey: "refund-requested-" + event.params.refundId,
     });
+    await queueAdminActionEmail({
+      dedupeKey: `admin-payment-refund:${event.params.refundId}`,
+      category: "admin_refund",
+      title: "New refund record",
+      summary: "A refund record was created and should be reviewed.",
+      path: claimId
+        ? `/admin/refund-claims?claim=${encodeURIComponent(claimId)}`
+        : "/admin/finance",
+    });
   }
 );
 
@@ -357,6 +367,14 @@ export const adminCustomerRefundClaimSubmitted = onDocumentCreated(
       subject: {type: "refund-claim", id: event.params.claimId},
       dedupeKey: "refund-claim-" + event.params.claimId,
     });
+    await queueAdminActionEmail({
+      dedupeKey: `admin-refund:${event.params.claimId}`,
+      category: "admin_refund",
+      title: "New refund or return claim",
+      summary: "A customer refund or return claim is waiting for review.",
+      path: `/admin/refund-claims?claim=${encodeURIComponent(event.params.claimId)}`,
+    });
+    await queueStoreRefundClaimEmail(event.params.claimId, text(claim.orderId));
   }
 );
 

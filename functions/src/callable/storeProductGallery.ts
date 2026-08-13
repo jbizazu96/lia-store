@@ -21,6 +21,7 @@ import {
 import {
   grantStoreUploadClaim,
 } from "../services/store/storeUploadClaimService";
+import {enforceCallableAbuseProtection} from "../security/callableAbuseProtection";
 
 if (admin.apps.length === 0) {
   admin.initializeApp();
@@ -80,7 +81,6 @@ export const prepareStoreProductGalleryImage = onCall({ region: "us-central1" },
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Sign in to upload a product image.");
   }
-
   const input = record(request.data);
   const productId = identifier(input.productId, "product ID");
   const imageId = identifier(input.imageId, "image ID");
@@ -98,6 +98,13 @@ export const prepareStoreProductGalleryImage = onCall({ region: "us-central1" },
   }
 
   const { storeId } = await requireOwnedApprovedProduct(request.auth.uid, productId);
+  await enforceCallableAbuseProtection({
+    operation: "store-product-gallery-prepare",
+    uid: request.auth.uid,
+    appCheckVerified: Boolean(request.app),
+    maximumRequests: 40,
+    windowSeconds: 3_600,
+  });
 
   /*
    * The browser uploads the original directly to its owner-restricted Storage

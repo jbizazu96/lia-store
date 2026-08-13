@@ -87,6 +87,28 @@
           "order": "ASCENDING"
         },
         {
+          "fieldPath": "payment.status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "payment.paidAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "orders",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "store.id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "checkoutStatus",
+          "order": "ASCENDING"
+        },
+        {
           "fieldPath": "createdAt",
           "order": "DESCENDING"
         }
@@ -372,6 +394,141 @@
           "fieldPath": "name",
           "order": "ASCENDING"
         }
+      ]
+    },
+    {
+      "collectionGroup": "products",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "storeId", "order": "ASCENDING"},
+        {"fieldPath": "isArchived", "order": "ASCENDING"},
+        {"fieldPath": "category", "order": "ASCENDING"},
+        {"fieldPath": "nameSearch", "order": "ASCENDING"},
+        {"fieldPath": "__name__", "order": "ASCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "products",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "storeId", "order": "ASCENDING"},
+        {"fieldPath": "isArchived", "order": "ASCENDING"},
+        {"fieldPath": "isAvailable", "order": "ASCENDING"},
+        {"fieldPath": "nameSearch", "order": "ASCENDING"},
+        {"fieldPath": "__name__", "order": "ASCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "products",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "storeId", "order": "ASCENDING"},
+        {"fieldPath": "isArchived", "order": "ASCENDING"},
+        {"fieldPath": "category", "order": "ASCENDING"},
+        {"fieldPath": "isAvailable", "order": "ASCENDING"},
+        {"fieldPath": "nameSearch", "order": "ASCENDING"},
+        {"fieldPath": "__name__", "order": "ASCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "products",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "storeId", "order": "ASCENDING"},
+        {"fieldPath": "isArchived", "order": "ASCENDING"},
+        {"fieldPath": "searchTokens", "arrayConfig": "CONTAINS"},
+        {"fieldPath": "nameSearch", "order": "ASCENDING"},
+        {"fieldPath": "__name__", "order": "ASCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "products",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "storeId", "order": "ASCENDING"},
+        {"fieldPath": "isArchived", "order": "ASCENDING"},
+        {"fieldPath": "category", "order": "ASCENDING"},
+        {"fieldPath": "searchTokens", "arrayConfig": "CONTAINS"},
+        {"fieldPath": "nameSearch", "order": "ASCENDING"},
+        {"fieldPath": "__name__", "order": "ASCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "products",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "storeId", "order": "ASCENDING"},
+        {"fieldPath": "isArchived", "order": "ASCENDING"},
+        {"fieldPath": "isAvailable", "order": "ASCENDING"},
+        {"fieldPath": "searchTokens", "arrayConfig": "CONTAINS"},
+        {"fieldPath": "nameSearch", "order": "ASCENDING"},
+        {"fieldPath": "__name__", "order": "ASCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "products",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "storeId", "order": "ASCENDING"},
+        {"fieldPath": "isArchived", "order": "ASCENDING"},
+        {"fieldPath": "category", "order": "ASCENDING"},
+        {"fieldPath": "isAvailable", "order": "ASCENDING"},
+        {"fieldPath": "searchTokens", "arrayConfig": "CONTAINS"},
+        {"fieldPath": "nameSearch", "order": "ASCENDING"},
+        {"fieldPath": "__name__", "order": "ASCENDING"}
+      ]
+    },
+    {"collectionGroup":"products","queryScope":"COLLECTION","fields":[{"fieldPath":"storeId","order":"ASCENDING"},{"fieldPath":"isArchived","order":"ASCENDING"},{"fieldPath":"nameSearch","order":"ASCENDING"},{"fieldPath":"__name__","order":"ASCENDING"}]},
+    {"collectionGroup":"products","queryScope":"COLLECTION","fields":[{"fieldPath":"storeId","order":"ASCENDING"},{"fieldPath":"isArchived","order":"ASCENDING"},{"fieldPath":"stock","order":"ASCENDING"},{"fieldPath":"__name__","order":"ASCENDING"}]},
+    {"collectionGroup":"products","queryScope":"COLLECTION","fields":[{"fieldPath":"storeId","order":"ASCENDING"},{"fieldPath":"isArchived","order":"ASCENDING"},{"fieldPath":"stock","order":"DESCENDING"},{"fieldPath":"__name__","order":"DESCENDING"}]},
+    {"collectionGroup":"products","queryScope":"COLLECTION","fields":[{"fieldPath":"storeId","order":"ASCENDING"},{"fieldPath":"isArchived","order":"ASCENDING"},{"fieldPath":"price","order":"ASCENDING"},{"fieldPath":"__name__","order":"ASCENDING"}]},
+    {"collectionGroup":"products","queryScope":"COLLECTION","fields":[{"fieldPath":"storeId","order":"ASCENDING"},{"fieldPath":"isArchived","order":"ASCENDING"},{"fieldPath":"price","order":"DESCENDING"},{"fieldPath":"__name__","order":"DESCENDING"}]},
+    {"collectionGroup":"products","queryScope":"COLLECTION","fields":[{"fieldPath":"storeId","order":"ASCENDING"},{"fieldPath":"isArchived","order":"ASCENDING"},{"fieldPath":"updatedAt","order":"DESCENDING"},{"fieldPath":"__name__","order":"DESCENDING"}]},
+    {"collectionGroup":"products","queryScope":"COLLECTION","fields":[{"fieldPath":"storeId","order":"ASCENDING"},{"fieldPath":"isArchived","order":"ASCENDING"},{"fieldPath":"category","order":"ASCENDING"},{"fieldPath":"stock","order":"ASCENDING"},{"fieldPath":"__name__","order":"ASCENDING"}]},
+    {"collectionGroup":"products","queryScope":"COLLECTION","fields":[{"fieldPath":"storeId","order":"ASCENDING"},{"fieldPath":"isArchived","order":"ASCENDING"},{"fieldPath":"category","order":"ASCENDING"},{"fieldPath":"stock","order":"DESCENDING"},{"fieldPath":"__name__","order":"DESCENDING"}]},
+    {"collectionGroup":"products","queryScope":"COLLECTION","fields":[{"fieldPath":"storeId","order":"ASCENDING"},{"fieldPath":"isArchived","order":"ASCENDING"},{"fieldPath":"category","order":"ASCENDING"},{"fieldPath":"price","order":"ASCENDING"},{"fieldPath":"__name__","order":"ASCENDING"}]},
+    {"collectionGroup":"products","queryScope":"COLLECTION","fields":[{"fieldPath":"storeId","order":"ASCENDING"},{"fieldPath":"isArchived","order":"ASCENDING"},{"fieldPath":"category","order":"ASCENDING"},{"fieldPath":"price","order":"DESCENDING"},{"fieldPath":"__name__","order":"DESCENDING"}]},
+    {"collectionGroup":"products","queryScope":"COLLECTION","fields":[{"fieldPath":"storeId","order":"ASCENDING"},{"fieldPath":"isArchived","order":"ASCENDING"},{"fieldPath":"category","order":"ASCENDING"},{"fieldPath":"updatedAt","order":"DESCENDING"},{"fieldPath":"__name__","order":"DESCENDING"}]},
+    {"collectionGroup":"products","queryScope":"COLLECTION","fields":[{"fieldPath":"storeId","order":"ASCENDING"},{"fieldPath":"isArchived","order":"ASCENDING"},{"fieldPath":"stock","order":"ASCENDING"},{"fieldPath":"nameSearch","order":"ASCENDING"},{"fieldPath":"__name__","order":"ASCENDING"}]},
+    {"collectionGroup":"products","queryScope":"COLLECTION","fields":[{"fieldPath":"storeId","order":"ASCENDING"},{"fieldPath":"isArchived","order":"ASCENDING"},{"fieldPath":"imageStatus","order":"ASCENDING"},{"fieldPath":"nameSearch","order":"ASCENDING"},{"fieldPath":"__name__","order":"ASCENDING"}]},
+    {"collectionGroup":"products","queryScope":"COLLECTION","fields":[{"fieldPath":"storeId","order":"ASCENDING"},{"fieldPath":"isArchived","order":"ASCENDING"},{"fieldPath":"isLowStock","order":"ASCENDING"},{"fieldPath":"nameSearch","order":"ASCENDING"},{"fieldPath":"__name__","order":"ASCENDING"}]},
+    {"collectionGroup":"products","queryScope":"COLLECTION","fields":[{"fieldPath":"storeId","order":"ASCENDING"},{"fieldPath":"isArchived","order":"ASCENDING"},{"fieldPath":"isAvailable","order":"ASCENDING"}]},
+    {"collectionGroup":"products","queryScope":"COLLECTION","fields":[{"fieldPath":"storeId","order":"ASCENDING"},{"fieldPath":"isArchived","order":"ASCENDING"},{"fieldPath":"featured","order":"ASCENDING"}]},
+    {"collectionGroup":"products","queryScope":"COLLECTION","fields":[{"fieldPath":"storeId","order":"ASCENDING"},{"fieldPath":"isArchived","order":"ASCENDING"},{"fieldPath":"stock","order":"ASCENDING"}]},
+    {"collectionGroup":"products","queryScope":"COLLECTION","fields":[{"fieldPath":"storeId","order":"ASCENDING"},{"fieldPath":"isArchived","order":"ASCENDING"},{"fieldPath":"imageStatus","order":"ASCENDING"}]},
+    {"collectionGroup":"storeInventoryAuditLogs","queryScope":"COLLECTION","fields":[{"fieldPath":"storeId","order":"ASCENDING"},{"fieldPath":"createdAt","order":"DESCENDING"}]},
+    {
+      "collectionGroup": "orders",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "store.id", "order": "ASCENDING"},
+        {"fieldPath": "checkoutStatus", "order": "ASCENDING"},
+        {"fieldPath": "payment.status", "order": "ASCENDING"},
+        {"fieldPath": "status", "order": "ASCENDING"},
+        {"fieldPath": "payment.paidAt", "order": "DESCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "orders",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "store.id", "order": "ASCENDING"},
+        {"fieldPath": "checkoutStatus", "order": "ASCENDING"},
+        {"fieldPath": "payment.status", "order": "ASCENDING"},
+        {"fieldPath": "storeSearchTokens", "arrayConfig": "CONTAINS"},
+        {"fieldPath": "payment.paidAt", "order": "DESCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "orders",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "store.id", "order": "ASCENDING"},
+        {"fieldPath": "checkoutStatus", "order": "ASCENDING"},
+        {"fieldPath": "payment.status", "order": "ASCENDING"},
+        {"fieldPath": "status", "order": "ASCENDING"},
+        {"fieldPath": "storeSearchTokens", "arrayConfig": "CONTAINS"},
+        {"fieldPath": "payment.paidAt", "order": "DESCENDING"}
       ]
     }
   ],

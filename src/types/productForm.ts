@@ -47,6 +47,8 @@ export interface ProductFormData {
 
   stock: number;
 
+  lowStockThreshold: number;
+
   sku: string;
 
   imageUrl: string;

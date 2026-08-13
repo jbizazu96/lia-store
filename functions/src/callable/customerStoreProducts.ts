@@ -27,7 +27,7 @@ if (admin.apps.length === 0) {
 const db = getFirestore("default");
 const DEFAULT_PRODUCT_PAGE_SIZE = 60;
 const MAXIMUM_PRODUCT_PAGE_SIZE = 100;
-const STORE_PREVIEW_PRODUCTS_PER_CATEGORY = 8;
+const STORE_PREVIEW_PRODUCTS_PER_CATEGORY = 10;
 const MAXIMUM_STORE_PREVIEW_CATEGORIES = 50;
 
 function pageSize(value: unknown): number {

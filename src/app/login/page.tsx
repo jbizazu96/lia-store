@@ -40,6 +40,7 @@ import {
   CurrentAccountClientError,
 } from "@/services/user/currentAccountClientService";
 import { googleAuthenticationService } from "@/services/auth/googleAuthenticationService";
+import {appleAuthenticationService} from "@/services/auth/appleAuthenticationService";
 import {Capacitor} from "@capacitor/core";
 import {reportClientIssue} from "@/services/monitoring/clientErrorReporter";
 
@@ -310,6 +311,35 @@ export default function LoginPage() {
     }
   }
 
+  async function handleAppleLogin() {
+    try {
+      setLoading(true);
+      setError("");
+      const result = await appleAuthenticationService.signIn();
+      await handlePostLogin(result.user.uid);
+    } catch (error: unknown) {
+      console.error("Apple sign in failed:", error);
+      const code = error && typeof error === "object" && "code" in error
+        ? String(error.code)
+        : "";
+      reportClientIssue({
+        area: "authentication.apple_sign_in",
+        message: "Apple sign-in failed",
+        error,
+        metadata: {code},
+      });
+      setError(
+        code.includes("account-exists-with-different-credential")
+          ? "An account already uses this email. Sign in with the original method, then connect Apple from your account settings."
+          : code.includes("popup-closed-by-user") || code.includes("canceled")
+            ? "Apple sign in was cancelled."
+            : "Apple sign in failed. Please try again.",
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
   /*
     Handle address submission.
   */
@@ -378,6 +408,7 @@ export default function LoginPage() {
             showPassword={showPassword}
             onLogin={handleLogin}
             onGoogleLogin={handleGoogleLogin}
+            onAppleLogin={handleAppleLogin}
             onForgotPassword={() => setShowResetModal(true)}
             onTogglePassword={togglePasswordVisibility}
           />
