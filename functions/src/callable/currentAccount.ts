@@ -46,14 +46,21 @@ export const getCurrentAccount = onCall(
       );
     }
 
-    /* Admin provisioning is separate from ordinary application profiles. */
-    try {
+    /*
+     * Admin provisioning is separate from ordinary application profiles.
+     * Only attempt admin authorization when this UID has an admin record.
+     * Otherwise a real admin denial (unverified email, disabled record, or
+     * mismatched email) would be swallowed and misreported as an incomplete
+     * ordinary user profile.
+     */
+    const administrator = await db
+      .collection("admins")
+      .doc(request.auth.uid)
+      .get();
+
+    if (administrator.exists) {
       await requireActiveAdmin(request);
       return { accountType: "admin" as const };
-    } catch (error) {
-      if (!(error instanceof HttpsError) || error.code !== "permission-denied") {
-        throw error;
-      }
     }
 
     const user = await db.collection("users").doc(request.auth.uid).get();

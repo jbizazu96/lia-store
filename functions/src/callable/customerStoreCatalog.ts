@@ -49,6 +49,14 @@ function number(value: unknown, fallback = 0): number {
     : fallback;
 }
 
+function imageVariants(value: unknown): Record<string, string> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return Object.fromEntries(Object.entries(value).filter(
+    (entry): entry is [string, string] =>
+      typeof entry[1] === "string" && entry[1].trim().length > 0
+  ));
+}
+
 function timestamp(value: unknown): string {
   if (
     value &&
@@ -106,6 +114,8 @@ function publicStore(
     formattedAddress: text(data.formattedAddress),
     logoUrl: text(data.logoUrl),
     bannerUrl: text(data.bannerUrl),
+    logoImageVariants: imageVariants(data.logoImageVariants),
+    bannerImageVariants: imageVariants(data.bannerImageVariants),
     category: text(data.category),
     rating: number(data.rating),
     reviewCount: Math.max(0, Math.floor(number(data.reviewCount))),

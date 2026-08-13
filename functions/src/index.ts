@@ -29,6 +29,7 @@ import * as admin from "firebase-admin";
 import {onCall, HttpsError} from "firebase-functions/v2/https";
 import {onSchedule} from "firebase-functions/v2/scheduler"; 
 import {getFirestore} from "firebase-admin/firestore";
+import {requireActiveAdmin} from "./admin/adminAuthorizationService";
 import { shipdayWebhook } from "./webhooks/shipdayWebhook";
 import { stripeConnectWebhook } from "./webhooks/stripeConnectWebhook";
 import { syncCustomerOrders } from "./delivery/syncCustomerOrders";
@@ -39,6 +40,7 @@ import {
   prepareCheckoutPayment,
 } from "./payment/checkout/prepareCheckoutPayment";
 import {
+  cleanupDeliveryRouteCache,
   getStoreDeliveryRoutes,
 } from "./delivery/getStoreDeliveryRoutes";
 export {
@@ -388,11 +390,30 @@ export const syncEmailVerification = onCall(
         );
       }
 
-      // Update Firestore
-      await db
+      const userReference = db
         .collection("users")
-        .doc(request.auth.uid)
-        .update({
+        .doc(request.auth.uid);
+      const userProfile = await userReference.get();
+
+      /*
+       * Master and staff administrators are intentionally provisioned only
+       * under admins/{uid}. A verified administrator has nothing to sync in
+       * users/{uid}; validate the admin record and return without creating an
+       * ordinary application profile.
+       */
+      if (!userProfile.exists) {
+        await requireActiveAdmin(request);
+        return {
+          success: true,
+          uid: user.uid,
+          email: user.email,
+          emailVerified: true,
+          updatedAt: new Date().toISOString(),
+        };
+      }
+
+      // Update Firestore
+      await userReference.update({
           emailVerified: true,
           emailVerifiedAt: admin.firestore.FieldValue.serverTimestamp(),
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -409,6 +430,10 @@ export const syncEmailVerification = onCall(
       };
     } catch (error) {
       console.error("❌ Error in syncEmailVerification:", error);
+
+      if (error instanceof HttpsError) {
+        throw error;
+      }
 
       // Handle specific Firebase Auth errors
       const err = error as {code?: string; message?: string};
@@ -597,6 +622,7 @@ export {
   prepareCheckoutPayment,
 };
 export {
+  cleanupDeliveryRouteCache,
   getStoreDeliveryRoutes,
 };
 export {

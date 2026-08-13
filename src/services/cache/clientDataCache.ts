@@ -16,6 +16,7 @@ interface CacheEntry<T> {
 }
 
 const entries = new Map<string, CacheEntry<unknown>>();
+const inFlightLoads = new Map<string, Promise<unknown>>();
 
 function scopedKey(
   key: string,
@@ -69,16 +70,28 @@ export async function loadCached<T>(
     scope?: "current-user" | "public";
   },
 ): Promise<T> {
+  const cacheKey = scopedKey(key, options.scope ?? "current-user");
   const cached = readCached<T>(key, options);
   if (cached !== null) {
     /* Keep navigation instant, then refresh the short-lived view model. */
-    void loader()
+    if (!inFlightLoads.has(cacheKey)) {
+      const refresh = loader()
       .then((value) => writeCached(key, value, options))
-      .catch(() => undefined);
+        .finally(() => inFlightLoads.delete(cacheKey));
+      inFlightLoads.set(cacheKey, refresh);
+      void refresh.catch(() => undefined);
+    }
     return cached;
   }
 
-  return writeCached(key, await loader(), options);
+  const existingLoad = inFlightLoads.get(cacheKey) as Promise<T> | undefined;
+  if (existingLoad) return existingLoad;
+
+  const load = loader()
+    .then((value) => writeCached(key, value, options))
+    .finally(() => inFlightLoads.delete(cacheKey));
+  inFlightLoads.set(cacheKey, load);
+  return load;
 }
 
 export function invalidateCached(
@@ -101,4 +114,5 @@ export function clearCurrentUserCache(): void {
 
 export function clearClientDataCache(): void {
   entries.clear();
+  inFlightLoads.clear();
 }

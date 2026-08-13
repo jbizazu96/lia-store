@@ -26,6 +26,8 @@ const METERS_PER_MILE = 1609.344;
 
 const GOOGLE_ROUTES_ENDPOINT =
   "https://routes.googleapis.com/directions/v2:computeRoutes";
+const GOOGLE_ROUTE_MATRIX_ENDPOINT =
+  "https://routes.googleapis.com/distanceMatrix/v2:computeRouteMatrix";
 
 
 /*
@@ -50,6 +52,13 @@ interface GoogleRoutesResponse {
     */
     duration?: string;
   }>;
+}
+
+interface GoogleRouteMatrixElement {
+  originIndex?: number;
+  destinationIndex?: number;
+  condition?: string;
+  distanceMeters?: number;
 }
 
 
@@ -285,6 +294,100 @@ async function getTrustedDrivingDistanceMiles(
   return distanceMiles;
 }
 
+function routeMatrixElements(text: string): GoogleRouteMatrixElement[] {
+  try {
+    const parsed = JSON.parse(text) as unknown;
+    if (Array.isArray(parsed)) return parsed as GoogleRouteMatrixElement[];
+    if (parsed && typeof parsed === "object") return [parsed as GoogleRouteMatrixElement];
+  } catch {
+    return text.split("\n").flatMap((line) => {
+      if (!line.trim()) return [];
+      try {
+        return [JSON.parse(line) as GoogleRouteMatrixElement];
+      } catch {
+        return [];
+      }
+    });
+  }
+  return [];
+}
+
+/** Calculates several display routes in one Google Route Matrix request. */
+async function getTrustedDrivingDistanceMatrixMiles(
+  origins: CheckoutRouteCoordinates[],
+  destination: CheckoutRouteCoordinates,
+  googleMapsApiKey: string,
+): Promise<Array<number | null>> {
+  if (
+    origins.length === 0 ||
+    origins.length > 50 ||
+    origins.some((origin) => !hasValidCheckoutCoordinates(origin)) ||
+    !hasValidCheckoutCoordinates(destination)
+  ) {
+    throw new CheckoutDistanceError(
+      "INVALID_ROUTE_COORDINATES",
+      "The store or delivery address has invalid map coordinates."
+    );
+  }
+  const normalizedApiKey = googleMapsApiKey.trim();
+  if (!normalizedApiKey) {
+    throw new CheckoutDistanceError(
+      "MISSING_GOOGLE_MAPS_KEY",
+      "The server routing service is not configured."
+    );
+  }
+
+  let response: Response;
+  try {
+    response = await fetch(GOOGLE_ROUTE_MATRIX_ENDPOINT, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Goog-Api-Key": normalizedApiKey,
+        "X-Goog-FieldMask": "originIndex,destinationIndex,status,condition,distanceMeters",
+      },
+      body: JSON.stringify({
+        origins: origins.map((origin) => ({
+          waypoint: {location: {latLng: origin}},
+          routeModifiers: {avoidFerries: false},
+        })),
+        destinations: [{waypoint: {location: {latLng: destination}}}],
+        travelMode: "DRIVE",
+        routingPreference: "TRAFFIC_UNAWARE",
+      }),
+    });
+  } catch {
+    throw new CheckoutDistanceError(
+      "GOOGLE_ROUTE_REQUEST_FAILED",
+      "The delivery routes could not be calculated."
+    );
+  }
+  if (!response.ok) {
+    console.error("Google Route Matrix rejected the request:", {
+      status: response.status,
+      body: await response.text().catch(() => ""),
+    });
+    throw new CheckoutDistanceError(
+      "GOOGLE_ROUTE_REQUEST_FAILED",
+      "The delivery routes could not be calculated."
+    );
+  }
+
+  const distances: Array<number | null> = origins.map(() => null);
+  routeMatrixElements(await response.text()).forEach((element) => {
+    if (
+      element.destinationIndex === 0 &&
+      typeof element.originIndex === "number" &&
+      typeof element.distanceMeters === "number" &&
+      element.distanceMeters >= 0 &&
+      element.condition !== "ROUTE_NOT_FOUND"
+    ) {
+      distances[element.originIndex] = element.distanceMeters / METERS_PER_MILE;
+    }
+  });
+  return distances;
+}
+
 
 /*
   Type guard used by the future checkout callable function.
@@ -304,4 +407,5 @@ export function isCheckoutDistanceError(
 */
 export const checkoutDistanceService = {
   getTrustedDrivingDistanceMiles,
+  getTrustedDrivingDistanceMatrixMiles,
 };

@@ -47,6 +47,7 @@ export default function StoreCategoryPage({
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryProducts, setCategoryProducts] = useState<Product[]>([]);
+  const [categoryProductsLoading, setCategoryProductsLoading] = useState(true);
   const [productCursor, setProductCursor] = useState<{name: string; id: string} | null>(null);
   const [hasMoreProducts, setHasMoreProducts] = useState(false);
   const [loadingMoreProducts, setLoadingMoreProducts] = useState(false);
@@ -104,6 +105,8 @@ export default function StoreCategoryPage({
       setHasMoreProducts(page.hasMore);
     }).catch((loadError) => {
       console.error("Unable to load category products:", loadError);
+    }).finally(() => {
+      if (active) setCategoryProductsLoading(false);
     });
 
     return () => { active = false; };
@@ -242,6 +245,10 @@ export default function StoreCategoryPage({
         </button>
       </main>
     );
+  }
+
+  if (categoryProductsLoading) {
+    return <CustomerPageSkeleton variant="store" />;
   }
 
   return (

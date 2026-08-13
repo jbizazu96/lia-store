@@ -123,16 +123,17 @@ export default function LoginPage() {
       return;
     }
 
-    /*
-      Firebase Auth is the source of truth for email verification. Sync the
-      now-existing profile through a callable after a verified user signs in.
-    */
-    await httpsCallable(functions, "syncEmailVerification")();
-
     if (accountType === "admin") {
       router.replace("/admin");
       return;
     }
+
+    /*
+      Firebase Auth is the source of truth for email verification. Sync the
+      now-existing ordinary user profile after a verified user signs in.
+      Administrators are provisioned under admins/{uid}, not users/{uid}.
+    */
+    await httpsCallable(functions, "syncEmailVerification")();
 
     /*
       Store Owner Flow - Redirect to Premium Dashboard.
@@ -224,6 +225,7 @@ export default function LoginPage() {
       } else {
         setError("Invalid email or password.");
       }
+      setLoading(false);
       return;
     }
 
@@ -232,11 +234,24 @@ export default function LoginPage() {
     try {
       // Check if email is verified.
       if (!user.emailVerified) {
-        await signOut(auth);
-        await sendEmailVerification(user);
-        setError(
-          "Please verify your email first. A new verification link has been sent."
-        );
+        try {
+          /* Verification requires the newly authenticated user session. */
+          await sendEmailVerification(user);
+          setError(
+            "Please verify your email first. A new verification link has been sent."
+          );
+        } catch (verificationError: unknown) {
+          const code = verificationError && typeof verificationError === "object" && "code" in verificationError
+            ? String(verificationError.code)
+            : "";
+          setError(
+            code === "auth/too-many-requests"
+              ? "Too many verification emails were requested. Please use the most recent email we sent, or wait before trying again."
+              : "Your email is not verified. We couldn't send another verification email right now; please try again later."
+          );
+        } finally {
+          await signOut(auth);
+        }
         return;
       }
 

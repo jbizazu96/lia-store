@@ -40,17 +40,15 @@ import { CustomerBottomNavigation } from "@/components/customer/navigation/Custo
 import { useCart } from "@/context/CartContext";
 import { CustomerPageState } from "@/components/customer/ui/CustomerPageState";
 import { CustomerPageSkeleton } from "@/components/customer/ui/CustomerPageSkeleton";
-import { useMarketplacePricingPolicy } from "@/hooks/useMarketplacePricingPolicy";
-import { useOrderDeliveryPolicy } from "@/hooks/useOrderDeliveryPolicy";
 import { useCustomerFavoriteStores } from "@/hooks/useCustomerFavoriteStores";
 import { Heart, ShoppingBag, Sparkles } from "lucide-react";
 import { AddressesModal } from "@/components/customer/profile/AddressesModal";
 import { MarketplaceCategoryNav } from "@/components/customer/home/MarketplaceCategoryNav";
 import {marketplacePricingClientService} from "@/services/pricing/marketplacePricingClientService";
+import type {MarketplacePricingPolicy} from "@/services/pricing/marketplacePricingClientService";
+import {startCustomerPerformanceTrace} from "@/services/performance/customerPerformanceService";
 
 export default function CustomerHomePage() {
-  const marketplacePolicy = useMarketplacePricingPolicy();
-  const orderDeliveryPolicy = useOrderDeliveryPolicy();
   const router = useRouter();
   const { itemCount, totalPrice } = useCart();
   const [userName, setUserName] = useState("Customer");
@@ -65,6 +63,8 @@ export default function CustomerHomePage() {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [catalogStores, setCatalogStores] = useState<Store[]>([]);
+  const [catalogReady, setCatalogReady] = useState(false);
+  const [marketplacePolicy, setMarketplacePolicy] = useState<MarketplacePricingPolicy | null>(null);
   const [storeCursor, setStoreCursor] = useState<StoreCatalogCursor | null>(null);
   const [hasMoreStores, setHasMoreStores] = useState(false);
   const [loadingMoreStores, setLoadingMoreStores] = useState(false);
@@ -139,6 +139,7 @@ export default function CustomerHomePage() {
         return;
       }
 
+      const profileTrace = startCustomerPerformanceTrace("customer_home_profile");
       try {
         const profile = await customerProfileClientService.getProfile();
         setUserName(
@@ -155,11 +156,13 @@ export default function CustomerHomePage() {
             "Add a verified delivery address to see driving distances and available delivery."
           );
         }
+        profileTrace.stop({status: "success"});
       } catch (error) {
         console.error("Unable to load the customer delivery location:", error);
         setDistanceError(
           "We could not load your delivery address. Please try again."
         );
+        profileTrace.stop({status: "error"});
       } finally {
         setLocationReady(true);
       }
@@ -170,18 +173,30 @@ export default function CustomerHomePage() {
 
   useEffect(() => {
     let active = true;
+    const catalogTrace = startCustomerPerformanceTrace("customer_home_catalog");
     void storeService.getStoresPage(null, 40)
       .then((page) => {
         if (!active) return;
         setCatalogStores(page.stores);
         setStoreCursor(page.nextCursor);
         setHasMoreStores(page.hasMore);
+        catalogTrace.stop({
+          status: "success",
+          store_count: String(page.stores.length),
+        });
       })
       .catch((error) => {
         console.error("Unable to load the store catalog:", error);
         if (active) setDistanceError("We could not load stores. Please try again.");
+        catalogTrace.stop({status: "error"});
+      })
+      .finally(() => {
+        if (active) setCatalogReady(true);
       });
-    return () => { active = false; };
+    return () => {
+      active = false;
+      catalogTrace.stop({status: "cancelled"});
+    };
   }, []);
 
   const loadMoreStores = async () => {
@@ -206,10 +221,9 @@ export default function CustomerHomePage() {
   // Keep customer store discovery synchronized with newly activated stores.
   useEffect(() => {
     let isMounted = true;
-    let latestRequest = 0;
 
     const updateStores = async (storesData: Store[]) => {
-      if (!locationReady || !marketplacePolicy) {
+      if (!locationReady || !catalogReady) {
         return;
       }
 
@@ -220,13 +234,14 @@ export default function CustomerHomePage() {
         return;
       }
 
+      const homeTrace = startCustomerPerformanceTrace("customer_home_store_discovery");
       try {
         if (!hasLoadedStoresRef.current) {
           setLoading(true);
         }
-        setDistanceError(null);
-        const requestId = ++latestRequest;
-
+        if (storesData.length > 0) {
+          setDistanceError(null);
+        }
         const storesWithCoordinates =
           storesData.filter((store) =>
             isStoreCustomerVisible(store) &&
@@ -236,49 +251,36 @@ export default function CustomerHomePage() {
             })
           );
 
-        const [routes, applicablePricing] = await Promise.all([
-          storesWithCoordinates.length > 0
-            ? getCachedStoreDeliveryRoutes(
-                storesWithCoordinates.map((store) => ({
-                  id: store.id,
-                  latitude: store.latitude,
-                  longitude: store.longitude,
-                })),
-                {
-                  latitude: userLocation.lat,
-                  longitude: userLocation.lng,
-                }
-              )
-            : Promise.resolve([]),
-          marketplacePricingClientService.getApplicablePricingForStores(
-            storesWithCoordinates.map((store) => store.id),
-          ),
-        ]);
-
-        if (!isMounted || requestId !== latestRequest) {
+        if (storesWithCoordinates.length === 0) {
+          if (isMounted) {
+            setNearbyStores([]);
+            setFarStores([]);
+            hasLoadedStoresRef.current = true;
+          }
+          homeTrace.stop({store_count: "0"});
           return;
         }
 
-        const routeByStoreId = new Map(
-          routes.map((route) => [
-            route.storeId,
-            route.distanceMiles,
-          ])
+        const bootstrap = await marketplacePricingClientService.getHomeBootstrap(
+          storesWithCoordinates.map((store) => store.id),
         );
+        if (!isMounted) return;
+        setMarketplacePolicy(bootstrap.policy);
 
-        const calculatedStores =
-          storesWithCoordinates.map((store) => {
-            const distance = routeByStoreId.get(
-              store.id
-            );
-
-            if (distance === undefined) {
-              return null;
-            }
-
-            const applicable = applicablePricing[store.id];
-            const storePolicy = applicable?.policy ?? marketplacePolicy;
-            const isOrderZone = applicable?.decision?.zoneAccessType === "customer_order_zone";
+        const mapRoutes = (
+          sourceStores: Store[],
+          routes: Awaited<ReturnType<typeof getCachedStoreDeliveryRoutes>>,
+        ): CustomerStore[] => {
+          const routeByStoreId = new Map(
+            routes.map((route) => [route.storeId, route.distanceMiles]),
+          );
+          return sourceStores.flatMap((store) => {
+            const distance = routeByStoreId.get(store.id);
+            if (distance === undefined) return [];
+            const applicable = bootstrap.byStoreId[store.id];
+            const storePolicy = applicable?.policy ?? bootstrap.policy;
+            const isOrderZone =
+              applicable?.decision?.zoneAccessType === "customer_order_zone";
             const pricing = calculateDeliveryFee(
               distance,
               0,
@@ -286,68 +288,107 @@ export default function CustomerHomePage() {
               storePolicy.peakSurchargeEnabled,
               !isOrderZone,
             );
-
-            return storeMapper.toCustomerStore(store, {
+            return [storeMapper.toCustomerStore(store, {
               distance,
               deliveryFee: pricing.deliveryFee,
-              deliveryFeeDisplay: getDeliveryFeeDisplay(distance, storePolicy, !isOrderZone),
-              estimatedPrepTime: getEstimatedTimeNumber(distance, orderDeliveryPolicy),
-              estimatedDeliveryTime: getEstimatedTime(distance, orderDeliveryPolicy),
+              deliveryFeeDisplay: getDeliveryFeeDisplay(
+                distance,
+                storePolicy,
+                !isOrderZone,
+              ),
+              estimatedPrepTime: getEstimatedTimeNumber(
+                distance,
+                bootstrap.orderDeliveryPolicy,
+              ),
+              estimatedDeliveryTime: getEstimatedTime(
+                distance,
+                bootstrap.orderDeliveryPolicy,
+              ),
               categories: [],
               promotions: [],
               isFavorite: false,
               maxDeliveryMiles: storePolicy.maxRadiusMiles,
               zoneAccessAllowed: applicable?.decision?.allowed ?? true,
-              zoneAccessType: applicable?.decision?.zoneAccessType ?? "default_pricing",
-            });
+              zoneAccessType:
+                applicable?.decision?.zoneAccessType ?? "default_pricing",
+            })];
           });
+        };
 
-        const storesWithDistance = calculatedStores.filter(
-          (store): store is CustomerStore => store !== null
+        const routeStores = async (sourceStores: Store[]) =>
+          sourceStores.length === 0
+            ? []
+            : getCachedStoreDeliveryRoutes(
+                sourceStores.map((store) => ({
+                  id: store.id,
+                  latitude: store.latitude,
+                  longitude: store.longitude,
+                })),
+                {latitude: userLocation.lat, longitude: userLocation.lng},
+              );
+
+        const preferredStores: Store[] = [];
+        const exploratoryStores: Store[] = [];
+        storesWithCoordinates.forEach((store) => {
+          if (bootstrap.byStoreId[store.id]?.decision?.allowed === false) {
+            exploratoryStores.push(store);
+          } else {
+            preferredStores.push(store);
+          }
+        });
+
+        const preferredRoutes = await routeStores(preferredStores);
+        if (!isMounted) return;
+        const preferredResults = mapRoutes(preferredStores, preferredRoutes)
+          .sort((first, second) => first.distance - second.distance);
+        const preferredNearby = preferredResults.filter((store) =>
+          store.zoneAccessAllowed &&
+          (store.zoneAccessType === "customer_order_zone" ||
+            store.distance <= store.maxDeliveryMiles)
+        );
+        const preferredFar = preferredResults.filter((store) =>
+          !preferredNearby.some((nearbyStore) => nearbyStore.id === store.id)
         );
 
-        /*
-          Only compare routes against the stores actually submitted to
-          Google Routes. Pending, suspended, inactive, or ungeocoded stores
-          are intentionally excluded before the request and must not trigger
-          a misleading delivery-distance warning.
-        */
-        if (storesWithDistance.length !== storesWithCoordinates.length) {
+        if (preferredStores.length > 0 && preferredResults.length !== preferredStores.length) {
           setDistanceError(
             "Some stores could not be shown because their delivery distance could not be calculated."
           );
         }
-
-        // Sort by distance (closest first)
-        storesWithDistance.sort((a, b) => a.distance - b.distance);
-        
-        // Closed stores remain visible; their card displays the current schedule.
-        const activeStores = storesWithDistance.filter(store => 
-          isStoreCustomerVisible(store)
-        );
-        
-        // Split stores into nearby (≤25mi) and far (>25mi)
-        const nearby = activeStores.filter(
-          (store) =>
-            store.zoneAccessAllowed &&
-            (store.zoneAccessType === "customer_order_zone" ||
-              store.distance <= store.maxDeliveryMiles)
-        );
-
-        const far = activeStores.filter(
-          (store) =>
-            !store.zoneAccessAllowed ||
-            (store.zoneAccessType !== "customer_order_zone" &&
-              store.distance > store.maxDeliveryMiles)
-        );
-        
-        if (isMounted && requestId === latestRequest) {
-          setNearbyStores(nearby);
-          setFarStores(far);
-          hasLoadedStoresRef.current = true;
+        setNearbyStores(preferredNearby);
+        setFarStores(preferredFar);
+        hasLoadedStoresRef.current = true;
+        if (preferredResults.length > 0 || exploratoryStores.length === 0) {
+          setLoading(false);
+          homeTrace.stop({
+            stage: "preferred",
+            store_count: String(preferredResults.length),
+          });
         }
+
+        // Out-of-zone stores stay discoverable, but do not delay usable stores.
+        const exploratoryRoutes = await routeStores(exploratoryStores);
+        if (!isMounted) return;
+        const exploratoryResults = mapRoutes(exploratoryStores, exploratoryRoutes);
+        const allFar = [...preferredFar, ...exploratoryResults]
+          .sort((first, second) => first.distance - second.distance);
+        setFarStores(allFar);
+        if (exploratoryStores.length > 0 && exploratoryResults.length !== exploratoryStores.length) {
+          setDistanceError(
+            "Some stores could not be shown because their delivery distance could not be calculated."
+          );
+        }
+        setLoading(false);
+        homeTrace.stop({
+          stage: "complete",
+          store_count: String(preferredResults.length + exploratoryResults.length),
+        });
       } catch (error) {
         console.error("Error fetching stores:", error);
+        homeTrace.stop({status: "error"});
+        if (isMounted) {
+          setDistanceError("We could not load delivery availability. Please try again.");
+        }
       } finally {
         if (isMounted) {
           setLoading(false);
@@ -362,12 +403,18 @@ export default function CustomerHomePage() {
       };
     }
 
+    if (!catalogReady) {
+      return () => {
+        isMounted = false;
+      };
+    }
+
     void updateStores(catalogStores);
 
     return () => {
       isMounted = false;
     };
-  }, [catalogStores, locationReady, userLocation, marketplacePolicy, orderDeliveryPolicy]);
+  }, [catalogReady, catalogStores, locationReady, userLocation]);
 
   // Handle store click
   const handleStoreClick = (store: CustomerStore) => {

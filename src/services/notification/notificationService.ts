@@ -252,7 +252,8 @@ export class NotificationService {
  */
 listenForUnreadCount(
   uid: string,
-  callback: (count: number) => void
+  callback: (count: number) => void,
+  onError?: (error: Error) => void,
 ) {
 
   const currentUid = this.requireCurrentUser(uid);
@@ -281,8 +282,12 @@ listenForUnreadCount(
     () => {
       void this.getUnreadCount(currentUid).then(callback).catch((error) => {
         console.error("Unable to count unread notifications:", error);
+        onError?.(error instanceof Error ? error : new Error(String(error)));
       });
-    }
+    },
+    (error) => {
+      onError?.(error);
+    },
 
   );
 

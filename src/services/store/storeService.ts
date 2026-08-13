@@ -20,14 +20,18 @@
 import {
   collection,
   doc,
+  documentId,
   getDoc,
+  getDocs,
+  limit,
   onSnapshot,
+  orderBy,
+  query,
+  startAfter,
 } from "firebase/firestore";
 import { isStoreActive, isStoreApproved } from "./storeAvailability";
 
 import { db } from "@/lib/firebase";
-import { functions } from "@/lib/firebase";
-import { httpsCallable } from "firebase/functions";
 import {
   loadCached,
 } from "@/services/cache/clientDataCache";
@@ -167,18 +171,44 @@ export const storeService = {
     cursor: StoreCatalogCursor | null = null,
     pageSize = 40,
   ): Promise<StoreCatalogPage> {
-    const result = await httpsCallable<
-      {cursor: StoreCatalogCursor | null; pageSize: number},
-      {stores: Array<{id: string} & PublicStoreDocument>; hasMore: boolean; nextCursor: StoreCatalogCursor | null}
-    >(functions, "getCustomerStoreCatalog")({cursor, pageSize});
+    const requestedSize = Math.min(100, Math.max(1, Math.floor(pageSize)));
+    const loadPage = async (): Promise<StoreCatalogPage> => {
+      const constraints = [
+        orderBy("name", "asc"),
+        orderBy(documentId(), "asc"),
+        ...(cursor ? [startAfter(cursor.name, cursor.id)] : []),
+        limit(requestedSize + 1),
+      ];
+      const snapshot = await getDocs(query(
+        collection(db, "storePublicProfiles"),
+        ...constraints,
+      ));
+      const pageDocuments = snapshot.docs.slice(0, requestedSize);
+      const lastDocument = pageDocuments.at(-1);
 
-    return {
-      stores: result.data.stores.map((store) =>
-        mapStoreDocument(store.id, store)
-      ),
-      hasMore: result.data.hasMore === true,
-      nextCursor: result.data.nextCursor,
+      return {
+        stores: pageDocuments.map((storeDocument) =>
+          mapStoreDocument(storeDocument.id, storeDocument.data())
+        ),
+        hasMore: snapshot.docs.length > requestedSize,
+        nextCursor: lastDocument
+          ? {name: text(lastDocument.data().name), id: lastDocument.id}
+          : null,
+      };
     };
+
+    /*
+     * The sanitized projection is publicly readable by design. Reading it
+     * directly removes a Cloud Functions cold start from customer Home.
+     * Cache only the first page, which is the critical visible catalog.
+     */
+    return cursor
+      ? loadPage()
+      : loadCached(
+        `customer-store-catalog:first:${requestedSize}`,
+        loadPage,
+        {ttlMs: 30_000, scope: "public"},
+      );
   },
 
   /**

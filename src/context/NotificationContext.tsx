@@ -16,11 +16,13 @@ import {
   useEffect,
   useState,
 } from "react";
+import {usePathname} from "next/navigation";
 
 import { useAuth } from "./AuthContext";
 
 import { notificationService } from "@/services/notification/notificationService";
 import {listenForNotificationMutations} from "@/services/notification/notificationSync";
+import {auth} from "@/lib/firebase";
 
 interface NotificationContextType {
 
@@ -40,29 +42,40 @@ export function NotificationProvider({
 }) {
 
   const { user } = useAuth();
+  const pathname = usePathname();
 
   const [unreadCount, setUnreadCount] =
     useState(0);
 
   useEffect(() => {
 
-    if (!user) {
+    /* Only the customer Home header consumes this unread-count context. */
+    if (!user || pathname !== "/home") {
       return;
 
     }
 
-    const unsubscribe =
-      notificationService.listenForUnreadCount(
-
+    /*
+     * AuthContext and Firebase Auth can be one render apart during sign-in,
+     * sign-out, and account switching. Treat that short mismatch as a normal
+     * transition instead of allowing the ownership guard to throw globally.
+     */
+    try {
+      const unsubscribe = notificationService.listenForUnreadCount(
         user.uid,
-
-        setUnreadCount
-
+        setUnreadCount,
+        (error) => {
+          console.error("Unable to listen for unread notifications:", error);
+        },
       );
 
-    return unsubscribe;
+      return unsubscribe;
+    } catch (error) {
+      if (auth.currentUser?.uid !== user.uid) return;
+      console.error("Unable to start the unread notification listener:", error);
+    }
 
-  }, [user]);
+  }, [pathname, user]);
 
   useEffect(() => listenForNotificationMutations("user", (mutation) => {
     if (mutation.action === "read-one") {
@@ -76,7 +89,7 @@ export function NotificationProvider({
 
     <NotificationContext.Provider
       value={{
-        unreadCount: user ? unreadCount : 0,
+        unreadCount: user && pathname === "/home" ? unreadCount : 0,
       }}
     >
 
