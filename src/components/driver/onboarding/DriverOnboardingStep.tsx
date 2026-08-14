@@ -1,4 +1,7 @@
 "use client";
+/* eslint-disable @next/next/no-img-element -- private object-URL document previews are not Next image assets */
+/* eslint-disable react/no-unescaped-entities -- apostrophes appear in user-facing contractual copy */
+/* eslint-disable react-hooks/set-state-in-effect -- the server draft intentionally hydrates all step-specific form drafts */
 
 /*
 |--------------------------------------------------------------------------

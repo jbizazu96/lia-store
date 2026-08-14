@@ -1,4 +1,5 @@
 "use client";
+/* eslint-disable react-hooks/set-state-in-effect -- pathname changes intentionally close the mobile navigation shell */
 
 import { useEffect, useState } from "react";
 import Link from "next/link";

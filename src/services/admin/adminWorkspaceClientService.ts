@@ -11,8 +11,9 @@
 import {
   httpsCallable,
 } from "firebase/functions";
+import {ref, uploadBytesResumable} from "firebase/storage";
 import {
-  functions,
+  functions, storage,
 } from "@/lib/firebase";
 import {
   loadCached,
@@ -45,6 +46,7 @@ import type {
   AdminRefundClaimListItem,
 } from "@/types/adminWorkspace";
 import type {HomePromotion} from "@/types/homePromotion";
+import type {StoreContractWorkspace} from "@/types/storeContract";
 import type {
   DeliveryZone,
   DeliveryZoneDraft,
@@ -194,6 +196,47 @@ export const adminWorkspaceClientService = {
       "getAdminStoreApplication",
       {storeId}
     ),
+
+  getStoreContracts: (storeId: string) =>
+    call<StoreContractWorkspace>("getAdminStoreContracts", {storeId}),
+
+  uploadStoreContract: async (
+    storeId: string,
+    file: File,
+    onProgress?: (percentage: number) => void,
+  ) => {
+    if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
+      throw new Error("Choose a PDF contract.");
+    }
+    if (file.size <= 0 || file.size > 10 * 1024 * 1024) {
+      throw new Error("Each PDF must be 10 MB or smaller.");
+    }
+    const upload = await call<{contractId: string; storagePath: string}>(
+      "prepareAdminStoreContractUpload",
+      {storeId, fileName: file.name, sizeBytes: file.size},
+    );
+    await new Promise<void>((resolve, reject) => {
+      const task = uploadBytesResumable(ref(storage, upload.storagePath), file, {
+        contentType: "application/pdf",
+        cacheControl: "private,no-store,max-age=0",
+        customMetadata: {
+          storeId,
+          contractId: upload.contractId,
+          processingType: "store-contract-original",
+        },
+      });
+      task.on("state_changed", (snapshot) => {
+        onProgress?.(Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100));
+      }, reject, () => resolve());
+    });
+    await call<{success: boolean}>("finalizeAdminStoreContractUpload", {storeId, contractId: upload.contractId});
+  },
+
+  getStoreContractPreview: (storeId: string, contractId: string) =>
+    call<{url: string; expiresAt: string}>("getAdminStoreContractPreview", {storeId, contractId}),
+
+  deleteStoreContract: (storeId: string, contractId: string) =>
+    call<{success: boolean}>("deleteAdminStoreContract", {storeId, contractId}),
 
   getDriverApplication: (driverId: string) =>
     call<AdminDriverApplicationDetail>(

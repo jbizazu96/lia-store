@@ -39,7 +39,11 @@ beforeEach(async () => {
         isActive: true,
         role: "master_admin",
       }),
-      db.doc("stores/store-1").set({ownerId: "store-owner"}),
+      db.doc("stores/store-1").set({
+        ownerId: "store-owner",
+        onboardingCompleted: true,
+        isApproved: true,
+      }),
       db.doc("storePublicProfiles/store-1").set({name: "Test Store", isActive: true}),
       db.doc("productPublicProfiles/product-1").set({name: "Rice", storeId: "store-1"}),
       db.doc("users/customer-1/notifications/notification-1").set({title: "Order update"}),

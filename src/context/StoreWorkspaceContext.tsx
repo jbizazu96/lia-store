@@ -1,4 +1,6 @@
 "use client";
+/* eslint-disable react-hooks/set-state-in-effect -- auth transitions intentionally reset owner-scoped workspace state */
+/* eslint-disable react-hooks/exhaustive-deps -- the status listener is keyed by store ID and uses functional state updates for current fields */
 
 import {createContext, useCallback, useContext, useEffect, useMemo, useState} from "react";
 import {doc, onSnapshot} from "firebase/firestore";

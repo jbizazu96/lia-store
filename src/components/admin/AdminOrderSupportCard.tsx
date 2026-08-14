@@ -1,4 +1,5 @@
 "use client";
+/* eslint-disable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps -- reload is keyed by orderId; mutation handlers invoke the same loader explicitly */
 
 /* Protected admin response panel embedded in one order's operations view. */
 

@@ -1,4 +1,6 @@
 "use client";
+/* eslint-disable @next/next/no-img-element -- private onboarding upload previews use temporary URLs */
+/* eslint-disable react-hooks/set-state-in-effect -- the server draft intentionally hydrates all step-specific form drafts */
 
 /*
   Shared Store Onboarding Step.

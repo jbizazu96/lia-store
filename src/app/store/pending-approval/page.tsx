@@ -1,4 +1,5 @@
 "use client";
+/* eslint-disable react-hooks/set-state-in-effect -- the entry effect initializes status before attaching the live listener */
 
 import {useCallback, useEffect, useMemo, useState} from "react";
 import {doc, onSnapshot} from "firebase/firestore";

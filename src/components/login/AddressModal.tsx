@@ -16,7 +16,7 @@ interface AddressModalProps {
     zip: string;
     country: string;
   };
-  setAddressData: (data: any) => void;
+  setAddressData: (data: AddressModalProps["addressData"]) => void;
   addressLoading: boolean;
   addressError: string;
   addressGeocoding: boolean;
@@ -32,7 +32,6 @@ export function AddressModal({
   addressError,
   addressGeocoding,
   onSubmit,
-  onClose,
 }: AddressModalProps) {
   if (!isOpen) return null;
 

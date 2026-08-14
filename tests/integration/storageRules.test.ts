@@ -5,25 +5,43 @@ import {
   assertSucceeds,
   initializeTestEnvironment,
 } from "@firebase/rules-unit-testing";
-import {afterAll, beforeAll, describe, it} from "vitest";
+import {afterAll, beforeAll, beforeEach, describe, it} from "vitest";
 
-const PROJECT_ID = "demo-lia-store-storage-tests";
+const PROJECT_ID = "demo-lia-store-tests";
 const IMAGE_ID = "1723456789000-123e4567-e89b-12d3-a456-426614174000";
 const SMALL_IMAGE = new Uint8Array([1, 2, 3, 4]);
 
 let testEnv: RulesTestEnvironment;
 
 beforeAll(async () => {
-  const [host = "127.0.0.1", portText = "9199"] =
+  const [storageHost = "127.0.0.1", storagePortText = "9199"] =
     (process.env.FIREBASE_STORAGE_EMULATOR_HOST ?? "127.0.0.1:9199").split(":");
+  const [firestoreHost = "127.0.0.1", firestorePortText = "8085"] =
+    (process.env.FIRESTORE_EMULATOR_HOST ?? "127.0.0.1:8085").split(":");
 
   testEnv = await initializeTestEnvironment({
     projectId: PROJECT_ID,
+    firestore: {
+      host: firestoreHost,
+      port: Number(firestorePortText),
+      rules: readFileSync("firestore.rules", "utf8"),
+    },
     storage: {
-      host,
-      port: Number(portText),
+      host: storageHost,
+      port: Number(storagePortText),
       rules: readFileSync("storage.rules", "utf8"),
     },
+  });
+});
+
+beforeEach(async () => {
+  await testEnv.clearFirestore();
+  await testEnv.withSecurityRulesDisabled(async (context) => {
+    await context.firestore().doc("stores/store-1").set({
+      ownerId: "owner-1",
+      onboardingCompleted: false,
+      isApproved: false,
+    });
   });
 });
 

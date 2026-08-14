@@ -1,7 +1,7 @@
 "use client";
 
 import {motion} from "framer-motion";
-import {CheckCircle, Truck, Clock, AlertCircle} from "lucide-react";
+import {CheckCircle, Truck, Clock} from "lucide-react";
 
 interface OrderSuccessProps {
   orderNumber: string;

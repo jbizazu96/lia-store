@@ -10,7 +10,7 @@
 */
 
 import {motion} from "framer-motion";
-import {X, Store, Clock, CheckCircle, ArrowRight, Sparkles} from "lucide-react";
+import {X, Store, Clock, CheckCircle, ArrowRight} from "lucide-react";
 
 interface StoreStatusModalProps {
   isOpen: boolean;
@@ -44,7 +44,7 @@ export function StoreStatusModal({
             Welcome to LIA! 🎉
           </h2>
           <p className="text-center text-gray-600 mb-2">
-            You're all set to start selling on LIA Marketplace.
+            You&apos;re all set to start selling on LIA Marketplace.
           </p>
           <p className="text-center text-gray-500 text-sm mb-6">
             Set up your store and start reaching thousands of customers in your area.
@@ -78,7 +78,7 @@ export function StoreStatusModal({
           <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 mb-6">
             <p className="text-yellow-800 text-sm text-center">
               Your store is currently being reviewed by the LIA team.
-              We'll notify you when your store is approved. Once approved, you can
+              We&apos;ll notify you when your store is approved. Once approved, you can
               start adding products; LIA will activate it for customers separately.
             </p>
             <p className="text-yellow-600 text-xs text-center mt-2">

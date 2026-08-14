@@ -6,6 +6,8 @@
 |
 */
 "use client";
+/* eslint-disable @next/next/no-img-element -- the store logo can be a processing URL not supported by the optimizer */
+/* eslint-disable react-hooks/set-state-in-effect -- route, viewport, auth, and subscription effects intentionally synchronize shell state */
 
 import { useAuth } from "@/context/AuthContext";
 import { useState, useEffect, useRef } from "react";
@@ -20,7 +22,6 @@ import {
   Settings,
   LogOut,
   Menu,
-  X,
   Store,
   Bell,
   Clock,

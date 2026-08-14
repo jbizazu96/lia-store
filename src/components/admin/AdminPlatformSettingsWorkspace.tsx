@@ -1,4 +1,5 @@
 "use client";
+/* eslint-disable react-hooks/set-state-in-effect -- protected settings loaders initialize independent policy editors */
 import {useEffect, useState} from "react";
 import {ArrowLeft, Building2, CircleDollarSign, ClipboardCheck, DatabaseZap, History, LoaderCircle, PackageCheck, ShieldCheck, Truck} from "lucide-react";
 import Link from "next/link";

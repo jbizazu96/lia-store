@@ -1,6 +1,7 @@
 /*
   Order detail types.
 */
+import type {LucideIcon} from "lucide-react";
 
 export interface OrderItem {
   name: string;
@@ -29,5 +30,5 @@ export interface Order {
 export interface StatusConfig {
   label: string;
   color: string;
-  icon: any;
+  icon: LucideIcon;
 }

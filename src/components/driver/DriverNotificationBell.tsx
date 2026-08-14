@@ -1,4 +1,5 @@
 "use client";
+/* eslint-disable react-hooks/set-state-in-effect -- authentication changes intentionally clear owner-scoped notifications */
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";

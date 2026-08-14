@@ -25,7 +25,10 @@ async function callDraft(name: string, data?: unknown): Promise<DriverOnboarding
 }
 
 export const driverOnboardingService = {
-  getDraft: (_driverId?: string) => callDraft("getDriverOnboardingDraft"),
+  getDraft: (driverId?: string) => {
+    void driverId;
+    return callDraft("getDriverOnboardingDraft");
+  },
 
   async savePersonalInformation(_driverId: string, input: { firstName: string; middleName: string; lastName: string; phone: string; email: string; dateOfBirth: string; profilePhoto: File | null }) {
     const draft = await callDraft("saveDriverPersonalInformation", input);
@@ -58,7 +61,8 @@ export const driverOnboardingService = {
     return callDraft("saveDriverAgreement", input);
   },
 
-  async complete(_driverId: string) {
+  async complete(driverId: string) {
+    void driverId;
     await httpsCallable(functions, "completeDriverOnboarding")();
   },
 

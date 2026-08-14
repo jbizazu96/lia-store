@@ -1,4 +1,5 @@
 "use client";
+/* eslint-disable @next/next/no-img-element -- local upload previews use temporary object URLs */
 
 import {memo, useRef} from "react";
 import {motion} from "framer-motion";

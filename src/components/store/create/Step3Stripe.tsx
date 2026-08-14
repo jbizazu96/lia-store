@@ -111,9 +111,9 @@ export const Step3Stripe = memo(({
       <div className="flex items-start gap-3">
         <Banknote className="w-5 h-5 text-orange-600 mt-0.5" />
         <div>
-          <p className="text-orange-700 font-medium">You'll be redirected to Stripe</p>
+          <p className="text-orange-700 font-medium">You&apos;ll be redirected to Stripe</p>
           <p className="text-orange-600 text-sm">
-            After creating your store, you'll complete the Stripe onboarding
+            After creating your store, you&apos;ll complete the Stripe onboarding
             to start receiving payments.
           </p>
         </div>

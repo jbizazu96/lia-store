@@ -13,12 +13,12 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "test:rules": "XDG_CONFIG_HOME=.firebase-test/config FIREBASE_CLI_DISABLE_UPDATE_CHECK=1 firebase emulators:exec --config firebase.test.json --project demo-lia-store-tests --only firestore,storage \"vitest run --config vitest.integration.config.ts\"",
+    "test:rules": "XDG_CONFIG_HOME=.firebase-test/config FIREBASE_CLI_DISABLE_UPDATE_CHECK=1 firebase emulators:exec --config firebase.test.json --project demo-lia-store-tests --only firestore,storage \"vitest run --config vitest.integration.config.mts\"",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:report": "playwright show-report",
     "test:all": "npm run test && npm run test:rules && npm run test:e2e",
-    "verify": "npm run lint && tsc --noEmit && npm --prefix functions run lint && npm --prefix functions run build && npm run test && npm run test:rules && npm run test:e2e"
+    "verify": "npm run lint && tsc --noEmit && npm --prefix functions run lint && npm --prefix functions run build && npm run test && npm run build && npm run test:rules && npm run test:e2e"
   },
   "dependencies": {
     "@capacitor-firebase/authentication": "^8.3.0",

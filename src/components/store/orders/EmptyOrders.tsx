@@ -39,7 +39,7 @@ export function EmptyOrders() {
         No orders yet
       </h2>
       <p className="text-gray-500 text-sm mb-6 max-w-xs mx-auto">
-        When customers place orders, they'll appear here. 
+        When customers place orders, they&apos;ll appear here.
         Share your store with customers to start receiving orders!
       </p>
 

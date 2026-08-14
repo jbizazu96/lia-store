@@ -1,4 +1,6 @@
 "use client";
+/* eslint-disable @next/next/no-img-element -- protected application documents use short-lived signed URLs */
+/* eslint-disable react-hooks/set-state-in-effect -- route selection intentionally resets and reloads the protected review state */
 
 /*
 |--------------------------------------------------------------------------
@@ -33,6 +35,7 @@ import {
 import {
   adminWorkspaceClientService,
 } from "@/services/admin/adminWorkspaceClientService";
+import {StoreContractSection} from "@/components/admin/StoreContractSection";
 import {AdminZoneAssignmentEditor} from "@/components/admin/AdminZoneAssignmentEditor";
 import type {
   AdminApplicationListItem,
@@ -77,12 +80,14 @@ function getName(type: ApplicationType, detail: Detail): string {
 export function ApplicationReviewWorkspace({
   type,
   applicationId,
+  initialStatus = "pending_review",
 }: {
   type: ApplicationType;
   applicationId?: string;
+  initialStatus?: AdminApplicationStatus;
 }) {
   const router = useRouter();
-  const [status, setStatus] = useState<AdminApplicationStatus>("pending_review");
+  const [status, setStatus] = useState<AdminApplicationStatus>(initialStatus);
   const [applications, setApplications] = useState<AdminApplicationListItem[]>([]);
   const [counts, setCounts] = useState<AdminApplicationCounts>({
     pending_review: 0,
@@ -148,8 +153,18 @@ export function ApplicationReviewWorkspace({
 
   const openApplication = (application: AdminApplicationListItem) => {
     router.push(
-      `/admin/${type === "store" ? "store-applications" : "driver-applications"}/${application.id}`
+      `/admin/${type === "store" ? "store-applications" : "driver-applications"}/${application.id}?from=${status}`
     );
+  };
+
+  const selectStatus = (nextStatus: AdminApplicationStatus) => {
+    setStatus(nextStatus);
+    const base = `/admin/${type === "store" ? "store-applications" : "driver-applications"}`;
+    window.history.replaceState(window.history.state, "", `${base}?status=${nextStatus}`);
+  };
+
+  const backToApplications = () => {
+    router.push(`/admin/${type === "store" ? "store-applications" : "driver-applications"}?status=${initialStatus}`);
   };
 
   const refreshSelected = async () => {
@@ -321,7 +336,7 @@ export function ApplicationReviewWorkspace({
 
   return (
     <section>
-      {applicationId && <button data-admin-read-action type="button" onClick={() => router.push(`/admin/${type === "store" ? "store-applications" : "driver-applications"}`)} className="mb-5 inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-bold text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50"><ChevronRight className="h-4 w-4 rotate-180" />Back to applications</button>}
+      {applicationId && <button data-admin-read-action type="button" onClick={backToApplications} className="mb-5 inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-bold text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50"><ChevronRight className="h-4 w-4 rotate-180" />Back to applications</button>}
       <p className="text-sm font-bold tracking-wide text-orange-600">
         {type === "store" ? "STORE APPLICATIONS" : "DRIVER APPLICATIONS"}
       </p>
@@ -330,7 +345,7 @@ export function ApplicationReviewWorkspace({
 
       {!applicationId && <div className="mt-6 flex flex-wrap gap-2">
         {statuses.map((item) => (
-          <button data-admin-read-action key={item.value} type="button" onClick={() => setStatus(item.value)} className={`rounded-full px-4 py-2 text-sm font-bold ${status === item.value ? "bg-orange-600 text-white" : "bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50"}`}>
+          <button data-admin-read-action key={item.value} type="button" onClick={() => selectStatus(item.value)} className={`rounded-full px-4 py-2 text-sm font-bold ${status === item.value ? "bg-orange-600 text-white" : "bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50"}`}>
             {item.label}
           </button>
         ))}
@@ -375,6 +390,8 @@ export function ApplicationReviewWorkspace({
               disabled={working}
               onSaved={refreshSelected}
             />
+
+            {type === "store" && <StoreContractSection storeId={selected.id} disabled={working} />}
 
             <div className="mt-7 flex flex-wrap gap-3 border-t border-slate-100 pt-5">
               <button type="button" disabled={working || (type === "driver" && !selected.isApproved && !allRequiredApproved)} onClick={() => type === "store" ? void setStoreApproval() : void setDriverApproval()} className="inline-flex items-center gap-2 rounded-xl bg-green-600 px-4 py-2.5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-45">

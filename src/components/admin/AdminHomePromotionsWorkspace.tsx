@@ -1,4 +1,5 @@
 "use client";
+/* eslint-disable react-hooks/set-state-in-effect -- the protected promotions loader initializes this workspace */
 
 import {useEffect, useState} from "react";
 import {Pencil, Plus, Trash2} from "lucide-react";

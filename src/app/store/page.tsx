@@ -1,4 +1,5 @@
 "use client";
+/* eslint-disable react-hooks/set-state-in-effect -- the entry effect initializes state from the protected workspace service */
 
 /*
   React hooks.

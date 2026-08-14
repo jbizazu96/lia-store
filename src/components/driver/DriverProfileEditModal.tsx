@@ -1,4 +1,5 @@
 "use client";
+/* eslint-disable react-hooks/set-state-in-effect -- a newly selected profile intentionally resets the modal draft */
 
 /*
 |--------------------------------------------------------------------------

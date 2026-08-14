@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, Suspense } from "react";
+import { useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { CheckCircle, XCircle, Loader2 } from "lucide-react";
@@ -38,7 +38,7 @@ function ResetPasswordContent() {
       await confirmPasswordReset(auth, oobCode!, newPassword);
       setSuccess(true);
       setTimeout(() => router.push("/login"), 3000);
-    } catch (err) {
+    } catch {
       setError("Unable to reset password. Link may be expired.");
     } finally {
       setLoading(false);

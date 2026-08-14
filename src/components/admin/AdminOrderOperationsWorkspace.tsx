@@ -11,7 +11,7 @@
 */
 
 import {useEffect, useState} from "react";
-import {ChevronRight, LoaderCircle, MapPin, PackageCheck, Truck, UserRound} from "lucide-react";
+import {ChevronRight, LoaderCircle, PackageCheck, Truck, UserRound} from "lucide-react";
 import {useRouter} from "next/navigation";
 import {adminWorkspaceClientService} from "@/services/admin/adminWorkspaceClientService";
 import type {AdminOrderDetail, AdminOrderListItem} from "@/types/adminWorkspace";

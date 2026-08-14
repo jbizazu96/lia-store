@@ -1,4 +1,6 @@
 "use client";
+/* eslint-disable @next/next/no-img-element -- protected claim evidence uses short-lived signed URLs */
+/* eslint-disable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps -- filters and selected claim IDs deliberately key protected reloads */
 
 /*
 |--------------------------------------------------------------------------

@@ -21,6 +21,7 @@ import {
   loadCached,
   writeCached,
 } from "@/services/cache/clientDataCache";
+import type {StoreContractWorkspace} from "@/types/storeContract";
 
 export interface StoreWorkspaceStore {
   id: string;
@@ -337,4 +338,11 @@ export const storeWorkspaceClientService = {
   }),
 
   getSettingsAudit: () => call<{entries: StoreSettingsAuditEntry[]}>("getStoreSettingsAudit"),
+
+  getContracts: () => call<StoreContractWorkspace>("getStoreOwnerContracts"),
+
+  getContractPreview: (contractId: string) => call<{url: string; expiresAt: string}>(
+    "getStoreOwnerContractPreview",
+    {contractId},
+  ),
 };

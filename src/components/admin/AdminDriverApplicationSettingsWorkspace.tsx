@@ -1,4 +1,5 @@
 "use client";
+/* eslint-disable react-hooks/set-state-in-effect -- the protected settings loader initializes this editor */
 
 import Link from "next/link";
 import {useEffect, useState} from "react";

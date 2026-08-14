@@ -83,6 +83,13 @@ service firebase.storage {
         );
     }
 
+    function isActiveAdmin() {
+      return signedIn() &&
+        request.auth.token.email_verified == true &&
+        firestore.exists(/databases/(default)/documents/admins/$(request.auth.uid)) &&
+        firestore.get(/databases/(default)/documents/admins/$(request.auth.uid)).data.isActive == true;
+    }
+
     function isStoreImageField(imageField) {
       return imageField == "logo" ||
         imageField == "banner" ||
@@ -169,6 +176,21 @@ service firebase.storage {
     match /stores/{storeId}/images/optimized/owner-photo-id/{fileName} {
       allow read: if canManageStoreApplication(storeId);
       allow write: if false;
+    }
+
+    /* Signed contracts are exact private originals; Functions issue previews. */
+    match /stores/{storeId}/contracts/{fileName} {
+      allow read: if false;
+      allow create: if isActiveAdmin() &&
+        request.resource.size > 0 &&
+        request.resource.size <= 10 * 1024 * 1024 &&
+        request.resource.contentType == "application/pdf" &&
+        request.resource.metadata.storeId == storeId &&
+        request.resource.metadata.processingType == "store-contract-original" &&
+        fileName == request.resource.metadata.contractId + ".pdf" &&
+        firestore.exists(/databases/(default)/documents/stores/$(storeId)/contracts/$(request.resource.metadata.contractId)) &&
+        firestore.get(/databases/(default)/documents/stores/$(storeId)/contracts/$(request.resource.metadata.contractId)).data.status == "reserved";
+      allow update, delete: if false;
     }
 
     /*

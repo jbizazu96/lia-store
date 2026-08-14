@@ -6,7 +6,7 @@
 
 import {useState} from "react";
 import {motion} from "framer-motion";
-import {X, Mail, AlertCircle, CheckCircle} from "lucide-react";
+import {Mail, AlertCircle, CheckCircle} from "lucide-react";
 import {authEmailService} from "@/services/auth/authEmailService";
 
 interface PasswordResetModalProps {
@@ -82,7 +82,7 @@ export function PasswordResetModal({
           Reset Password
         </h2>
         <p className="text-gray-500 mb-6">
-          Enter your email address and we'll send you a link to reset your password.
+          Enter your email address and we&apos;ll send you a link to reset your password.
         </p>
 
         {resetSuccess && (

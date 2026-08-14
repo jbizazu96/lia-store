@@ -4,8 +4,6 @@
   Payment breakdown summary.
 */
 
-import {CreditCard} from "lucide-react";
-
 interface PaymentSummaryProps {
   subtotal: number;
   tax: number;
