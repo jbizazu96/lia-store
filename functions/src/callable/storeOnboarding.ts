@@ -504,3 +504,70 @@ export const completeStoreOnboarding = onCall({ region: "us-central1" }, async (
   await db.collection("users").doc(request.auth.uid).set({ onboardingCompleted: true, storeId: store.id, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
   return { success: true };
 });
+
+/**
+ * Reopens only a rejected application. The owner keeps the existing draft,
+ * but must review every step and submit it again before another admin review.
+ * Suspensions and ordinary approval revocations remain admin-controlled.
+ */
+export const reopenRejectedStoreApplication = onCall({region: "us-central1"}, async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Sign in to correct your store application.");
+  }
+  const ownerId = request.auth.uid;
+  await enforceCallableAbuseProtection({
+    operation: "store-application-reopen",
+    uid: ownerId,
+    appCheckVerified: Boolean(request.app),
+    maximumRequests: 3,
+    windowSeconds: 86_400,
+  });
+  await requireStoreOwner(ownerId);
+  const owned = await requireOwnedStore(ownerId);
+  const storeReference = owned.ref;
+  const userReference = db.collection("users").doc(ownerId);
+  const auditReference = storeReference.collection("applicationAuditLogs").doc();
+
+  await db.runTransaction(async (transaction) => {
+    const store = await transaction.get(storeReference);
+    const data = store.data() ?? {};
+    if (text(data.status) !== "rejected" || data.isApproved === true || data.isActive === true) {
+      throw new HttpsError(
+        "failed-precondition",
+        "Only a rejected, inactive store application can be reopened.",
+      );
+    }
+    const previousReview = isRecord(data.applicationReview) ? data.applicationReview : {};
+    transaction.update(storeReference, {
+      onboardingCompleted: false,
+      onboardingStep: "owner" as StoreOnboardingStep,
+      status: "draft",
+      isApproved: false,
+      isActive: false,
+      applicationReview: FieldValue.delete(),
+      submittedAt: FieldValue.delete(),
+      approvalRevokedAt: FieldValue.delete(),
+      resubmissionCount: FieldValue.increment(1),
+      lastRejectedApplicationReview: {
+        decision: text(previousReview.decision) || "rejected",
+        reason: text(previousReview.reason) || null,
+        reviewedAt: previousReview.reviewedAt ?? null,
+        reviewedBy: text(previousReview.reviewedBy) || null,
+      },
+      applicationReopenedAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    transaction.set(userReference, {
+      onboardingCompleted: false,
+      updatedAt: FieldValue.serverTimestamp(),
+    }, {merge: true});
+    transaction.set(auditReference, {
+      action: "rejected_application_reopened",
+      ownerId,
+      previousReason: text(previousReview.reason) || null,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+  });
+
+  return {success: true, onboardingStep: "owner" as StoreOnboardingStep};
+});

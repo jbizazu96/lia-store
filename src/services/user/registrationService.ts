@@ -11,7 +11,6 @@
 import {
   createUserWithEmailAndPassword,
   deleteUser,
-  sendEmailVerification,
   signOut,
 } from "firebase/auth";
 
@@ -23,6 +22,7 @@ import {
   auth,
   functions,
 } from "@/lib/firebase";
+import {authEmailService} from "@/services/auth/authEmailService";
 
 export type RegistrationAccountType =
   | "customer"
@@ -84,7 +84,7 @@ export const registrationService = {
 
       profileInitialized = true;
 
-      await sendEmailVerification(user);
+      await authEmailService.requestVerification();
     } catch (error) {
       /*
         If profile initialization fails, remove the just-created Auth user so

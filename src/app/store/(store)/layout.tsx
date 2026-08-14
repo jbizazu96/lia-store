@@ -27,7 +27,6 @@ import {
   ChevronRight,
   CheckCircle,
 } from "lucide-react";
-import { auth } from "@/lib/firebase";
 import Image from "next/image";
 import Link from "next/link";
 import { notificationService } from "@/services/notification/notificationService";
@@ -39,6 +38,8 @@ import {
 import {
   RoleGuard,
 } from "@/components/auth/RoleGuard";
+import {customerLogoutService} from "@/services/auth/customerLogoutService";
+import {auth} from "@/lib/firebase";
 
 interface StoreData {
   id: string;
@@ -215,8 +216,8 @@ function StoreLayoutContent({ children }: { children: React.ReactNode }) {
 
   // Handle logout
   const handleLogout = async () => {
-    await auth.signOut();
-    router.push("/login");
+    await customerLogoutService.logout();
+    router.replace("/login");
   };
 
   // ✅ Close sidebar helper (mobile only)

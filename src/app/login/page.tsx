@@ -12,7 +12,6 @@ import {motion} from "framer-motion";
 */
 import {
   signInWithEmailAndPassword,
-  sendEmailVerification,
   signOut,
 } from "firebase/auth";
 import {
@@ -43,6 +42,7 @@ import { googleAuthenticationService } from "@/services/auth/googleAuthenticatio
 import {appleAuthenticationService} from "@/services/auth/appleAuthenticationService";
 import {Capacitor} from "@capacitor/core";
 import {reportClientIssue} from "@/services/monitoring/clientErrorReporter";
+import {authEmailService} from "@/services/auth/authEmailService";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -244,7 +244,7 @@ export default function LoginPage() {
       if (!user.emailVerified) {
         try {
           /* Verification requires the newly authenticated user session. */
-          await sendEmailVerification(user);
+          await authEmailService.requestVerification();
           setError(
             "Please verify your email first. A new verification link has been sent."
           );
@@ -253,7 +253,7 @@ export default function LoginPage() {
             ? String(verificationError.code)
             : "";
           setError(
-            code === "auth/too-many-requests"
+            code === "auth/too-many-requests" || code.includes("resource-exhausted")
               ? "Too many verification emails were requested. Please use the most recent email we sent, or wait before trying again."
               : "Your email is not verified. We couldn't send another verification email right now; please try again later."
           );

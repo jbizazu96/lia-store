@@ -3,6 +3,7 @@ import {
   canAccessStoreStripe,
   canEditStoreApplication,
   hasApprovedStoreWorkspace,
+  isStoreReadyForActivation,
 } from "../../functions/src/services/store/storeApprovalPolicy";
 
 describe("store approval enforcement", () => {
@@ -23,5 +24,22 @@ describe("store approval enforcement", () => {
     expect(canAccessStoreStripe({onboardingCompleted: true, isApproved: false}, "onboarding")).toBe(false);
     expect(canAccessStoreStripe({onboardingCompleted: true, isApproved: false}, "settings")).toBe(false);
     expect(canAccessStoreStripe({onboardingCompleted: true, isApproved: true}, "settings")).toBe(true);
+  });
+
+  it("activates only an approved, completed store with ready Stripe transfers", () => {
+    const ready = {
+      onboardingCompleted: true,
+      isApproved: true,
+      stripeIsReady: true,
+      stripeTransfersEnabled: true,
+      stripeConnectApiVersion: "v2",
+      stripeAccountId: "acct_store",
+    };
+    expect(isStoreReadyForActivation(ready)).toBe(true);
+    expect(isStoreReadyForActivation({...ready, stripeIsReady: false})).toBe(false);
+    expect(isStoreReadyForActivation({...ready, stripeTransfersEnabled: false})).toBe(false);
+    expect(isStoreReadyForActivation({...ready, stripeConnectApiVersion: "v1"})).toBe(false);
+    expect(isStoreReadyForActivation({...ready, stripeAccountId: ""})).toBe(false);
+    expect(isStoreReadyForActivation({...ready, isApproved: false})).toBe(false);
   });
 });

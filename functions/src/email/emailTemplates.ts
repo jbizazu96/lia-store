@@ -95,6 +95,22 @@ function receipt(input: {storeName: string; orderNumber: string; items: EmailRec
   </table>`;
 }
 
+export function emailVerificationEmail(input: {displayName: string; url: string}) {
+  const title = "Confirm your LIA email";
+  const name = input.displayName.trim() || "there";
+  const body = `<div style="display:inline-block;padding:6px 10px;border-radius:999px;background:#fff7ed;color:${brandDark};font-size:12px;font-weight:800">EMAIL VERIFICATION</div><p style="margin:18px 0 0;line-height:1.65;color:#374151">Hi ${escapeHtml(name)}, confirm this email address to finish setting up your LIA Marketplace account.</p><p style="margin:16px 0 0;font-size:13px;line-height:1.6;color:${muted}">This secure link expires automatically. If you did not create or request access to a LIA account, you can safely ignore this email.</p>`;
+  const text = `Hi ${name}, confirm your email address to finish setting up your LIA Marketplace account: ${input.url}\n\nIf you did not request this, you can ignore this email.`;
+  return {subject: title, text, html: layout({title, preheader: "Confirm your email to finish setting up your LIA account.", body, action: {label: "Confirm email", url: input.url}})};
+}
+
+export function passwordResetEmail(input: {displayName: string; url: string}) {
+  const title = "Reset your LIA password";
+  const name = input.displayName.trim() || "there";
+  const body = `<div style="display:inline-block;padding:6px 10px;border-radius:999px;background:#fff7ed;color:${brandDark};font-size:12px;font-weight:800">PASSWORD RESET</div><p style="margin:18px 0 0;line-height:1.65;color:#374151">Hi ${escapeHtml(name)}, use the secure button below to choose a new password for your LIA Marketplace account.</p><p style="margin:16px 0 0;font-size:13px;line-height:1.6;color:${muted}">If you did not request a password reset, do not use this link. Your current password will remain unchanged.</p>`;
+  const text = `Hi ${name}, reset your LIA Marketplace password using this secure link: ${input.url}\n\nIf you did not request this, ignore this email and your password will remain unchanged.`;
+  return {subject: title, text, html: layout({title, preheader: "A secure password reset was requested for your LIA account.", body, action: {label: "Reset password", url: input.url}})};
+}
+
 export function newOrderEmail(input: {storeName: string; orderNumber: string; url: string}) {
   const title = `New paid order ${input.orderNumber}`;
   const text = `${input.storeName}, you received a new paid order. Open LIA to review and accept it: ${input.url}`;

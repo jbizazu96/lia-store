@@ -11,6 +11,16 @@ import type {Order} from "@/types/order";
 const activeStatuses = ["pending", "accepted", "preparing", "ready_for_pickup"];
 const emptyStats = {total: 0, pending: 0, accepted: 0, preparing: 0, readyForPickup: 0, outForDelivery: 0, completed: 0, cancelled: 0};
 
+function isTransientDeadline(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const code = "code" in error && typeof error.code === "string" ? error.code : "";
+  return code === "deadline-exceeded" || code === "functions/deadline-exceeded" || code.endsWith("/deadline-exceeded");
+}
+
+function wait(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
+}
+
 export function useStoreOrders(options: {status?: string; search?: string; from?: string; to?: string} = {}) {
   const {entry, loading: workspaceLoading} = useStoreWorkspace();
   const status = options.status ?? "all";
@@ -28,13 +38,24 @@ export function useStoreOrders(options: {status?: string; search?: string; from?
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [needsStoreSetup, setNeedsStoreSetup] = useState(false);
   const requestId = useRef(0);
+  const workspaceStoreId = entry?.store?.id ?? null;
+  const hasStore = entry?.hasStore === true;
 
   const loadHistory = useCallback(async (cursor?: string, append = false, showLoading = true) => {
     const id = ++requestId.current;
     if (append) setLoadingMore(true);
     else if (showLoading) setLoading(true);
     try {
-      const page = await storeWorkspaceClientService.getOrders({pageSize: 25, status, search, ...(from ? {from} : {}), ...(to ? {to} : {}), ...(cursor ? {cursor} : {})});
+      const options = {pageSize: 25, status, search, ...(from ? {from} : {}), ...(to ? {to} : {}), ...(cursor ? {cursor} : {})};
+      let page;
+      try {
+        page = await storeWorkspaceClientService.getOrders(options);
+      } catch (firstError) {
+        if (!isTransientDeadline(firstError) || id !== requestId.current) throw firstError;
+        await wait(750);
+        if (id !== requestId.current) return;
+        page = await storeWorkspaceClientService.getOrders(options);
+      }
       if (id !== requestId.current) return;
       const mapped = page.orders.map((order) => mapOrderData(order.id, order));
       setHistoryOrders((current) => append ? [...current, ...mapped] : mapped);
@@ -65,7 +86,7 @@ export function useStoreOrders(options: {status?: string; search?: string; from?
       });
       return;
     }
-    if (!entry?.hasStore || !entry.store) {
+    if (!hasStore || !workspaceStoreId) {
       queueMicrotask(() => {
         setIsAuthenticated(true);
         setNeedsStoreSetup(true);
@@ -75,13 +96,13 @@ export function useStoreOrders(options: {status?: string; search?: string; from?
     }
     queueMicrotask(() => {
       setIsAuthenticated(true);
-      setStoreId(entry.store!.id);
+      setStoreId(workspaceStoreId);
       setNeedsStoreSetup(false);
     });
     queueMicrotask(() => void loadHistory());
     const activeQuery = query(
           collection(db, "orders"),
-          where("store.id", "==", entry.store.id),
+          where("store.id", "==", workspaceStoreId),
           where("checkoutStatus", "==", "confirmed"),
           where("payment.status", "==", "paid"),
           where("status", "in", activeStatuses),
@@ -94,7 +115,7 @@ export function useStoreOrders(options: {status?: string; search?: string; from?
     return () => {
       unsubscribeOrders?.();
     };
-  }, [entry, loadHistory, workspaceLoading]);
+  }, [hasStore, loadHistory, workspaceLoading, workspaceStoreId]);
 
   const normalizedSearch = search.toLocaleLowerCase("en-US");
   const fromTime = from ? new Date(from).getTime() : null;

@@ -43,6 +43,11 @@ async function deliver(reference: FirebaseFirestore.DocumentReference): Promise<
     const result = await response.json() as {id?: unknown; message?: unknown; name?: unknown};
     if (!response.ok || typeof result.id !== "string") throw new Error(text(result.message) || text(result.name) || `Resend returned ${response.status}`);
     await reference.update({status: "sent", resendEmailId: result.id, sentAt: FieldValue.serverTimestamp(), lastError: null, updatedAt: FieldValue.serverTimestamp()});
+    console.info("Email accepted by Resend.", {
+      jobId: reference.id,
+      category: text(claimed.category),
+      resendEmailId: result.id,
+    });
   } catch (error) {
     const attempts = Number(claimed.attempts);
     const permanent = attempts >= MAX_ATTEMPTS;

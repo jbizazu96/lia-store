@@ -5,6 +5,7 @@ export {cleanupEmailJobs, deliverQueuedEmail, retryQueuedEmails} from "./email/r
 export {resendEmailWebhook} from "./email/resendWebhook";
 export {sendStoreInventoryEmailDigest} from "./email/inventoryEmailDigest";
 export {orderTransactionalEmails} from "./email/transactionalEmailEvents";
+export {requestPasswordResetEmail, requestVerificationEmail} from "./callable/authEmail";
 
 import {
   defineSecret,
@@ -261,6 +262,7 @@ export {
   completeStoreOnboarding,
   ensureStoreOnboardingDraft,
   getStoreOnboardingDraft,
+  reopenRejectedStoreApplication,
   saveStoreOnboardingBusinessInformation,
   saveStoreOnboardingOwner,
   saveStoreOnboardingSchedule,

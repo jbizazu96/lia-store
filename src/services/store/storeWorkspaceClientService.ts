@@ -118,6 +118,10 @@ export interface StoreWorkspaceEntry {
   store: (Pick<StoreWorkspaceStore, "id" | "name" | "logoUrl" | "isApproved" | "isActive"> & {
     onboardingCompleted: boolean;
     onboardingStep: string;
+    status: "draft" | "pending_review" | "approved" | "rejected" | "suspended";
+    rejectionReason: string | null;
+    suspensionReason: string | null;
+    approvalRevoked: boolean;
   }) | null;
   pendingOrderCount: number;
 }
@@ -134,7 +138,20 @@ async function call<T>(
   return result.data;
 }
 
+const pendingCalls = new Map<string, Promise<unknown>>();
+
+async function callOnce<T>(name: string, data: unknown, key: string): Promise<T> {
+  const existing = pendingCalls.get(key) as Promise<T> | undefined;
+  if (existing) return existing;
+  const pending = call<T>(name, data).finally(() => pendingCalls.delete(key));
+  pendingCalls.set(key, pending);
+  return pending;
+}
+
 export const storeWorkspaceClientService = {
+  reopenRejectedApplication: () => call<{success: boolean; onboardingStep: string}>(
+    "reopenRejectedStoreApplication",
+  ),
   getEntry: async (forceRefresh = false) => {
     if (forceRefresh) {
       return writeCached(
@@ -225,7 +242,7 @@ export const storeWorkspaceClientService = {
     search?: string;
     from?: string;
     to?: string;
-  } = {}) => call<{
+  } = {}) => callOnce<{
     orders: Array<Record<string, unknown> & { id: string }>;
     stats: {
       total: number;
@@ -238,7 +255,7 @@ export const storeWorkspaceClientService = {
       cancelled: number;
     };
     nextCursor: string | null;
-  }>("getStoreWorkspaceOrders", options),
+  }>("getStoreWorkspaceOrders", options, `store-orders:${JSON.stringify(options)}`),
 
   getOrder: (
     orderId: string

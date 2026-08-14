@@ -595,6 +595,8 @@ export const getStoreWorkspaceEntry = onCall({ region: "us-central1" }, async (r
     const store = await requireOwnedStore(request.auth.uid);
     await refreshStoreUploadClaim(request.auth.uid, store.id);
     const data = store.data() ?? {};
+    const applicationReview = isRecord(data.applicationReview) ? data.applicationReview : {};
+    const suspension = isRecord(data.suspension) ? data.suspension : {};
     const orders = await db.collection("orders")
       .where("store.id", "==", store.id)
       .where("checkoutStatus", "==", "confirmed")
@@ -613,6 +615,10 @@ export const getStoreWorkspaceEntry = onCall({ region: "us-central1" }, async (r
         isActive: data.isActive === true,
         onboardingCompleted: data.onboardingCompleted === true,
         onboardingStep: text(data.onboardingStep) || "owner",
+        status: text(data.status) || "draft",
+        rejectionReason: text(applicationReview.reason) || null,
+        suspensionReason: text(suspension.reason) || null,
+        approvalRevoked: Boolean(data.approvalRevokedAt),
       },
       pendingOrderCount,
     };
@@ -630,6 +636,7 @@ export const getStoreWorkspaceEntry = onCall({ region: "us-central1" }, async (r
  * queries orders/{orderId} or orders by store ID directly.
  */
 export const getStoreWorkspaceOrders = onCall({region: "us-central1", timeoutSeconds: 300}, async (request) => {
+  const startedAt = Date.now();
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in to view store orders.");
   const input = isRecord(request.data) ? request.data : {};
   const requestedSize = Number(input.pageSize);
@@ -648,7 +655,13 @@ export const getStoreWorkspaceOrders = onCall({region: "us-central1", timeoutSec
   });
   const searchToken = search.length >= 2 ? search.slice(0, 40) : "";
   const cursor = text(input.cursor);
-  await ensureStoreOrderIndex(store);
+  /*
+   * Browsing order history must never wait for a legacy search migration.
+   * New orders receive search tokens when they are created. Only a deliberate
+   * text search can request the bounded one-time backfill for older orders.
+   */
+  if (searchToken) await ensureStoreOrderIndex(store);
+  const preparedAt = Date.now();
   let query: FirebaseFirestore.Query = db.collection("orders")
     .where("store.id", "==", store.id)
     .where("checkoutStatus", "==", "confirmed")
@@ -666,7 +679,19 @@ export const getStoreWorkspaceOrders = onCall({region: "us-central1", timeoutSec
     query = query.startAfter(cursorOrder);
   }
   const [orders, stats] = await Promise.all([query.get(), storeOrderCounts(store.id)]);
+  const ordersLoadedAt = Date.now();
   const financials = await storeOrderFinancialSummaries(store.id, orders.docs);
+  const completedAt = Date.now();
+
+  console.info("Store order history loaded.", {
+    storeId: store.id,
+    resultCount: orders.size,
+    search: Boolean(searchToken),
+    preparationMs: preparedAt - startedAt,
+    orderAndCountMs: ordersLoadedAt - preparedAt,
+    financialSummaryMs: completedAt - ordersLoadedAt,
+    totalMs: completedAt - startedAt,
+  });
 
   return {
     orders: orders.docs.map((order) => ({

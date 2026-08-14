@@ -6,6 +6,8 @@ if (admin.apps.length === 0) admin.initializeApp();
 const db = getFirestore("default");
 
 export type EmailCategory =
+  | "auth_email_verification"
+  | "auth_password_reset"
   | "customer_order_delivered"
   | "store_new_order"
   | "store_refund_claim"
@@ -33,9 +35,21 @@ function validEmail(value: string): boolean {
 }
 
 export async function enqueueEmail(input: EmailJobInput): Promise<boolean> {
-  if (!validEmail(input.to)) return false;
+  if (!validEmail(input.to)) {
+    console.warn("Email job skipped because the recipient is invalid.", {
+      category: input.category,
+      dedupeKey: input.dedupeKey,
+    });
+    return false;
+  }
   const normalizedEmail = input.to.trim().toLowerCase();
-  if ((await db.collection("emailSuppressions").doc(normalizedEmail).get()).exists) return false;
+  if ((await db.collection("emailSuppressions").doc(normalizedEmail).get()).exists) {
+    console.warn("Email job skipped because the recipient is suppressed.", {
+      category: input.category,
+      dedupeKey: input.dedupeKey,
+    });
+    return false;
+  }
   const reference = db.collection("emailJobs").doc(safeJobId(input.dedupeKey));
   try {
     await reference.create({
@@ -55,7 +69,13 @@ export async function enqueueEmail(input: EmailJobInput): Promise<boolean> {
     return true;
   } catch (error) {
     const code = (error as {code?: unknown}).code;
-    if (code === 6 || code === "already-exists") return false;
+    if (code === 6 || code === "already-exists") {
+      console.info("Duplicate email job safely skipped.", {
+        category: input.category,
+        dedupeKey: input.dedupeKey,
+      });
+      return false;
+    }
     throw error;
   }
 }
@@ -66,5 +86,12 @@ export async function enqueueAdminEmail(input: Omit<EmailJobInput, "to" | "dedup
     const email = typeof adminDocument.data().email === "string" ? adminDocument.data().email : "";
     return enqueueEmail({...input, to: email, dedupeKey: `${input.dedupeKey}:${adminDocument.id}`});
   }));
-  return results.filter(Boolean).length;
+  const queuedCount = results.filter(Boolean).length;
+  console.info("Admin email fan-out completed.", {
+    category: input.category,
+    activeAdminCount: admins.size,
+    queuedCount,
+    skippedCount: admins.size - queuedCount,
+  });
+  return queuedCount;
 }

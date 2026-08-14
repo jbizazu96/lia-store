@@ -55,6 +55,7 @@ import type {
   MarketplacePricingPolicy,
 } from "./pricing/marketplacePricingPolicy";
 import type {ZonePricingDecision} from "./pricing/zonePricingResolutionService";
+import {createCatalogSearchTokens} from "../services/catalog/catalogSearchTokens";
 
 
 const db =
@@ -293,6 +294,15 @@ async function createPaymentPendingOrder(
   try {
     await orderReference.set({
       orderNumber,
+
+      /* Server-owned search index used by the store order workspace. */
+      storeSearchTokens:
+        createCatalogSearchTokens([
+          orderReference.id,
+          orderNumber,
+          customerName,
+          customerEmail,
+        ]),
 
             /*
         Temporary checkout-session relationship.

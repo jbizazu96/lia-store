@@ -63,9 +63,27 @@ export function StoreWorkspaceProvider({children}: {children: React.ReactNode}) 
     return onSnapshot(doc(db, "storeWorkspaceStatuses", user.uid), (snapshot) => {
       if (!snapshot.exists()) return;
       const status = snapshot.data();
+      const lifecycleStatus = ["draft", "pending_review", "approved", "rejected", "suspended"]
+        .includes(status.status) ? status.status as NonNullable<StoreWorkspaceEntry["store"]>["status"] : null;
       setEntry((current) => current?.store ? {
         ...current,
-        store: {...current.store, isApproved: status.isApproved === true, isActive: status.isActive === true},
+        store: {
+          ...current.store,
+          isApproved: status.isApproved === true,
+          isActive: status.isActive === true,
+          onboardingCompleted: status.onboardingCompleted === true,
+          onboardingStep: typeof status.onboardingStep === "string" ? status.onboardingStep : current.store.onboardingStep,
+          status: lifecycleStatus ?? current.store.status,
+          rejectionReason: Object.hasOwn(status, "rejectionReason")
+            ? typeof status.rejectionReason === "string" ? status.rejectionReason : null
+            : current.store.rejectionReason,
+          suspensionReason: Object.hasOwn(status, "suspensionReason")
+            ? typeof status.suspensionReason === "string" ? status.suspensionReason : null
+            : current.store.suspensionReason,
+          approvalRevoked: Object.hasOwn(status, "approvalRevoked")
+            ? status.approvalRevoked === true
+            : current.store.approvalRevoked,
+        },
       } : current);
     }, (listenerError) => console.error("Unable to listen to store workspace status:", listenerError));
   }, [entry?.store?.id, user]);

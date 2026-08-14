@@ -11,7 +11,7 @@ import { confirmPasswordReset } from "firebase/auth";
 function ResetPasswordContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
   const [newPassword, setNewPassword] = useState("");

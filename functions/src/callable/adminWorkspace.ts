@@ -33,6 +33,7 @@ import {
   getDriverApplicationPolicy,
   type DriverApplicationPolicy,
 } from "../admin/driverApplicationPolicy";
+import {isStoreReadyForActivation} from "../services/store/storeApprovalPolicy";
 
 if (admin.apps.length === 0) {
   admin.initializeApp();
@@ -543,7 +544,10 @@ export const decideAdminApplication = onCall(
       status: outcome === "approved" ? "approved" : "rejected",
       isApproved: outcome === "approved",
       /* Marketplace activation is intentionally a separate admin decision. */
-      ...(type === "store" ? {isActive: false} : {availabilityStatus: "offline"}),
+      ...(type === "store" ? {
+        isActive: false,
+        ...(outcome === "approved" ? {approvalRevokedAt: FieldValue.delete()} : {}),
+      } : {availabilityStatus: "offline"}),
       applicationReview: {decision: outcome, reason: outcome === "rejected" ? reason : null, reviewedAt: FieldValue.serverTimestamp(), reviewedBy: administrator.uid},
       updatedAt: FieldValue.serverTimestamp(),
     });
@@ -597,9 +601,16 @@ export const setAdminStoreApproval = onCall(
         /* An unapproved store must never remain customer-visible. */
         ...(isApproved ? {
           status: "approved",
+          approvalRevokedAt: FieldValue.delete(),
           accountDeletionRequestId: FieldValue.delete(),
           accountDeletionDisabledAt: FieldValue.delete(),
-        } : {status: "pending_review", isActive: false}),
+        } : {
+          status: "pending_review",
+          isActive: false,
+          ...(data.isApproved === true ? {
+            approvalRevokedAt: FieldValue.serverTimestamp(),
+          } : {}),
+        }),
         approvalUpdatedAt: FieldValue.serverTimestamp(),
         approvalUpdatedBy: administrator.uid,
         updatedAt: FieldValue.serverTimestamp(),
@@ -691,6 +702,12 @@ export const activateAdminStore = onCall(
         !allRequiredStoreDocumentsApproved(data, policy)) {
         throw new HttpsError("failed-precondition", "Approve every required store document before activating this store.");
       }
+      if (isActive && !isStoreReadyForActivation(data)) {
+        throw new HttpsError(
+          "failed-precondition",
+          "The store must finish Stripe Connect and have transfers enabled before it can be activated.",
+        );
+      }
 
       transaction.update(storeReference, {
         isActive,
@@ -738,6 +755,9 @@ export const setAdminStoreSuspension = onCall(
         status: "suspended",
         isApproved: false,
         isActive: false,
+        ...(store.data()?.isApproved === true ? {
+          approvalRevokedAt: FieldValue.serverTimestamp(),
+        } : {}),
         suspension: {
           reason,
           suspendedAt: FieldValue.serverTimestamp(),

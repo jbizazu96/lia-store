@@ -26,6 +26,15 @@ interface StoreWorkspaceStatusSource {
   isApproved?: unknown;
   isActive?: unknown;
   isOpen?: unknown;
+  applicationReview?: unknown;
+  suspension?: unknown;
+  approvalRevokedAt?: unknown;
+}
+
+function record(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
 }
 
 function text(value: unknown): string {
@@ -77,6 +86,9 @@ export const storeWorkspaceStatusSync = onDocumentWritten(
       .doc(ownerId)
       .set(
         {
+          rejectionReason: text(record(source?.applicationReview).reason) || null,
+          suspensionReason: text(record(source?.suspension).reason) || null,
+          approvalRevoked: Boolean(source?.approvalRevokedAt),
           storeId,
           onboardingCompleted: source?.onboardingCompleted === true,
           onboardingStep: text(source?.onboardingStep) || "owner",

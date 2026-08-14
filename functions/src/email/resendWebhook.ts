@@ -37,6 +37,12 @@ export const resendEmailWebhook = onRequest({region: "us-central1", secrets: [we
   if (!jobs.empty) {
     const field = ({"email.delivered": "deliveredAt", "email.bounced": "bouncedAt", "email.complained": "complainedAt", "email.failed": "providerFailedAt", "email.delivery_delayed": "delayedAt"} as Record<string, string>)[type];
     if (field) await jobs.docs[0].ref.update({providerStatus: type.replace("email.", ""), [field]: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp()});
+    if (field) {
+      console.info("Resend delivery status received.", {
+        jobId: jobs.docs[0].id,
+        providerStatus: type.replace("email.", ""),
+      });
+    }
   }
   if (["email.bounced", "email.complained"].includes(type)) {
     const recipientValue = event.data?.to;

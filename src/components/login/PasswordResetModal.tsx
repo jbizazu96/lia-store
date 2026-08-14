@@ -7,8 +7,7 @@
 import {useState} from "react";
 import {motion} from "framer-motion";
 import {X, Mail, AlertCircle, CheckCircle} from "lucide-react";
-import {sendPasswordResetEmail} from "firebase/auth";
-import {auth} from "@/lib/firebase";
+import {authEmailService} from "@/services/auth/authEmailService";
 
 interface PasswordResetModalProps {
   isOpen: boolean;
@@ -39,10 +38,7 @@ export function PasswordResetModal({
       setResetError("");
       setResetSuccess(false);
 
-      await sendPasswordResetEmail(auth, resetEmail, {
-        url: window.location.origin + "/login",
-        handleCodeInApp: false,
-      });
+      await authEmailService.requestPasswordReset(resetEmail);
 
       setResetSuccess(true);
       setResetEmail("");
@@ -51,15 +47,14 @@ export function PasswordResetModal({
         onClose();
         setResetSuccess(false);
       }, 3000);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Reset error:", err);
-      if (err.code === "auth/user-not-found") {
-        setResetError("No account found with this email address.");
-      } else if (err.code === "auth/invalid-email") {
-        setResetError("Please enter a valid email address.");
-      } else {
-        setResetError("Unable to send reset email. Please try again.");
-      }
+      const code = err && typeof err === "object" && "code" in err ? String(err.code) : "";
+      setResetError(
+        code.includes("resource-exhausted")
+          ? "Too many reset requests were made. Please wait before trying again."
+          : "Unable to request a reset email. Please try again.",
+      );
     } finally {
       setResetLoading(false);
     }
@@ -95,9 +90,9 @@ export function PasswordResetModal({
             <div className="flex items-start gap-3">
               <CheckCircle className="w-5 h-5 text-green-500 mt-0.5 flex-shrink-0" />
               <div>
-                <p className="text-green-700 font-semibold">Reset email sent!</p>
+                <p className="text-green-700 font-semibold">Request received</p>
                 <p className="text-green-600 text-sm mt-1">
-                  Check your inbox for the password reset link.
+                  If an account matches that address, LIA will send a secure password reset link.
                 </p>
               </div>
             </div>

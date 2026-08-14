@@ -1,5 +1,5 @@
 import {describe, expect, it} from "vitest";
-import {adminActionEmail, deliveredOrderEmail, inventoryDigestEmail, newOrderEmail} from "../../functions/src/email/emailTemplates";
+import {adminActionEmail, deliveredOrderEmail, emailVerificationEmail, inventoryDigestEmail, newOrderEmail, passwordResetEmail} from "../../functions/src/email/emailTemplates";
 
 describe("transactional email templates", () => {
   it("creates secure deep-link calls to action", () => {
@@ -42,5 +42,16 @@ describe("transactional email templates", () => {
   it("keeps sensitive admin details behind the workspace link", () => {
     const message = adminActionEmail({title: "Support needed", summary: "A request needs review.", url: "https://liamarketplace.com/admin/orders/42"});
     expect(message.html).toContain("protected Admin workspace");
+  });
+
+  it("creates branded Firebase-backed authentication messages", () => {
+    const verification = emailVerificationEmail({displayName: "Alex <Owner>", url: "https://liamarketplace.com/verify-email?oobCode=secure"});
+    const reset = passwordResetEmail({displayName: "Alex", url: "https://liamarketplace.com/reset-password?oobCode=secure"});
+    expect(verification.subject).toContain("Confirm");
+    expect(verification.html).toContain("https://liamarketplace.com/verify-email?oobCode=secure");
+    expect(verification.html).not.toContain("Alex <Owner>");
+    expect(reset.subject).toContain("Reset");
+    expect(reset.html).toContain("https://liamarketplace.com/reset-password?oobCode=secure");
+    expect(reset.text).toContain("password will remain unchanged");
   });
 });
