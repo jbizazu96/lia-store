@@ -34,6 +34,7 @@ import {
   registrationService,
   type RegistrationAccountType,
 } from "@/services/user/registrationService";
+import {LegalReviewModal} from "@/components/legal/LegalReviewModal";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -52,6 +53,9 @@ export default function RegisterPage() {
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [customerTermsAccepted, setCustomerTermsAccepted] = useState(false);
+  const [customerPrivacyAcknowledged, setCustomerPrivacyAcknowledged] = useState(false);
+  const [reviewingLegalDocument, setReviewingLegalDocument] = useState<"customer_terms" | "customer_privacy" | null>(null);
 
   /*
     UI state.
@@ -112,6 +116,10 @@ export default function RegisterPage() {
       setError("Passwords do not match");
       return false;
     }
+    if (accountType === "customer" && (!customerTermsAccepted || !customerPrivacyAcknowledged)) {
+      setError("Review the Customer Terms and Privacy Policy to continue.");
+      return false;
+    }
     return true;
   }
 
@@ -138,6 +146,8 @@ export default function RegisterPage() {
         phone,
         password,
         accountType,
+        customerTermsAccepted,
+        customerPrivacyAcknowledged,
       });
 
       setSuccess(true);
@@ -469,6 +479,9 @@ export default function RegisterPage() {
           </div>
 
           {/* Submit Button */}
+          {accountType === "customer" ? <label className="flex cursor-pointer gap-3 rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm leading-6 text-gray-700"><input type="checkbox" checked={customerTermsAccepted && customerPrivacyAcknowledged} onChange={(event) => { setCustomerTermsAccepted(event.target.checked); setCustomerPrivacyAcknowledged(event.target.checked); }} disabled={success} className="mt-1 h-4 w-4 shrink-0 accent-green-600" /><span>I agree to the <button type="button" onClick={(event) => { event.preventDefault(); setReviewingLegalDocument("customer_terms"); }} className="font-bold text-orange-700 underline underline-offset-2">LIA Terms of Service</button> and acknowledge that I have read the <button type="button" onClick={(event) => { event.preventDefault(); setReviewingLegalDocument("customer_privacy"); }} className="font-bold text-orange-700 underline underline-offset-2">LIA Privacy Policy</button>.</span></label> : null}
+
+          {/* Submit Button */}
           <motion.button
             whileTap={{scale: 0.97}}
             type="submit"
@@ -496,6 +509,7 @@ export default function RegisterPage() {
           </a>
         </p>
       </motion.div>
+      {reviewingLegalDocument ? <LegalReviewModal documents={[{key: "customer_terms", title: "Customer Terms", path: "/legal/customer-terms"}, {key: "customer_privacy", title: "Privacy Policy", path: "/legal/privacy"}]} initialKey={reviewingLegalDocument} onReviewed={(key) => { if (key === "customer_terms") setCustomerTermsAccepted(true); if (key === "customer_privacy") setCustomerPrivacyAcknowledged(true); }} onDeclined={(key) => { if (key === "customer_terms") setCustomerTermsAccepted(false); if (key === "customer_privacy") setCustomerPrivacyAcknowledged(false); }} onClose={() => setReviewingLegalDocument(null)}/> : null}
     </main>
   );
 }

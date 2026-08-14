@@ -48,6 +48,23 @@ export const createAccountSupportRequest = onCall({region: "us-central1"}, async
   return {success: true, requestId: reference.id};
 });
 
+export const createPublicSupportRequest = onCall({region: "us-central1"}, async (request) => {
+  const input = record(request.data);
+  const name = text(input.name);
+  const email = text(input.email).toLowerCase();
+  const reason = text(input.reason);
+  const message = text(input.message);
+  if (text(input.website)) return {success: true}; // Honeypot: silently discard automated form submissions.
+  if (name.length < 2 || name.length > 100) throw new HttpsError("invalid-argument", "Enter your name using 2 to 100 characters.");
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) throw new HttpsError("invalid-argument", "Enter a valid email address.");
+  if (!reasons.has(reason)) throw new HttpsError("invalid-argument", "Choose a valid question type.");
+  if (message.length < 10 || message.length > 2_000) throw new HttpsError("invalid-argument", "Write your question using 10 to 2,000 characters.");
+  await enforceCallableAbuseProtection({operation: "public-support-create", uid: email, appCheckVerified: Boolean(request.app), maximumRequests: 3, windowSeconds: 3600});
+  const reference = db.collection("accountSupportRequests").doc();
+  await reference.create({ownerId: "", ownerType: "public", ownerName: name, ownerEmail: email, reason, message, source: "public_website", status: "open", createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp()});
+  return {success: true, requestId: reference.id};
+});
+
 export const getAdminAccountSupportRequests = onCall({region: "us-central1"}, async (request) => {
   await requireAdminPermission(request, "support");
   const requestedStatus = text(record(request.data).status) || "all";

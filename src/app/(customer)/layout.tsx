@@ -8,6 +8,7 @@ import {
 } from "@/context/CustomerOrdersContext";
 import { CustomerOfflineNotice } from "@/components/customer/ui/CustomerOfflineNotice";
 import {CustomerPushPermissionPrompt} from "@/components/customer/native/CustomerPushPermissionPrompt";
+import {CustomerTermsGate} from "@/components/customer/legal/CustomerTermsGate";
 
 export default function CustomerLayout({
   children,
@@ -20,11 +21,13 @@ export default function CustomerLayout({
         "customer",
       ]}
     >
-      <CustomerOrdersProvider>
-        <CustomerOfflineNotice />
-        <CustomerPushPermissionPrompt />
-        {children}
-      </CustomerOrdersProvider>
+      <CustomerTermsGate>
+        <CustomerOrdersProvider>
+          <CustomerOfflineNotice />
+          <CustomerPushPermissionPrompt />
+          {children}
+        </CustomerOrdersProvider>
+      </CustomerTermsGate>
     </RoleGuard>
   );
 }

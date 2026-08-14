@@ -16,6 +16,7 @@ import {
   Store,
   Truck,
 } from "lucide-react";
+import {PublicSupportButton} from "@/components/public/PublicSupportButton";
 
 const marketplaceSteps = [
   {icon: MapPin, number: "01", title: "Find nearby stores", description: "Set your delivery address and discover independent stores available in your market."},
@@ -53,7 +54,7 @@ export default function HomePage() {
             <Link href="#how-it-works" className="transition hover:text-orange-600">How it works</Link>
             <Link href="#partners" className="transition hover:text-orange-600">For partners</Link>
             <Link href="#community" className="transition hover:text-orange-600">Why LIA</Link>
-            <Link href="/help" className="transition hover:text-orange-600">Help</Link>
+            <PublicSupportButton className="transition hover:text-orange-600">Help</PublicSupportButton>
           </nav>
 
           <div className="flex shrink-0 items-center gap-2">
@@ -147,7 +148,7 @@ export default function HomePage() {
       <section className="px-4 pb-18 sm:px-6 sm:pb-24">
         <div className="mx-auto max-w-7xl overflow-hidden rounded-[1.75rem] bg-gradient-to-br from-orange-500 to-orange-700 px-6 py-10 text-white shadow-xl shadow-orange-200 sm:px-10 sm:py-14 lg:flex lg:items-center lg:justify-between">
           <div className="max-w-2xl"><HeartHandshake className="h-8 w-8 text-orange-100"/><h2 className="mt-5 text-3xl font-black tracking-tight sm:text-4xl">Better delivery starts with stronger local connections.</h2><p className="mt-4 leading-7 text-orange-50">Create an account as a customer, store owner, or driver and become part of the LIA marketplace.</p></div>
-          <div className="mt-8 flex flex-col gap-3 sm:flex-row lg:mt-0 lg:pl-8"><Link href="/register" className="inline-flex items-center justify-center gap-2 rounded-full bg-white px-6 py-3 text-sm font-black text-orange-700 shadow-sm">Join LIA <ArrowRight className="h-4 w-4"/></Link><Link href="/help" className="inline-flex items-center justify-center rounded-full border border-white/50 px-6 py-3 text-sm font-black text-white">Visit Help Center</Link></div>
+          <div className="mt-8 flex flex-col gap-3 sm:flex-row lg:mt-0 lg:pl-8"><Link href="/register" className="inline-flex items-center justify-center gap-2 rounded-full bg-white px-6 py-3 text-sm font-black text-orange-700 shadow-sm">Join LIA <ArrowRight className="h-4 w-4"/></Link><PublicSupportButton className="inline-flex items-center justify-center rounded-full border border-white/50 px-6 py-3 text-sm font-black text-white">Visit Help Center</PublicSupportButton></div>
         </div>
       </section>
 
@@ -156,7 +157,7 @@ export default function HomePage() {
           <div className="grid gap-8 md:grid-cols-[1.3fr_1fr_1fr]">
             <div><div className="flex items-center gap-2.5"><Image src="/icon/icon-192.png" alt="" width={38} height={38} className="rounded-xl"/><div><p className="font-black">LIA Marketplace</p><p className="text-xs text-slate-500">Local marketplace and delivery</p></div></div><p className="mt-4 max-w-sm text-sm leading-6 text-slate-600">Helping independent stores serve their communities through thoughtful technology and reliable delivery coordination.</p></div>
             <div><p className="text-sm font-black">Explore</p><div className="mt-4 grid gap-3 text-sm text-slate-600"><Link href="#how-it-works" className="hover:text-orange-700">How it works</Link><Link href="#partners" className="hover:text-orange-700">For store partners</Link><Link href="/register" className="hover:text-orange-700">Create an account</Link><Link href="/login" className="hover:text-orange-700">Sign in</Link></div></div>
-            <div><p className="text-sm font-black">Support and legal</p><div className="mt-4 grid gap-3 text-sm text-slate-600"><Link href="/help" className="hover:text-orange-700">Help Center</Link><a href="mailto:support@liamarketplace.com" className="hover:text-orange-700">support@liamarketplace.com</a><Link href="/legal" className="hover:text-orange-700">Privacy and terms</Link><a href="tel:+18336724143" className="hover:text-orange-700">(833) 672-4143</a></div></div>
+            <div><p className="text-sm font-black">Support and legal</p><div className="mt-4 grid gap-3 text-sm text-slate-600"><PublicSupportButton className="text-left hover:text-orange-700">Contact support</PublicSupportButton><a href="mailto:info@liamarketplace.com" className="hover:text-orange-700">info@liamarketplace.com</a><Link href="/legal" className="hover:text-orange-700">Legal documents</Link><Link href="/legal/customer-terms" className="hover:text-orange-700">Customer Terms</Link><a href="tel:+18336724143" className="hover:text-orange-700">(833) 672-4143</a></div></div>
           </div>
           <div className="mt-10 flex flex-col gap-3 border-t border-slate-200 pt-6 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between"><p>&copy; {new Date().getFullYear()} LIA Marketplace. All rights reserved.</p><div className="flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-emerald-600"/><span>Secure account and payment experiences</span></div></div>
         </div>

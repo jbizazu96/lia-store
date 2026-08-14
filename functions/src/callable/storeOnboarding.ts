@@ -59,7 +59,10 @@ type StoreOnboardingStep =
   | "store-information"
   | "business-information"
   | "schedule"
+  | "agreement"
   | "stripe";
+
+const storeMerchantAgreementVersion = "lia-merchant-agreement-v1";
 
 type ScheduleDay = {
   day: string;
@@ -163,6 +166,20 @@ function timestampValue(value: unknown): string | null {
   return typeof value === "string" ? value : null;
 }
 
+function merchantAgreementAcceptance(value: unknown) {
+  const data = isRecord(value) ? value : {};
+  if (data.accepted !== true) return undefined;
+  return {
+    accepted: true,
+    version: text(data.version),
+    representativeName: text(data.representativeName),
+    acceptedByUid: text(data.acceptedByUid),
+    acceptedByEmail: text(data.acceptedByEmail) || null,
+    acceptedAt: timestampValue(data.acceptedAt),
+    manualSignatureRequired: data.manualSignatureRequired === true,
+  };
+}
+
 async function requireStoreOwner(uid: string) {
   const user = await db.collection("users").doc(uid).get();
   if (user.data()?.accountType !== "store_owner") {
@@ -207,6 +224,12 @@ function mapDraft(storeId: string | null, ownerId: string, value?: Record<string
   const step = text(data.onboardingStep);
   const status = text(data.status);
   const schedule = Array.isArray(data.schedule) ? data.schedule : defaultSchedule;
+  const agreementAcceptance = merchantAgreementAcceptance(data.merchantAgreementAcceptance);
+  const savedStep = step === "owner" || step === "store-information" || step === "business-information" || step === "schedule" || step === "agreement" || step === "stripe" ? step : "owner";
+  const onboardingStep = data.onboardingCompleted !== true && savedStep === "stripe" && (
+    agreementAcceptance?.accepted !== true ||
+    agreementAcceptance.version !== storeMerchantAgreementVersion
+  ) ? "agreement" : savedStep;
 
   return {
     storeId,
@@ -214,7 +237,7 @@ function mapDraft(storeId: string | null, ownerId: string, value?: Record<string
     isApproved: data.isApproved === true,
     isActive: data.isActive === true,
     onboardingCompleted: data.onboardingCompleted === true,
-    onboardingStep: step === "owner" || step === "store-information" || step === "business-information" || step === "schedule" || step === "stripe" ? step : "owner",
+    onboardingStep,
     status: status === "draft" || status === "pending_review" || status === "approved" || status === "rejected" || status === "suspended" ? status : data.isApproved === true ? "approved" : "draft",
     submittedAt: timestampValue(data.submittedAt),
     owner: {
@@ -238,6 +261,7 @@ function mapDraft(storeId: string | null, ownerId: string, value?: Record<string
     storeInsideReview: review(data.storeInsideReview), storeInsideSubmissionVersion: typeof data.storeInsideSubmissionVersion === "number" ? data.storeInsideSubmissionVersion : 0,
     businessType: text(data.businessType), registeredName: text(data.registeredName), ein: text(data.ein), businessStructure: text(data.businessStructure),
     schedule,
+    merchantAgreementAcceptance: agreementAcceptance,
     stripeAccountId: text(data.stripeAccountId) || undefined,
     stripeAccountStatus: text(data.stripeAccountStatus) || undefined,
     stripeDetailsSubmitted: data.stripeDetailsSubmitted === true,
@@ -310,6 +334,11 @@ function requireCompleteApplication(
   if (!draft.name || !draft.email || !draft.phone || !draft.description || !draft.address || !draft.city || !draft.state || !draft.zip || !draft.formattedAddress || (policy.requiredDocuments.logo && !draft.logoUrl) || (policy.requiredDocuments.banner && !draft.bannerUrl)) missing.push("store information");
   if (!draft.businessType || !draft.registeredName || !draft.businessStructure || (policy.requiredDocuments.storeFront && !draft.storeFrontUrl) || (policy.requiredDocuments.storeInside && !draft.storeInsideUrl)) missing.push("business information");
   if (scheduleError(draft.schedule)) missing.push("business schedule");
+  if (
+    draft.merchantAgreementAcceptance?.accepted !== true ||
+    draft.merchantAgreementAcceptance.version !== storeMerchantAgreementVersion ||
+    draft.merchantAgreementAcceptance.acceptedByUid !== draft.ownerId
+  ) missing.push("merchant agreement acknowledgment");
   /*
    * Stripe may take time to verify the submitted payout details. A store can
    * submit its LIA application as soon as it has completed Stripe's hosted
@@ -388,11 +417,15 @@ export const saveStoreOnboardingOwner = onCall({ region: "us-central1", secrets:
   if (!location) throw new HttpsError("invalid-argument", "We couldn't verify your home address. Check the street, city, state, and ZIP code.");
   const zone = await resolveDeliveryZoneForAddress(input.city, state, input.zip, location.placeId);
   const photoChanged = requireRecord(request.data).photoIdUploaded === true;
+  const ownerIdentityChanged =
+    text(owner.firstName).trim().toLocaleLowerCase() !== text(input.firstName).trim().toLocaleLowerCase() ||
+    text(owner.lastName).trim().toLocaleLowerCase() !== text(input.lastName).trim().toLocaleLowerCase();
   await store.ref.update({
     ownerId: request.auth.uid,
     "owner.firstName": text(input.firstName).trim(), "owner.lastName": text(input.lastName).trim(), "owner.email": text(input.email).trim(), "owner.phone": text(input.phone).trim(),
     "owner.address": upper(text(input.address)), "owner.city": upper(text(input.city)), "owner.state": state, "owner.zip": upper(text(input.zip)), "owner.formattedAddress": upper(location.formattedAddress),
     ...(photoChanged ? { "owner.photoIdReview": pendingReview(), "owner.photoIdSubmissionVersion": (typeof owner.photoIdSubmissionVersion === "number" ? owner.photoIdSubmissionVersion : 0) + 1 } : {}),
+    ...(ownerIdentityChanged && data.merchantAgreementAcceptance ? {merchantAgreementAcceptance: FieldValue.delete()} : {}),
     ...lifecycleFor(data),
     updatedAt: FieldValue.serverTimestamp(),
   });
@@ -456,11 +489,13 @@ export const saveStoreOnboardingBusinessInformation = onCall({ region: "us-centr
   const frontChanged = input.storeFrontUploaded === true;
   const insideChanged = input.storeInsideUploaded === true;
   const structure = text(input.businessStructure);
+  const registeredNameChanged = text(data.registeredName).trim().toLocaleLowerCase() !== text(input.registeredName).trim().toLocaleLowerCase();
   await store.ref.update({
     businessType: text(input.businessType), registeredName: text(input.registeredName).trim(), ein: text(input.ein).trim() || null, businessStructure: structure,
     stripeBusinessType: text(input.businessType), stripeAccountType: structure === "sole_proprietorship" || structure === "dba" ? "individual" : "company",
     ...(frontChanged ? { storeFrontReview: pendingReview(), storeFrontSubmissionVersion: (typeof data.storeFrontSubmissionVersion === "number" ? data.storeFrontSubmissionVersion : 0) + 1 } : {}),
     ...(insideChanged ? { storeInsideReview: pendingReview(), storeInsideSubmissionVersion: (typeof data.storeInsideSubmissionVersion === "number" ? data.storeInsideSubmissionVersion : 0) + 1 } : {}),
+    ...(registeredNameChanged && data.merchantAgreementAcceptance ? {merchantAgreementAcceptance: FieldValue.delete()} : {}),
     onboardingStep: data.onboardingCompleted === true ? text(data.onboardingStep) || "stripe" : "schedule",
     updatedAt: FieldValue.serverTimestamp(),
   });
@@ -477,7 +512,73 @@ export const saveStoreOnboardingSchedule = onCall({ region: "us-central1" }, asy
   const store = await requireOwnedStore(request.auth.uid);
   requireApplicationEditable(store);
   const data = store.data() ?? {};
-  await store.ref.update({ schedule, isOpen: data.onboardingCompleted === true ? data.isOpen === true : false, onboardingStep: data.onboardingCompleted === true ? text(data.onboardingStep) || "stripe" : "stripe", updatedAt: FieldValue.serverTimestamp() });
+  await store.ref.update({ schedule, isOpen: data.onboardingCompleted === true ? data.isOpen === true : false, onboardingStep: data.onboardingCompleted === true ? text(data.onboardingStep) || "stripe" : "agreement", updatedAt: FieldValue.serverTimestamp() });
+  const updated = await store.ref.get();
+  return mapDraft(store.id, request.auth.uid, updated.data());
+});
+
+export const acceptStoreMerchantAgreement = onCall({region: "us-central1"}, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Sign in to accept the merchant agreement.");
+  await enforceCallableAbuseProtection({
+    operation: "store-merchant-agreement",
+    uid: request.auth.uid,
+    appCheckVerified: Boolean(request.app),
+    maximumRequests: 5,
+    windowSeconds: 86_400,
+  });
+  await requireStoreOwner(request.auth.uid);
+  const input = requireRecord(request.data);
+  const acknowledgments = requireRecord(input.acknowledgments);
+  const requiredAcknowledgments = [
+    "readAndUnderstood",
+    "authorityConfirmed",
+    "qualityAndFoodSafetyAccepted",
+    "refundRecoveryUnderstood",
+    "suspensionTerminationUnderstood",
+    "customerProtectionAccepted",
+  ];
+  if (!requiredAcknowledgments.every((key) => acknowledgments[key] === true)) {
+    throw new HttpsError("invalid-argument", "Accept every merchant agreement acknowledgment to continue.");
+  }
+  const representativeName = text(input.representativeName).trim().replace(/\s+/g, " ");
+  const store = await requireOwnedStore(request.auth.uid);
+  requireApplicationEditable(store);
+  const data = store.data() ?? {};
+  const owner = isRecord(data.owner) ? data.owner : {};
+  const expectedName = `${text(owner.firstName).trim()} ${text(owner.lastName).trim()}`.trim().replace(/\s+/g, " ");
+  if (!expectedName || representativeName.toLocaleLowerCase() !== expectedName.toLocaleLowerCase()) {
+    throw new HttpsError("invalid-argument", `Enter the authorized representative name exactly as ${expectedName || "saved in owner information"}.`);
+  }
+  if (!text(data.registeredName) || scheduleError(data.schedule)) {
+    throw new HttpsError("failed-precondition", "Complete the business information and schedule before accepting the agreement.");
+  }
+
+  const acceptance = {
+    accepted: true,
+    version: storeMerchantAgreementVersion,
+    representativeName,
+    acceptedByUid: request.auth.uid,
+    acceptedByEmail: text(request.auth.token.email) || null,
+    acceptedAt: FieldValue.serverTimestamp(),
+    manualSignatureRequired: true,
+    acknowledgments: Object.fromEntries(requiredAcknowledgments.map((key) => [key, true])),
+  };
+  const auditReference = store.ref.collection("agreementAcceptanceAudit").doc();
+  await db.runTransaction(async (transaction) => {
+    const latest = await transaction.get(store.ref);
+    requireApplicationEditable(latest);
+    transaction.update(store.ref, {
+      merchantAgreementAcceptance: acceptance,
+      onboardingStep: "stripe" as StoreOnboardingStep,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    transaction.set(auditReference, {
+      ...acceptance,
+      storeId: store.id,
+      registeredName: text(latest.data()?.registeredName),
+      createdAt: FieldValue.serverTimestamp(),
+    });
+  });
   const updated = await store.ref.get();
   return mapDraft(store.id, request.auth.uid, updated.data());
 });

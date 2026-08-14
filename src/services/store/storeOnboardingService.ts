@@ -192,6 +192,25 @@ export const storeOnboardingService = {
     });
   },
 
+  async acceptMerchantAgreement(
+    ownerId: string,
+    representativeName: string,
+  ): Promise<StoreOnboardingDraft> {
+    requireOwnedStoreOwnerId(ownerId);
+
+    return call<StoreOnboardingDraft>("acceptStoreMerchantAgreement", {
+      representativeName,
+      acknowledgments: {
+        readAndUnderstood: true,
+        authorityConfirmed: true,
+        qualityAndFoodSafetyAccepted: true,
+        refundRecoveryUnderstood: true,
+        suspensionTerminationUnderstood: true,
+        customerProtectionAccepted: true,
+      },
+    });
+  },
+
   async complete(ownerId: string): Promise<void> {
     requireOwnedStoreOwnerId(ownerId);
 

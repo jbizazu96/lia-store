@@ -35,12 +35,16 @@ export interface RegistrationInput {
   phone: string;
   password: string;
   accountType: RegistrationAccountType;
+  customerTermsAccepted?: boolean;
+  customerPrivacyAcknowledged?: boolean;
 }
 
 interface InitializeUserProfileInput {
   fullName: string;
   phone: string;
   accountType: RegistrationAccountType;
+  customerTermsAccepted?: boolean;
+  customerPrivacyAcknowledged?: boolean;
 }
 
 /*
@@ -80,6 +84,8 @@ export const registrationService = {
         fullName: input.fullName,
         phone: input.phone,
         accountType: input.accountType,
+        customerTermsAccepted: input.customerTermsAccepted,
+        customerPrivacyAcknowledged: input.customerPrivacyAcknowledged,
       });
 
       profileInitialized = true;

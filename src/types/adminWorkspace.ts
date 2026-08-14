@@ -71,6 +71,7 @@ export interface AdminStoreApplicationDetail {
   zoneAssignment: {homeZoneId: string | null; serviceZoneIds: string[]};
   owner: {name: string; email: string; phone: string; address: string};
   store: {name: string; email: string; phone: string; description: string; address: string; businessType: string; registeredName: string; ein: string; businessStructure: string; schedule: Array<{day: string; open: string; close: string; isClosed: boolean}>};
+  merchantAgreement: {accepted: boolean; version: string | null; representativeName: string | null; acceptedByEmail: string | null; acceptedAt: string | null; manualSignatureRequired: boolean};
   stripe: {accountStatus: string; detailsSubmitted: boolean; transfersEnabled: boolean; payoutsEnabled: boolean; requiresAction: boolean};
   documents: AdminReviewDocument[];
   applicationReview: Record<string, unknown>;

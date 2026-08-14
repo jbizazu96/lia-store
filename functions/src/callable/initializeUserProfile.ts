@@ -18,6 +18,7 @@ import {
 import {
   getFirestore,
 } from "firebase-admin/firestore";
+import {getCurrentCustomerLegalDocuments} from "../legal/customerLegalConfig";
 
 type RegistrationAccountType =
   | "customer"
@@ -28,6 +29,8 @@ interface InitializeUserProfileData {
   fullName?: string;
   phone?: string;
   accountType?: RegistrationAccountType;
+  customerTermsAccepted?: boolean;
+  customerPrivacyAcknowledged?: boolean;
 }
 
 const ALLOWED_ACCOUNT_TYPES: RegistrationAccountType[] = [
@@ -93,6 +96,13 @@ export const initializeUserProfile = onCall<InitializeUserProfileData>(
     const phone = normalizePhone(request.data.phone ?? "");
     const authUser = await admin.auth().getUser(request.auth.uid);
 
+    if (accountType === "customer" && request.data.customerTermsAccepted !== true) {
+      throw new HttpsError("failed-precondition", "Accept the LIA Customer Terms of Service before creating a customer profile.");
+    }
+    if (accountType === "customer" && request.data.customerPrivacyAcknowledged !== true) {
+      throw new HttpsError("failed-precondition", "Acknowledge the LIA Privacy Policy before creating a customer profile.");
+    }
+
     if (!authUser.email || !authUser.email.includes("@")) {
       throw new HttpsError(
         "failed-precondition",
@@ -125,7 +135,12 @@ export const initializeUserProfile = onCall<InitializeUserProfileData>(
       };
     }
 
-    await userReference.create({
+    const now = admin.firestore.FieldValue.serverTimestamp();
+    const firestore = getFirestore("default");
+    const currentLegalDocuments = accountType === "customer" ? await getCurrentCustomerLegalDocuments(firestore) : [];
+    const legalAcceptances = Object.fromEntries(currentLegalDocuments.filter((document) => document.requiresAcceptance).map((document) => [document.acceptanceField, {accepted: true, ...document, acceptedByUid: request.auth!.uid, acceptedByEmail: authUser.email!.trim().toLowerCase(), acceptedAt: now, source: "registration"}]));
+    const batch = firestore.batch();
+    batch.create(userReference, {
       uid: request.auth.uid,
       displayName: fullName,
       email: authUser.email.trim().toLowerCase(),
@@ -138,9 +153,12 @@ export const initializeUserProfile = onCall<InitializeUserProfileData>(
         ? admin.firestore.FieldValue.serverTimestamp()
         : null,
       onboardingCompleted: accountType === "customer",
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      ...(currentLegalDocuments.length > 0 ? {legalAcceptances} : {}),
+      createdAt: now,
+      updatedAt: now,
     });
+    for (const acceptance of Object.values(legalAcceptances)) batch.set(userReference.collection("legalAcceptanceAudit").doc(), {...acceptance, createdAt: now});
+    await batch.commit();
 
     return {
       created: true,
@@ -148,4 +166,3 @@ export const initializeUserProfile = onCall<InitializeUserProfileData>(
     };
   }
 );
-

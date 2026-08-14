@@ -130,12 +130,12 @@ export default function HelpPage() {
               <span className="min-w-0 flex-1"><span className="block text-sm font-extrabold text-gray-900">Request an Order Zone</span><span className="mt-1 block text-xs leading-5 text-gray-500">Ask LIA Support for permission to order from a store outside your current zone and normal delivery radius.</span></span>
               <ChevronRight className="h-5 w-5 text-orange-500 transition group-hover:translate-x-0.5" />
             </button>
-            <a href="mailto:support@liamarketplace.com" className="group flex items-center gap-4 rounded-2xl border border-gray-200 bg-white p-4 shadow-[0_4px_12px_rgba(15,23,42,0.06)] transition hover:-translate-y-0.5 hover:border-orange-200 hover:bg-white">
+            <a href="mailto:info@liamarketplace.com" className="group flex items-center gap-4 rounded-2xl border border-gray-200 bg-white p-4 shadow-[0_4px_12px_rgba(15,23,42,0.06)] transition hover:-translate-y-0.5 hover:border-orange-200 hover:bg-white">
               <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-orange-50 text-orange-600"><Mail className="h-5 w-5" /></span>
               <span className="min-w-0 flex-1"><span className="block text-sm font-extrabold text-gray-900">Contact LIA Support</span><span className="mt-1 block text-xs leading-5 text-gray-500">Account questions, delivery concerns, or general help.</span></span>
               <ChevronRight className="h-5 w-5 text-orange-500 transition group-hover:translate-x-0.5" />
             </a>
-            <a href="mailto:support@liamarketplace.com?subject=Report%20an%20issue" className="group flex items-center gap-4 rounded-2xl border border-gray-200 bg-white p-4 shadow-[0_4px_12px_rgba(15,23,42,0.06)] transition hover:-translate-y-0.5 hover:border-red-200 hover:bg-white">
+            <a href="mailto:info@liamarketplace.com?subject=Report%20an%20issue" className="group flex items-center gap-4 rounded-2xl border border-gray-200 bg-white p-4 shadow-[0_4px_12px_rgba(15,23,42,0.06)] transition hover:-translate-y-0.5 hover:border-red-200 hover:bg-white">
               <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-red-50 text-red-600"><FileWarning className="h-5 w-5" /></span>
               <span className="min-w-0 flex-1"><span className="block text-sm font-extrabold text-gray-900">Report an issue</span><span className="mt-1 block text-xs leading-5 text-gray-500">Tell us about a technical problem or something that needs attention.</span></span>
               <ChevronRight className="h-5 w-5 text-red-500 transition group-hover:translate-x-0.5" />

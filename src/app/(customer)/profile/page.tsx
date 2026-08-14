@@ -189,7 +189,7 @@ export default function ProfilePage() {
       icon: FileText,
       label: "Legal",
       description: "Policies and legal documents",
-      onClick: () => router.push("/legal"),
+      onClick: () => router.push("/legal?returnTo=%2Fprofile"),
     },
     {
       icon: Shield,

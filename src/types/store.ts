@@ -54,7 +54,7 @@ export interface Store {
   isApproved: boolean;
   isActive: boolean;
   onboardingCompleted?: boolean;
-  onboardingStep?: "owner" | "store-information" | "business-information" | "schedule" | "stripe";
+  onboardingStep?: "owner" | "store-information" | "business-information" | "schedule" | "agreement" | "stripe";
   owner?: StoreOwnerProfile;
   isOpen: boolean;
   schedule?: StoreScheduleDay[];

@@ -258,7 +258,18 @@ export {
 export {
   getCurrentAccount,
 } from "./callable/currentAccount";
+export {acceptCustomerTerms, getCustomerTermsStatus} from "./callable/customerLegal";
 export {
+  archiveAdminLegalDocument,
+  createAdminLegalDocumentDraft,
+  deleteAdminLegalDocumentDraft,
+  getAdminLegalDocuments,
+  getPublicLegalDocument,
+  publishAdminLegalDocument,
+  updateAdminLegalDocumentDraft,
+} from "./callable/legalDocuments";
+export {
+  acceptStoreMerchantAgreement,
   completeStoreOnboarding,
   ensureStoreOnboardingDraft,
   getStoreOnboardingDraft,
@@ -701,6 +712,7 @@ export {
 } from "./callable/adminOrderSupport";
 export {
   createAccountSupportRequest,
+  createPublicSupportRequest,
   getAdminAccountSupportRequests,
   respondAdminAccountSupportRequest,
 } from "./callable/accountSupport";

@@ -16,7 +16,20 @@ export type StoreOnboardingStep =
   | "store-information"
   | "business-information"
   | "schedule"
+  | "agreement"
   | "stripe";
+
+export const STORE_MERCHANT_AGREEMENT_VERSION = "lia-merchant-agreement-v1";
+
+export interface StoreMerchantAgreementAcceptance {
+  accepted: boolean;
+  version: string;
+  representativeName: string;
+  acceptedByUid: string;
+  acceptedByEmail: string | null;
+  acceptedAt: string | null;
+  manualSignatureRequired: boolean;
+}
 
 /* Store application review is separate from marketplace activation. */
 export type StoreApplicationStatus =
@@ -107,6 +120,7 @@ export interface StoreOnboardingDraft {
   ein: string;
   businessStructure: string;
   schedule: StoreScheduleDay[];
+  merchantAgreementAcceptance?: StoreMerchantAgreementAcceptance;
   stripeAccountId?: string;
   stripeAccountStatus?: StripeOnboardingStatus;
   stripeDetailsSubmitted?: boolean;
@@ -122,6 +136,7 @@ export const ONBOARDING_STEPS: StoreOnboardingStep[] = [
   "store-information",
   "business-information",
   "schedule",
+  "agreement",
   "stripe",
 ];
 

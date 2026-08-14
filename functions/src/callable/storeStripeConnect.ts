@@ -37,6 +37,7 @@ if (admin.apps.length === 0) {
 
 const db = getFirestore("default");
 const stripeSecretKey = defineSecret("STRIPE_SECRET_KEY");
+const storeMerchantAgreementVersion = "lia-merchant-agreement-v1";
 
 /*
  * This trusted application origin is used only for Stripe return URLs.
@@ -58,6 +59,21 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function text(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function requireCurrentMerchantAgreement(data: Record<string, unknown>) {
+  const acceptance = isRecord(data.merchantAgreementAcceptance)
+    ? data.merchantAgreementAcceptance
+    : {};
+  if (
+    acceptance.accepted !== true ||
+    text(acceptance.version) !== storeMerchantAgreementVersion
+  ) {
+    throw new HttpsError(
+      "failed-precondition",
+      "Accept the current LIA Merchant Agreement before setting up Stripe payouts.",
+    );
+  }
 }
 
 function requireStoreId(data: unknown): string {
@@ -205,6 +221,7 @@ export const createOrRetrieveStoreStripeAccount = onCall({
     const store = await requireOwnedStore(request.auth.uid, storeId);
     const data = store.data() ?? {};
     requireStripeAccess(store, data.onboardingCompleted === true ? "settings" : "onboarding");
+    if (data.onboardingCompleted !== true) requireCurrentMerchantAgreement(data);
     const existingAccountId = text(data.stripeAccountId);
     if (existingAccountId && text(data.stripeConnectApiVersion) !== "v2") {
       throw new HttpsError("failed-precondition", "This store has a legacy Stripe connection. Reconnect Stripe to use the current payment setup.");
@@ -258,6 +275,7 @@ export const createStoreStripeOnboardingLink = onCall({
     const store = await requireOwnedStore(request.auth.uid, storeId);
     const data = store.data() ?? {};
     requireStripeAccess(store, returnContext);
+    if (returnContext === "onboarding") requireCurrentMerchantAgreement(data);
     const accountId = text(data.stripeAccountId);
     if (!accountId) throw new HttpsError("failed-precondition", "Create the store's Stripe account before starting onboarding.");
     if (text(data.stripeConnectApiVersion) !== "v2") throw new HttpsError("failed-precondition", "This store has a legacy Stripe connection. Reconnect Stripe to use the current payment setup.");

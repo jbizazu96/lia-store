@@ -106,6 +106,15 @@ function applicationStatus(value: unknown): "draft" | "pending_review" | "approv
     : "draft";
 }
 
+const storeMerchantAgreementVersion = "lia-merchant-agreement-v1";
+
+function hasCurrentStoreMerchantAgreement(data: Record<string, unknown>): boolean {
+  const acceptance = record(data.merchantAgreementAcceptance);
+  return acceptance.accepted === true &&
+    text(acceptance.version) === storeMerchantAgreementVersion &&
+    text(acceptance.acceptedByUid) === text(data.ownerId);
+}
+
 function reviewFieldsForStore(
   data: Record<string, unknown>,
   policy: StoreApplicationPolicy,
@@ -356,6 +365,7 @@ export const getAdminStoreApplication = onCall(
     const data = store.data() ?? {};
     const policy = await getStoreApplicationPolicy();
     const owner = record(data.owner);
+    const agreement = record(data.merchantAgreementAcceptance);
 
     return {
       id: store.id,
@@ -377,6 +387,14 @@ export const getAdminStoreApplication = onCall(
         address: text(data.formattedAddress) || [text(data.address), text(data.city), text(data.state), text(data.zip)].filter(Boolean).join(", "),
         businessType: text(data.businessType), registeredName: text(data.registeredName), ein: text(data.ein), businessStructure: text(data.businessStructure),
         schedule: Array.isArray(data.schedule) ? data.schedule : [],
+      },
+      merchantAgreement: {
+        accepted: hasCurrentStoreMerchantAgreement(data),
+        version: text(agreement.version) || null,
+        representativeName: text(agreement.representativeName) || null,
+        acceptedByEmail: text(agreement.acceptedByEmail) || null,
+        acceptedAt: timestamp(agreement.acceptedAt),
+        manualSignatureRequired: agreement.manualSignatureRequired === true,
       },
       stripe: {accountStatus: text(data.stripeAccountStatus) || "not_started", detailsSubmitted: data.stripeDetailsSubmitted === true, transfersEnabled: data.stripeTransfersEnabled === true, payoutsEnabled: data.stripePayoutsEnabled === true, requiresAction: data.stripeRequiresAction === true},
       documents: reviewFieldsForStore(data, policy),
@@ -539,6 +557,9 @@ export const decideAdminApplication = onCall(
     if (outcome === "approved" && data.onboardingCompleted !== true) {
       throw new HttpsError("failed-precondition", "The applicant has not submitted a complete onboarding application.");
     }
+    if (outcome === "approved" && type === "store" && !hasCurrentStoreMerchantAgreement(data)) {
+      throw new HttpsError("failed-precondition", "The store owner has not accepted the current LIA Merchant Agreement.");
+    }
 
     await application.ref.update({
       status: outcome === "approved" ? "approved" : "rejected",
@@ -590,6 +611,9 @@ export const setAdminStoreApproval = onCall(
       }
       if (isApproved && data.onboardingCompleted !== true) {
         throw new HttpsError("failed-precondition", "The store owner has not submitted a complete onboarding application.");
+      }
+      if (isApproved && !hasCurrentStoreMerchantAgreement(data)) {
+        throw new HttpsError("failed-precondition", "The store owner has not accepted the current LIA Merchant Agreement.");
       }
       if (isApproved && !policy.allowWorkspaceApprovalBeforeDocumentReview &&
         !allRequiredStoreDocumentsApproved(data, policy)) {
@@ -697,6 +721,9 @@ export const activateAdminStore = onCall(
       }
       if (isActive && data.isApproved !== true) {
         throw new HttpsError("failed-precondition", "Approve the store before activating it.");
+      }
+      if (isActive && !hasCurrentStoreMerchantAgreement(data)) {
+        throw new HttpsError("failed-precondition", "The store owner has not accepted the current LIA Merchant Agreement.");
       }
       if (isActive && policy.requireApprovedDocumentsForActivation &&
         !allRequiredStoreDocumentsApproved(data, policy)) {

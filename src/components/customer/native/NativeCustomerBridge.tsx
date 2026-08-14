@@ -93,7 +93,7 @@ export function NativeCustomerBridge() {
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
 
-    const listener = App.addListener("backButton", ({ canGoBack }) => {
+    const listener = App.addListener("backButton", ({canGoBack}) => {
       if (pathname === "/home" || pathname === "/login" || pathname === "/") {
         void App.exitApp();
       } else if (canGoBack && window.history.length > 1) {

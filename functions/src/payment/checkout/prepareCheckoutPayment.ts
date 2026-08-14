@@ -57,6 +57,7 @@ import {
 } from "firebase-admin/firestore";
 import {requireAccountOperational} from "../../accountDeletion/accountDeletionAccessService";
 import {enforceCallableAbuseProtection} from "../../security/callableAbuseProtection";
+import {requireCurrentCustomerLegalDocuments} from "../../legal/customerLegalConfig";
 
 import {
   checkoutDataService,
@@ -621,6 +622,8 @@ export const prepareCheckoutPayment =
           "This customer account is currently suspended. Contact support for help."
         );
       }
+
+      await requireCurrentCustomerLegalDocuments(db, customerProfile.data() ?? {}, request.auth.uid);
 
       /*
         These references are populated only for a newly created session.

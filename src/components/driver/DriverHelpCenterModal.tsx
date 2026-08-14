@@ -117,7 +117,7 @@ export function DriverHelpCenterModal({
         </div>
 
         <a
-          href="mailto:support@liamarketplace.com?subject=Driver%20Help%20Request"
+          href="mailto:info@liamarketplace.com?subject=Driver%20Help%20Request"
           className="mt-5 flex items-center justify-center gap-2 rounded-xl bg-orange-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-orange-700"
         >
           <Mail className="h-4 w-4" />

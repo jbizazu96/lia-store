@@ -118,7 +118,7 @@ export default function AdminNotificationsPage() {
     <section className="mx-auto max-w-3xl">
       <button
         type="button"
-        onClick={() => router.back()}
+        onClick={() => router.push("/admin")}
         className="mb-5 inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-bold text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50"
       >
         <ChevronRight className="h-4 w-4 rotate-180" />
