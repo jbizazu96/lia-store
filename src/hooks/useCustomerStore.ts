@@ -50,13 +50,13 @@ import {
   calculateDeliveryFee,
   getDeliveryFeeDisplay,
 } from "@/services/delivery/deliveryPricing";
-import {useApplicableMarketplacePricing} from "@/hooks/useMarketplacePricingPolicy";
-import {useOrderDeliveryPolicy} from "@/hooks/useOrderDeliveryPolicy";
+import {marketplacePricingClientService, type ApplicableMarketplacePricing} from "@/services/pricing/marketplacePricingClientService";
 
 import type { Category } from "@/types/category";
 import type { Product } from "@/types/product";
 import type { CustomerStore } from "@/types/view-models/customerStore";
 import type { Promotion } from "@/types/promotion";
+import {startCustomerPerformanceTrace} from "@/services/performance/customerPerformanceService";
 
 /*
 |--------------------------------------------------------------------------
@@ -174,8 +174,8 @@ export function useCustomerStore({
 
   skipDistanceWarning = false,
 }: UseCustomerStoreParams): UseCustomerStoreResult {
-  const orderDeliveryPolicy = useOrderDeliveryPolicy();
-  const applicablePricing = useApplicableMarketplacePricing(storeId);
+  const [applicablePricing, setApplicablePricing] =
+    useState<ApplicableMarketplacePricing | null>(null);
   const marketplacePolicy = applicablePricing?.policy ?? null;
   const [store, setStore] =
     useState<CustomerStore | null>(null);
@@ -215,22 +215,7 @@ export function useCustomerStore({
     */
 
     const loadStoreData = async () => {
-      /*
-      - The store view needs the trusted pricing policy to calculate delivery
-      - details. Do not finish loading while that independent policy request
-      - is still pending: otherwise pages briefly render their empty-store
-      - error state before this effect reruns with the policy.
-       */
-      if (!marketplacePolicy) {
-        /*
-         * This also covers a route change while the policy cache is being
-         * refreshed. Keep the existing screen behind the loader rather than
-         * briefly rendering the page's "store not found" fallback.
-         */
-        setLoading(true);
-        setError(null);
-        return;
-      }
+      const storeTrace = startCustomerPerformanceTrace("customer_store_ready");
 
       try {
         setLoading(true);
@@ -252,8 +237,20 @@ export function useCustomerStore({
         |--------------------------------------------------------------------------
         */
 
-        const domainStore =
-          await storeService.getStore(storeId);
+        const [domainStore, storeCategories, customerLocation, pricingBootstrap] =
+          await Promise.all([
+            storeService.getStore(storeId),
+            productService.getStoreProductPreview(storeId),
+            customerLocationRequest,
+            marketplacePricingClientService.getHomeBootstrap([storeId]),
+          ]);
+
+        const currentPricing = pricingBootstrap.byStoreId[storeId] ?? {
+          policy: pricingBootstrap.policy,
+          decision: null,
+        };
+        const currentPolicy = currentPricing.policy;
+        const currentOrderDeliveryPolicy = pricingBootstrap.orderDeliveryPolicy;
 
         if (!domainStore) {
           if (isMounted) {
@@ -261,6 +258,7 @@ export function useCustomerStore({
             setError("Store not found");
             setResolvedStoreId(storeId);
           }
+          storeTrace.stop({status: "not_found"});
 
           return;
         }
@@ -271,6 +269,7 @@ export function useCustomerStore({
             setError("This store is not currently available.");
             setResolvedStoreId(storeId);
           }
+          storeTrace.stop({status: "unavailable"});
 
           return;
         }
@@ -280,11 +279,6 @@ export function useCustomerStore({
         | Load Products
         |--------------------------------------------------------------------------
         */
-
-        const [storeCategories, customerLocation] = await Promise.all([
-          productService.getStoreProductPreview(storeId),
-          customerLocationRequest,
-        ]);
 
         const previewProducts = storeCategories.flatMap(
           (category) => category.products,
@@ -367,9 +361,9 @@ export function useCustomerStore({
                 calculateDeliveryFee(
                   distance,
                   0,
-                  marketplacePolicy,
-                  marketplacePolicy.peakSurchargeEnabled,
-                  applicablePricing?.decision?.zoneAccessType !== "customer_order_zone",
+                  currentPolicy,
+                  currentPolicy.peakSurchargeEnabled,
+                  currentPricing.decision?.zoneAccessType !== "customer_order_zone",
                 );
 
               deliveryFee =
@@ -378,7 +372,7 @@ export function useCustomerStore({
               estimatedTime =
                 getEstimatedTimeNumber(
                   distance,
-                  orderDeliveryPolicy,
+                  currentOrderDeliveryPolicy,
                 );
             }
           }
@@ -401,19 +395,19 @@ export function useCustomerStore({
               deliveryFeeDisplay:
                 getDeliveryFeeDisplay(
                   distance,
-                  marketplacePolicy,
-                  applicablePricing?.decision?.zoneAccessType !== "customer_order_zone",
+                  currentPolicy,
+                  currentPricing.decision?.zoneAccessType !== "customer_order_zone",
                 ),
 
               estimatedPrepTime:
                 estimatedTime ||
-                orderDeliveryPolicy?.defaultPreparationMinutes ||
+                currentOrderDeliveryPolicy.defaultPreparationMinutes ||
                 0,
 
               estimatedDeliveryTime:
                 getEstimatedTime(
                   distance,
-                  orderDeliveryPolicy,
+                  currentOrderDeliveryPolicy,
                 ),
 
               categories:
@@ -425,9 +419,9 @@ export function useCustomerStore({
                 ),
 
               isFavorite: false,
-              maxDeliveryMiles: marketplacePolicy.maxRadiusMiles,
-              zoneAccessAllowed: applicablePricing?.decision?.allowed ?? true,
-              zoneAccessType: applicablePricing?.decision?.zoneAccessType ?? "default_pricing",
+              maxDeliveryMiles: currentPolicy.maxRadiusMiles,
+              zoneAccessAllowed: currentPricing.decision?.allowed ?? true,
+              zoneAccessType: currentPricing.decision?.zoneAccessType ?? "default_pricing",
             }
           );
 
@@ -442,6 +436,7 @@ export function useCustomerStore({
         }
 
         setStore(customerStore);
+        setApplicablePricing(currentPricing);
         setProducts(previewProducts);
         setCategories(storeCategories);
         setResolvedStoreId(storeId);
@@ -529,9 +524,9 @@ export function useCustomerStore({
         };
 
         const exceedsDeliveryRadius =
-          applicablePricing?.decision?.zoneAccessType !== "customer_order_zone" &&
-          distance > marketplacePolicy.maxRadiusMiles;
-        const cannotOrder = exceedsDeliveryRadius || applicablePricing?.decision?.allowed === false;
+          currentPricing.decision?.zoneAccessType !== "customer_order_zone" &&
+          distance > currentPolicy.maxRadiusMiles;
+        const cannotOrder = exceedsDeliveryRadius || currentPricing.decision?.allowed === false;
 
         setDistanceValue(distance);
 
@@ -539,8 +534,10 @@ export function useCustomerStore({
           cannotOrder &&
           !skipDistanceWarning
         );
+        storeTrace.stop({status: "success", category_count: String(storeCategories.length)});
 
       } catch (loadError) {
+        storeTrace.stop({status: "error"});
         console.error(
           "Error loading customer store:",
           loadError
@@ -586,9 +583,6 @@ export function useCustomerStore({
     deliveryFeeParam,
     estimatedTimeParam,
     skipDistanceWarning,
-    marketplacePolicy,
-    applicablePricing,
-    orderDeliveryPolicy,
   ]);
 
   /*

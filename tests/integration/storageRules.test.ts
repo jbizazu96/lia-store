@@ -74,6 +74,36 @@ function customerMetadata(overrides: Record<string, string> = {}) {
   };
 }
 
+function productMetadata(overrides: Record<string, string> = {}) {
+  return {
+    contentType: "image/jpeg",
+    customMetadata: {
+      storeId: "store-1",
+      productId: "product-1",
+      imageId: IMAGE_ID,
+      galleryImageId: IMAGE_ID,
+      processingType: "product-gallery-image-original",
+      ...overrides,
+    },
+  };
+}
+
+describe("store product gallery rules", () => {
+  const path = `stores/store-1/products/product-1/gallery/${IMAGE_ID}/original.jpg`;
+
+  it("accepts the server-reserved original using the store upload claim", async () => {
+    const storage = testEnv.authenticatedContext("owner-1", {storeUploadStoreId: "store-1"}).storage();
+    await assertSucceeds(storage.ref(path).put(SMALL_IMAGE, productMetadata()));
+  });
+
+  it("rejects missing claims and mismatched reservation metadata", async () => {
+    await assertFails(testEnv.authenticatedContext("owner-1").storage().ref(path).put(SMALL_IMAGE, productMetadata()));
+    const storage = testEnv.authenticatedContext("owner-1", {storeUploadStoreId: "store-1"}).storage();
+    await assertFails(storage.ref(path).put(SMALL_IMAGE, productMetadata({productId: "product-2"})));
+    await assertFails(storage.ref(path).put(SMALL_IMAGE, productMetadata({processingType: "wrong"})));
+  });
+});
+
 describe("store onboarding image rules", () => {
   it("accepts a supported reserved original with matching metadata", async () => {
     const storage = testEnv.authenticatedContext("owner-1", {

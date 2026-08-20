@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
 import { motion, AnimatePresence } from "framer-motion";
 import { auth } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
@@ -34,7 +35,6 @@ import { TopNavigation } from "@/components/customer/home/TopNavigation";
 import { SearchBar } from "@/components/customer/home/SearchBar";
 import { PromoCarousel } from "@/components/customer/home/PromoCarousel";
 import { StoreCard } from "@/components/customer/home/StoreCard";
-import { DistanceWarningModal } from "@/components/customer/home/DistanceWarningModal";
 import { FloatingCart } from "@/components/customer/home/FloatingCart";
 import { CustomerBottomNavigation } from "@/components/customer/navigation/CustomerBottomNavigation";
 import { useCart } from "@/context/CartContext";
@@ -42,11 +42,19 @@ import { CustomerPageState } from "@/components/customer/ui/CustomerPageState";
 import { CustomerPageSkeleton } from "@/components/customer/ui/CustomerPageSkeleton";
 import { useCustomerFavoriteStores } from "@/hooks/useCustomerFavoriteStores";
 import { Heart, ShoppingBag, Sparkles } from "lucide-react";
-import { AddressesModal } from "@/components/customer/profile/AddressesModal";
 import { MarketplaceCategoryNav } from "@/components/customer/home/MarketplaceCategoryNav";
 import {marketplacePricingClientService} from "@/services/pricing/marketplacePricingClientService";
 import type {MarketplacePricingPolicy} from "@/services/pricing/marketplacePricingClientService";
 import {startCustomerPerformanceTrace} from "@/services/performance/customerPerformanceService";
+
+const DistanceWarningModal = dynamic(
+  () => import("@/components/customer/home/DistanceWarningModal").then((module) => module.DistanceWarningModal),
+  {ssr: false},
+);
+const AddressesModal = dynamic(
+  () => import("@/components/customer/profile/AddressesModal").then((module) => module.AddressesModal),
+  {ssr: false},
+);
 
 export default function CustomerHomePage() {
   const router = useRouter();
@@ -62,6 +70,7 @@ export default function CustomerHomePage() {
   const [storeFilter, setStoreFilter] = useState<"all" | "favorites">("all");
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [deliveryDetailsLoading, setDeliveryDetailsLoading] = useState(false);
   const [catalogStores, setCatalogStores] = useState<Store[]>([]);
   const [catalogReady, setCatalogReady] = useState(false);
   const [marketplacePolicy, setMarketplacePolicy] = useState<MarketplacePricingPolicy | null>(null);
@@ -88,11 +97,34 @@ export default function CustomerHomePage() {
 
   const storeCategories = useMemo(
     () => Array.from(new Set(
-      [...nearbyStores, ...farStores]
+      catalogStores
         .map((store) => store.category?.trim())
         .filter((category): category is string => Boolean(category))
     )).sort((first, second) => first.localeCompare(second)),
-    [farStores, nearbyStores]
+    [catalogStores]
+  );
+
+  const displayedProvisionalStores = useMemo(
+    () => catalogStores
+      .filter(isStoreCustomerVisible)
+      .map((store) => storeMapper.toCustomerStore(store, {
+        distance: 0,
+        deliveryFee: 0,
+        deliveryFeeDisplay: "Calculating…",
+        estimatedPrepTime: 0,
+        estimatedDeliveryTime: "Calculating…",
+        categories: [],
+        promotions: [],
+        isFavorite: favoriteStoreIdSet.has(store.id),
+        maxDeliveryMiles: Number.MAX_SAFE_INTEGER,
+        zoneAccessAllowed: true,
+        zoneAccessType: "default_pricing",
+      }))
+      .filter((store) =>
+        (storeFilter === "all" || store.isFavorite) &&
+        (selectedCategory === null || store.category === selectedCategory)
+      ),
+    [catalogStores, favoriteStoreIdSet, selectedCategory, storeFilter],
   );
 
   const displayedNearbyStores = useMemo(
@@ -231,14 +263,14 @@ export default function CustomerHomePage() {
         setNearbyStores([]);
         setFarStores([]);
         setLoading(false);
+        setDeliveryDetailsLoading(false);
         return;
       }
 
       const homeTrace = startCustomerPerformanceTrace("customer_home_store_discovery");
       try {
-        if (!hasLoadedStoresRef.current) {
-          setLoading(true);
-        }
+        setLoading(false);
+        setDeliveryDetailsLoading(true);
         if (storesData.length > 0) {
           setDistanceError(null);
         }
@@ -258,6 +290,7 @@ export default function CustomerHomePage() {
             hasLoadedStoresRef.current = true;
           }
           homeTrace.stop({store_count: "0"});
+          setDeliveryDetailsLoading(false);
           return;
         }
 
@@ -358,6 +391,7 @@ export default function CustomerHomePage() {
         setNearbyStores(preferredNearby);
         setFarStores(preferredFar);
         hasLoadedStoresRef.current = true;
+        setDeliveryDetailsLoading(false);
         if (preferredResults.length > 0 || exploratoryStores.length === 0) {
           setLoading(false);
           homeTrace.stop({
@@ -379,6 +413,7 @@ export default function CustomerHomePage() {
           );
         }
         setLoading(false);
+        setDeliveryDetailsLoading(false);
         homeTrace.stop({
           stage: "complete",
           store_count: String(preferredResults.length + exploratoryResults.length),
@@ -392,6 +427,7 @@ export default function CustomerHomePage() {
       } finally {
         if (isMounted) {
           setLoading(false);
+          setDeliveryDetailsLoading(false);
         }
       }
     };
@@ -552,7 +588,7 @@ export default function CustomerHomePage() {
             <p className="mt-1 text-sm font-medium text-slate-500">
               {storeFilter === "favorites"
                 ? `${displayedNearbyStores.length + displayedFarStores.length} saved`
-                : `${nearbyStores.length + farStores.length} stores`}
+                : `${deliveryDetailsLoading ? displayedProvisionalStores.length : nearbyStores.length + farStores.length} stores`}
             </p>
           </div>
 
@@ -578,7 +614,7 @@ export default function CustomerHomePage() {
           </button>
         </div>
 
-        {displayedNearbyStores.length === 0 && displayedFarStores.length === 0 ? (
+        {!deliveryDetailsLoading && displayedNearbyStores.length === 0 && displayedFarStores.length === 0 ? (
           <CustomerPageState
             kind="empty"
             title={
@@ -597,7 +633,7 @@ export default function CustomerHomePage() {
           <>
             <div className="grid gap-8">
               <AnimatePresence initial={false} mode="popLayout">
-                {displayedNearbyStores.map((store, index) => (
+                {(deliveryDetailsLoading ? displayedProvisionalStores : displayedNearbyStores).map((store, index) => (
                 <motion.div
                   key={store.id}
                   animate={{ opacity: 1, y: 0 }}
@@ -605,9 +641,12 @@ export default function CustomerHomePage() {
                 >
                   <StoreCard
                     store={store}
-                    onClick={() => handleStoreClick(store)}
+                    onClick={() => deliveryDetailsLoading
+                      ? router.push(`/store/${store.id}`)
+                      : handleStoreClick(store)}
                     onFavoriteChange={setFavorite}
                     priority={index === 0}
+                    pricingLoading={deliveryDetailsLoading}
                   />
                 </motion.div>
                 ))}

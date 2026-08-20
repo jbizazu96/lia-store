@@ -8,7 +8,7 @@ import {enforceCallableAbuseProtection} from "../security/callableAbuseProtectio
 
 if (admin.apps.length === 0) admin.initializeApp();
 
-const appUrl = defineString("APP_URL", {default: "https://liamarketplace.com"});
+const appUrl = defineString("APP_URL", {default: "https://www.liamarketplace.com"});
 const normalizedEmailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function normalizedEmail(value: unknown): string {

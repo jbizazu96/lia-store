@@ -15,6 +15,7 @@ import {
   storeWorkspaceClientService,
 } from "@/services/store/storeWorkspaceClientService";
 import { BrandedLoader } from "@/components/ui/BrandedLoader";
+import {startStorePerformanceTrace} from "@/services/performance/storePerformanceService";
 
 interface AnalyticsData {
   timeZone: string;
@@ -85,6 +86,8 @@ export default function AnalyticsPage() {
 
   useEffect(() => {
     const fetchAnalytics = async () => {
+      const trace = startStorePerformanceTrace("store_analytics_ready");
+      let result = "complete";
       try {
         setLoading(true);
         setError(null);
@@ -95,6 +98,7 @@ export default function AnalyticsPage() {
         setAnalytics(response);
 
       } catch (error) {
+        result = "error";
         console.error("Error fetching analytics:", error);
         const code = typeof error === "object" && error !== null && "code" in error ? String(error.code) : "";
         setError(!navigator.onLine
@@ -103,6 +107,7 @@ export default function AnalyticsPage() {
             ? {title: "Analytics access unavailable", message: "Your store account does not currently have permission to view analytics."}
             : {title: "Analytics could not be loaded", message: "A temporary server problem prevented this report from loading. No zero totals are being substituted."});
       } finally {
+        trace.stop({result, period});
         setLoading(false);
       }
     };

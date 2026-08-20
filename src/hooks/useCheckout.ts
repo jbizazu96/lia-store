@@ -46,6 +46,7 @@ import type {
 import type {
   CheckoutAddress,
 } from "@/app/checkout/types";
+import {startCustomerPerformanceTrace} from "@/services/performance/customerPerformanceService";
 
 /*
 |--------------------------------------------------------------------------
@@ -237,6 +238,7 @@ export function useCheckout({
             setError(null);
           }
 
+          const checkoutTrace = startCustomerPerformanceTrace("customer_checkout_data_ready");
           try {
             /*
             |--------------------------------------------------------------------------
@@ -244,8 +246,10 @@ export function useCheckout({
             |--------------------------------------------------------------------------
             */
 
-            const profile =
-              await customerProfileClientService.getProfile();
+            const [profile, loadedStore] = await Promise.all([
+              customerProfileClientService.getProfile(),
+              storeId ? storeService.getStore(storeId) : Promise.resolve(null),
+            ]);
 
             const resolvedName =
               profile.displayName ||
@@ -275,14 +279,8 @@ export function useCheckout({
             |--------------------------------------------------------------------------
             */
 
-            const loadedStore =
-              storeId
-                ? await storeService.getStore(
-                    storeId
-                  )
-                : null;
-
             if (!isMounted) {
+              checkoutTrace.stop({status: "cancelled"});
               return;
             }
 
@@ -318,7 +316,9 @@ export function useCheckout({
                 "The selected store could not be loaded."
               );
             }
+            checkoutTrace.stop({status: "success"});
           } catch (loadError) {
+            checkoutTrace.stop({status: "error"});
             console.error(
               "Error loading checkout data:",
               loadError

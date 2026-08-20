@@ -2,7 +2,7 @@
 /* eslint-disable react-hooks/set-state-in-effect -- auth transitions intentionally reset owner-scoped workspace state */
 /* eslint-disable react-hooks/exhaustive-deps -- the status listener is keyed by store ID and uses functional state updates for current fields */
 
-import {createContext, useCallback, useContext, useEffect, useMemo, useState} from "react";
+import {createContext, useCallback, useContext, useEffect, useMemo, useRef, useState} from "react";
 import {doc, onSnapshot} from "firebase/firestore";
 import {useAuth} from "@/context/AuthContext";
 import {db} from "@/lib/firebase";
@@ -30,6 +30,7 @@ export function StoreWorkspaceProvider({children}: {children: React.ReactNode}) 
   const [entry, setEntry] = useState<StoreWorkspaceEntry | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const lastRefreshAt = useRef(0);
 
   const refresh = useCallback(async () => {
     if (!user) return;
@@ -40,6 +41,7 @@ export function StoreWorkspaceProvider({children}: {children: React.ReactNode}) 
       // prevents product and order pages from replaying their entrance/loading
       // states merely because the browser tab became active again.
       setEntry((current) => workspaceEntriesMatch(current, next) ? current : next);
+      lastRefreshAt.current = Date.now();
       setError(null);
     } catch (loadError) {
       console.error("Unable to load the store workspace:", loadError);
@@ -92,7 +94,9 @@ export function StoreWorkspaceProvider({children}: {children: React.ReactNode}) 
 
   useEffect(() => {
     const refreshWhenVisible = () => {
-      if (document.visibilityState === "visible") void refresh();
+      if (document.visibilityState === "visible" && Date.now() - lastRefreshAt.current >= 30_000) {
+        void refresh();
+      }
     };
     document.addEventListener("visibilitychange", refreshWhenVisible);
     return () => {

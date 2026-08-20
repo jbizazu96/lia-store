@@ -62,6 +62,7 @@ export function BrandedLoader({message = "Loading..."}: BrandedLoaderProps) {
               alt="LIA Logo" 
               width={48}
               height={48}
+              priority
               className="w-12 h-12 object-contain" 
             />
           </div>

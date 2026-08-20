@@ -21,11 +21,11 @@ import {
 } from "firebase/auth";
 import {
   saveCartToFirestore,
-  loadCartFromFirestore,
   clearCartFromFirestore,
   repeatCompletedOrderInCart,
   type CartItem,
 } from "@/services/cart/cartService";
+import {customerStartupClientService} from "@/services/user/customerStartupClientService";
 
 interface CartContextType {
   items: CartItem[];
@@ -100,8 +100,9 @@ export function CartProvider({children}: {children: ReactNode}) {
     error: unknown
   ): boolean =>
     error instanceof Error &&
-    error.message ===
-      "This account is not authorized to manage a customer cart.";
+    (error.message ===
+      "This account is not authorized to manage a customer cart." ||
+      error.message.includes("not authorized to access the customer app"));
 
   // ✅ Load cart from Firestore on auth change
   useEffect(() => {
@@ -121,7 +122,7 @@ export function CartProvider({children}: {children: ReactNode}) {
       if (user) {
         setIsLoading(true);
         try {
-          const savedItems = await loadCartFromFirestore(user.uid);
+          const savedItems = (await customerStartupClientService.get()).cart.items;
 
           if (!active || auth.currentUser?.uid !== user.uid) {
             return;

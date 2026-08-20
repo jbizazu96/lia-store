@@ -2,6 +2,7 @@
 
 import {httpsCallable} from "firebase/functions";
 import {functions} from "@/lib/firebase";
+import {invalidateCached, loadCached, writeCached} from "@/services/cache/clientDataCache";
 
 export interface CustomerLegalDocumentStatus {
   documentKey: string; title: string; version: string; effectiveDate: string; lastUpdated: string;
@@ -19,6 +20,15 @@ async function call(name: string, data?: unknown): Promise<CustomerTermsStatus> 
 }
 
 export const customerLegalClientService = {
-  getStatus: () => call("getCustomerTermsStatus"),
-  acceptCurrentDocuments: () => call("acceptCustomerTerms", {accepted: true}),
+  getStatus: () => loadCached(
+    "customer-legal-status",
+    () => call("getCustomerTermsStatus"),
+    {ttlMs: 30_000},
+  ),
+  acceptCurrentDocuments: async () => {
+    const status = await call("acceptCustomerTerms", {accepted: true});
+    writeCached("customer-legal-status", status, {ttlMs: 30_000});
+    invalidateCached("customer-startup");
+    return status;
+  },
 };

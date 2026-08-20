@@ -35,8 +35,7 @@ import { storeService } from "@/services/store/storeService";
 import { isStoreCustomerVisible } from "@/services/store/storeAvailability";
 import { formatProductName } from "@/utils/productDisplay";
 import { CustomerPageSkeleton } from "@/components/customer/ui/CustomerPageSkeleton";
-import {DistanceWarningModal} from "@/components/customer/home/DistanceWarningModal";
-import {useApplicableMarketplacePricing} from "@/hooks/useMarketplacePricingPolicy";
+import dynamic from "next/dynamic";
 import {userService} from "@/services/user/userService";
 import {getStoreDeliveryRoute} from "@/services/delivery/deliveryRoutesClientService";
 import {auth} from "@/lib/firebase";
@@ -47,6 +46,14 @@ import type {
   ProductGalleryImage,
 } from "@/types/product";
 import type { Store } from "@/types/store";
+import {startCustomerPerformanceTrace} from "@/services/performance/customerPerformanceService";
+import {marketplacePricingClientService, type ApplicableMarketplacePricing} from "@/services/pricing/marketplacePricingClientService";
+
+const DistanceWarningModal = dynamic(
+  () => import("@/components/customer/home/DistanceWarningModal")
+    .then((module) => module.DistanceWarningModal),
+  {ssr: false},
+);
 
 interface ProductPageProps {
   params: Promise<{ productId: string }>;
@@ -121,13 +128,15 @@ export default function ProductPage({ params }: ProductPageProps) {
   const [purchaseDistance, setPurchaseDistance] = useState(0);
   const [purchaseAllowed, setPurchaseAllowed] = useState<boolean | null>(null);
   const [showPurchaseWarning, setShowPurchaseWarning] = useState(false);
-  const applicablePricing = useApplicableMarketplacePricing(store?.id);
+  const [applicablePricing, setApplicablePricing] =
+    useState<ApplicableMarketplacePricing | null>(null);
   const productCategories = useProductCategories();
 
   useEffect(() => {
     let active = true;
 
     async function loadProductPage() {
+      const productTrace = startCustomerPerformanceTrace("customer_product_ready");
       try {
         setLoading(true);
         setError(null);
@@ -137,6 +146,10 @@ export default function ProductPage({ params }: ProductPageProps) {
          * the exact projection path: the product document or its gallery.
          * This is especially useful while validating the public-catalog rules.
          */
+        const userId = auth.currentUser?.uid;
+        const customerLocationRequest = userId
+          ? userService.getDefaultLocation(userId)
+          : Promise.resolve(null);
         const [productResult, galleryResult] = await Promise.allSettled([
           productService.getProduct(productId),
           productGalleryService.getProductImages(productId),
@@ -163,26 +176,58 @@ export default function ProductPage({ params }: ProductPageProps) {
 
         if (!productData) {
           if (active) setError("Product not found.");
+          productTrace.stop({status: "not_found"});
           return;
         }
 
-        const [storeData, relatedPage] = await Promise.all([
+        const pricingRequest = marketplacePricingClientService.getHomeBootstrap([
+          productData.storeId,
+        ]);
+        const routeRequest = customerLocationRequest.then((location) =>
+          location
+            ? getStoreDeliveryRoute(productData.storeId, {
+              latitude: location.lat,
+              longitude: location.lng,
+            })
+            : null,
+        );
+        const [storeData, relatedPage, pricingBootstrap, route] = await Promise.all([
           storeService.getStore(productData.storeId),
           productService.getStoreProductsPage(productData.storeId, {
             categoryValues: [productData.category],
             pageSize: 8,
           }),
+          pricingRequest,
+          routeRequest,
         ]);
 
-        if (!active) return;
-
-        if (!storeData || !isStoreCustomerVisible(storeData)) {
-          setError("This store is not currently available.");
+        if (!active) {
+          productTrace.stop({status: "cancelled"});
           return;
         }
 
+        if (!storeData || !isStoreCustomerVisible(storeData)) {
+          setError("This store is not currently available.");
+          productTrace.stop({status: "store_unavailable"});
+          return;
+        }
+
+        const pricing = pricingBootstrap.byStoreId[productData.storeId] ?? {
+          policy: pricingBootstrap.policy,
+          decision: null,
+        };
+        const distance = route?.distanceMiles ?? 0;
+
         setProduct(productData);
         setStore(storeData);
+        setApplicablePricing(pricing);
+        setPurchaseDistance(distance);
+        setPurchaseAllowed(
+          Boolean(route) &&
+          pricing.decision?.allowed !== false &&
+          (pricing.decision?.zoneAccessType === "customer_order_zone" ||
+            distance <= pricing.policy.maxRadiusMiles),
+        );
         setGalleryImages(imageData);
         setSelectedImageIndex(0);
         setSelectedQuantity(1);
@@ -196,7 +241,9 @@ export default function ProductPage({ params }: ProductPageProps) {
             )
             .slice(0, 7)
         );
+        productTrace.stop({status: "success"});
       } catch (loadError) {
+        productTrace.stop({status: "error"});
         console.error("Error loading product details:", loadError);
         if (active) setError("Failed to load this product.");
       } finally {
@@ -209,30 +256,6 @@ export default function ProductPage({ params }: ProductPageProps) {
       active = false;
     };
   }, [productId]);
-
-  useEffect(() => {
-    let active = true;
-    if (!store || !applicablePricing) return;
-    const userId = auth.currentUser?.uid;
-    if (!userId || applicablePricing.decision?.allowed === false) {
-      queueMicrotask(() => {if (active) setPurchaseAllowed(false);});
-      return () => {active = false;};
-    }
-    void userService.getDefaultLocation(userId).then(async (location) => {
-      if (!location) return null;
-      return getStoreDeliveryRoute(store.id, {latitude: location.lat, longitude: location.lng});
-    }).then((route) => {
-      if (!active) return;
-      const distance = route?.distanceMiles ?? 0;
-      setPurchaseDistance(distance);
-      setPurchaseAllowed(
-        Boolean(route) &&
-        (applicablePricing.decision?.zoneAccessType === "customer_order_zone" ||
-          distance <= applicablePricing.policy.maxRadiusMiles),
-      );
-    }).catch(() => {if (active) setPurchaseAllowed(false);});
-    return () => {active = false;};
-  }, [store, applicablePricing]);
 
   const selectedImage = galleryImages[selectedImageIndex] ?? null;
   const selectedImageUrl =

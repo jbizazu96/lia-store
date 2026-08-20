@@ -5,6 +5,7 @@
 */
 import {useState, useEffect} from "react";
 import {useRouter} from "next/navigation";
+import dynamic from "next/dynamic";
 import {AnimatePresence} from "framer-motion";
 import {onAuthStateChanged, type User as FirebaseUser} from "firebase/auth";
 import {auth} from "@/lib/firebase";
@@ -20,13 +21,6 @@ import {
 */
 import {ProfileHeader} from "@/components/customer/profile/ProfileHeader";
 import {ProfileMenuItem} from "@/components/customer/profile/ProfileMenuItem";
-import {EditProfileModal} from "@/components/customer/profile/EditProfileModal";
-import {AddressesModal} from "@/components/customer/profile/AddressesModal";
-import {LanguageModal} from "@/components/customer/profile/LanguageModal";
-import {SecurityModal} from "@/components/customer/profile/SecurityModal";
-import {LogoutModal} from "@/components/customer/profile/LogoutModal";
-import {DeleteAccountModal} from "@/components/customer/profile/DeleteAccountModal";
-import {NotificationSettingsModal} from "@/components/customer/profile/NotificationSettingsModal";
 import { CustomerPageState } from "@/components/customer/ui/CustomerPageState";
 import { CustomerPageSkeleton } from "@/components/customer/ui/CustomerPageSkeleton";
 import { CustomerBottomNavigation } from "@/components/customer/navigation/CustomerBottomNavigation";
@@ -37,6 +31,14 @@ import {
   type NotificationDeviceStatus,
   type NotificationPermissionState,
 } from "@/services/notification/firebaseMessaging";
+
+const EditProfileModal = dynamic(() => import("@/components/customer/profile/EditProfileModal").then((m) => m.EditProfileModal), {ssr: false});
+const AddressesModal = dynamic(() => import("@/components/customer/profile/AddressesModal").then((m) => m.AddressesModal), {ssr: false});
+const LanguageModal = dynamic(() => import("@/components/customer/profile/LanguageModal").then((m) => m.LanguageModal), {ssr: false});
+const SecurityModal = dynamic(() => import("@/components/customer/profile/SecurityModal").then((m) => m.SecurityModal), {ssr: false});
+const LogoutModal = dynamic(() => import("@/components/customer/profile/LogoutModal").then((m) => m.LogoutModal), {ssr: false});
+const DeleteAccountModal = dynamic(() => import("@/components/customer/profile/DeleteAccountModal").then((m) => m.DeleteAccountModal), {ssr: false});
+const NotificationSettingsModal = dynamic(() => import("@/components/customer/profile/NotificationSettingsModal").then((m) => m.NotificationSettingsModal), {ssr: false});
 
 export default function ProfilePage() {
   const router = useRouter();

@@ -12,7 +12,6 @@
 */
 
 import {
-  useDeferredValue,
   useEffect,
   useMemo,
   useRef,
@@ -58,6 +57,7 @@ import {
 import {useProductCategories} from "@/hooks/useProductCategories";
 import {useStoreProductActions} from "@/hooks/useStoreProductActions";
 import {productService} from "@/services/product/productService";
+import {useDebouncedValue} from "@/hooks/useDebouncedValue";
 
 function parseCsvLine(line: string): string[] {
   const cells: string[] = [];
@@ -85,7 +85,7 @@ export default function ProductsPage() {
   const [sort, setSort] = useState<"name" | "stock_asc" | "stock_desc" | "price_asc" | "price_desc" | "updated_desc">("name");
   const importInputRef = useRef<HTMLInputElement>(null);
   const [auditEntries, setAuditEntries] = useState<Array<{id: string; productName: string; action: string; createdAt: string}>>([]);
-  const deferredSearchValue = useDeferredValue(searchQuery.trim());
+  const deferredSearchValue = useDebouncedValue(searchQuery.trim());
   const deferredSearch = deferredSearchValue.length >= 2 ? deferredSearchValue : "";
   const hasFilters = Boolean(deferredSearch) || categoryFilter !== "all" || statusFilter !== "all";
 

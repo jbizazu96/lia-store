@@ -22,6 +22,7 @@ import {
   writeCached,
 } from "@/services/cache/clientDataCache";
 import type {StoreContractWorkspace} from "@/types/storeContract";
+import type {DashboardData} from "@/types/dashboard";
 
 export interface StoreWorkspaceStore {
   id: string;
@@ -264,33 +265,20 @@ export const storeWorkspaceClientService = {
     order: Record<string, unknown> & { id: string };
   }>("getStoreWorkspaceOrder", { orderId }),
 
-  getDashboard: () => call<{
-    storeName: string;
-    timeZone: string;
-    stats: {
-      totalOrders: number;
-      netStoreEarnings: number;
-      currentWeekNetEarnings: number;
-      refundDeductions: number;
-      totalCustomers: number;
-      averageRating: number;
-      pendingOrders: number;
-      activeOrders: number;
-      todayOrders: number;
-      weeklyGrowth: number;
-      earningsGrowth: number;
-    };
-    recentOrders: Array<{
-      id: string;
-      customerName: string;
-      grossStoreOrderAmount: number;
-      displayStoreAmount: number;
-      amountType: "gross" | "net";
-      status: string;
-      paidAt: string;
-      itemCount: number;
-    }>;
-    }>("getStoreWorkspaceDashboard"),
+  getDashboard: async (forceRefresh = false) => {
+    if (forceRefresh) {
+      return writeCached(
+        "store-workspace-dashboard",
+        await call<DashboardData>("getStoreWorkspaceDashboard"),
+        {ttlMs: 30_000},
+      );
+    }
+    return loadCached(
+      "store-workspace-dashboard",
+      () => call<DashboardData>("getStoreWorkspaceDashboard"),
+      {ttlMs: 30_000},
+    );
+  },
 
   getSettings: async (forceRefresh = false) => {
     if (forceRefresh) {

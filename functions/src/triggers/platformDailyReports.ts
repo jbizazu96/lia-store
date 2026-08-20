@@ -17,6 +17,7 @@ import {
   synchronizeStoreCustomerRelationship,
   synchronizeOrderDailyReport,
 } from "../reporting/platformDailyReportService";
+import {synchronizeStorePerformanceSummary} from "../reporting/storePerformanceSummaryService";
 
 export const platformOrderDailyReport = onDocumentWritten(
   {
@@ -31,6 +32,7 @@ export const platformOrderDailyReport = onDocumentWritten(
     await Promise.all([
       synchronizeOrderDailyReport(event.params.orderId, after),
       synchronizeStoreCustomerRelationship(event.params.orderId, after),
+      synchronizeStorePerformanceSummary(event.params.orderId),
     ]);
   }
 );

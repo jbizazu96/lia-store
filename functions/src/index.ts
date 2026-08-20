@@ -258,6 +258,8 @@ export {
 export {
   getCurrentAccount,
 } from "./callable/currentAccount";
+export {getCustomerStartup} from "./callable/customerStartup";
+export {getCustomerOrderMetrics, customerOrderMetricsSync} from "./callable/customerOrderMetrics";
 export {acceptCustomerTerms, getCustomerTermsStatus} from "./callable/customerLegal";
 export {
   archiveAdminLegalDocument,
@@ -331,6 +333,10 @@ export {
   platformCustomerDailyReport,
   platformOrderDailyReport,
 } from "./triggers/platformDailyReports";
+export {
+  storeSettlementPerformanceSummarySync,
+  storeRefundPerformanceSummarySync,
+} from "./triggers/storePerformanceSummaries";
 
 export {
   reconcileMarketplaceSettlements,
@@ -558,7 +564,7 @@ export const resendVerificationEmail = onCall(
       }
 
       // Generate a new verification link
-      const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
+      const frontendUrl = process.env.FRONTEND_URL || "https://www.liamarketplace.com";
       const link = await admin.auth().generateEmailVerificationLink(
         user.email as string,
         {

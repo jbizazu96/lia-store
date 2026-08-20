@@ -7,7 +7,7 @@ import {inventoryDigestEmail} from "./emailTemplates";
 
 if (admin.apps.length === 0) admin.initializeApp();
 const db = getFirestore("default");
-const appUrl = defineString("APP_URL", {default: "https://liamarketplace.com"});
+const appUrl = defineString("APP_URL", {default: "https://www.liamarketplace.com"});
 const text = (value: unknown): string => typeof value === "string" ? value.trim() : "";
 
 export const sendStoreInventoryEmailDigest = onSchedule({schedule: "every day 09:00", region: "us-central1", timeZone: "America/Chicago"}, async () => {
@@ -32,4 +32,3 @@ export const sendStoreInventoryEmailDigest = onSchedule({schedule: "every day 09
     await enqueueEmail({dedupeKey: `store-inventory-digest:${storeId}:${day}`, category: "store_inventory_digest", to: email, ...template, tags: {store_id: storeId}});
   }));
 });
-

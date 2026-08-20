@@ -51,16 +51,17 @@ async function pricingRequest(storeIds: string[]): Promise<MarketplacePricingBoo
 
 export const marketplacePricingClientService = {
   getPolicy: async (storeId?: string): Promise<MarketplacePricingPolicy> => {
-    const result = await httpsCallable<{storeId?: string}, {policy: MarketplacePricingPolicy}>(functions, "getMarketplacePricing")(storeId ? {storeId} : {});
-    return result.data.policy;
+    return (await pricingRequest(storeId ? [storeId] : [])).policy;
   },
   getApplicablePricing: async (storeId: string): Promise<ApplicableMarketplacePricing> => {
-    const result = await httpsCallable<{storeId: string}, ApplicableMarketplacePricing & {byStoreId: Record<string, ApplicableMarketplacePricing>}>(functions, "getMarketplacePricing")({storeId});
-    return {policy: result.data.policy, decision: result.data.decision};
+    const result = await pricingRequest([storeId]);
+    return result.byStoreId[storeId] ?? {policy: result.policy, decision: null};
   },
   getApplicablePricingForStores: async (storeIds: string[]): Promise<Record<string, ApplicableMarketplacePricing>> => {
     if (storeIds.length === 0) return {};
     return (await pricingRequest(storeIds)).byStoreId;
   },
   getHomeBootstrap: pricingRequest,
+  getOrderDeliveryPolicy: async (storeId?: string): Promise<OrderDeliveryPolicy> =>
+    (await pricingRequest(storeId ? [storeId] : [])).orderDeliveryPolicy,
 };

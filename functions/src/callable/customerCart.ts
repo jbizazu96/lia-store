@@ -33,7 +33,7 @@ const CART_EXPIRY_HOURS = 48;
 const MAX_CART_ITEMS = 100;
 const MAX_ITEM_QUANTITY = 99;
 
-interface CartItem {
+export interface CustomerCartItem {
   id: string;
   name: string;
   price: number;
@@ -104,7 +104,7 @@ function optionalNumber(value: unknown): number | undefined {
     : undefined;
 }
 
-function normalizeCartItem(value: unknown): CartItem {
+function normalizeCartItem(value: unknown): CustomerCartItem {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new HttpsError("invalid-argument", "A cart item is invalid.");
   }
@@ -197,7 +197,7 @@ function normalizeCartItem(value: unknown): CartItem {
   };
 }
 
-function normalizeCustomerCartItems(value: unknown): CartItem[] {
+function normalizeCustomerCartItems(value: unknown): CustomerCartItem[] {
   if (!Array.isArray(value) || value.length > MAX_CART_ITEMS) {
     throw new HttpsError("invalid-argument", "The cart contains too many items.");
   }
@@ -244,7 +244,7 @@ function createCartExpiration(): Timestamp {
   );
 }
 
-async function loadCart(userId: string): Promise<CartItem[]> {
+export async function loadCustomerCart(userId: string): Promise<CustomerCartItem[]> {
   const reference = db.collection("carts").doc(userId);
   const snapshot = await reference.get();
 
@@ -284,7 +284,7 @@ export const getCustomerCart = onCall(
     await requireCustomer(request.auth.uid);
 
     return {
-      items: await loadCart(request.auth.uid),
+      items: await loadCustomerCart(request.auth.uid),
     };
   }
 );
@@ -411,7 +411,7 @@ export const repeatCustomerOrder = onCall(
       productSnapshots.map((snapshot) => [snapshot.id, snapshot]),
     );
     const skippedProductNames: string[] = [];
-    const items: CartItem[] = [];
+    const items: CustomerCartItem[] = [];
 
     for (const requested of requestedItems) {
       const product = productsById.get(requested.productId);

@@ -44,6 +44,7 @@ import type {
   CheckoutAddress,
   CheckoutTotals,
 } from "@/app/checkout/types";
+import {startCustomerPerformanceTrace} from "@/services/performance/customerPerformanceService";
 
 /*
 |--------------------------------------------------------------------------
@@ -104,7 +105,7 @@ export function useCheckoutPricing({
 }: UseCheckoutPricingParams): UseCheckoutPricingResult {
   const marketplacePolicy =
     useMarketplacePricingPolicy(store?.id);
-  const orderDeliveryPolicy = useOrderDeliveryPolicy();
+  const orderDeliveryPolicy = useOrderDeliveryPolicy(store?.id);
   const [distanceMiles, setDistanceMiles] = useState(0);
   const [isCalculatingDistance, setIsCalculatingDistance] = useState(false);
   const [distanceError, setDistanceError] = useState<string | null>(null);
@@ -152,6 +153,7 @@ export function useCheckoutPricing({
     }
 
     let isMounted = true;
+    const pricingTrace = startCustomerPerformanceTrace("customer_checkout_pricing_ready");
     queueMicrotask(() => {
       if (!isMounted) return;
       setIsCalculatingDistance(true);
@@ -173,9 +175,11 @@ export function useCheckoutPricing({
           }
 
           setDistanceMiles(route.distanceMiles);
+          pricingTrace.stop({status: "success"});
         }
       })
       .catch(() => {
+        pricingTrace.stop({status: "error"});
         if (isMounted) {
           setDistanceMiles(0);
           setDistanceError(
@@ -191,6 +195,7 @@ export function useCheckoutPricing({
 
     return () => {
       isMounted = false;
+      pricingTrace.stop({status: "cancelled"});
     };
   }, [store, address]);
 

@@ -453,6 +453,12 @@ service cloud.firestore {
         allow read, update, delete: if isOperationalAccount(userId) || isAdmin();
         allow create: if isAdmin();
       }
+
+      /* Server-maintained lightweight counters used by customer navigation. */
+      match /metrics/{metricId} {
+        allow get: if isOperationalAccount(userId) || isAdmin();
+        allow list, write: if false;
+      }
     }
 
     /*

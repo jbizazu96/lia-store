@@ -19,6 +19,7 @@ interface StoreCardProps {
     isFavorite: boolean
   ) => Promise<void>;
   priority?: boolean;
+  pricingLoading?: boolean;
 }
 
 export function StoreCard({
@@ -26,6 +27,7 @@ export function StoreCard({
   onClick,
   onFavoriteChange,
   priority = false,
+  pricingLoading = false,
 }: StoreCardProps) {
   const [isSavingFavorite, setIsSavingFavorite] = useState(false);
   const maxRadius = store.maxDeliveryMiles || Infinity;
@@ -132,7 +134,12 @@ export function StoreCard({
           </button>
         </div>
 
-        <div className="flex items-center gap-1.5 text-sm font-medium text-slate-600">
+        {pricingLoading ? (
+          <div className="space-y-1.5" aria-label="Calculating delivery details">
+            <div className="h-4 w-44 animate-pulse rounded bg-slate-100" />
+            <p className="text-sm font-medium text-slate-500">Calculating delivery details…</p>
+          </div>
+        ) : <><div className="flex items-center gap-1.5 text-sm font-medium text-slate-600">
           {hasReviews && <><span className="font-bold text-slate-900">{(store.rating ?? 0).toFixed(1)}</span><Star className="h-4 w-4 fill-slate-700 text-slate-700" /><span>·</span></>}
           <span>{formattedDistance}</span>
           <span>·</span>
@@ -143,6 +150,7 @@ export function StoreCard({
         <p className={`text-sm font-medium ${isTooFar ? "text-red-500" : "text-slate-500"}`}>
           {isTooFar ? "Delivery unavailable" : `${deliveryFee} delivery fee`}
         </p>
+        </>}
       </div>
     </motion.div>
   );

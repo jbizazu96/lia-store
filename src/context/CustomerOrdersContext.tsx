@@ -13,14 +13,12 @@ import {
   useState,
 } from "react";
 import {
-  collection,
+  doc,
   onSnapshot,
-  orderBy,
-  query,
-  where,
 } from "firebase/firestore";
+import {httpsCallable} from "firebase/functions";
 import {
-  db,
+  db, functions,
 } from "@/lib/firebase";
 import {
   useAuth,
@@ -63,25 +61,26 @@ export function CustomerOrdersProvider({
       setError(null);
     });
 
-    const ordersQuery = query(
-      collection(db, "orders"),
-      where("customer.uid", "==", user.uid),
-      where("checkoutStatus", "==", "confirmed"),
-      where("payment.status", "==", "paid"),
-      where("status", "in", [
-        "pending",
-        "accepted",
-        "preparing",
-        "ready_for_pickup",
-        "out_for_delivery",
-      ]),
-      orderBy("createdAt", "desc"),
+    const metricsReference = doc(db, "users", user.uid, "metrics", "orders");
+    const refreshMetrics = httpsCallable<void, {activeOrderCount: number}>(
+      functions, "getCustomerOrderMetrics",
     );
 
+    void refreshMetrics().then((response) => {
+      setOpenOrderCount(response.data.activeOrderCount);
+      setError(null);
+      setLoading(false);
+    }).catch((metricsError) => {
+      console.error("Unable to refresh customer order count:", metricsError);
+      setError("Failed to load orders.");
+      setLoading(false);
+    });
+
     return onSnapshot(
-      ordersQuery,
+      metricsReference,
       (snapshot) => {
-        setOpenOrderCount(snapshot.size);
+        const value = snapshot.data()?.activeOrderCount;
+        setOpenOrderCount(typeof value === "number" ? value : 0);
         setError(null);
         setLoading(false);
       },

@@ -7,6 +7,7 @@
 */
 
 import { PageContentSkeleton } from "@/components/ui/PageContentSkeleton";
+import dynamic from "next/dynamic";
 import { useState, useEffect } from "react";
 import {
   useRouter,
@@ -34,15 +35,15 @@ import {
 } from "@/services/store/storeWorkspaceClientService";
 
 // Components
-import { ProfileSection } from "@/components/store/settings/ProfileSection";
-import { SecuritySection } from "@/components/store/settings/SecuritySection";
-import { NotificationsSection } from "@/components/store/settings/NotificationsSection";
-import { PaymentSection } from "@/components/store/settings/PaymentSection";
-import { BusinessSection } from "@/components/store/settings/BusinessSection";
-import { DangerSection } from "@/components/store/settings/DangerSection";
-import { StoreSchedule } from "@/components/store/settings/StoreSchedule";
-import {SettingsActivitySection} from "@/components/store/settings/SettingsActivitySection";
-import {AccountSupportForm} from "@/components/support/AccountSupportForm";
+const ProfileSection = dynamic(() => import("@/components/store/settings/ProfileSection").then((module) => module.ProfileSection));
+const SecuritySection = dynamic(() => import("@/components/store/settings/SecuritySection").then((module) => module.SecuritySection));
+const NotificationsSection = dynamic(() => import("@/components/store/settings/NotificationsSection").then((module) => module.NotificationsSection));
+const PaymentSection = dynamic(() => import("@/components/store/settings/PaymentSection").then((module) => module.PaymentSection));
+const BusinessSection = dynamic(() => import("@/components/store/settings/BusinessSection").then((module) => module.BusinessSection));
+const DangerSection = dynamic(() => import("@/components/store/settings/DangerSection").then((module) => module.DangerSection));
+const StoreSchedule = dynamic(() => import("@/components/store/settings/StoreSchedule").then((module) => module.StoreSchedule));
+const SettingsActivitySection = dynamic(() => import("@/components/store/settings/SettingsActivitySection").then((module) => module.SettingsActivitySection));
+const AccountSupportForm = dynamic(() => import("@/components/support/AccountSupportForm").then((module) => module.AccountSupportForm));
 import { useUnsavedChanges } from "@/hooks/useUnsavedChanges";
 import { useConfirmation } from "@/context/ConfirmationContext";
 import { useSuccessToast } from "@/context/SuccessToastContext";

@@ -52,6 +52,11 @@ service firebase.storage {
         );
     }
 
+    function ownsProductUploadStore(storeId) {
+      return signedIn() &&
+        request.auth.token.storeUploadStoreId == storeId;
+    }
+
     function ownsDriver(driverId) {
       return signedIn() &&
         firestore.get(
@@ -131,15 +136,22 @@ service firebase.storage {
     |
     */
     match /stores/{storeId}/products/{productId}/gallery/{imageId}/{fileName} {
-      allow read: if ownsApprovedStore(storeId);
+      allow read: if ownsProductUploadStore(storeId);
 
       /*
        * The owner can upload only a supported original under their own store
        * claim. Product ownership and the exact canonical path are verified by
        * the callable reservation and background processor.
        */
-      allow write: if ownsApprovedStore(storeId) &&
-        isSupportedProductImage();
+      allow create: if ownsProductUploadStore(storeId) &&
+        isSupportedProductImage() &&
+        request.resource.metadata.storeId == storeId &&
+        request.resource.metadata.productId == productId &&
+        request.resource.metadata.imageId == imageId &&
+        request.resource.metadata.galleryImageId == imageId &&
+        request.resource.metadata.processingType == "product-gallery-image-original" &&
+        fileName.matches("original\\.(jpg|jpeg|png|webp|avif|heic|heif)");
+      allow update, delete: if false;
     }
 
     /*

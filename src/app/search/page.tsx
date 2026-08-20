@@ -18,9 +18,10 @@ import {SearchResults} from "./components/SearchResults";
 import {SearchResult, StoreGroup} from "./types";
 
 // Services
-import {enrichSearchResults, performSearch, groupResultsByStore, searchStoresByName} from "./services/searchService";
+import {enrichSearchResults, groupResultsByStore, searchMarketplacePage} from "./services/searchService";
 import {loadRecentSearches, saveRecentSearch} from "./services/recentSearchService";
 import {BrandedLoader} from "@/components/ui/BrandedLoader";
+import {startCustomerPerformanceTrace} from "@/services/performance/customerPerformanceService";
 
 function SearchPageContent() {
   const router = useRouter();
@@ -33,6 +34,35 @@ function SearchPageContent() {
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const [userLocation, setUserLocation] = useState<{lat: number; lng: number} | null>(null);
   const [locationReady, setLocationReady] = useState(false);
+  const [nextProductCursor, setNextProductCursor] = useState<string | null>(null);
+  const [nextStoreCursor, setNextStoreCursor] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  const buildGroups = (items: SearchResult[]): StoreGroup[] => {
+    const productResults = items.filter((result) => result.resultType === "product");
+    const storeResults = items.filter((result) => result.resultType === "store");
+    const groupsByStore = new Map(
+      groupResultsByStore(productResults).map((group) => [group.storeId, group]),
+    );
+    storeResults.forEach((store) => {
+      const existing = groupsByStore.get(store.storeId);
+      if (existing) {
+        existing.matchesStore = true;
+      } else {
+        groupsByStore.set(store.storeId, {
+          storeId: store.storeId, storeName: store.storeName,
+          storeRating: store.storeRating, storeDistance: store.storeDistance,
+          deliveryFee: store.deliveryFee, estimatedTime: store.estimatedTime,
+          storeLogo: store.storeLogo, isOpen: store.storeIsOpen === true,
+          storeAddress: store.storeAddress || "", storePhone: store.storePhone || "",
+          storeLatitude: store.storeLatitude || 0, storeLongitude: store.storeLongitude || 0,
+          matchesStore: true, products: [],
+        });
+      }
+    });
+    return Array.from(groupsByStore.values());
+  };
 
   // Load user data
   useEffect(() => {
@@ -96,67 +126,29 @@ function SearchPageContent() {
 
     const timer = setTimeout(() => {
       const runSearch = async () => {
+        const searchTrace = startCustomerPerformanceTrace("customer_search_ready");
         try {
-          // Search both products and stores.
-          const [rawProductResults, rawStoreResults] = await Promise.all([
-            performSearch(normalizedQuery),
-            searchStoresByName(normalizedQuery),
-          ]);
+          const page = await searchMarketplacePage(normalizedQuery);
           const enrichedResults = await enrichSearchResults(
-            [...rawProductResults, ...rawStoreResults],
+            [...page.productResults, ...page.storeResults],
             userLocation,
-          );
-          const productResults = enrichedResults.filter(
-            (result) => result.resultType === "product",
-          );
-          const storeResults = enrichedResults.filter(
-            (result) => result.resultType === "store",
           );
 
           if (!active) {
+            searchTrace.stop({status: "cancelled"});
             return;
           }
 
           // Product matches are grouped under their store. A direct store
           // match is added as a store-only group instead of a fake product.
-          const combinedResults = [...productResults, ...storeResults];
-          const groupedProducts = groupResultsByStore(productResults);
-          const groupsByStore = new Map(
-            groupedProducts.map((group) => [
-              group.storeId,
-              group,
-            ])
-          );
-
-          storeResults.forEach((store) => {
-            const existing = groupsByStore.get(store.storeId);
-
-            if (existing) {
-              existing.matchesStore = true;
-              return;
-            }
-
-            groupsByStore.set(store.storeId, {
-              storeId: store.storeId,
-              storeName: store.storeName,
-              storeRating: store.storeRating,
-              storeDistance: store.storeDistance,
-              deliveryFee: store.deliveryFee,
-              estimatedTime: store.estimatedTime,
-              storeLogo: store.storeLogo,
-              isOpen: store.storeIsOpen === true,
-              storeAddress: store.storeAddress || "",
-              storePhone: store.storePhone || "",
-              storeLatitude: store.storeLatitude || 0,
-              storeLongitude: store.storeLongitude || 0,
-              matchesStore: true,
-              products: [],
-            });
-          });
-
-          setResults(combinedResults);
-          setGroups(Array.from(groupsByStore.values()));
+          setResults(enrichedResults);
+          setGroups(buildGroups(enrichedResults));
+          setNextProductCursor(page.nextProductCursor);
+          setNextStoreCursor(page.nextStoreCursor);
+          setHasMore(page.hasMore);
+          searchTrace.stop({status: "success", result_count: String(enrichedResults.length)});
         } catch (error) {
+          searchTrace.stop({status: "error"});
           console.error("Unable to search the marketplace:", error);
 
           if (active) {
@@ -182,11 +174,43 @@ function SearchPageContent() {
     };
   }, [locationReady, searchQuery, userLocation]);
 
+  const loadMore = async () => {
+    if (loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    try {
+      const page = await searchMarketplacePage(searchQuery, {
+        product: nextProductCursor,
+        store: nextStoreCursor,
+        productDone: nextProductCursor === null,
+        storeDone: nextStoreCursor === null,
+      });
+      const enriched = await enrichSearchResults(
+        [...page.productResults, ...page.storeResults], userLocation,
+      );
+      const byKey = new Map(
+        results.map((item) => [`${item.resultType}:${item.id}`, item]),
+      );
+      enriched.forEach((item) => byKey.set(`${item.resultType}:${item.id}`, item));
+      const merged = Array.from(byKey.values());
+      setResults(merged);
+      setGroups(buildGroups(merged));
+      setNextProductCursor(page.nextProductCursor);
+      setNextStoreCursor(page.nextStoreCursor);
+      setHasMore(page.hasMore);
+    } catch (error) {
+      console.error("Unable to load more search results:", error);
+      setSearchError("More results could not be loaded. Please try again.");
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
   const handleClear = () => {
     setSearchQuery("");
     setSearchError(null);
     setResults([]);
     setGroups([]);
+    setHasMore(false);
   };
 
   const handleSearchSubmit = () => {
@@ -236,6 +260,9 @@ function SearchPageContent() {
             results={results}
             groups={groups}
             onStoreClick={handleStoreClick}
+            hasMore={hasMore}
+            loadingMore={loadingMore}
+            onLoadMore={() => void loadMore()}
           />
         )}
       </div>

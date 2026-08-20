@@ -128,7 +128,7 @@ export function useStoreProducts(options: UseStoreProductsOptions = {}) {
     const refreshVisibleInventory = () => {
       if (document.visibilityState !== "visible" || !auth.currentUser) return;
       const now = Date.now();
-      if (now - lastVisibleRefreshAt.current < 1_000) return;
+      if (now - lastVisibleRefreshAt.current < 30_000) return;
       lastVisibleRefreshAt.current = now;
       void load(undefined, false, false);
     };

@@ -14,6 +14,7 @@ import {
 } from "@/hooks/useCartStoreStatus";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
 import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
 import Link from "next/link";
@@ -38,11 +39,13 @@ import {
 import {
   formatProductName,
 } from "@/utils/productDisplay";
-import {
-  FeeInfoSheet,
-  type FeeInfoType,
-} from "@/components/customer/cart/FeeInfoSheet";
+import type {FeeInfoType} from "@/components/customer/cart/FeeInfoSheet";
 import {useMarketplacePricingPolicy} from "@/hooks/useMarketplacePricingPolicy";
+
+const FeeInfoSheet = dynamic(
+  () => import("@/components/customer/cart/FeeInfoSheet").then((module) => module.FeeInfoSheet),
+  {ssr: false},
+);
 
 export default function CartPage() {
   const router = useRouter();

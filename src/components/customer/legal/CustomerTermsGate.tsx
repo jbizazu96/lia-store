@@ -6,6 +6,7 @@ import {BrandedLoader} from "@/components/ui/BrandedLoader";
 import {customerLegalClientService, type CustomerLegalDocumentStatus} from "@/services/legal/customerLegalClientService";
 import {LegalReviewModal} from "@/components/legal/LegalReviewModal";
 import {customerLogoutService} from "@/services/auth/customerLogoutService";
+import {startCustomerPerformanceTrace} from "@/services/performance/customerPerformanceService";
 
 export function CustomerTermsGate({children}: {children: React.ReactNode}) {
   const [status, setStatus] = useState<"loading" | "required" | "accepted" | "error">("loading");
@@ -23,14 +24,16 @@ export function CustomerTermsGate({children}: {children: React.ReactNode}) {
 
   useEffect(() => {
     let active = true;
+    const legalTrace = startCustomerPerformanceTrace("customer_legal_ready");
     void customerLegalClientService.getStatus().then((result) => {
-      if (active) { setPendingDocuments(result.pendingDocuments); setStatus(result.accepted ? "accepted" : "required"); }
+      if (active) { setPendingDocuments(result.pendingDocuments); setStatus(result.accepted ? "accepted" : "required"); legalTrace.stop({status: result.accepted ? "accepted" : "required"}); }
     }).catch((error: unknown) => {
       if (!active) return;
+      legalTrace.stop({status: "error"});
       setMessage(error instanceof Error ? error.message : "We could not verify your legal agreement status.");
       setStatus("error");
     });
-    return () => { active = false; };
+    return () => { active = false; legalTrace.stop({status: "cancelled"}); };
   }, []);
   if (status === "accepted") return <>{children}</>;
   if (status === "loading") return <BrandedLoader message="Checking account agreements" />;

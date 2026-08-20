@@ -151,20 +151,15 @@ function StoreLayoutContent({ children }: { children: React.ReactNode }) {
     setNotificationsLoading(true);
     setNotificationsError(false);
 
-    const unsubscribe = notificationService.listenForNotifications(
+    const unsubscribe = notificationService.listenForRecentUnread(
       user.uid,
       (notifications) => {
-        // ✅ Filter ONLY unread notifications
-        const unread = notifications.filter(n => !n.read);
-        // Sort by date (newest first) and take the 4 most recent
-        const sorted = unread.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-        const visibleUnread = sorted.slice(0, 4);
-        setUnreadNotifications(visibleUnread);
+        setUnreadNotifications(notifications);
         setNotificationsLoading(false);
-        if (unread.some((notification) => notification.deepLink?.startsWith("/store/store-orders"))) {
+        if (notifications.some((notification) => notification.deepLink?.startsWith("/store/store-orders"))) {
           void refreshWorkspace();
         }
-        if (unread.some((notification) => notification.type === "inventory")) {
+        if (notifications.some((notification) => notification.type === "inventory")) {
           window.dispatchEvent(new Event("lia:store-inventory-changed"));
         }
 

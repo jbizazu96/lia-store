@@ -11,9 +11,12 @@
 
 import {
   collection,
+  documentId,
   getDocs,
   limit,
+  orderBy,
   query,
+  startAfter,
   where,
 } from "firebase/firestore";
 import {
@@ -34,8 +37,17 @@ import type {
   StoreData,
   StoreGroup,
 } from "../types";
+import {loadCached} from "@/services/cache/clientDataCache";
 
-const MAXIMUM_INDEXED_RESULTS = 60;
+const SEARCH_PAGE_SIZE = 20;
+
+export interface MarketplaceSearchPage {
+  productResults: SearchResult[];
+  storeResults: SearchResult[];
+  nextProductCursor: string | null;
+  nextStoreCursor: string | null;
+  hasMore: boolean;
+}
 
 type Data = Record<string, unknown>;
 
@@ -134,39 +146,154 @@ function storeData(
 }
 
 async function matchingProductDocuments(
-  searchTerm: string
+  searchTerm: string,
+  cursor?: string | null,
 ) {
   const reference = collection(
     db,
     "productPublicProfiles"
   );
-  const indexed = await getDocs(
-    query(
-      reference,
-      where("searchTokens", "array-contains", searchTerm),
-      limit(MAXIMUM_INDEXED_RESULTS)
-    )
-  );
+  const constraints = [
+    where("searchTokens", "array-contains", searchTerm),
+    orderBy(documentId()),
+    ...(cursor ? [startAfter(cursor)] : []),
+    limit(SEARCH_PAGE_SIZE + 1),
+  ];
+  const indexed = await getDocs(query(reference, ...constraints));
 
   return indexed.docs;
 }
 
 async function matchingStoreDocuments(
-  searchTerm: string
+  searchTerm: string,
+  cursor?: string | null,
 ) {
   const reference = collection(
     db,
     "storePublicProfiles"
   );
-  const indexed = await getDocs(
-    query(
-      reference,
-      where("searchTokens", "array-contains", searchTerm),
-      limit(MAXIMUM_INDEXED_RESULTS)
-    )
-  );
+  const constraints = [
+    where("searchTokens", "array-contains", searchTerm),
+    orderBy(documentId()),
+    ...(cursor ? [startAfter(cursor)] : []),
+    limit(SEARCH_PAGE_SIZE + 1),
+  ];
+  const indexed = await getDocs(query(reference, ...constraints));
 
   return indexed.docs;
+}
+
+/** Indexed, cursor-based search boundary. Results are cached briefly and
+ * identical in-flight requests are deduplicated by the shared client cache. */
+export async function searchMarketplacePage(
+  searchTerm: string,
+  cursors: {
+    product?: string | null;
+    store?: string | null;
+    productDone?: boolean;
+    storeDone?: boolean;
+  } = {},
+): Promise<MarketplaceSearchPage> {
+  const term = normalize(searchTerm);
+  if (term.length < 2) {
+    return {productResults: [], storeResults: [], nextProductCursor: null, nextStoreCursor: null, hasMore: false};
+  }
+
+  return loadCached(
+    `catalog-search:${term}:${cursors.product ?? "first"}:${cursors.store ?? "first"}`,
+    async () => {
+      const [productDocuments, storeDocuments] = await Promise.all([
+        cursors.productDone ? Promise.resolve([]) : matchingProductDocuments(term, cursors.product),
+        cursors.storeDone ? Promise.resolve([]) : matchingStoreDocuments(term, cursors.store),
+      ]);
+      const productPage = productDocuments.slice(0, SEARCH_PAGE_SIZE);
+      const storePage = storeDocuments.slice(0, SEARCH_PAGE_SIZE);
+      const productResults = await mapProductDocuments(productPage);
+      const storeResults = mapStoreDocuments(storePage);
+      const productHasMore = productDocuments.length > SEARCH_PAGE_SIZE;
+      const storeHasMore = storeDocuments.length > SEARCH_PAGE_SIZE;
+      return {
+        productResults,
+        storeResults,
+        nextProductCursor: productHasMore ? productPage.at(-1)?.id ?? null : null,
+        nextStoreCursor: storeHasMore ? storePage.at(-1)?.id ?? null : null,
+        hasMore: productHasMore || storeHasMore,
+      };
+    },
+    {ttlMs: 30_000, scope: "public"},
+  );
+}
+
+function mapProductDocuments(
+  documents: Awaited<ReturnType<typeof matchingProductDocuments>>,
+): SearchResult[] {
+  return documents.filter((document) => {
+    const data = document.data() as Data;
+    return data.isAvailable !== false && number(data.stock) > 0;
+  }).flatMap((document) => {
+    const product = document.data() as Data;
+    const storeId = text(product.storeId);
+    const storeSummary = product.storeSummary;
+    if (!storeId || !isRecord(storeSummary) || !isCustomerVisibleStore(storeSummary)) return [];
+    const store = storeData(storeId, storeSummary);
+    return [{
+      resultType: "product" as const,
+      id: document.id,
+      name: text(product.name) || "Unnamed Product",
+      description: text(product.description),
+      price: number(product.price),
+      imageUrl: text(product.imageUrl),
+      imageVariants: product.imageVariants as SearchResult["imageVariants"],
+      category: text(product.category) || "Uncategorized",
+      stock: number(product.stock),
+      storeId,
+      storeName: store.name,
+      storeRating: store.rating,
+      storeDistance: 0,
+      deliveryFee: store.deliveryFee,
+      estimatedTime: store.estimatedPrepTime,
+      storeLogo: store.logoUrl,
+      storeIsOpen: store.isOpen,
+      storeAddress: store.address,
+      storePhone: store.phone,
+      storeLatitude: store.latitude,
+      storeLongitude: store.longitude,
+      promotion: product.promotion as SearchResult["promotion"],
+      size: product.size as SearchResult["size"],
+    }];
+  });
+}
+
+function mapStoreDocuments(
+  documents: Awaited<ReturnType<typeof matchingStoreDocuments>>,
+): SearchResult[] {
+  return documents.flatMap((document) => {
+    const data = document.data() as Data;
+    if (!isCustomerVisibleStore(data)) return [];
+    const store = storeData(document.id, data);
+    return [{
+      resultType: "store" as const,
+      id: store.id,
+      name: store.name,
+      description: "Store",
+      price: 0,
+      imageUrl: store.logoUrl || "",
+      category: "Store",
+      stock: 0,
+      storeId: store.id,
+      storeName: store.name,
+      storeRating: store.rating,
+      storeDistance: 0,
+      deliveryFee: store.deliveryFee,
+      estimatedTime: store.estimatedPrepTime,
+      storeLogo: store.logoUrl,
+      storeIsOpen: store.isOpen,
+      storeAddress: store.address,
+      storePhone: store.phone,
+      storeLatitude: store.latitude,
+      storeLongitude: store.longitude,
+    }];
+  });
 }
 
 export async function performSearch(
@@ -180,55 +307,7 @@ export async function performSearch(
 
   try {
     const productDocuments = await matchingProductDocuments(term);
-    const products = productDocuments.filter((document) => {
-      const data = document.data() as Data;
-
-      return data.isAvailable !== false &&
-        number(data.stock) > 0;
-    });
-    return products.flatMap((document) => {
-      const product = document.data() as Data;
-      const storeId = text(product.storeId);
-      const storeSummary = product.storeSummary;
-
-      if (!storeId ||
-        !isRecord(storeSummary) ||
-        !isCustomerVisibleStore(storeSummary)
-      ) {
-        return [];
-      }
-
-      const store = storeData(
-        storeId,
-        storeSummary,
-      );
-
-      return [{
-        resultType: "product" as const,
-        id: document.id,
-        name: text(product.name) || "Unnamed Product",
-        description: text(product.description),
-        price: number(product.price),
-        imageUrl: text(product.imageUrl),
-        imageVariants: product.imageVariants as SearchResult["imageVariants"],
-        category: text(product.category) || "Uncategorized",
-        stock: number(product.stock),
-        storeId,
-        storeName: store.name,
-        storeRating: store.rating,
-        storeDistance: 0,
-        deliveryFee: store.deliveryFee,
-        estimatedTime: store.estimatedPrepTime,
-        storeLogo: store.logoUrl,
-        storeIsOpen: store.isOpen,
-        storeAddress: store.address,
-        storePhone: store.phone,
-        storeLatitude: store.latitude,
-        storeLongitude: store.longitude,
-        promotion: product.promotion as SearchResult["promotion"],
-        size: product.size as SearchResult["size"],
-      }];
-    });
+    return mapProductDocuments(productDocuments.slice(0, SEARCH_PAGE_SIZE));
   } catch (error) {
     console.error("Customer product search failed.", error);
     return [];
@@ -277,41 +356,7 @@ export async function searchStoresByName(
   try {
     const stores = await matchingStoreDocuments(term);
 
-    return stores.flatMap((document) => {
-      const data = document.data() as Data;
-
-      if (!isCustomerVisibleStore(data)) {
-        return [];
-      }
-
-      const store = storeData(
-        document.id,
-        data,
-      );
-
-      return [{
-        resultType: "store" as const,
-        id: store.id,
-        name: store.name,
-        description: "Store",
-        price: 0,
-        imageUrl: store.logoUrl || "",
-        category: "Store",
-        stock: 0,
-        storeId: store.id,
-        storeName: store.name,
-        storeRating: store.rating,
-        storeDistance: 0,
-        deliveryFee: store.deliveryFee,
-        estimatedTime: store.estimatedPrepTime,
-        storeLogo: store.logoUrl,
-        storeIsOpen: store.isOpen,
-        storeAddress: store.address,
-        storePhone: store.phone,
-        storeLatitude: store.latitude,
-        storeLongitude: store.longitude,
-      }];
-    });
+    return mapStoreDocuments(stores.slice(0, SEARCH_PAGE_SIZE));
   } catch (error) {
     console.error("Customer store search failed.", error);
     return [];

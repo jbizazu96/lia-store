@@ -36,6 +36,7 @@ import {
 import {
   userService,
 } from "@/services/user/userService";
+import {startCustomerPerformanceTrace} from "@/services/performance/customerPerformanceService";
 
 /*
 |--------------------------------------------------------------------------
@@ -154,6 +155,7 @@ export function useCartPricing({
     }
 
     const loadDeliveryRoute = async () => {
+      const pricingTrace = startCustomerPerformanceTrace("customer_cart_pricing_ready");
       setIsCalculatingDelivery(true);
       setDeliveryError(null);
 
@@ -186,7 +188,9 @@ export function useCartPricing({
         }
 
         setDistanceMiles(route.distanceMiles);
+        pricingTrace.stop({status: "success"});
       } catch (error: unknown) {
+        pricingTrace.stop({status: "error"});
         if (!isMounted) {
           return;
         }

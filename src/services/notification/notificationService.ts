@@ -332,6 +332,27 @@ listenForNotifications(
 
 }
 
+/** Listen only to the newest unread rows needed by workspace dropdowns. */
+listenForRecentUnread(
+  uid: string,
+  callback: (notifications: Notification[]) => void,
+  onError?: (error: Error) => void,
+  pageSize = 4,
+) {
+  const currentUid = this.requireCurrentUser(uid);
+  const q = query(
+    collection(db, "users", currentUid, "notifications"),
+    where("read", "==", false),
+    orderBy("createdAt", "desc"),
+    limit(Math.min(10, Math.max(1, pageSize))),
+  );
+  return onSnapshot(
+    q,
+    (snapshot) => callback(snapshot.docs.map(mapFirestoreNotification)),
+    (error) => onError?.(error),
+  );
+}
+
 }
 
 export const notificationService =

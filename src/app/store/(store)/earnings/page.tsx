@@ -1,5 +1,6 @@
 "use client";
 import {PageContentSkeleton} from "@/components/ui/PageContentSkeleton";
+import dynamic from "next/dynamic";
 import {useState, useEffect} from "react";
 import {motion} from "framer-motion";
 import {
@@ -15,10 +16,10 @@ import {
   storeWorkspaceClientService,
   type StoreWorkspacePayout,
 } from "@/services/store/storeWorkspaceClientService";
-import {
-  PayoutDetailModal,
-} from "@/components/store/earnings/PayoutDetailModal";
 import Link from "next/link";
+import {startStorePerformanceTrace} from "@/services/performance/storePerformanceService";
+
+const PayoutDetailModal = dynamic(() => import("@/components/store/earnings/PayoutDetailModal").then((module) => module.PayoutDetailModal));
 
 export default function EarningsPage() {
   const [stats, setStats] = useState({
@@ -44,6 +45,8 @@ export default function EarningsPage() {
 
   useEffect(() => {
     const fetchData = async () => {
+      const trace = startStorePerformanceTrace("store_financials_ready");
+      let result = "complete";
       try {
         setLoading(true);
         setError(null);
@@ -69,6 +72,7 @@ export default function EarningsPage() {
         });
 
       } catch (error) {
+        result = "error";
         console.error("Error fetching earnings:", error);
         const code = typeof error === "object" && error !== null && "code" in error ? String(error.code) : "";
         setError(!navigator.onLine
@@ -77,6 +81,7 @@ export default function EarningsPage() {
             ? {title: "Earnings access unavailable", message: "Your store account does not currently have permission to view financial data."}
             : {title: "Earnings could not be loaded", message: "A temporary server problem prevented current totals from loading. Your balances have not been replaced with zero."});
       } finally {
+        trace.stop({result});
         setLoading(false);
       }
     };

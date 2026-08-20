@@ -15,6 +15,7 @@ import Stripe from "stripe";
 import {
   AggregateField,
   type DocumentData,
+  FieldPath,
   FieldValue,
   getFirestore,
   type UpdateData,
@@ -37,11 +38,10 @@ import {enforceCallableAbuseProtection} from "../security/callableAbuseProtectio
 import {hasStoreAddressChanged} from "../services/store/storeSettingsPolicy";
 import {
   localDateKey,
-  localHour,
   storeAnalyticsRange,
   type StoreAnalyticsPeriod,
 } from "../reporting/storeAnalyticsPeriod";
-import {calculateStoreAnalyticsAccounting} from "../reporting/storeAnalyticsAccounting";
+import {backfillStorePerformanceSummaries} from "../reporting/storePerformanceSummaryService";
 
 if (admin.apps.length === 0) {
   admin.initializeApp();
@@ -597,14 +597,16 @@ export const getStoreWorkspaceEntry = onCall({ region: "us-central1" }, async (r
     const data = store.data() ?? {};
     const applicationReview = isRecord(data.applicationReview) ? data.applicationReview : {};
     const suspension = isRecord(data.suspension) ? data.suspension : {};
-    const orders = await db.collection("orders")
-      .where("store.id", "==", store.id)
-      .where("checkoutStatus", "==", "confirmed")
-      .where("payment.status", "==", "paid")
-      .where("status", "in", ["pending", "accepted", "preparing", "ready_for_pickup"])
-      .count()
-      .get();
-    const pendingOrderCount = orders.data().count;
+    const performance = await store.ref.collection("reporting").doc("lifetime").get();
+    const pendingOrderCount = performance.exists
+      ? nonNegativeCentAmount(performance.data()?.activeOrders)
+      : (await db.collection("orders")
+        .where("store.id", "==", store.id)
+        .where("checkoutStatus", "==", "confirmed")
+        .where("payment.status", "==", "paid")
+        .where("status", "in", ["pending", "accepted", "preparing", "ready_for_pickup"])
+        .count()
+        .get()).data().count;
     return {
       hasStore: true,
       store: {
@@ -745,42 +747,35 @@ export const getStoreWorkspaceDashboard = onCall({region: "us-central1", timeout
     .where("store.id", "==", store.id)
     .where("checkoutStatus", "==", "confirmed")
     .where("payment.status", "==", "paid");
-  const [lifetimeOrders, currentWeekOrders, previousWeekOrders, todayOrders, pendingCount, activeCount, customerCount, recentOrders] = await Promise.all([
-    confirmedOrders.get(),
-    confirmedOrders.where("payment.paidAt", ">=", week.start).where("payment.paidAt", "<", week.end).get(),
-    confirmedOrders.where("payment.paidAt", ">=", week.previousStart).where("payment.paidAt", "<", week.previousEnd).get(),
-    confirmedOrders.where("payment.paidAt", ">=", todayStart).where("payment.paidAt", "<", tomorrowStart).get(),
-    confirmedOrders.where("status", "==", "pending").count().get(),
-    confirmedOrders.where("status", "in", ["pending", "accepted", "preparing", "ready_for_pickup", "out_for_delivery"]).count().get(),
+  const [lifetime, currentWeek, previousWeek, today, customerCount, recentOrders] = await Promise.all([
+    lifetimePerformance(store),
+    periodPerformance(store, week.start, week.end, timeZone),
+    periodPerformance(store, week.previousStart, week.previousEnd, timeZone),
+    periodPerformance(store, todayStart, tomorrowStart, timeZone),
     store.ref.collection("customers").count().get(),
     confirmedOrders.orderBy("payment.paidAt", "desc").limit(4).get(),
-  ]);
-  const [lifetimeAccounting, weekAccounting, previousWeekAccounting] = await Promise.all([
-    orderCohortAccounting(lifetimeOrders),
-    orderCohortAccounting(currentWeekOrders),
-    orderCohortAccounting(previousWeekOrders),
   ]);
   const recentFinancials = await storeOrderFinancialSummaries(store.id, recentOrders.docs);
   const recent = recentOrders.docs.map((order) => order.data());
   const growth = (current: number, previous: number) => previous > 0 ? ((current - previous) / previous) * 100 : current > 0 ? 100 : 0;
-  const lifetimeNetEarnings = Math.max(0, lifetimeAccounting.grossStoreEntitlement - lifetimeAccounting.storeRefundImpact);
-  const weekNetEarnings = Math.max(0, weekAccounting.grossStoreEntitlement - weekAccounting.storeRefundImpact);
-  const previousWeekNetEarnings = Math.max(0, previousWeekAccounting.grossStoreEntitlement - previousWeekAccounting.storeRefundImpact);
+  const lifetimeNetEarnings = Math.max(0, lifetime.grossStoreEntitlement - lifetime.storeRefundImpact);
+  const weekNetEarnings = Math.max(0, currentWeek.totals.grossStoreEntitlement - currentWeek.totals.storeRefundImpact);
+  const previousWeekNetEarnings = Math.max(0, previousWeek.totals.grossStoreEntitlement - previousWeek.totals.storeRefundImpact);
 
   return {
     storeName: text(storeData.name) || "Your Store",
     timeZone,
     stats: {
-      totalOrders: lifetimeOrders.size,
+      totalOrders: lifetime.paidOrders,
       netStoreEarnings: lifetimeNetEarnings / 100,
       currentWeekNetEarnings: weekNetEarnings / 100,
-      refundDeductions: lifetimeAccounting.storeRefundImpact / 100,
+      refundDeductions: lifetime.storeRefundImpact / 100,
       totalCustomers: customerCount.data().count,
       averageRating: typeof storeData.rating === "number" ? storeData.rating : 0,
-      pendingOrders: pendingCount.data().count,
-      activeOrders: activeCount.data().count,
-      todayOrders: todayOrders.size,
-      weeklyGrowth: growth(currentWeekOrders.size, previousWeekOrders.size),
+      pendingOrders: lifetime.pendingOrders,
+      activeOrders: lifetime.activeOrders,
+      todayOrders: today.totals.paidOrders,
+      weeklyGrowth: growth(currentWeek.totals.paidOrders, previousWeek.totals.paidOrders),
       earningsGrowth: growth(weekNetEarnings, previousWeekNetEarnings),
     },
     recentOrders: recent.map((order, index) => {
@@ -805,6 +800,7 @@ export const getStoreWorkspaceDashboard = onCall({region: "us-central1", timeout
 
 export const getStoreWorkspaceFinancials = onCall({
   region: "us-central1",
+  timeoutSeconds: 300,
   secrets: [stripeSecretKey],
 }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in to view store financials.");
@@ -824,25 +820,19 @@ export const getStoreWorkspaceFinancials = onCall({
     .where("recipient.id", "==", store.id)
     .where("recipient.type", "==", "store");
   const [
-    lifetimeOrders,
-    weeklyOrders,
-    monthlyOrders,
+    lifetime,
+    weekly,
+    monthly,
     pendingTransfers,
     transferHistory,
   ] = await Promise.all([
-    db.collection("orders").where("store.id", "==", store.id).where("checkoutStatus", "==", "confirmed").where("payment.status", "==", "paid").get(),
-    db.collection("orders").where("store.id", "==", store.id).where("checkoutStatus", "==", "confirmed").where("payment.status", "==", "paid").where("payment.paidAt", ">=", week.start).where("payment.paidAt", "<", week.end).get(),
-    db.collection("orders").where("store.id", "==", store.id).where("checkoutStatus", "==", "confirmed").where("payment.status", "==", "paid").where("payment.paidAt", ">=", month.start).where("payment.paidAt", "<", month.end).get(),
+    lifetimePerformance(store),
+    periodPerformance(store, week.start, week.end, timeZone).then((result) => result.totals),
+    periodPerformance(store, month.start, month.end, timeZone).then((result) => result.totals),
     transfers.where("status", "in", ["pending", "eligible", "processing"]).aggregate({ total: AggregateField.sum("amount") }).get(),
     /* The earnings dashboard previews only the ten most recent payouts. */
     transfers.orderBy("updatedAt", "desc").limit(10).get(),
   ]);
-  const [lifetime, weekly, monthly] = await Promise.all([
-    orderCohortAccounting(lifetimeOrders),
-    orderCohortAccounting(weeklyOrders),
-    orderCohortAccounting(monthlyOrders),
-  ]);
-
   const totalEarnings = Math.max(0, lifetime.grossStoreEntitlement - lifetime.storeRefundImpact) / 100;
   const pendingBalance = (pendingTransfers.data().total ?? 0) / 100;
   const transferRows = transferHistory.docs.map((transfer) => ({
@@ -918,6 +908,92 @@ async function storeTimeZone(store: FirebaseFirestore.DocumentSnapshot): Promise
   }
 }
 
+type StorePerformanceTotals = {
+  paidOrders: number; deliveredOrders: number; cancelledOrders: number;
+  openOrders: number; pendingOrders: number; activeOrders: number;
+  grossMerchandise: number; salesTax: number; grossStoreEntitlement: number;
+  storeCommission: number; refundedMerchandise: number; refundedSalesTax: number;
+  storeRefundImpact: number; customerRefundTotal: number; refundCount: number;
+  peakHours: number[]; productSales: Record<string, {name: string; sales: number}>;
+  customerIds: Set<string>;
+};
+
+const performanceNumberFields = [
+  "paidOrders", "deliveredOrders", "cancelledOrders", "openOrders",
+  "pendingOrders", "activeOrders", "grossMerchandise", "salesTax",
+  "grossStoreEntitlement", "storeCommission", "refundedMerchandise",
+  "refundedSalesTax", "storeRefundImpact", "customerRefundTotal", "refundCount",
+] as const;
+
+function emptyPerformanceTotals(): StorePerformanceTotals {
+  return {
+    paidOrders: 0, deliveredOrders: 0, cancelledOrders: 0, openOrders: 0,
+    pendingOrders: 0, activeOrders: 0, grossMerchandise: 0, salesTax: 0,
+    grossStoreEntitlement: 0, storeCommission: 0, refundedMerchandise: 0,
+    refundedSalesTax: 0, storeRefundImpact: 0, customerRefundTotal: 0,
+    refundCount: 0, peakHours: Array(24).fill(0), productSales: {}, customerIds: new Set(),
+  };
+}
+
+function addPerformanceDocument(target: StorePerformanceTotals, data: Record<string, unknown>) {
+  performanceNumberFields.forEach((field) => { target[field] += nonNegativeCentAmount(data[field]); });
+  const hours = Array.isArray(data.peakHours) ? data.peakHours : [];
+  hours.slice(0, 24).forEach((value, index) => { target.peakHours[index] += nonNegativeCentAmount(value); });
+  const products = isRecord(data.productSales) ? data.productSales : {};
+  Object.entries(products).forEach(([id, value]) => {
+    const item = isRecord(value) ? value : {};
+    const existing = target.productSales[id] ?? {name: text(item.name) || "Product", sales: 0};
+    existing.name = text(item.name) || existing.name;
+    existing.sales += nonNegativeCentAmount(item.sales);
+    target.productSales[id] = existing;
+  });
+  const customers = isRecord(data.customerOrderCounts) ? data.customerOrderCounts : {};
+  Object.keys(customers).forEach((id) => target.customerIds.add(id));
+}
+
+const initializedPerformanceStores = new Set<string>();
+const performanceBackfills = new Map<string, Promise<number>>();
+async function ensureStorePerformanceSummary(store: FirebaseFirestore.DocumentSnapshot) {
+  if (store.data()?.performanceSummaryVersion === 1 || initializedPerformanceStores.has(store.id)) return;
+  let backfill = performanceBackfills.get(store.id);
+  if (!backfill) {
+    backfill = backfillStorePerformanceSummaries(store.id);
+    performanceBackfills.set(store.id, backfill);
+  }
+  try {
+    await backfill;
+    initializedPerformanceStores.add(store.id);
+  } finally {
+    performanceBackfills.delete(store.id);
+  }
+}
+
+async function lifetimePerformance(store: FirebaseFirestore.DocumentSnapshot) {
+  await ensureStorePerformanceSummary(store);
+  const snapshot = await store.ref.collection("reporting").doc("lifetime").get();
+  const totals = emptyPerformanceTotals();
+  if (snapshot.exists) addPerformanceDocument(totals, snapshot.data() ?? {});
+  return totals;
+}
+
+async function periodPerformance(
+  store: FirebaseFirestore.DocumentSnapshot,
+  start: Date,
+  end: Date,
+  timeZone: string,
+) {
+  await ensureStorePerformanceSummary(store);
+  const startDay = localDateKey(start, timeZone, false);
+  const endDay = localDateKey(end, timeZone, false);
+  const snapshot = await store.ref.collection("dailyPerformance")
+    .where(FieldPath.documentId(), ">=", startDay)
+    .where(FieldPath.documentId(), "<", endDay)
+    .get();
+  const totals = emptyPerformanceTotals();
+  snapshot.docs.forEach((document) => addPerformanceDocument(totals, document.data()));
+  return {totals, documents: snapshot.docs};
+}
+
 async function documentsByReferences(references: FirebaseFirestore.DocumentReference[]) {
   const documents: FirebaseFirestore.DocumentSnapshot[] = [];
   for (let index = 0; index < references.length; index += 300) {
@@ -937,46 +1013,8 @@ async function refundsForOrders(orderIds: string[]) {
   return refunds;
 }
 
-async function orderCohortAccounting(orders: FirebaseFirestore.QuerySnapshot) {
-  const orderIds = orders.docs.map((document) => document.id);
-  const [settlements, refunds] = await Promise.all([
-    documentsByReferences(orderIds.map((id) => db.collection("paymentSettlements").doc(id))),
-    refundsForOrders(orderIds),
-  ]);
-  const settlementAmounts = new Map(settlements.filter((item) => item.exists).map((item) => [
-    item.id,
-    nonNegativeCentAmount(item.data()?.storeAmount),
-  ]));
-  const refundAmounts = refunds.map((document) => {
-    const data = document.data();
-    const allocation = isRecord(data.allocation) ? data.allocation : {};
-    const completed = data.status === "completed";
-    const reversals = Array.isArray(data.reversals) ? data.reversals.map((value: unknown) => isRecord(value) ? value : {}) : [];
-    const completedStoreReversal = reversals
-      .filter((reversal) => reversal.recipientType === "store" && reversal.status === "completed")
-      .reduce((sum, reversal) => sum + nonNegativeCentAmount(reversal.amount), 0);
-    return {
-      orderId: text(data.orderId),
-      merchandise: completed ? nonNegativeCentAmount(allocation.merchandiseAmount) : 0,
-      tax: completed ? nonNegativeCentAmount(allocation.taxAmount) : 0,
-      storeReversal: completedStoreReversal,
-      total: completed ? nonNegativeCentAmount(allocation.totalAmount) : 0,
-      completed,
-    };
-  });
-  const orderAmounts = orders.docs.map((document) => {
-    const pricing = isRecord(document.data().pricing) ? document.data().pricing : {};
-    return {
-      id: document.id,
-      merchandise: nonNegativeCentAmount(pricing.subtotalAmount),
-      tax: nonNegativeCentAmount(pricing.taxAmount),
-    };
-  });
-  return calculateStoreAnalyticsAccounting(orderAmounts, settlementAmounts, refundAmounts);
-}
-
 /* Calendar-period analytics use one paid-order cohort and immutable financial records. */
-export const getStoreWorkspaceAnalytics = onCall({region: "us-central1"}, async (request) => {
+export const getStoreWorkspaceAnalytics = onCall({region: "us-central1", timeoutSeconds: 300}, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in to view store analytics.");
   const input = isRecord(request.data) ? request.data : {};
   const requestedPeriod = text(input.period);
@@ -984,46 +1022,20 @@ export const getStoreWorkspaceAnalytics = onCall({region: "us-central1"}, async 
   const store = await requireApprovedStore(request.auth.uid);
   const timeZone = await storeTimeZone(store);
   const {start, end, previousStart, previousEnd} = storeAnalyticsRange(period, timeZone);
-  const baseOrders = db.collection("orders")
-    .where("store.id", "==", store.id)
-    .where("checkoutStatus", "==", "confirmed")
-    .where("payment.status", "==", "paid");
   const completedTransfers = db.collection("paymentTransfers")
     .where("recipient.id", "==", store.id)
     .where("recipient.type", "==", "store")
     .where("status", "==", "completed");
-  const [currentOrders, previousOrders, completedPayouts] = await Promise.all([
-    baseOrders.where("payment.paidAt", ">=", start).where("payment.paidAt", "<", end).get(),
-    baseOrders.where("payment.paidAt", ">=", previousStart).where("payment.paidAt", "<", previousEnd).get(),
+  const [current, previous, completedPayouts] = await Promise.all([
+    periodPerformance(store, start, end, timeZone),
+    periodPerformance(store, previousStart, previousEnd, timeZone),
     completedTransfers.where("completedAt", ">=", start.toISOString()).where("completedAt", "<", end.toISOString()).aggregate({total: AggregateField.sum("amount")}).get(),
   ]);
-  const [accounting, previousAccounting] = await Promise.all([
-    orderCohortAccounting(currentOrders),
-    orderCohortAccounting(previousOrders),
-  ]);
-
-  const customers = new Set<string>();
-  const hours = Array(24).fill(0) as number[];
-  const products = new Map<string, {name: string; sales: number}>();
   const buckets = new Map<string, number>();
-  currentOrders.docs.forEach((document) => {
+  current.documents.forEach((document) => {
     const data = document.data();
-    const customerId = text(isRecord(data.customer) ? data.customer.uid : "");
-    if (customerId) customers.add(customerId);
-    const paidAt = storedDate(isRecord(data.payment) ? data.payment.paidAt : null);
-    if (paidAt) {
-      hours[localHour(paidAt, timeZone)] += 1;
-      const key = localDateKey(paidAt, timeZone, period === "year");
-      buckets.set(key, (buckets.get(key) ?? 0) + 1);
-    }
-    if (Array.isArray(data.items)) data.items.forEach((value: unknown) => {
-      const item = isRecord(value) ? value : {};
-      const id = text(item.id) || text(item.name);
-      if (!id) return;
-      const existing = products.get(id) ?? {name: text(item.name) || "Product", sales: 0};
-      existing.sales += typeof item.quantity === "number" ? Math.max(0, item.quantity) : 0;
-      products.set(id, existing);
-    });
+    const key = period === "year" ? document.id.slice(0, 7) : document.id;
+    buckets.set(key, (buckets.get(key) ?? 0) + nonNegativeCentAmount(data.paidOrders));
   });
 
   const series: Array<{label: string; value: number}> = [];
@@ -1034,11 +1046,12 @@ export const getStoreWorkspaceAnalytics = onCall({region: "us-central1"}, async 
     if (period === "year") cursor.setUTCMonth(cursor.getUTCMonth() + 1);
     else cursor.setUTCDate(cursor.getUTCDate() + 1);
   }
-  const orderCount = currentOrders.size;
+  const accounting = current.totals;
+  const previousAccounting = previous.totals;
+  const orderCount = accounting.paidOrders;
   const netMerchandise = Math.max(0, accounting.grossMerchandise - accounting.refundedMerchandise);
   const netStoreEarnings = Math.max(0, accounting.grossStoreEntitlement - accounting.storeRefundImpact);
   const previousNetStoreEarnings = Math.max(0, previousAccounting.grossStoreEntitlement - previousAccounting.storeRefundImpact);
-  const statuses = currentOrders.docs.map((document) => text(document.data().status));
 
   return {
     period,
@@ -1046,9 +1059,9 @@ export const getStoreWorkspaceAnalytics = onCall({region: "us-central1"}, async 
     periodStart: start.toISOString(),
     periodEnd: end.toISOString(),
     totalOrders: orderCount,
-    completedOrders: statuses.filter((status) => status === "completed" || status === "delivered").length,
-    cancelledOrders: statuses.filter((status) => status === "cancelled").length,
-    openOrders: statuses.filter((status) => status !== "completed" && status !== "delivered" && status !== "cancelled").length,
+    completedOrders: accounting.deliveredOrders,
+    cancelledOrders: accounting.cancelledOrders,
+    openOrders: accounting.openOrders,
     grossMerchandiseSales: accounting.grossMerchandise / 100,
     refundedMerchandise: accounting.refundedMerchandise / 100,
     netMerchandiseSales: netMerchandise / 100,
@@ -1063,13 +1076,13 @@ export const getStoreWorkspaceAnalytics = onCall({region: "us-central1"}, async 
     customerRefundTotal: accounting.customerRefundTotal / 100,
     refundCount: accounting.refundCount,
     averageOrderValue: orderCount ? netMerchandise / orderCount / 100 : 0,
-    totalCustomers: customers.size,
+    totalCustomers: accounting.customerIds.size,
     averageRating: typeof store.data()?.rating === "number" ? store.data()?.rating : 0,
-    peakHours: hours,
+    peakHours: accounting.peakHours,
     orderSeries: series,
-    orderGrowth: percentageGrowth(orderCount, previousOrders.size),
+    orderGrowth: percentageGrowth(orderCount, previousAccounting.paidOrders),
     revenueGrowth: percentageGrowth(netStoreEarnings, previousNetStoreEarnings),
-    topProducts: Array.from(products.values()).sort((left, right) => right.sales - left.sales).slice(0, 5),
+    topProducts: Object.values(accounting.productSales).sort((left, right) => right.sales - left.sales).slice(0, 5),
   };
 });
 

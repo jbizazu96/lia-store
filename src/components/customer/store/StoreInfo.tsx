@@ -64,7 +64,7 @@ export function StoreInfo({
 }: StoreInfoProps) {
   const applicablePricing = useApplicableMarketplacePricing(storeId);
   const marketplacePolicy = applicablePricing?.policy ?? null;
-  const orderDeliveryPolicy = useOrderDeliveryPolicy();
+  const orderDeliveryPolicy = useOrderDeliveryPolicy(storeId);
   const [showPricingFees, setShowPricingFees] = useState(false);
   // Use the shared formatting functions
   const formattedDistance = formatDistance(distance);

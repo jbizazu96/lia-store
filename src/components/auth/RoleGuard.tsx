@@ -29,6 +29,8 @@ import {
 import {
   currentAccountClientService,
 } from "@/services/user/currentAccountClientService";
+import {customerStartupClientService} from "@/services/user/customerStartupClientService";
+import {startCustomerPerformanceTrace} from "@/services/performance/customerPerformanceService";
 
 export type AccountType =
   | "customer"
@@ -105,9 +107,12 @@ export function RoleGuard({
     setAccessError(null);
 
     const verifyAccess = async () => {
+      const accessTrace = startCustomerPerformanceTrace("customer_access_ready");
       try {
-        const { accountType } =
-          await currentAccountClientService.get();
+        const customerOnly = allowedAccountTypesSignature === "customer";
+        const {accountType} = customerOnly
+          ? await customerStartupClientService.get()
+          : await currentAccountClientService.get();
 
         if (
           !accountType ||
@@ -117,6 +122,7 @@ export function RoleGuard({
             accountType
           )
         ) {
+          accessTrace.stop({status: "redirected", account_type: accountType});
           router.replace(
             getAccountHome(accountType)
           );
@@ -126,7 +132,9 @@ export function RoleGuard({
         if (active) {
           setAccessVerified(true);
         }
+        accessTrace.stop({status: "success", account_type: accountType});
       } catch (error) {
+        accessTrace.stop({status: "error"});
         console.error(
           "Unable to verify route access:",
           error

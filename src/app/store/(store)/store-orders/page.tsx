@@ -19,7 +19,6 @@
 */
 
 import {
-  useDeferredValue,
   useEffect,
   useState,
 } from "react";
@@ -56,6 +55,7 @@ import {
 import {
   OrderStats,
 } from "@/components/store/orders/OrderStats";
+import {useDebouncedValue} from "@/hooks/useDebouncedValue";
 
 /*
 |--------------------------------------------------------------------------
@@ -72,7 +72,7 @@ export default function StoreOrdersPage() {
   const [statusFilter, setStatusFilter] = useState(searchParams.get("status") ?? "all");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
-  const deferredSearchValue = useDeferredValue(searchQuery.trim());
+  const deferredSearchValue = useDebouncedValue(searchQuery.trim());
   const deferredSearch = deferredSearchValue.length >= 2 ? deferredSearchValue : "";
   const hasFilters = Boolean(deferredSearch || fromDate || toDate) || statusFilter !== "all";
   const from = fromDate ? new Date(`${fromDate}T00:00:00`).toISOString() : "";

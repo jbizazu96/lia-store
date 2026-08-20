@@ -45,6 +45,7 @@ import type {
   PrepareCheckoutPaymentResult,
 } from "@/types/checkoutPayment";
 import {reportClientIssue} from "@/services/monitoring/clientErrorReporter";
+import {startCustomerPerformanceTrace} from "@/services/performance/customerPerformanceService";
 
 
 /*
@@ -178,6 +179,10 @@ UsePrepareCheckoutPaymentResult {
         return null;
       }
 
+      const paymentTrace = startCustomerPerformanceTrace(
+        "customer_checkout_payment_prepared"
+      );
+
       try {
         setLoading(true);
         setError(null);
@@ -191,11 +196,13 @@ UsePrepareCheckoutPaymentResult {
         setPreparedPayment(
           result
         );
+        paymentTrace.stop({status: "success"});
 
         return result;
       } catch (
         preparationError: unknown
       ) {
+        paymentTrace.stop({status: "error"});
         console.error(
           "Unable to prepare Stripe checkout:",
           preparationError

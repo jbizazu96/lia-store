@@ -88,7 +88,7 @@ async function requireCustomer(uid: string) {
   return { reference, data };
 }
 
-function profileResponse(data: Record<string, unknown>) {
+export function customerProfileResponse(data: Record<string, unknown>) {
   const address = isRecord(data.defaultAddress) ? data.defaultAddress : null;
   const hasAddress =
     address &&
@@ -232,7 +232,7 @@ export const getCustomerProfile = onCall(
   async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Sign in to view your profile.");
     const { data } = await requireCustomer(request.auth.uid);
-    return profileResponse(data);
+    return customerProfileResponse(data);
   }
 );
 
@@ -257,7 +257,7 @@ export const updateCustomerProfile = onCall(
       admin.auth().updateUser(request.auth.uid, { displayName }),
     ]);
 
-    return profileResponse({ ...data, displayName, phone, language });
+    return customerProfileResponse({ ...data, displayName, phone, language });
   }
 );
 
@@ -309,7 +309,7 @@ export const saveCustomerRecentSearch = onCall(
       throw new HttpsError("invalid-argument", "Enter a valid search.");
     }
 
-    const current = profileResponse(data).recentSearches;
+    const current = customerProfileResponse(data).recentSearches;
     const recentSearches = [
       query,
       ...current.filter((item) => item.toLowerCase() !== query.toLowerCase()),
@@ -375,7 +375,7 @@ export const updateCustomerNotificationPreferences = onCall(
 |
 */
 
-function favoriteStoreIds(
+export function customerFavoriteStoreIds(
   value: unknown
 ): string[] {
   if (!Array.isArray(value)) {
@@ -403,7 +403,7 @@ export const getCustomerFavoriteStores = onCall(
     const { data } = await requireCustomer(request.auth.uid);
 
     return {
-      storeIds: favoriteStoreIds(data.favoriteStoreIds),
+      storeIds: customerFavoriteStoreIds(data.favoriteStoreIds),
     };
   }
 );
@@ -430,7 +430,7 @@ export const setCustomerStoreFavorite = onCall(
       );
     }
 
-    const currentStoreIds = favoriteStoreIds(data.favoriteStoreIds);
+    const currentStoreIds = customerFavoriteStoreIds(data.favoriteStoreIds);
 
     if (shouldSave) {
       const storeProfile = await db

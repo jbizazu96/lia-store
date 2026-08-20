@@ -15,6 +15,7 @@ import {
 import {
   httpsCallable,
 } from "firebase/functions";
+import {loadCached, writeCached} from "@/services/cache/clientDataCache";
 
 async function call<T>(
   name: string,
@@ -40,7 +41,11 @@ export const customerFavoriteStoreClientService = {
   get(): Promise<{
     storeIds: string[];
   }> {
-    return call("getCustomerFavoriteStores");
+    return loadCached(
+      "customer-favorite-stores",
+      () => call("getCustomerFavoriteStores"),
+      {ttlMs: 30_000},
+    );
   },
 
   set(
@@ -49,9 +54,13 @@ export const customerFavoriteStoreClientService = {
   ): Promise<{
     storeIds: string[];
   }> {
-    return call("setCustomerStoreFavorite", {
+    return call<{storeIds: string[]}>("setCustomerStoreFavorite", {
       storeId,
       isFavorite,
-    });
+    }).then((result) => writeCached(
+      "customer-favorite-stores",
+      result,
+      {ttlMs: 30_000},
+    ));
   },
 };

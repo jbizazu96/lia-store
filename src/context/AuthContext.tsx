@@ -45,6 +45,7 @@ import {customerLogoutService} from "@/services/auth/customerLogoutService";
 import {
   clearClientDataCache,
 } from "@/services/cache/clientDataCache";
+import {startCustomerPerformanceTrace} from "@/services/performance/customerPerformanceService";
 /*
   This interface describes what data
   our AuthContext will provide.
@@ -115,6 +116,7 @@ export function AuthProvider({
     Runs once when component mounts.
   */
   useEffect(() => {
+    const authTrace = startCustomerPerformanceTrace("customer_auth_ready");
     const removeSessionCleanup = customerLogoutService.installSessionCleanup();
     /*
       Listen for authentication changes.
@@ -125,7 +127,7 @@ export function AuthProvider({
     const unsubscribe =
       onAuthStateChanged(
         auth,
-        async (firebaseUser) => {
+        (firebaseUser) => {
           /*
             firebaseUser can be:
 
@@ -133,6 +135,8 @@ export function AuthProvider({
             - null
           */
           setUser(firebaseUser);
+          setLoading(false);
+          authTrace.stop({status: firebaseUser ? "authenticated" : "signed_out"});
 
             /* Never retain an account's in-memory view models after logout. */
             if (!firebaseUser) {
@@ -140,8 +144,11 @@ export function AuthProvider({
             }
 
             if (firebaseUser) {
-
-              try {
+              /* Push setup is optional background work. It must never keep
+               * authentication, role verification, or the first page behind
+               * a loading screen. */
+              void (async () => {
+                try {
                /*
                 * Do not show the permission prompt at login. Existing opt-in
                 * devices are silently refreshed; new users choose from
@@ -152,23 +159,17 @@ export function AuthProvider({
                  requestPermission: false,
                });
 
-              } catch (error) {
+                } catch (error) {
 
                 console.error(
                   "Unable to register device for notifications:",
                   error
                 );
 
-              }
+                }
+              })();
 
             }
-
-            /*
-              Firebase has finished checking.
-
-              We can stop loading.
-            */
-            setLoading(false);
         }
       );
 

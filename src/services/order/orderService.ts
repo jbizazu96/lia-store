@@ -110,6 +110,10 @@ export class OrderService {
       );
     }
 
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new Event("lia:store-orders-changed"));
+    }
+
     return new Date(
       response.data.changedAt
     );

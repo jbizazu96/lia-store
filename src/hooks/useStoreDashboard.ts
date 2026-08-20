@@ -14,6 +14,7 @@
 import {
   useCallback,
   useEffect,
+  useRef,
   useState,
 } from "react";
 import {
@@ -28,6 +29,7 @@ import {
 import type {
   DashboardData,
 } from "@/types/dashboard";
+import {startStorePerformanceTrace} from "@/services/performance/storePerformanceService";
 
 interface UseStoreDashboardResult {
   data: DashboardData | null;
@@ -44,15 +46,18 @@ export function useStoreDashboard(): UseStoreDashboardResult {
   const [error, setError] = useState<string | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [needsStoreSetup, setNeedsStoreSetup] = useState(false);
+  const lastRefreshAt = useRef(0);
 
   const loadDashboard = useCallback(async (showLoading = true): Promise<void> => {
+    const trace = startStorePerformanceTrace("store_dashboard_ready");
+    let traceResult = "complete";
     if (showLoading) setLoading(true);
 
     try {
       /* Both callables independently verify the owner, so start them together. */
       const [entryResult, dashboardResult] = await Promise.allSettled([
         storeWorkspaceClientService.getEntry(),
-        storeWorkspaceClientService.getDashboard(),
+        storeWorkspaceClientService.getDashboard(!showLoading),
       ]);
 
       if (entryResult.status === "rejected") {
@@ -72,20 +77,21 @@ export function useStoreDashboard(): UseStoreDashboardResult {
       }
 
       setData(dashboardResult.value);
+      lastRefreshAt.current = Date.now();
       setNeedsStoreSetup(false);
       setError(null);
     } catch (loadError) {
+      traceResult = "error";
       console.error("Error loading store dashboard:", loadError);
       setData(null);
       setError("Failed to load dashboard.");
     } finally {
+      trace.stop({result: traceResult, background: String(!showLoading)});
       if (showLoading) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    let refreshTimer: ReturnType<typeof setInterval> | null = null;
-
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (!user) {
         setData(null);
@@ -98,12 +104,20 @@ export function useStoreDashboard(): UseStoreDashboardResult {
 
       setIsAuthenticated(true);
       void loadDashboard();
-      refreshTimer = setInterval(() => void loadDashboard(false), 60_000);
     });
+
+    const refreshWhenUseful = () => {
+      if (!auth.currentUser || document.visibilityState !== "visible") return;
+      if (Date.now() - lastRefreshAt.current < 30_000) return;
+      void loadDashboard(false);
+    };
+    document.addEventListener("visibilitychange", refreshWhenUseful);
+    window.addEventListener("lia:store-orders-changed", refreshWhenUseful);
 
     return () => {
       unsubscribe();
-      if (refreshTimer) clearInterval(refreshTimer);
+      document.removeEventListener("visibilitychange", refreshWhenUseful);
+      window.removeEventListener("lia:store-orders-changed", refreshWhenUseful);
     };
   }, [loadDashboard]);
 

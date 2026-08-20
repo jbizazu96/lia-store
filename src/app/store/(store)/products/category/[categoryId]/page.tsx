@@ -1,6 +1,6 @@
 "use client";
 
-import {use, useDeferredValue, useEffect, useState} from "react";
+import {use, useEffect, useState} from "react";
 import Link from "next/link";
 import {useRouter} from "next/navigation";
 import {ArrowLeft, PackageOpen, Search} from "lucide-react";
@@ -9,6 +9,7 @@ import {ProductCard} from "@/components/store/products/ProductCard";
 import {useProductCategories} from "@/hooks/useProductCategories";
 import {useStoreProductActions} from "@/hooks/useStoreProductActions";
 import {useStoreProducts} from "@/hooks/useStoreProducts";
+import {useDebouncedValue} from "@/hooks/useDebouncedValue";
 
 interface StoreCategoryProductsPageProps {
   params: Promise<{categoryId: string}>;
@@ -29,7 +30,7 @@ export default function StoreCategoryProductsPage({params}: StoreCategoryProduct
   const categories = useProductCategories();
   const [searchQuery, setSearchQuery] = useState("");
   const [sort, setSort] = useState<"name" | "stock_asc" | "stock_desc" | "price_asc" | "price_desc" | "updated_desc">("name");
-  const deferredSearchValue = useDeferredValue(searchQuery.trim());
+  const deferredSearchValue = useDebouncedValue(searchQuery.trim());
   const deferredSearch = deferredSearchValue.length >= 2 ? deferredSearchValue : "";
   const {
     products,

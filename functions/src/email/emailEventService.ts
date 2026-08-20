@@ -6,7 +6,7 @@ import {adminActionEmail, deliveredOrderEmail, EmailReceiptItem, EmailReceiptPri
 
 if (admin.apps.length === 0) admin.initializeApp();
 const db = getFirestore("default");
-const appUrl = defineString("APP_URL", {default: "https://liamarketplace.com"});
+const appUrl = defineString("APP_URL", {default: "https://www.liamarketplace.com"});
 const text = (value: unknown): string => typeof value === "string" ? value.trim() : "";
 const finite = (value: unknown): number | null => typeof value === "number" && Number.isFinite(value) ? value : null;
 
