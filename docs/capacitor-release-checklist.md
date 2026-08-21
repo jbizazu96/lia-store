@@ -28,10 +28,10 @@ Complete these checks during native development and repeat them on release candi
 ## Native configuration
 
 - Choose the final unique app identifier before creating the iOS and Android projects.
-- Set `CAPACITOR_SERVER_URL` to the deployed HTTPS customer app before running Capacitor sync.
+- Set `CAPACITOR_SERVER_URL=https://www.liamarketplace.com` before running Capacitor sync. A safe committed template is provided in `.env.capacitor.example`; configure it explicitly in each native build environment.
 - Generate the Android and iOS splash assets from the approved LIA launch artwork after creating the native projects. The shared native splash behavior is already configured in `capacitor.config.ts`; verify the white native screen hands off cleanly to the branded customer loader without a blank or flashing frame.
 - Register the `lia://` deep-link scheme and configure Universal Links (iOS) and App Links (Android) for the production HTTPS domain.
-- Set `NEXT_PUBLIC_APP_URL` in the native build to that HTTPS origin. Stripe redirect returns must never use `capacitor://localhost`.
+- Set `NEXT_PUBLIC_APP_URL=https://www.liamarketplace.com` in the hosted/native build environment. Stripe redirect returns must never use `capacitor://localhost`.
 - Configure Firebase Android (`google-services.json`) and iOS (`GoogleService-Info.plist`) applications separately from the web app.
 - Enable Google as a Firebase Authentication provider. Add the Android SHA-1 fingerprint and enable the plugin's Google dependencies in `android/variables.gradle` after creating Android.
 - Add the reversed Google client ID URL scheme and the Firebase Authentication Google pod configuration after creating iOS.
@@ -44,7 +44,19 @@ Complete these checks during native development and repeat them on release candi
 - Follow the Firebase Messaging iOS setup in the plugin documentation: forward remote-notification registration and receipt callbacks from `AppDelegate.swift`. Do not reinstall `@capacitor/push-notifications`; it conflicts with the Firebase Messaging plugin used to obtain iOS FCM tokens.
 - Add the recommended Android monochrome notification icon metadata after the Android project is created.
 
+## Native crash reporting
+
+- `@capacitor-firebase/crashlytics` is connected to the customer shell. The existing Firestore reporter remains responsible for web/PWA diagnostics; native builds additionally send process crashes and handled client failures to Firebase Crashlytics.
+- After creating Android, add the Firebase Crashlytics Gradle plugin to the project and app Gradle files, then run `npx cap sync android`.
+- After creating iOS, run `npx cap sync ios`; the required Swift Package Manager symlink option is already declared in `capacitor.config.ts`.
+- In Firebase Console > Crashlytics, confirm separate iOS and Android apps are linked to the production Firebase project.
+- Produce one intentional crash in a non-production build on each physical platform. Relaunch the app, then verify the issue, app version, customer UID, `app_surface=customer`, and `hosted_shell=true` appear in Crashlytics.
+- Verify a handled React error appears as a non-fatal report and that ordinary web/PWA errors still appear only in LIA's browser error reports.
+- Do not add an intentional crash control to a production-visible screen.
+
 ## Push and deep-link tests
+
+- Record every physical-device result and its evidence in [`docs/native-push-device-validation.md`](./native-push-device-validation.md). A checklist item is not passed merely because the implementation exists or a simulator succeeds.
 
 - On the first authenticated customer app or installed PWA open, confirm the LIA notification explanation appears once before the system permission dialog.
 - Test both first-open choices. “Not now” must leave notification controls available in Profile; “Allow notifications” must register the current installation on the server before showing the enabled confirmation.
@@ -61,6 +73,7 @@ Complete these checks during native development and repeat them on release candi
 - Test an ordinary card payment in iOS and Android.
 - Test a Stripe 3D Secure card and at least one redirect-based payment method enabled for the account.
 - Verify the return route is `/checkout/payment-result`, waits for the verified webhook, then opens the confirmed LIA order.
+- Leave a test payment in processing for more than 90 seconds. Verify the screen stops showing an indefinite loader, warns against another payment, and offers Retry verification, Check order status, and Contact LIA Support.
 - Background the app during authorization, return to it, and verify no duplicate pending order or duplicate payment intent is created.
 - Test decline, cancellation, slow webhook, and lost-network paths. The cart must remain intact until the webhook confirms payment.
 

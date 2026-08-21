@@ -143,3 +143,27 @@ export function storeRefundClaimEmail(input: {storeName: string; orderNumber: st
   const body = `<div style="display:inline-block;padding:6px 10px;border-radius:999px;background:#fef2f2;color:#b91c1c;font-size:12px;font-weight:800">ACTION MAY BE REQUIRED</div><p style="margin:18px 0 0;line-height:1.65;color:#374151">${escapeHtml(input.storeName)}, a customer submitted a refund or return claim connected to this order. Review the protected order workspace for the current status and any action requested by LIA.</p>`;
   return {subject: title, text: `${input.storeName}, a refund or return claim may require your attention. Review it securely in LIA: ${input.url}`, html: layout({title, preheader: `A claim for ${input.orderNumber} may need attention.`, body, action: {label: "Review order", url: input.url}})};
 }
+
+export function customerRefundClaimActivityEmail(input: {
+  customerName: string;
+  orderNumber: string;
+  title: string;
+  summary: string;
+  url: string;
+}) {
+  const name = input.customerName.trim() || "Customer";
+  const title = input.title.trim() || "Refund claim update";
+  const summary = input.summary.trim() || "There is an update to your refund claim.";
+  const body = `<div style="display:inline-block;padding:6px 10px;border-radius:999px;background:#fff7ed;color:${brandDark};font-size:12px;font-weight:800">REFUND CLAIM UPDATE</div><p style="margin:18px 0 0;line-height:1.65;color:#374151">Hi ${escapeHtml(name)}, ${escapeHtml(summary)}</p><div style="margin-top:20px;padding:14px 16px;border-radius:10px;background:#f9fafb;border:1px solid #e5e7eb"><span style="font-size:13px;color:${muted}">Order</span><div style="margin-top:4px;font-size:16px;font-weight:800;color:${ink}">${escapeHtml(input.orderNumber)}</div></div><p style="margin:16px 0 0;font-size:13px;line-height:1.6;color:${muted}">Open the protected order page for the current claim timeline and any message from LIA Support.</p>`;
+  const text = `Hi ${name}, ${summary}\n\nOrder: ${input.orderNumber}\nView the protected claim timeline: ${input.url}`;
+  return {
+    subject: title,
+    text,
+    html: layout({
+      title,
+      preheader: summary,
+      body,
+      action: {label: "View claim activity", url: input.url},
+    }),
+  };
+}

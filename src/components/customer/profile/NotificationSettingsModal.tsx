@@ -1,6 +1,7 @@
 "use client";
 
 import {useState} from "react";
+import {createPortal} from "react-dom";
 import {Bell, Megaphone, Package, PackageCheck, Store, X} from "lucide-react";
 import type {
   CustomerNotificationPreferences,
@@ -141,9 +142,11 @@ export function NotificationSettingsModal({
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-[60] flex items-end bg-black/45 p-4 sm:items-center sm:justify-center">
-      <div className="flex max-h-[calc(100dvh-2rem)] w-full max-w-md flex-col overflow-hidden rounded-3xl bg-white p-5 shadow-2xl">
+  if (typeof document === "undefined") return null;
+
+  return createPortal(
+    <div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/45 p-0 sm:items-center sm:p-4">
+      <div className="flex max-h-[calc(100dvh-env(safe-area-inset-top)-1rem)] w-full max-w-md flex-col overflow-hidden rounded-t-3xl bg-white px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-5 shadow-2xl sm:max-h-[calc(100dvh-2rem)] sm:rounded-3xl sm:p-5">
         <div className="flex items-start justify-between gap-4">
           <div>
             <h2 className="text-xl font-bold text-gray-900">
@@ -320,6 +323,7 @@ export function NotificationSettingsModal({
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

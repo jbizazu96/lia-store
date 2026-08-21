@@ -1,9 +1,11 @@
 /// <reference types="@capacitor-firebase/authentication" />
+/// <reference types="@capacitor-firebase/crashlytics" />
 /// <reference types="@capacitor-firebase/messaging" />
 
 import type { CapacitorConfig } from "@capacitor/cli";
 
-const hostedAppUrl = process.env.CAPACITOR_SERVER_URL?.trim();
+const hostedAppUrl = process.env.CAPACITOR_SERVER_URL?.trim() ||
+  "https://www.liamarketplace.com";
 
 const config: CapacitorConfig = {
   appId: "com.liamarketplace.customer",
@@ -44,6 +46,9 @@ const config: CapacitorConfig = {
       spm: {
         packageOptions: {
           "@capacitor-firebase/messaging": {
+            symlink: true,
+          },
+          "@capacitor-firebase/crashlytics": {
             symlink: true,
           },
         },

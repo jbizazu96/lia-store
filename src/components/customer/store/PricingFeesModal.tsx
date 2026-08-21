@@ -60,7 +60,7 @@ export function PricingFeesModal({
             animate={{opacity: 1, y: 0}}
             exit={{opacity: 0, y: 80}}
             transition={{type: "spring", damping: 28, stiffness: 320}}
-            className="relative max-h-[88vh] w-full max-w-lg overflow-y-auto rounded-t-[32px] bg-white px-5 pb-8 pt-5 shadow-2xl sm:rounded-[32px] sm:p-7"
+            className="relative max-h-[88vh] w-full max-w-lg overflow-y-auto rounded-t-[32px] bg-white px-5 pb-[max(2rem,env(safe-area-inset-bottom))] pt-5 shadow-2xl sm:rounded-[32px] sm:p-7"
           >
             <div className="mb-5 flex items-center justify-between gap-4">
               <h2 id="pricing-fees-title" className="text-xl font-black tracking-[-0.03em] text-slate-950">

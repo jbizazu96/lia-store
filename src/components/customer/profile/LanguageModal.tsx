@@ -1,13 +1,10 @@
 "use client";
 
 import {motion} from "framer-motion";
-import {X, Check} from "lucide-react";
-import {useState} from "react";
+import {X, Check, Clock3} from "lucide-react";
 
 interface LanguageModalProps {
-  currentLanguage: string;
   onClose: () => void;
-  onSelect: (language: string) => Promise<void>;
 }
 
 const languages = [
@@ -16,9 +13,7 @@ const languages = [
   {code: "sw", name: "Swahili", flag: "🇹🇿"},
 ];
 
-export function LanguageModal({currentLanguage, onClose, onSelect}: LanguageModalProps) {
-  const [savingLanguage, setSavingLanguage] = useState<string | null>(null);
-
+export function LanguageModal({onClose}: LanguageModalProps) {
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
       <motion.div
@@ -29,7 +24,10 @@ export function LanguageModal({currentLanguage, onClose, onSelect}: LanguageModa
       >
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <h2 className="text-xl font-bold text-gray-800">Select Language</h2>
+          <div>
+            <h2 className="text-xl font-bold text-gray-800">Languages</h2>
+            <p className="mt-1 text-sm font-medium text-orange-600">Coming soon</p>
+          </div>
           <button
             onClick={onClose}
             className="w-8 h-8 rounded-full hover:bg-gray-100 flex items-center justify-center transition"
@@ -39,39 +37,44 @@ export function LanguageModal({currentLanguage, onClose, onSelect}: LanguageModa
           </button>
         </div>
 
-        {/* Language List */}
-        <div className="p-4 space-y-1">
-          {languages.map((lang) => {
-            const isSelected = lang.name === currentLanguage;
-            
-            return (
-              <button
-                key={lang.code}
-                onClick={async () => {
-                  try {
-                    setSavingLanguage(lang.name);
-                    await onSelect(lang.name);
-                    onClose();
-                  } finally {
-                    setSavingLanguage(null);
-                  }
-                }}
-                disabled={savingLanguage !== null}
-                className="flex w-full items-center justify-between rounded-full px-4 py-4 transition hover:bg-gray-50"
-                aria-label={`Select ${lang.name}`}
-              >
+        <div className="p-5">
+          <div className="mb-4 rounded-2xl bg-orange-50 p-4 text-sm leading-6 text-gray-700">
+            LIA is currently available in English. French and Swahili are planned for a future update.
+          </div>
+
+          <div className="space-y-1" aria-label="Planned application languages">
+            {languages.map((lang) => {
+              const isAvailable = lang.code === "en";
+
+              return (
+                <div
+                  key={lang.code}
+                  className="flex w-full items-center justify-between rounded-2xl px-4 py-3"
+                >
                 <div className="flex items-center gap-3">
                   <span className="text-2xl">{lang.flag}</span>
                   <span className="font-medium text-gray-800">{lang.name}</span>
                 </div>
-                {savingLanguage === lang.name ? (
-                  <span className="h-5 w-5 animate-spin rounded-full border-2 border-green-600 border-t-transparent" />
-                ) : isSelected && (
+                {isAvailable ? (
                   <Check className="w-5 h-5 text-green-600" />
+                ) : (
+                  <span className="flex items-center gap-1.5 text-xs font-semibold text-gray-500">
+                    <Clock3 className="h-4 w-4" />
+                    Planned
+                  </span>
                 )}
-              </button>
-            );
-          })}
+                </div>
+              );
+            })}
+          </div>
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="mt-5 w-full rounded-full bg-orange-500 px-5 py-3 font-semibold text-white transition hover:bg-orange-600"
+          >
+            Got it
+          </button>
         </div>
       </motion.div>
     </div>

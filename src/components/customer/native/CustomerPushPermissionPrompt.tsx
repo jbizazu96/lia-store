@@ -1,6 +1,7 @@
 "use client";
 
 import {useEffect, useState} from "react";
+import {createPortal} from "react-dom";
 import {Capacitor} from "@capacitor/core";
 import {BellRing} from "lucide-react";
 import {useAuth} from "@/context/AuthContext";
@@ -70,8 +71,10 @@ export function CustomerPushPermissionPrompt() {
     }
   };
 
-  return <div className="fixed inset-0 z-[90] flex items-end bg-black/45 p-4 sm:items-center sm:justify-center">
-    <section role="dialog" aria-modal="true" aria-labelledby="push-permission-title" className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl">
+  if (typeof document === "undefined") return null;
+
+  return createPortal(<div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/45 p-0 sm:items-center sm:p-4">
+    <section role="dialog" aria-modal="true" aria-labelledby="push-permission-title" className="w-full rounded-t-3xl bg-white px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-6 shadow-2xl sm:max-w-sm sm:rounded-3xl sm:p-6">
       <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-orange-50 text-orange-600">
         <BellRing className="h-7 w-7" />
       </span>
@@ -81,5 +84,5 @@ export function CustomerPushPermissionPrompt() {
       <button type="button" disabled={working} onClick={() => void accept()} className="mt-6 w-full rounded-full bg-orange-600 py-3 text-sm font-bold text-white disabled:opacity-60">{working ? "Please wait…" : "Allow notifications"}</button>
       <button type="button" disabled={working} onClick={() => void decline()} className="mt-2 w-full rounded-full py-3 text-sm font-bold text-gray-600 transition hover:bg-gray-50 disabled:opacity-60">Not now</button>
     </section>
-  </div>;
+  </div>, document.body);
 }

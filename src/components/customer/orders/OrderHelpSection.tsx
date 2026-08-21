@@ -8,6 +8,7 @@ import {
   RotateCcw,
 } from "lucide-react";
 import {
+  useEffect,
   useState,
 } from "react";
 import {
@@ -16,6 +17,8 @@ import {
 import {
   RefundClaimCard,
 } from "@/components/customer/orders/RefundClaimCard";
+import {refundClaimClientService} from "@/services/refund/refundClaimClientService";
+import {orderSupportClientService} from "@/services/order/orderSupportClientService";
 
 type HelpView = "support" | "claim" | null;
 
@@ -30,6 +33,30 @@ export function OrderHelpSection({
 }) {
   const [activeView, setActiveView] =
     useState<HelpView>(null);
+
+  useEffect(() => {
+    let active = true;
+
+    void Promise.allSettled([
+      refundClaimClientService.get(orderId),
+      orderSupportClientService.getCustomer(orderId),
+    ]).then(([claimResult, supportResult]) => {
+      if (!active) return;
+
+      if (claimResult.status === "fulfilled" && claimResult.value.claim) {
+        setActiveView("claim");
+      } else if (
+        supportResult.status === "fulfilled" &&
+        supportResult.value.request
+      ) {
+        setActiveView("support");
+      }
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [orderId]);
 
   return (
     <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-[0_6px_18px_rgba(15,23,42,0.08)]">

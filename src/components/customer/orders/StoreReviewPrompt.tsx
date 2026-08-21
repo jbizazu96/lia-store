@@ -4,6 +4,7 @@ import {
   useEffect,
   useState,
 } from "react";
+import { createPortal } from "react-dom";
 import {
   Star,
   X,
@@ -23,7 +24,6 @@ export function StoreReviewPrompt({
 }: StoreReviewPromptProps) {
   const [loading, setLoading] = useState(true);
   const [rating, setRating] = useState(0);
-  const [comment, setComment] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -37,7 +37,6 @@ export function StoreReviewPrompt({
         if (!active) return;
         if (review) {
           setRating(review.rating);
-          setComment(review.comment);
           setSubmitted(true);
         } else {
           /*
@@ -68,7 +67,7 @@ export function StoreReviewPrompt({
     try {
       setSaving(true);
       setError(null);
-      await customerStoreReviewClientService.submit(orderId, rating, comment);
+      await customerStoreReviewClientService.submit(orderId, rating);
       setSubmitted(true);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Unable to submit your review.");
@@ -88,16 +87,16 @@ export function StoreReviewPrompt({
     );
   }
 
-  if (!open) return null;
+  if (!open || typeof document === "undefined") return null;
 
-  return (
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-end bg-slate-950/45 p-0 sm:items-center sm:justify-center sm:p-6"
+      className="fixed inset-0 z-[200] flex items-end justify-center bg-slate-950/45 p-0 sm:items-center sm:p-6"
       role="dialog"
       aria-modal="true"
       aria-labelledby="store-review-title"
     >
-      <section className="w-full rounded-t-3xl bg-white p-6 shadow-2xl sm:max-w-md sm:rounded-3xl">
+      <section className="w-full rounded-t-3xl bg-white px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-6 shadow-2xl sm:max-w-md sm:rounded-3xl sm:p-6">
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-sm font-bold uppercase tracking-wide text-orange-600">
@@ -123,19 +122,19 @@ export function StoreReviewPrompt({
         <p className="mt-2 text-sm leading-6 text-gray-600">
           Share a verified rating based on this delivered order.
         </p>
-        <div className="mt-5 flex gap-1" aria-label="Choose a rating">
+        <div className="mt-5 flex justify-center gap-1" aria-label="Choose a rating">
           {[1, 2, 3, 4, 5].map((value) => (
             <button key={value} type="button" onClick={() => setRating(value)} className="rounded-full p-1 focus:outline-none focus:ring-2 focus:ring-orange-500" aria-label={`${value} star${value === 1 ? "" : "s"}`}>
               <Star className={"h-9 w-9 " + (value <= rating ? "fill-orange-400 text-orange-400" : "text-gray-300")} />
             </button>
           ))}
         </div>
-        <textarea value={comment} onChange={(event) => setComment(event.target.value)} maxLength={1000} placeholder="Tell us more (optional)" className="mt-4 min-h-28 w-full rounded-xl border border-orange-100 bg-orange-50/40 p-3 text-sm text-gray-800 outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-200" />
         {error && <p className="mt-3 text-sm font-medium text-red-600">{error}</p>}
         <button type="button" disabled={!rating || saving} onClick={() => void submit()} className="mt-4 w-full rounded-full bg-orange-500 py-3 text-sm font-bold text-white transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-50">
           {saving ? "Submitting review..." : "Submit review"}
         </button>
       </section>
-    </div>
+    </div>,
+    document.body,
   );
 }

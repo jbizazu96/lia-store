@@ -9,6 +9,7 @@ export type EmailCategory =
   | "auth_email_verification"
   | "auth_password_reset"
   | "customer_order_delivered"
+  | "customer_refund_claim"
   | "store_new_order"
   | "store_refund_claim"
   | "store_inventory_digest"

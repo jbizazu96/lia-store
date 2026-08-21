@@ -68,7 +68,7 @@ LIA currently has no advertising network, no data broker integration, no cross-a
 | Device ID | Yes | Yes | No | App Functionality; Developer’s Advertising or Marketing | A stable LIA installation ID, Firebase messaging token, platform, and user agent are registered to the signed-in account for private push delivery and customer-controlled promotional notifications. This is not Apple’s advertising identifier. |
 | Purchase History | Yes | Yes | No | App Functionality; Analytics | Products, quantities, store, prices, tax, fees, tip, order and payment status, delivery, refunds, claims, and order history. Authoritative order data also supports reporting and settlement reconciliation. |
 | Product Interaction | Yes | Yes | No | App Functionality; Product Personalization; Developer’s Advertising or Marketing | Server-backed cart, favorite stores, recent searches, notification preferences, reviews, and customer interaction needed to restore and personalize shopping. Favorites/preferences may affect opted-in store/product/promotional notifications. LIA does not currently collect a general clickstream of every tap or scroll. |
-| Crash Data | Yes | Yes | No | App Functionality | Production client failures can be sent to LIA’s Firebase-backed error reporter with authenticated user ID, route path, sanitized stack, platform, and app version. |
+| Crash Data | Yes | Yes | No | App Functionality | Native iOS process crashes and handled client failures can be sent to Firebase Crashlytics. Reports may include the authenticated Firebase UID, route path, sanitized stack, platform, native build information, and hosted-app version. Web/PWA failures continue to use LIA’s Firebase-backed browser reporter. |
 | Performance Data | Yes | Potentially yes | No | App Functionality; Analytics | Firebase Performance traces and LIA timing reports measure customer route/load and route-calculation latency. Slow-operation reports can be associated with an authenticated user through the LIA error reporter, so answer linked conservatively. |
 | Other Diagnostic Data | Yes | Yes | No | App Functionality | Error area/message, sanitized stack, route pathname without query text, native/web platform, version, online status, safe metadata, App Check state, and security/abuse-control records. |
 
@@ -151,7 +151,7 @@ After `npx cap add ios` and native dependency installation:
 
 1. Inspect every generated `PrivacyInfo.xcprivacy` file.
 2. Generate and review Xcode’s privacy report/archive report.
-3. Confirm the final versions of Firebase Authentication, Firebase Messaging, Firebase Performance, Stripe, Capacitor, and any transitive native SDKs.
+3. Confirm the final versions of Firebase Authentication, Firebase Messaging, Firebase Crashlytics, Firebase Performance, Stripe, Capacitor, and any transitive native SDKs.
 4. Confirm no SDK declares tracking or advertising-ID access.
 5. Compare the archive’s collected-data declarations with this worksheet.
 6. Update this file and App Store Connect if the compiled build differs.

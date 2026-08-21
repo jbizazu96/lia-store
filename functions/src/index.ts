@@ -211,6 +211,7 @@ export {
 } from "./triggers/adminNotifications";
 export {homePromotionCustomerNotifications} from "./triggers/homePromotionCustomerNotifications";
 export {
+  customerRefundClaimSubmissionNotification,
   customerRefundClaimDecisionNotification,
   customerRefundClaimPaymentNotification,
 } from "./triggers/refundClaimNotifications";

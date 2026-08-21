@@ -15,11 +15,13 @@ import {
   getFirestore,
 } from "firebase-admin/firestore";
 import {
+  onDocumentCreated,
   onDocumentUpdated,
 } from "firebase-functions/v2/firestore";
 import {
   notificationService,
 } from "../services/notificationService";
+import {queueCustomerRefundClaimActivityEmail} from "../email/emailEventService";
 
 if (admin.apps.length === 0) {
   admin.initializeApp();
@@ -96,6 +98,28 @@ async function notifyCustomer(
   }
 }
 
+export const customerRefundClaimSubmissionNotification =
+  onDocumentCreated(
+    {
+      document: "refundClaims/{claimId}",
+      region: "us-central1",
+      database: "default",
+    },
+    async (event) => {
+      const claim = event.data?.data() as Data | undefined;
+      if (!claim || text(claim.status) !== "pending_review") return;
+
+      await queueCustomerRefundClaimActivityEmail({
+        claimId: event.params.claimId,
+        customerId: text(claim.customerId),
+        orderId: text(claim.orderId),
+        eventKey: "submitted",
+        title: "We received your refund claim",
+        summary: "LIA received your refund claim and it is waiting for Admin review. We will email you when its status changes.",
+      });
+    },
+  );
+
 export const customerRefundClaimDecisionNotification =
   onDocumentUpdated(
     {
@@ -120,19 +144,32 @@ export const customerRefundClaimDecisionNotification =
       const decision = record(after.decision);
       const note = text(decision.reason);
 
-      await notifyCustomer(
+      const title = nextStatus === "approved"
+        ? "Your refund claim was approved"
+        : "Your refund claim was reviewed";
+      const body = nextStatus === "approved"
+        ? "Your refund is now being processed."
+        : note
+          ? "Your claim was not approved. Review note: " + note
+          : "Your claim was not approved.";
+
+      await Promise.all([
+        notifyCustomer(
         text(after.customerId),
         event.params.claimId,
         text(after.orderId),
-        nextStatus === "approved"
-          ? "Your refund claim was approved"
-          : "Your refund claim was reviewed",
-        nextStatus === "approved"
-          ? "Your refund is now being processed."
-          : note
-            ? "Your claim was not approved. Review note: " + note
-            : "Your claim was not approved.",
-      );
+        title,
+        body,
+        ),
+        queueCustomerRefundClaimActivityEmail({
+          claimId: event.params.claimId,
+          customerId: text(after.customerId),
+          orderId: text(after.orderId),
+          eventKey: nextStatus,
+          title,
+          summary: body,
+        }),
+      ]);
     },
   );
 
@@ -152,10 +189,7 @@ export const customerRefundClaimPaymentNotification =
       const previousStatus = text(before.status);
       const nextStatus = text(after.status);
 
-      if (
-        previousStatus === nextStatus ||
-        !isTerminalRefundStatus(nextStatus)
-      ) return;
+      if (previousStatus === nextStatus) return;
 
       const claims = await db
         .collection("refundClaims")
@@ -163,7 +197,7 @@ export const customerRefundClaimPaymentNotification =
         .limit(5)
         .get();
 
-      if (claims.empty && text(after.reason) === "store_cancelled") {
+      if (isTerminalRefundStatus(nextStatus) && claims.empty && text(after.reason) === "store_cancelled") {
         const orderId = text(after.orderId);
         const order = orderId ? await db.collection("orders").doc(orderId).get() : null;
         const customerId = text(record(order?.data()?.customer).uid);
@@ -179,7 +213,7 @@ export const customerRefundClaimPaymentNotification =
         await notifyCustomer(customerId, event.params.refundId, orderId, title, body);
       }
 
-      await Promise.all(claims.docs.map(async (claim) => {
+      if (isTerminalRefundStatus(nextStatus)) await Promise.all(claims.docs.map(async (claim) => {
         const data = claim.data();
         const title = nextStatus === "completed"
           ? "Your refund is complete"
@@ -199,5 +233,29 @@ export const customerRefundClaimPaymentNotification =
           body,
         );
       }));
+
+      const activity = {
+        pending: ["Your refund is pending", "LIA is preparing your approved refund."],
+        eligible: ["Your refund is ready for processing", "Your approved refund is queued for secure payment processing."],
+        processing: ["Your refund is processing", "LIA has started processing your refund with the payment provider."],
+        completed: ["Your refund is complete", "Your refund was sent to the original payment method. Your bank controls when it appears."],
+        partially_completed: ["Your refund needs additional review", "Part of the refund completed, and LIA Support is reviewing the remaining activity."],
+        failed: ["Your refund needs attention", "The latest refund attempt did not complete. LIA will retry or review it; you do not need to submit another claim."],
+        cancelled: ["Your refund activity changed", "The refund obligation was cancelled. Open the order for the current claim status or contact LIA Support."],
+      }[nextStatus];
+
+      if (activity) {
+        await Promise.all(claims.docs.map((claim) => {
+          const data = claim.data();
+          return queueCustomerRefundClaimActivityEmail({
+            claimId: claim.id,
+            customerId: text(data.customerId),
+            orderId: text(data.orderId),
+            eventKey: `refund-${event.params.refundId}-${nextStatus}`,
+            title: activity[0],
+            summary: activity[1],
+          });
+        }));
+      }
     },
   );

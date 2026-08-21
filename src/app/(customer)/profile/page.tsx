@@ -184,7 +184,7 @@ export default function ProfilePage() {
     {
       icon: Globe,
       label: "Language",
-      description: "English, French, Swahili",
+      description: "English · More languages coming soon",
       onClick: () => setShowLanguage(true),
     },
     {
@@ -405,16 +405,7 @@ export default function ProfilePage() {
       <AnimatePresence>
         {showLanguage && (
           <LanguageModal
-            currentLanguage={profileData.language || "English"}
             onClose={() => setShowLanguage(false)}
-            onSelect={async (lang) => {
-              const updatedProfile = await customerProfileClientService.updateProfile({
-                displayName: profileData.displayName,
-                phone: profileData.phone,
-                language: lang,
-              });
-              setUserData(updatedProfile);
-            }}
           />
         )}
       </AnimatePresence>

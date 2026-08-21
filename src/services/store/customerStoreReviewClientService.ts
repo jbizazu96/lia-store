@@ -3,7 +3,6 @@ import { functions } from "@/lib/firebase";
 
 export interface CustomerStoreReview {
   rating: number;
-  comment: string;
 }
 
 async function call<T>(name: string, data: unknown): Promise<T> {
@@ -20,6 +19,6 @@ async function call<T>(name: string, data: unknown): Promise<T> {
 
 export const customerStoreReviewClientService = {
   get: async (orderId: string) => call<{ review: CustomerStoreReview | null }>("getCustomerStoreReview", { orderId }),
-  submit: async (orderId: string, rating: number, comment: string) =>
-    call<{ rating: number }>("submitCustomerStoreReview", { orderId, rating, comment }),
+  submit: async (orderId: string, rating: number) =>
+    call<{ rating: number }>("submitCustomerStoreReview", { orderId, rating }),
 };

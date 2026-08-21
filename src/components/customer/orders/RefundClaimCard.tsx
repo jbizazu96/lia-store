@@ -1,6 +1,7 @@
 "use client";
 
 import {useEffect, useState} from "react";
+import {createPortal} from "react-dom";
 import {Camera, Check, Circle, ImagePlus, LoaderCircle, RotateCcw, Upload} from "lucide-react";
 import {refundClaimClientService} from "@/services/refund/refundClaimClientService";
 
@@ -377,9 +378,9 @@ export function RefundClaimCard({
         </div>
       )}
 
-      {evidencePickerOpen && (
-        <div className="fixed inset-0 z-50 flex items-end bg-black/40 p-4 sm:items-center sm:justify-center">
-          <div className="w-full max-w-sm rounded-3xl bg-white p-5 shadow-2xl">
+      {evidencePickerOpen && typeof document !== "undefined" && createPortal((
+        <div className="fixed inset-0 z-[200] flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4">
+          <div className="w-full rounded-t-3xl bg-white px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-5 shadow-2xl sm:max-w-sm sm:rounded-3xl sm:p-5">
             <h3 className="text-lg font-bold text-gray-900">
               Add photo evidence
             </h3>
@@ -422,7 +423,7 @@ export function RefundClaimCard({
             </button>
           </div>
         </div>
-      )}
+      ), document.body)}
     </section>
   );
 }

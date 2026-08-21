@@ -1,6 +1,7 @@
 import {Capacitor} from "@capacitor/core";
 import {httpsCallable} from "firebase/functions";
 import {functions} from "@/lib/firebase";
+import {recordNativeClientIssue} from "@/services/monitoring/nativeCrashReporter";
 
 export type ClientIssueSeverity = "warning" | "error" | "fatal";
 
@@ -42,6 +43,18 @@ export function reportClientIssue(issue: ClientIssue): void {
   if (Date.now() - lastReport < REPORT_DEDUPE_MS) return;
   recentReports.set(key, Date.now());
 
+  const severity = issue.severity ?? "error";
+  const path = safePath();
+  const appVersion = process.env.NEXT_PUBLIC_APP_VERSION ?? null;
+  recordNativeClientIssue({
+    area: issue.area,
+    message,
+    severity,
+    error: issue.error,
+    path,
+    appVersion,
+  });
+
   const metadata = Object.fromEntries(Object.entries(issue.metadata ?? {}).flatMap(([name, value]) =>
     value === null || value === undefined ? [] : [[name, value]]
   ));
@@ -49,13 +62,13 @@ export function reportClientIssue(issue: ClientIssue): void {
   void callable({
     area: issue.area,
     message,
-    severity: issue.severity ?? "error",
+    severity,
     stack: details.stack,
-    path: safePath(),
+    path,
     platform: Capacitor.isNativePlatform()
       ? `capacitor-${Capacitor.getPlatform()}`
       : "web",
-    appVersion: process.env.NEXT_PUBLIC_APP_VERSION ?? null,
+    appVersion,
     online: navigator.onLine,
     metadata,
   }).catch(() => undefined);

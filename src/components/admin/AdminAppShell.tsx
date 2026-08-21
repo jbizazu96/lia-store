@@ -98,7 +98,7 @@ export function AdminAppShell({
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
+    <div className="min-h-screen bg-slate-50 text-slate-900 [&_a[href]]:cursor-pointer [&_button:not(:disabled)]:cursor-pointer [&_button:disabled]:cursor-not-allowed">
       <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-slate-200 bg-white px-4 md:hidden">
         <div className="flex items-center gap-2">
           <Image src="/icon/icon-192.png" alt="LIA" width={28} height={28} className="rounded-md" />

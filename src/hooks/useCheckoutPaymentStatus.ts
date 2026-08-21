@@ -185,7 +185,8 @@ function normalizeOptionalString(
 
 export function useCheckoutPaymentStatus(
   checkoutSessionId:
-    string | null
+    string | null,
+  retrySignal = 0,
 ): UseCheckoutPaymentStatusResult {
   const [
     checkoutStatus,
@@ -395,6 +396,7 @@ export function useCheckoutPaymentStatus(
     return unsubscribe;
   }, [
     checkoutSessionId,
+    retrySignal,
   ]);
 
 

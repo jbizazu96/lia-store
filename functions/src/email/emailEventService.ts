@@ -2,7 +2,7 @@ import * as admin from "firebase-admin";
 import {getFirestore} from "firebase-admin/firestore";
 import {defineString} from "firebase-functions/params";
 import {enqueueAdminEmail, enqueueEmail} from "./emailQueueService";
-import {adminActionEmail, deliveredOrderEmail, EmailReceiptItem, EmailReceiptPricing, newOrderEmail, storeRefundClaimEmail} from "./emailTemplates";
+import {adminActionEmail, customerRefundClaimActivityEmail, deliveredOrderEmail, EmailReceiptItem, EmailReceiptPricing, newOrderEmail, storeRefundClaimEmail} from "./emailTemplates";
 
 if (admin.apps.length === 0) admin.initializeApp();
 const db = getFirestore("default");
@@ -110,4 +110,53 @@ export async function queueStoreRefundClaimEmail(claimId: string, orderId: strin
   const email = text(owner.data()?.email) || text(storeData.email) || text(embeddedStore.email);
   const template = storeRefundClaimEmail({storeName: text(storeData.name) || text(embeddedStore.name) || "Your store", orderNumber: text(data.orderNumber) || orderId.slice(0, 8), url: absolute(`/store/store-orders/${encodeURIComponent(orderId)}`)});
   await enqueueEmail({dedupeKey: `store-refund-claim:${claimId}`, category: "store_refund_claim", to: email, ...template, tags: {order_id: orderId, claim_id: claimId}});
+}
+
+export async function queueCustomerRefundClaimActivityEmail(input: {
+  claimId: string;
+  customerId: string;
+  orderId: string;
+  eventKey: string;
+  title: string;
+  summary: string;
+}): Promise<void> {
+  if (!input.customerId || !input.orderId) return;
+
+  const [order, customer] = await Promise.all([
+    db.collection("orders").doc(input.orderId).get(),
+    db.collection("users").doc(input.customerId).get(),
+  ]);
+  if (!order.exists) return;
+
+  const orderData = order.data() ?? {};
+  const embeddedCustomer = orderData.customer &&
+    typeof orderData.customer === "object" &&
+    !Array.isArray(orderData.customer)
+    ? orderData.customer as Record<string, unknown>
+    : {};
+  const customerData = customer.data() ?? {};
+  const email = text(customerData.email) || text(embeddedCustomer.email);
+  const customerName = text(customerData.displayName) ||
+    text(embeddedCustomer.name) ||
+    "Customer";
+  const orderNumber = text(orderData.orderNumber) || input.orderId.slice(0, 8);
+  const template = customerRefundClaimActivityEmail({
+    customerName,
+    orderNumber,
+    title: input.title,
+    summary: input.summary,
+    url: absolute(`/orders/${encodeURIComponent(input.orderId)}`),
+  });
+
+  await enqueueEmail({
+    dedupeKey: `customer-refund-claim:${input.claimId}:${input.eventKey}`,
+    category: "customer_refund_claim",
+    to: email,
+    ...template,
+    tags: {
+      order_id: input.orderId,
+      claim_id: input.claimId,
+      event: input.eventKey,
+    },
+  });
 }

@@ -2,6 +2,7 @@
 
 import {motion} from "framer-motion";
 import {X} from "lucide-react";
+import {createPortal} from "react-dom";
 
 export type FeeInfoType = "delivery" | "service" | "tax";
 
@@ -42,9 +43,11 @@ export function FeeInfoSheet({
 }: FeeInfoSheetProps) {
   const content = feeContent[type];
 
-  return (
+  if (typeof document === "undefined") return null;
+
+  return createPortal(
     <motion.div
-      className="fixed inset-0 z-50 flex items-end bg-black/45"
+      className="fixed inset-0 z-[200] flex items-end justify-center bg-black/45"
       initial={{opacity: 0}}
       animate={{opacity: 1}}
       exit={{opacity: 0}}
@@ -99,6 +102,7 @@ export function FeeInfoSheet({
           OK
         </button>
       </motion.section>
-    </motion.div>
+    </motion.div>,
+    document.body,
   );
 }

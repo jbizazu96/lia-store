@@ -91,7 +91,6 @@ export const getCustomerStoreReview = onCall(
     return {
       review: {
         rating: typeof data.rating === "number" ? data.rating : 0,
-        comment: text(data.comment),
       },
     };
   },
@@ -107,14 +106,9 @@ export const submitCustomerStoreReview = onCall(
     const input = record(request.data);
     const orderId = text(input.orderId);
     const rating = input.rating;
-    const comment = text(input.comment);
 
     if (typeof rating !== "number" || !Number.isInteger(rating) || rating < 1 || rating > 5) {
       throw new HttpsError("invalid-argument", "Choose a rating from 1 to 5 stars.");
-    }
-
-    if (comment.length > 1_000) {
-      throw new HttpsError("invalid-argument", "A review comment must be 1,000 characters or fewer.");
     }
 
     const verifiedOrder = await requireVerifiedDeliveredOrder(request.auth.uid, orderId);
@@ -152,7 +146,6 @@ export const submitCustomerStoreReview = onCall(
         customerId: request.auth?.uid,
         customerName: verifiedOrder.customerName,
         rating,
-        comment,
         createdAt: FieldValue.serverTimestamp(),
       });
       transaction.update(storeReference, {

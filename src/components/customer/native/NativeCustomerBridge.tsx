@@ -12,11 +12,19 @@ import {
   nativeCustomerDestination,
 } from "@/services/navigation/nativeCustomerRoutes";
 import {reportClientIssue} from "@/services/monitoring/clientErrorReporter";
+import {initializeNativeCrashReporting} from "@/services/monitoring/nativeCrashReporter";
 
 export function NativeCustomerBridge() {
   const pathname = usePathname();
   const router = useRouter();
   const {user, loading} = useAuth();
+
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform() || loading) return;
+    void initializeNativeCrashReporting(user?.uid ?? null).catch((error) => {
+      console.error("Unable to initialize native crash reporting:", error);
+    });
+  }, [loading, user]);
 
   useEffect(() => {
     if (!Capacitor.isNativePlatform() || loading) return;

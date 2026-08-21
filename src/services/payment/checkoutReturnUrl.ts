@@ -10,7 +10,8 @@ import {
  * development continues to work without production configuration.
  */
 function returnOrigin(): string {
-  const configured = process.env.NEXT_PUBLIC_APP_URL?.trim();
+  const configured = process.env.NEXT_PUBLIC_APP_URL?.trim() ||
+    "https://www.liamarketplace.com";
 
   if (Capacitor.isNativePlatform() && configured) {
     try {
