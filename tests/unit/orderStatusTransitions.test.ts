@@ -21,10 +21,14 @@ describe("store-controlled order transitions", () => {
     expect(isAllowedStoreOrderTransition(current, next)).toBe(false);
   });
 
-  it.each(["pending", "accepted", "preparing", "ready_for_pickup"] as const)(
-    "allows cancellation before delivery from %s",
+  it("allows a store to cancel only before accepting", () => {
+    expect(isAllowedStoreOrderTransition("pending", "cancelled")).toBe(true);
+  });
+
+  it.each(["accepted", "preparing", "ready_for_pickup", "out_for_delivery"] as const)(
+    "requires LIA Support after the order reaches %s",
     (current) => {
-      expect(isAllowedStoreOrderTransition(current, "cancelled")).toBe(true);
+      expect(isAllowedStoreOrderTransition(current, "cancelled")).toBe(false);
     },
   );
 });

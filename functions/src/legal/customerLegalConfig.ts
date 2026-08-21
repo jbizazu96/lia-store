@@ -6,7 +6,7 @@ export interface CustomerLegalDocument {
   documentHash: string; requiresAcceptance: boolean; acceptanceVerb: "agree" | "acknowledge";
 }
 
-export const CUSTOMER_TERMS: CustomerLegalDocument = {documentKey: "customer_terms", acceptanceField: "customerTerms", title: "Customer Terms of Service", version: "customer-terms-v1", effectiveDate: "2026-08-14", lastUpdated: "2026-08-14", documentPath: "/legal/customer-terms", documentHash: "sha256:3fcf03b5acc939fd515c5f61f4b6cd247585db0c2e5820389f1f90b82f7c7214", requiresAcceptance: true, acceptanceVerb: "agree"};
+export const CUSTOMER_TERMS: CustomerLegalDocument = {documentKey: "customer_terms", acceptanceField: "customerTerms", title: "Customer Terms of Service", version: "customer-terms-v2", effectiveDate: "2026-08-20", lastUpdated: "2026-08-20", documentPath: "/legal/customer-terms", documentHash: "sha256:54ec77f41846cbe380f3ead1239b52afc7a7a24664cee9ae9ac16d2a69d6e40a", requiresAcceptance: true, acceptanceVerb: "agree"};
 export const CUSTOMER_PRIVACY: CustomerLegalDocument = {documentKey: "customer_privacy", acceptanceField: "customerPrivacy", title: "Privacy Policy", version: "customer-privacy-v1", effectiveDate: "2026-08-14", lastUpdated: "2026-08-14", documentPath: "/legal/privacy", documentHash: "sha256:c4863c982b70398b7f9f150048fbed9df05452fc1a4020fd669841379f5a69a6", requiresAcceptance: true, acceptanceVerb: "acknowledge"};
 const FALLBACKS = [CUSTOMER_TERMS, CUSTOMER_PRIVACY];
 

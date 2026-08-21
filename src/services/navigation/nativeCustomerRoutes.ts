@@ -57,6 +57,10 @@ export function isNativeCustomerPath(pathname: string): boolean {
   if (!clean) return false;
   if (exactCustomerPaths.has(clean)) return true;
 
+  if (/^\/legal\/(customer-terms|privacy|refund-policy|account-deletion)$/.test(clean)) {
+    return true;
+  }
+
   if (/^\/orders\/[^/]+$/.test(clean)) return true;
   if (/^\/product\/[^/]+$/.test(clean)) return true;
 

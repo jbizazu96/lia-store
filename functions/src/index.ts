@@ -353,6 +353,7 @@ export {
 export {
   processEligibleMarketplaceRefund,
 } from "./triggers/processEligibleMarketplaceRefund";
+export {storeCancelledOrderRefund} from "./triggers/storeCancelledOrderRefund";
 
 /*
   Initialize the Firebase Admin SDK once.

@@ -108,8 +108,12 @@ export function DeleteAccountModal({onClose}: DeleteAccountModalProps) {
             
             <p className="text-gray-600 text-sm mb-6">
               Submitting this request immediately locks your account while an
-              administrator reviews it. If approved, your account and data will
-              be permanently deleted after the grace period.
+              administrator reviews it. Approved requests normally have a
+              30-day grace period before your account, saved addresses, files,
+              notification registrations, and other eligible account data are
+              permanently deleted or de-identified. Limited transaction,
+              security, and legal records may be retained as explained in the
+              Privacy Policy.
             </p>
 
             <div className="flex gap-3">

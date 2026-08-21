@@ -22,7 +22,7 @@ describe("US state normalization", () => {
 });
 
 describe("customer-only native navigation", () => {
-  it.each(["/home", "/orders/order-1", "/product/product-1", "/store/store-1", "/store/store-1/category/rice"])("allows %s", (path) => {
+  it.each(["/home", "/orders/order-1", "/product/product-1", "/store/store-1", "/store/store-1/category/rice", "/legal/refund-policy"])("allows %s", (path) => {
     expect(isNativeCustomerPath(path)).toBe(true);
   });
 

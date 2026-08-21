@@ -29,6 +29,7 @@
 */
 
 import { useState } from "react";
+import Link from "next/link";
 
 import type {
   OrderStatus,
@@ -247,17 +248,12 @@ export function OrderActions({
     }
   };
 
-  /*
-    Cancellation remains available until delivery begins.
-
-    Refunds and support cases after delivery begins should use a separate
-    workflow instead of changing fulfillment status.
-  */
-  const isCancellable = [
-    "pending",
+  const isCancellable = status === "pending";
+  const requiresSupport = [
     "accepted",
     "preparing",
     "ready_for_pickup",
+    "out_for_delivery",
   ].includes(status);
 
   return (
@@ -292,6 +288,16 @@ export function OrderActions({
             >
               Cancel Order
             </button>
+          )}
+
+          {requiresSupport && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+              <p className="font-semibold">Need to stop this order?</p>
+              <p className="mt-1 leading-5">After acceptance, contact LIA Support. The store cannot cancel or issue a refund directly.</p>
+              <Link href="/store/settings?section=support" className="mt-3 inline-flex rounded-full bg-amber-900 px-4 py-2 text-xs font-bold text-white">
+                Contact LIA Support
+              </Link>
+            </div>
           )}
         </div>
 

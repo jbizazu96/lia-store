@@ -35,6 +35,7 @@ import {
   type RegistrationAccountType,
 } from "@/services/user/registrationService";
 import {LegalReviewModal} from "@/components/legal/LegalReviewModal";
+import {getPasswordPolicyError, PASSWORD_POLICY_DESCRIPTION} from "@/utils/passwordPolicy";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -100,16 +101,9 @@ export default function RegisterPage() {
       setError("Password is required");
       return false;
     }
-    if (password.length < 8) {
-      setError("Password must be at least 8 characters");
-      return false;
-    }
-    if (!/[A-Z]/.test(password)) {
-      setError("Password must include at least one uppercase letter");
-      return false;
-    }
-    if (!/[^A-Za-z0-9]/.test(password)) {
-      setError("Password must include at least one symbol");
+    const passwordPolicyError = getPasswordPolicyError(password);
+    if (passwordPolicyError) {
+      setError(passwordPolicyError);
       return false;
     }
     if (password !== confirmPassword) {
@@ -435,7 +429,7 @@ export default function RegisterPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="w-full pl-10 pr-12 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition"
-                placeholder="8+ characters, uppercase and symbol"
+                placeholder="8+ characters"
                 required
                 disabled={success}
                 minLength={8}
@@ -449,6 +443,7 @@ export default function RegisterPage() {
                 {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
               </button>
             </div>
+            <p className="mt-2 text-xs leading-5 text-gray-500">{PASSWORD_POLICY_DESCRIPTION}</p>
           </div>
 
           {/* Confirm Password */}

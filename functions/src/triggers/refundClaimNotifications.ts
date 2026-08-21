@@ -163,6 +163,22 @@ export const customerRefundClaimPaymentNotification =
         .limit(5)
         .get();
 
+      if (claims.empty && text(after.reason) === "store_cancelled") {
+        const orderId = text(after.orderId);
+        const order = orderId ? await db.collection("orders").doc(orderId).get() : null;
+        const customerId = text(record(order?.data()?.customer).uid);
+        const title = nextStatus === "completed"
+          ? "Your cancelled order was refunded"
+          : nextStatus === "partially_completed"
+            ? "Your cancelled-order refund needs review"
+            : "Your cancelled-order refund needs attention";
+        const body = nextStatus === "completed"
+          ? "The full payment was returned to your original payment method. Your bank controls when it appears."
+          : "Please contact LIA Support for help with this refund.";
+
+        await notifyCustomer(customerId, event.params.refundId, orderId, title, body);
+      }
+
       await Promise.all(claims.docs.map(async (claim) => {
         const data = claim.data();
         const title = nextStatus === "completed"

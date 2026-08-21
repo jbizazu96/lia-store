@@ -6,6 +6,7 @@ import { motion } from "framer-motion";
 import { CheckCircle, XCircle, Loader2 } from "lucide-react";
 import { auth } from "@/lib/firebase";
 import { confirmPasswordReset } from "firebase/auth";
+import {getPasswordPolicyError, PASSWORD_POLICY_DESCRIPTION} from "@/utils/passwordPolicy";
 
 // Inner component that uses useSearchParams
 function ResetPasswordContent() {
@@ -23,8 +24,9 @@ function ResetPasswordContent() {
   const handleReset = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (newPassword.length < 6) {
-      setError("Password must be at least 6 characters.");
+    const policyError = getPasswordPolicyError(newPassword);
+    if (policyError) {
+      setError(policyError);
       return;
     }
 
@@ -38,8 +40,13 @@ function ResetPasswordContent() {
       await confirmPasswordReset(auth, oobCode!, newPassword);
       setSuccess(true);
       setTimeout(() => router.push("/login"), 3000);
-    } catch {
-      setError("Unable to reset password. Link may be expired.");
+    } catch (resetError) {
+      const code = typeof resetError === "object" && resetError !== null && "code" in resetError
+        ? String(resetError.code)
+        : "";
+      setError(code.includes("weak-password")
+        ? PASSWORD_POLICY_DESCRIPTION
+        : "Unable to reset password. The link may be invalid, expired, or already used.");
     } finally {
       setLoading(false);
     }
@@ -98,9 +105,12 @@ function ResetPasswordContent() {
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
               className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-green-500"
-              placeholder="Min 6 characters"
+              placeholder="8+ characters"
+              minLength={8}
+              autoComplete="new-password"
               required
             />
+            <p className="mt-2 text-xs leading-5 text-gray-500">{PASSWORD_POLICY_DESCRIPTION}</p>
           </div>
 
           <div>
@@ -113,6 +123,8 @@ function ResetPasswordContent() {
               onChange={(e) => setConfirmPassword(e.target.value)}
               className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-green-500"
               placeholder="Confirm your password"
+              minLength={8}
+              autoComplete="new-password"
               required
             />
           </div>

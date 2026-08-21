@@ -124,12 +124,17 @@ function ClaimTimeline({claim}: {claim: NonNullable<Claim>}) {
 export function RefundClaimCard({
   orderId,
   embedded = false,
+  deliveryFailureOnly = false,
 }: {
   orderId: string;
   embedded?: boolean;
+  deliveryFailureOnly?: boolean;
 }) {
   const [claim, setClaim] = useState<Claim>(null);
-  const [reason, setReason] = useState<string>(reasons[0][0]);
+  const availableReasons = deliveryFailureOnly
+    ? reasons.filter(([value]) => value === "delivery_failed")
+    : reasons;
+  const [reason, setReason] = useState<string>(deliveryFailureOnly ? "delivery_failed" : reasons[0][0]);
   const [description, setDescription] = useState("");
   const [evidenceFile, setEvidenceFile] = useState<File | null>(null);
   const [evidencePickerOpen, setEvidencePickerOpen] = useState(false);
@@ -138,8 +143,8 @@ export function RefundClaimCard({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const evidenceRequired =
-    reason === "missing_items" ||
-    reason === "damaged_items";
+    reason === "damaged_items" ||
+    reason === "quality_issue";
 
   const chooseEvidenceFile = (file: File | null) => {
     if (file) {
@@ -183,7 +188,7 @@ export function RefundClaimCard({
 
     if (evidenceRequired && !evidenceFile) {
       setError(
-        "Add a photo showing the missing or damaged items before submitting.",
+        "Add a clear photo showing the damage or quality issue before submitting.",
       );
       return;
     }
@@ -300,7 +305,7 @@ export function RefundClaimCard({
           }}
           className="mt-4 rounded-full bg-orange-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-orange-600"
         >
-          Start a refund or return claim
+          Start a refund claim
         </button>
       ) : (
         <div className="mt-4 space-y-3 rounded-xl bg-gray-50 p-4">
@@ -314,7 +319,7 @@ export function RefundClaimCard({
               }}
               className="mt-2 block w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-800"
             >
-              {reasons.map(([value, reasonLabel]) => (
+              {availableReasons.map(([value, reasonLabel]) => (
                 <option key={value} value={value}>{reasonLabel}</option>
               ))}
             </select>
@@ -334,7 +339,7 @@ export function RefundClaimCard({
             <label className="block text-sm font-semibold text-gray-700">
               Photo evidence required
               <span className="mt-1 block text-xs font-normal leading-5 text-gray-500">
-                Add a clear photo of the missing or damaged items. Only LIA
+                Add a clear photo of the damage or quality issue. Only LIA
                 Admin can view it while reviewing your claim.
               </span>
               <button

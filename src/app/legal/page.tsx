@@ -1,11 +1,12 @@
 import Link from "next/link";
-import {ChevronRight, FileText, ShieldCheck, Trash2} from "lucide-react";
+import {ChevronRight, FileText, RotateCcw, ShieldCheck, Trash2} from "lucide-react";
 import {LegalHubBackLink} from "@/components/legal/LegalHubBackLink";
 import {legalDocumentHref, legalReturnPath} from "@/services/navigation/legalReturnPath";
 
 const documents = [
   {title: "Customer Terms of Service", description: "The agreement governing customer accounts, orders, payments, delivery, refunds, and use of LIA.", href: "/legal/customer-terms", icon: FileText},
   {title: "Privacy Policy", description: "How LIA collects, uses, shares, protects, retains, and deletes personal information.", href: "/legal/privacy", icon: ShieldCheck},
+  {title: "Refund and Cancellation Policy", description: "How store cancellations, customer claims, evidence, and payment refunds are handled.", href: "/legal/refund-policy", icon: RotateCcw},
   {title: "Account deletion", description: "How customer deletion requests, review, retention, and permanent removal are handled.", href: "/legal/account-deletion", icon: Trash2},
 ] as const;
 

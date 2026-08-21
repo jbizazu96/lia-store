@@ -251,12 +251,11 @@ export default function OrderDetailPage({params}: OrderPageProps) {
           </div>
         )}
 
-        {!isCancelled && (
-          <OrderHelpSection
-            orderId={orderId}
-            canRequestRefund={order.status === "completed"}
-          />
-        )}
+        <OrderHelpSection
+          orderId={orderId}
+          canRequestRefund={order.status === "completed" || isCancelled}
+          deliveryFailureOnly={isCancelled}
+        />
 
         {order.status === "completed" && (
           <StoreReviewPrompt

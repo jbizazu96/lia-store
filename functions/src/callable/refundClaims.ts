@@ -4,7 +4,7 @@
 |--------------------------------------------------------------------------
 |
 | A claim is a review request, never a Stripe refund. The customer can create
-| one only for their own paid, completed order. Admin approval is handled by
+| one only for their own eligible paid order. Admin approval is handled by
 | a separate callable that creates the immutable refund obligation through
 | the marketplace refund engine.
 |
@@ -28,8 +28,8 @@ const CUSTOMER_REASONS = new Set([
   "delivery_failed", "duplicate_charge", "other",
 ]);
 const PHOTO_EVIDENCE_REASONS = new Set([
-  "missing_items",
   "damaged_items",
+  "quality_issue",
 ]);
 const SUPPORTED_EVIDENCE_CONTENT_TYPES = new Set([
   "image/jpeg",
@@ -79,9 +79,15 @@ function evidenceUploadPath(
   return `users/${customerId}/refund-claim-evidence/${orderId}/${uploadId}/original.${fileExtension}`;
 }
 
-async function requirePaidCompletedOrder(
+const DELIVERY_FAILURE_ELIGIBLE_STATUSES = new Set([
+  "cancelled",
+  "completed",
+]);
+
+async function requireEligiblePaidOrder(
   customerId: string,
   orderId: string,
+  reason: string,
 ): Promise<FirebaseFirestore.DocumentSnapshot> {
   const order = await db.collection("orders").doc(orderId).get();
   const orderData = order.data() ?? {};
@@ -100,10 +106,17 @@ async function requirePaidCompletedOrder(
     );
   }
 
-  if (orderData.status !== "completed") {
+  const status = text(orderData.status);
+  const eligible = reason === "delivery_failed"
+    ? DELIVERY_FAILURE_ELIGIBLE_STATUSES.has(status)
+    : status === "completed";
+
+  if (!eligible) {
     throw new HttpsError(
       "failed-precondition",
-      "A claim can be submitted after delivery is completed.",
+      reason === "delivery_failed"
+        ? "A delivery-failure claim is available after a material delivery failure or cancellation. Contact LIA Support while delivery is still active."
+        : "This claim can be submitted after delivery is completed.",
     );
   }
 
@@ -135,7 +148,7 @@ export const beginCustomerRefundClaimEvidenceUpload = onCall(
     if (!evidenceIsRequired(reason)) {
       throw new HttpsError(
         "failed-precondition",
-        "Photo evidence is required only for missing or damaged item claims.",
+        "Photo evidence is required only for damaged-item or quality claims.",
       );
     }
 
@@ -152,22 +165,17 @@ export const beginCustomerRefundClaimEvidenceUpload = onCall(
       );
     }
 
-    await requirePaidCompletedOrder(customerId, orderId);
+    await requireEligiblePaidOrder(customerId, orderId, reason);
 
     const existing = await db
       .collection("refundClaims")
       .doc(claimId(orderId, customerId))
       .get();
 
-    if (
-      existing.exists &&
-      ["pending_review", "approved", "processing", "completed"].includes(
-        text(existing.data()?.status),
-      )
-    ) {
+    if (existing.exists) {
       throw new HttpsError(
         "already-exists",
-        "There is already an active claim for this order.",
+        "A claim has already been submitted for this order.",
       );
     }
 
@@ -208,7 +216,7 @@ export const createCustomerRefundClaim = onCall({region: "us-central1"}, async (
   const description = text(input.description);
   if (!CUSTOMER_REASONS.has(reason)) throw new HttpsError("invalid-argument", "Choose a valid claim reason.");
   if (!description || description.length > 2_000) throw new HttpsError("invalid-argument", "Describe the issue using 1 to 2,000 characters.");
-  await requirePaidCompletedOrder(customerId, orderId);
+  await requireEligiblePaidOrder(customerId, orderId, reason);
 
   const evidenceUploadId = evidenceIsRequired(reason)
     ? identifier(input.evidenceUploadId, "Photo evidence")
@@ -289,7 +297,7 @@ export const createCustomerRefundClaim = onCall({region: "us-central1"}, async (
   const reference = db.collection("refundClaims").doc(claimId(orderId, customerId));
   await db.runTransaction(async (transaction) => {
     const existing = await transaction.get(reference);
-    if (existing.exists && ["pending_review", "approved", "processing", "completed"].includes(text(existing.data()?.status))) throw new HttpsError("already-exists", "There is already an active claim for this order.");
+    if (existing.exists) throw new HttpsError("already-exists", "A claim has already been submitted for this order.");
     transaction.set(reference, {id: reference.id, orderId, customerId, reason, description, status: "pending_review", createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(), decision: {reason: null, decidedAt: null, decidedBy: null}, refundId: null, evidence: evidence ?? FieldValue.delete()}, {merge: true});
 
     if (evidence) {

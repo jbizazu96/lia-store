@@ -9,12 +9,7 @@ export function isAllowedStoreOrderTransition(
   newStatus: StoreControlledOrderStatus,
 ): boolean {
   if (newStatus === "cancelled") {
-    return (
-      currentStatus === "pending" ||
-      currentStatus === "accepted" ||
-      currentStatus === "preparing" ||
-      currentStatus === "ready_for_pickup"
-    );
+    return currentStatus === "pending";
   }
 
   const allowedTransitions: Partial<

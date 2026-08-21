@@ -10,6 +10,7 @@ import {updatePassword, reauthenticateWithCredential, EmailAuthProvider} from "f
 import {auth} from "@/lib/firebase";
 import { useConfirmation } from "@/context/ConfirmationContext";
 import { useSuccessToast } from "@/context/SuccessToastContext";
+import {getPasswordPolicyError, PASSWORD_POLICY_DESCRIPTION} from "@/utils/passwordPolicy";
 
 interface SecurityModalProps {
   onClose: () => void;
@@ -39,8 +40,9 @@ export function SecurityModal({onClose}: SecurityModalProps) {
       return;
     }
 
-    if (formData.newPassword.length < 6) {
-      setError("Password must be at least 6 characters");
+    const policyError = getPasswordPolicyError(formData.newPassword);
+    if (policyError) {
+      setError(policyError);
       return;
     }
 
@@ -182,7 +184,9 @@ export function SecurityModal({onClose}: SecurityModalProps) {
                 value={formData.newPassword}
                 onChange={(e) => setFormData({...formData, newPassword: e.target.value})}
                 className="w-full pl-10 pr-12 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500"
-                placeholder="Min 6 characters"
+                placeholder="8+ characters"
+                minLength={8}
+                autoComplete="new-password"
                 required
                 disabled={loading || success}
               />
@@ -196,6 +200,7 @@ export function SecurityModal({onClose}: SecurityModalProps) {
                 {showNewPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
               </button>
             </div>
+            <p className="mt-2 text-xs leading-5 text-gray-500">{PASSWORD_POLICY_DESCRIPTION}</p>
           </div>
 
           {/* Confirm Password */}
@@ -212,6 +217,8 @@ export function SecurityModal({onClose}: SecurityModalProps) {
                 className="w-full pl-10 pr-12 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500"
                 placeholder="Confirm your new password"
                 required
+                minLength={8}
+                autoComplete="new-password"
                 disabled={loading || success}
               />
               <button

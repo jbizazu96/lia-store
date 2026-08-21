@@ -2,6 +2,29 @@
 
 Complete these checks during native development and repeat them on release candidates. They require real iOS and Android projects, so they cannot be completed from the Next.js web workspace alone.
 
+## Apple App Privacy
+
+- Use [`docs/apple-app-privacy-worksheet.md`](./apple-app-privacy-worksheet.md) as the source of truth for the customer-only iOS App Privacy answers.
+- Set the App Store privacy policy URL to `https://www.liamarketplace.com/legal/privacy`.
+- Enter and publish every collected data type, identity-linking answer, tracking answer, and purpose listed in the worksheet.
+- After the iOS project exists, inspect its generated privacy manifests and Xcode privacy report before submitting the first TestFlight/App Store build.
+- Re-audit the worksheet whenever a native SDK or customer data practice changes.
+
+## Google Play Data Safety
+
+- Use [`docs/google-play-data-safety-worksheet.md`](./google-play-data-safety-worksheet.md) as the source of truth for the customer-only Android Data Safety form.
+- Set the Play privacy policy URL to `https://www.liamarketplace.com/legal/privacy` and the account-deletion URL to `https://www.liamarketplace.com/legal/account-deletion`.
+- Enter every collection, sharing, required/optional, ephemeral-processing and purpose answer from the worksheet.
+- Keep the Play Console form in draft until the final Android App Bundle, merged manifest, permissions and SDK Index disclosures have been audited.
+- Re-audit whenever an Android SDK, permission, recipient, or customer data practice changes.
+
+## Google Play Account Deletion
+
+- Use [`docs/google-play-account-deletion-audit.md`](./google-play-account-deletion-audit.md) for the customer account-deletion submission and release test.
+- Enter `https://www.liamarketplace.com/legal/account-deletion` in the Play Console account-deletion URL field.
+- Verify the URL from a signed-out mobile browser; the email request path must work without installing or signing into LIA.
+- Test the in-app request, immediate account lock, grace-period cancellation, scheduled processing, anonymization, provider cleanup, failure retry and final deletion verification before production submission.
+
 ## Native configuration
 
 - Choose the final unique app identifier before creating the iOS and Android projects.

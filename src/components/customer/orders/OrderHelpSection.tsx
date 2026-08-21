@@ -22,9 +22,11 @@ type HelpView = "support" | "claim" | null;
 export function OrderHelpSection({
   orderId,
   canRequestRefund,
+  deliveryFailureOnly = false,
 }: {
   orderId: string;
   canRequestRefund: boolean;
+  deliveryFailureOnly?: boolean;
 }) {
   const [activeView, setActiveView] =
     useState<HelpView>(null);
@@ -82,7 +84,7 @@ export function OrderHelpSection({
               </span>
               <span className="min-w-0 flex-1">
                 <span className="block text-sm font-bold text-gray-900">
-                  Request a refund or return
+                  Request a refund
                 </span>
                 <span className="mt-0.5 block text-xs leading-5 text-gray-600">
                   Submit a payment-related claim for LIA Admin review.
@@ -97,7 +99,7 @@ export function OrderHelpSection({
       {activeView && (
         <div className="p-5">
           {activeView === "claim" && canRequestRefund ? (
-          <RefundClaimCard orderId={orderId} embedded />
+          <RefundClaimCard orderId={orderId} embedded deliveryFailureOnly={deliveryFailureOnly} />
           ) : (
             <OrderHelpCard orderId={orderId} embedded />
           )}

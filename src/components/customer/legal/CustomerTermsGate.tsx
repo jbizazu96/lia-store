@@ -35,21 +35,23 @@ export function CustomerTermsGate({children}: {children: React.ReactNode}) {
     });
     return () => { active = false; legalTrace.stop({status: "cancelled"}); };
   }, []);
+
+  const decline = async () => {
+    if (saving) return;
+    setSaving(true);
+    try { await customerLogoutService.logout(); window.location.assign("/login"); }
+    finally { setSaving(false); }
+  };
+
   if (status === "accepted") return <>{children}</>;
   if (status === "loading") return <BrandedLoader message="Checking account agreements" />;
-  if (status === "error") return <main className="flex min-h-screen items-center justify-center bg-slate-50 px-4"><section className="w-full max-w-md rounded-2xl border border-red-100 bg-white p-6 text-center shadow-sm"><h1 className="text-lg font-black">Agreement status unavailable</h1><p className="mt-2 text-sm leading-6 text-slate-600">{message}</p><button type="button" onClick={() => { setStatus("loading"); setMessage(""); void load(); }} className="mt-5 inline-flex items-center gap-2 rounded-full bg-orange-600 px-5 py-3 text-sm font-bold text-white"><RefreshCw className="h-4 w-4" />Retry</button></section></main>;
+  if (status === "error") return <main className="flex min-h-[100dvh] items-center justify-center bg-slate-50 px-4"><section className="w-full max-w-md rounded-2xl border border-red-100 bg-white p-6 text-center shadow-sm"><h1 className="text-lg font-black">Agreement status unavailable</h1><p className="mt-2 text-sm leading-6 text-slate-600">{message}</p><div className="mt-5 grid gap-3 sm:grid-cols-2"><button type="button" onClick={() => { setStatus("loading"); setMessage(""); void load(); }} className="inline-flex items-center justify-center gap-2 rounded-full border border-slate-200 px-5 py-3 text-sm font-bold text-slate-700"><RefreshCw className="h-4 w-4" />Retry</button><button type="button" onClick={() => void decline()} className="rounded-full bg-orange-600 px-5 py-3 text-sm font-bold text-white">Back to login</button></div></section></main>;
 
   const accept = async () => {
     if (!checked || saving) return;
     setSaving(true); setMessage("");
     try { await customerLegalClientService.acceptCurrentDocuments(); setStatus("accepted"); }
     catch (error) { setMessage(error instanceof Error ? error.message : "The Terms could not be accepted. Please try again."); }
-    finally { setSaving(false); }
-  };
-  const decline = async () => {
-    if (saving) return;
-    setSaving(true);
-    try { await customerLogoutService.logout(); window.location.assign("/login"); }
     finally { setSaving(false); }
   };
   const markReviewed = (key: string) => {
