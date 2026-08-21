@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import type {Metadata} from "next";
 import {
   ArrowRight,
   BadgeDollarSign,
@@ -17,6 +18,10 @@ import {
   Truck,
 } from "lucide-react";
 import {PublicSupportButton} from "@/components/public/PublicSupportButton";
+
+export const metadata: Metadata = {
+  alternates: {canonical: "/"},
+};
 
 const marketplaceSteps = [
   {icon: MapPin, number: "01", title: "Find nearby stores", description: "Set your delivery address and discover independent stores available in your market."},

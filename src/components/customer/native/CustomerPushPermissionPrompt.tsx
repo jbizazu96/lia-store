@@ -5,7 +5,10 @@ import {createPortal} from "react-dom";
 import {Capacitor} from "@capacitor/core";
 import {BellRing} from "lucide-react";
 import {useAuth} from "@/context/AuthContext";
-import {firebaseMessaging} from "@/services/notification/firebaseMessaging";
+import {
+  firebaseMessaging,
+  NATIVE_NOTIFICATION_STATE_EVENT,
+} from "@/services/notification/firebaseMessaging";
 import {reportClientIssue} from "@/services/monitoring/clientErrorReporter";
 
 export function CustomerPushPermissionPrompt() {
@@ -13,6 +16,8 @@ export function CustomerPushPermissionPrompt() {
   const [visible, setVisible] = useState(false);
   const [working, setWorking] = useState(false);
   const [error, setError] = useState("");
+  const [repairing, setRepairing] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     if (loading || !user) return;
@@ -20,19 +25,32 @@ export function CustomerPushPermissionPrompt() {
       firebaseMessaging.isInstalledWebApp();
     if (!eligible || !firebaseMessaging.isPushConfigured()) return;
     let active = true;
-    void firebaseMessaging.getPermissionStatus().then(async (permission) => {
+    void Promise.all([
+      firebaseMessaging.getPermissionStatus(),
+      firebaseMessaging.getDeviceStatus(),
+    ]).then(([permission, status]) => {
       if (!active) return;
       if (permission === "granted") {
-        await firebaseMessaging.recoverNativeRegistration();
+        const registrationMissing = !status.registered || !status.active;
+        const customerDeclined = firebaseMessaging.getNativePreference() === "declined";
+        setRepairing(registrationMissing);
+        setVisible(registrationMissing && !customerDeclined);
         return;
       }
+      setRepairing(false);
       setVisible(
         permission === "prompt" &&
         firebaseMessaging.getNativePreference() === null,
       );
     }).catch(() => {});
     return () => {active = false;};
-  }, [loading, user]);
+  }, [loading, refreshKey, user]);
+
+  useEffect(() => {
+    const refresh = () => setRefreshKey((value) => value + 1);
+    window.addEventListener(NATIVE_NOTIFICATION_STATE_EVENT, refresh);
+    return () => window.removeEventListener(NATIVE_NOTIFICATION_STATE_EVENT, refresh);
+  }, []);
 
   if (!visible) return null;
 
@@ -78,10 +96,12 @@ export function CustomerPushPermissionPrompt() {
       <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-orange-50 text-orange-600">
         <BellRing className="h-7 w-7" />
       </span>
-      <h2 id="push-permission-title" className="mt-5 text-xl font-extrabold text-gray-950">Stay updated with LIA</h2>
-      <p className="mt-2 text-sm leading-6 text-gray-600">Allow notifications for order progress, delivery updates, refunds, store news, products, and offers. You can turn individual notification types off later in Profile.</p>
+      <h2 id="push-permission-title" className="mt-5 text-xl font-extrabold text-gray-950">{repairing ? "Reconnect LIA notifications" : "Stay updated with LIA"}</h2>
+      <p className="mt-2 text-sm leading-6 text-gray-600">{repairing
+        ? "Your iPhone still allows notifications, but this installation is no longer registered with LIA. Register it again to continue receiving order and refund updates."
+        : "Allow notifications for order progress, delivery updates, refunds, store news, products, and offers. You can turn individual notification types off later in Profile."}</p>
       {error && <p className="mt-4 rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}
-      <button type="button" disabled={working} onClick={() => void accept()} className="mt-6 w-full rounded-full bg-orange-600 py-3 text-sm font-bold text-white disabled:opacity-60">{working ? "Please wait…" : "Allow notifications"}</button>
+      <button type="button" disabled={working} onClick={() => void accept()} className="mt-6 w-full rounded-full bg-orange-600 py-3 text-sm font-bold text-white disabled:opacity-60">{working ? "Please wait…" : repairing ? "Register notifications again" : "Allow notifications"}</button>
       <button type="button" disabled={working} onClick={() => void decline()} className="mt-2 w-full rounded-full py-3 text-sm font-bold text-gray-600 transition hover:bg-gray-50 disabled:opacity-60">Not now</button>
     </section>
   </div>, document.body);

@@ -14,6 +14,7 @@ export const metadata = {
   title: "Delete Your LIA Marketplace Account",
   description:
     "Request permanent deletion of a LIA Marketplace customer account and its associated data.",
+  alternates: {canonical: "/legal/account-deletion"},
 };
 
 const deletedData = [

@@ -13,9 +13,30 @@ import {NativeCustomerBridge} from "@/components/customer/native/NativeCustomerB
 import {GlobalClientErrorReporter} from "@/components/monitoring/GlobalClientErrorReporter";
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://www.liamarketplace.com"),
   title: "LIA Marketplace | Local delivery for independent stores",
   description: "Shop local and international products from independent stores, delivered to your door.",
   applicationName: "LIA Marketplace",
+  openGraph: {
+    type: "website",
+    locale: "en_US",
+    url: "/",
+    siteName: "LIA Marketplace",
+    title: "LIA Marketplace | Local delivery for independent stores",
+    description: "Shop local and international products from independent stores, delivered to your door.",
+    images: [{
+      url: "/opengraph-image",
+      width: 1200,
+      height: 630,
+      alt: "LIA Marketplace — shop independent local stores",
+    }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "LIA Marketplace | Local delivery for independent stores",
+    description: "Shop local and international products from independent stores, delivered to your door.",
+    images: ["/opengraph-image"],
+  },
   manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,

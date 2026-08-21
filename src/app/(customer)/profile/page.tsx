@@ -134,8 +134,11 @@ export default function ProfilePage() {
   }
 
   async function sendTestNotification() {
-    await firebaseMessaging.sendTestNotification();
-    setNotificationDeviceStatus(await firebaseMessaging.getDeviceStatus());
+    try {
+      await firebaseMessaging.sendTestNotification();
+    } finally {
+      setNotificationDeviceStatus(await firebaseMessaging.getDeviceStatus());
+    }
   }
 
   async function handleProfileImageUpload(file: File) {
@@ -345,8 +348,12 @@ export default function ProfilePage() {
                 icon={Bell}
                 label="Notification settings"
                 description={
-                  notificationPermission === "granted"
+                  notificationPermission === "granted" &&
+                  notificationDeviceStatus?.registered === true &&
+                  notificationDeviceStatus.active === true
                     ? "Choose order, store, product, promotion, and marketing updates"
+                    : notificationPermission === "granted"
+                      ? "Notification registration needs attention"
                     : notificationPermission === "denied"
                       ? "Manage notification types and device permission"
                       : notificationPermission === "unsupported"

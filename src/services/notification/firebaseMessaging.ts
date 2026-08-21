@@ -338,11 +338,46 @@ export class FirebaseMessaging {
       {deviceId: string},
       {accepted: boolean; messageId: string}
     >(functions, "sendTestNotification");
-    await sendTest({deviceId: this.deviceId()});
-    window.dispatchEvent(new Event(NATIVE_NOTIFICATION_STATE_EVENT));
+    try {
+      await sendTest({deviceId: this.deviceId()});
+    } finally {
+      // A rejected token is removed server-side. Refresh every interested UI
+      // even when the test fails so it immediately offers re-registration.
+      window.dispatchEvent(new Event(NATIVE_NOTIFICATION_STATE_EVENT));
+    }
+  }
+
+  private async clearCurrentPushToken(): Promise<void> {
+    if (await this.getPermissionStatus() !== "granted") return;
+
+    if (capacitorNotificationAdapter.isNativeApp()) {
+      await capacitorNotificationAdapter.deleteToken();
+      return;
+    }
+
+    const messaging = await getFirebaseMessaging();
+    if (messaging) await deleteWebToken(messaging);
   }
 
   async enableNativeNotifications(): Promise<NotificationPermissionState> {
+    const existingStatus = await this.getDeviceStatus().catch(() => null);
+    const needsFreshToken = existingStatus !== null &&
+      (!existingStatus.registered || !existingStatus.active);
+
+    if (needsFreshToken) {
+      await this.clearCurrentPushToken().catch((error) => {
+        reportClientIssue({
+          area: "notifications.registration_repair",
+          message: "Unable to clear an expired notification token",
+          error,
+        });
+      });
+      const user = auth.currentUser;
+      if (user) {
+        window.localStorage.removeItem("lia.notification-device:" + user.uid);
+      }
+    }
+
     if (!capacitorNotificationAdapter.isNativeApp()) {
       const enabled = await this.registerDevice({requestPermission: true});
       const permission = await this.getPermissionStatus();
@@ -391,14 +426,7 @@ export class FirebaseMessaging {
       await deactivate({deviceId: this.deviceId()});
       window.localStorage.removeItem("lia.notification-device:" + user.uid);
     }
-    if (await this.getPermissionStatus() === "granted") {
-      if (capacitorNotificationAdapter.isNativeApp()) {
-        await capacitorNotificationAdapter.deleteToken();
-      } else {
-        const messaging = await getFirebaseMessaging();
-        if (messaging) await deleteWebToken(messaging);
-      }
-    }
+    await this.clearCurrentPushToken();
     window.dispatchEvent(new Event(NATIVE_NOTIFICATION_STATE_EVENT));
   }
 

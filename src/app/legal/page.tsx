@@ -10,7 +10,10 @@ const documents = [
   {title: "Account deletion", description: "How customer deletion requests, review, retention, and permanent removal are handled.", href: "/legal/account-deletion", icon: Trash2},
 ] as const;
 
-export const metadata = {title: "Legal Documents | LIA Marketplace"};
+export const metadata = {
+  title: "Legal Documents | LIA Marketplace",
+  alternates: {canonical: "/legal"},
+};
 
 export default async function LegalPage({searchParams}: {searchParams: Promise<{returnTo?: string}>}) {
   const returnTo = legalReturnPath((await searchParams).returnTo);

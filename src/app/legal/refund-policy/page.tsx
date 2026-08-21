@@ -4,7 +4,7 @@ import {ManagedLegalDocumentContent} from "@/components/legal/ManagedLegalDocume
 import {customerRefundIntroduction, customerRefundSections} from "@/content/legal/customerRefund";
 import {CUSTOMER_REFUND_EFFECTIVE_DATE, CUSTOMER_REFUND_LAST_UPDATED, CUSTOMER_REFUND_VERSION} from "@/config/refundLegal";
 
-export const metadata = {title: "Refund and Cancellation Policy | LIA Marketplace", description: "How LIA handles order cancellations, claims, evidence, and refunds."};
+export const metadata = {title: "Refund and Cancellation Policy | LIA Marketplace", description: "How LIA handles order cancellations, claims, evidence, and refunds.", alternates: {canonical: "/legal/refund-policy"}};
 
 export default async function RefundPolicyPage({searchParams}: {searchParams: Promise<{embedded?: string}>}) {
   const embedded = (await searchParams).embedded === "1";

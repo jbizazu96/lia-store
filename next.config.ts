@@ -67,6 +67,23 @@ const withPwa = require("next-pwa")({
   ],
 });
 
+const contentSecurityPolicyReportOnly = [
+  "default-src 'self'",
+  "base-uri 'self'",
+  "object-src 'none'",
+  "frame-ancestors 'none'",
+  "manifest-src 'self'",
+  "worker-src 'self' blob:",
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.stripe.com https://accounts.google.com https://appleid.apple.com https://*.googleapis.com https://*.gstatic.com",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "font-src 'self' data: https://fonts.gstatic.com",
+  "img-src 'self' data: blob: https://firebasestorage.googleapis.com https://storage.googleapis.com https://lh3.googleusercontent.com https://*.googleusercontent.com https://maps.googleapis.com https://*.gstatic.com",
+  "connect-src 'self' https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://*.cloudfunctions.net https://*.google.com https://*.stripe.com https://api.stripe.com",
+  "frame-src 'self' https://js.stripe.com https://hooks.stripe.com https://*.firebaseapp.com https://accounts.google.com https://appleid.apple.com",
+  "form-action 'self' https://*.stripe.com",
+  "report-uri /api/csp-report",
+].join("; ");
+
 const nextConfig: NextConfig = {
   /*
    * next-pwa contributes a webpack hook for production service-worker
@@ -75,6 +92,26 @@ const nextConfig: NextConfig = {
    * treating the two build systems as an accidental conflict.
    */
   turbopack: {},
+  async headers() {
+    const securityHeaders = [
+      {key: "Content-Security-Policy-Report-Only", value: contentSecurityPolicyReportOnly},
+      {key: "X-Content-Type-Options", value: "nosniff"},
+      {key: "Referrer-Policy", value: "strict-origin-when-cross-origin"},
+      {key: "Permissions-Policy", value: "camera=(self), microphone=(), geolocation=(self), payment=(self \"https://js.stripe.com\")"},
+      {key: "X-Frame-Options", value: "DENY"},
+    ];
+    const serviceWorkerHeaders = [
+      {key: "Cache-Control", value: "public, max-age=0, must-revalidate"},
+      {key: "CDN-Cache-Control", value: "public, max-age=0, must-revalidate"},
+      {key: "Vercel-CDN-Cache-Control", value: "public, max-age=0, must-revalidate"},
+    ];
+
+    return [
+      {source: "/:path*", headers: securityHeaders},
+      {source: "/sw.js", headers: serviceWorkerHeaders},
+      {source: "/firebase-messaging-sw.js", headers: serviceWorkerHeaders},
+    ];
+  },
   images: {
     remotePatterns: [
       {

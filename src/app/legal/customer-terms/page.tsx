@@ -4,7 +4,7 @@ import {CUSTOMER_TERMS_EFFECTIVE_DATE, CUSTOMER_TERMS_LAST_UPDATED, CUSTOMER_TER
 import {customerTermsIntroduction, customerTermsSections} from "@/content/legal/customerTerms";
 import {ManagedLegalDocumentContent} from "@/components/legal/ManagedLegalDocumentContent";
 
-export const metadata = {title: "Customer Terms of Service | LIA Marketplace", description: "Terms governing customer use of LIA Marketplace."};
+export const metadata = {title: "Customer Terms of Service | LIA Marketplace", description: "Terms governing customer use of LIA Marketplace.", alternates: {canonical: "/legal/customer-terms"}};
 export default async function CustomerTermsPage({searchParams}: {searchParams: Promise<{embedded?: string}>}) {
   const embedded = (await searchParams).embedded === "1";
   const fallback = <><dl className="grid gap-2 border-b border-slate-200 pb-6 text-sm text-slate-600 sm:grid-cols-2"><div><dt className="font-bold text-slate-900">Effective date</dt><dd>{CUSTOMER_TERMS_EFFECTIVE_DATE}</dd></div><div><dt className="font-bold text-slate-900">Last updated</dt><dd>{CUSTOMER_TERMS_LAST_UPDATED}</dd></div><div className="sm:col-span-2"><dt className="font-bold text-slate-900">Version</dt><dd>{CUSTOMER_TERMS_VERSION}</dd></div></dl><div className="mt-6 space-y-4 text-sm leading-7 text-slate-700">{customerTermsIntroduction.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}</div><div className="mt-9 space-y-9">{customerTermsSections.map((section) => <section key={section.title}><h2 className="text-lg font-black text-slate-950">{section.title}</h2><div className="mt-3 space-y-3 text-sm leading-7 text-slate-700">{section.paragraphs.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}</div></section>)}</div></>;
