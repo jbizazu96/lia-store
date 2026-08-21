@@ -80,6 +80,12 @@ export const driverWorkspaceStatusSync = onDocumentWritten(
           onboardingStep: text(source?.onboardingStep) || "personal-information",
           status: text(source?.status) || "draft",
           isApproved: source?.isApproved === true,
+          applicationReview: {
+            reason: text(source?.applicationReview?.reason) || null,
+          },
+          suspension: {
+            reason: text(source?.suspension?.reason) || null,
+          },
           stripe: {
             status: text(source?.stripeAccountStatus) || "not_started",
             transfersEnabled: source?.stripeTransfersEnabled === true,

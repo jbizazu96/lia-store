@@ -309,6 +309,16 @@ export const sendTestNotification = onCall(
       };
     });
 
+    const user = await db.collection("users").doc(request.auth.uid).get();
+    const accountType = text(user.data()?.accountType);
+    const deepLink = accountType === "admin"
+      ? "/admin/notifications"
+      : accountType === "store_owner"
+        ? "/store/notifications"
+        : accountType === "driver"
+          ? "/driver/notifications"
+          : "/notifications";
+
     try {
       const messageId = await getMessaging().send({
         token: token.token,
@@ -323,7 +333,7 @@ export const sendTestNotification = onCall(
         data: {
           title: "LIA notifications are working",
           body: "This device is ready to receive your LIA updates.",
-          deepLink: "/notifications",
+          deepLink,
         },
       });
       await reference.set({

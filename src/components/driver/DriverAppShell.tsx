@@ -4,15 +4,17 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import {doc, onSnapshot} from "firebase/firestore";
 import Image from "next/image";
 import { Bell, CreditCard, LayoutDashboard, LogOut, Menu, Settings, X } from "lucide-react";
-import { auth } from "@/lib/firebase";
+import { accountLogoutService } from "@/services/auth/customerLogoutService";
 import {
   driverWorkspaceClientService,
   DriverWorkspaceClientError,
 } from "@/services/driver/driverWorkspaceClientService";
 import { BrandedLoader } from "@/components/ui/BrandedLoader";
 import { DriverNotificationBell } from "@/components/driver/DriverNotificationBell";
+import {auth, db} from "@/lib/firebase";
 
 const navigation = [
   { href: "/driver/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -52,6 +54,17 @@ export function DriverAppShell({ children }: { children: React.ReactNode }) {
     return () => { active = false; };
   }, [router]);
 
+  useEffect(() => {
+    const user = auth.currentUser;
+    if (!user) return;
+    return onSnapshot(doc(db, "driverWorkspaceStatuses", user.uid), (snapshot) => {
+      const status = snapshot.data();
+      if (snapshot.exists() && (status?.isApproved !== true || status?.status !== "approved")) {
+        router.replace("/driver/pending-approval");
+      }
+    });
+  }, [router]);
+
   /* Close the mobile drawer as soon as the person continues using the page. */
   useEffect(() => {
     const closeOnScroll = () => setSidebarOpen(false);
@@ -69,7 +82,7 @@ export function DriverAppShell({ children }: { children: React.ReactNode }) {
    */
   const handleLogout = async () => {
     setSidebarOpen(false);
-    await auth.signOut();
+    await accountLogoutService.logout();
     router.replace("/login");
   };
 

@@ -167,3 +167,11 @@ export function customerRefundClaimActivityEmail(input: {
     }),
   };
 }
+
+export function driverShipdayCredentialsEmail(input: {driverName: string; email: string; temporaryPassword: string}) {
+  const name = input.driverName.trim() || "Driver";
+  const title = "Your LIA delivery app access";
+  const body = `<div style="display:inline-block;padding:6px 10px;border-radius:999px;background:#ecfdf5;color:#047857;font-size:12px;font-weight:800">DRIVER APPROVED</div><p style="margin:18px 0 0;line-height:1.65;color:#374151">Hi ${escapeHtml(name)}, LIA approved your driver application and created your Shipday Driver account.</p><div style="margin-top:20px;padding:16px;border-radius:10px;background:#f9fafb;border:1px solid #e5e7eb"><p style="margin:0 0 8px;font-size:13px;color:${muted}">Email</p><p style="margin:0 0 16px;font-weight:800;color:${ink}">${escapeHtml(input.email)}</p><p style="margin:0 0 8px;font-size:13px;color:${muted}">Temporary password</p><p style="margin:0;font-family:monospace;font-size:17px;font-weight:800;color:${ink}">${escapeHtml(input.temporaryPassword)}</p></div><p style="margin:18px 0 0;font-size:13px;line-height:1.6;color:${muted}">Install the Shipday Driver app, sign in with these credentials, and change the temporary password immediately. Never share it with anyone, including LIA Support.</p>`;
+  const text = `Hi ${name}, your LIA driver application was approved.\n\nUse the Shipday Driver app.\nEmail: ${input.email}\nTemporary password: ${input.temporaryPassword}\n\nSign in and change this temporary password immediately. Never share it.`;
+  return {subject: title, text, html: layout({title, preheader: "Your approved LIA driver account is ready for Shipday.", body})};
+}

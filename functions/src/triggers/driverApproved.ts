@@ -37,6 +37,8 @@ import {
 import {
   shipdayCarrierService,
 } from "../services/shipday/carrierService";
+import {enqueueEmail} from "../email/emailQueueService";
+import {driverShipdayCredentialsEmail} from "../email/emailTemplates";
 
 /*
 |--------------------------------------------------------------------------
@@ -337,7 +339,7 @@ async function saveCarrierConnection(input: {
            */
           "shipday.credentialsStatus":
             input.wasCreated
-              ? "delivery_required"
+              ? "delivered_by_email"
               : "existing_carrier",
 
           updatedAt:
@@ -532,6 +534,17 @@ export const driverApproved =
             "Driver phone number"
           );
 
+        /* Do not create an account with a one-time password when LIA cannot
+         * deliver that credential. Admin can resolve the suppression and
+         * reapprove, without leaving an inaccessible Shipday carrier. */
+        const emailSuppression = await getFirestore("default")
+          .collection("emailSuppressions")
+          .doc(email)
+          .get();
+        if (emailSuppression.exists) {
+          throw new Error("The driver email is suppressed; Shipday credentials cannot be delivered.");
+        }
+
         const carrier =
           await shipdayCarrierService
             .findOrCreateCarrier({
@@ -539,6 +552,21 @@ export const driverApproved =
               email,
               phoneNumber,
             });
+
+        if (carrier.wasCreated && carrier.password) {
+          const template = driverShipdayCredentialsEmail({
+            driverName: name,
+            email: carrier.email || email,
+            temporaryPassword: carrier.password,
+          });
+          await enqueueEmail({
+            dedupeKey: `driver-shipday-credentials:${driverId}:${carrier.carrierId}`,
+            category: "driver_shipday_credentials",
+            to: email,
+            ...template,
+            tags: {driver_id: driverId, shipday_carrier_id: String(carrier.carrierId)},
+          });
+        }
 
         await saveCarrierConnection({
           driverId,

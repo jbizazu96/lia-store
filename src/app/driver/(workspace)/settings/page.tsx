@@ -12,7 +12,6 @@
 */
 
 import { useEffect, useRef, useState } from "react";
-import {signOut} from "firebase/auth";
 import { BadgeDollarSign, Camera, FileUp, HelpCircle, ShieldCheck, Trash2, UserRound } from "lucide-react";
 import { httpsCallable } from "firebase/functions";
 import { auth, functions } from "@/lib/firebase";
@@ -26,6 +25,8 @@ import { driverStripeConnectClientService } from "@/services/payment/driverStrip
 import { driverWorkspaceClientService } from "@/services/driver/driverWorkspaceClientService";
 import type { DriverWorkspaceSummary } from "@/types/driverWorkspace";
 import {AccountSupportForm} from "@/components/support/AccountSupportForm";
+import {accountLogoutService} from "@/services/auth/customerLogoutService";
+import {DeviceNotificationTestPanel} from "@/components/notification/DeviceNotificationTestPanel";
 
 type ReviewableField = Exclude<DriverImageField, "profile-photo">;
 const replacements: { label: string; field: ReviewableField }[] = [
@@ -49,13 +50,15 @@ function addressLabel(summary: DriverWorkspaceSummary) {
 export default function DriverSettingsPage() {
   const [summary, setSummary] = useState<DriverWorkspaceSummary | null>(null);
   const [message, setMessage] = useState("");
+  const [loadError, setLoadError] = useState("");
   const [busy, setBusy] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [helpCenterOpen, setHelpCenterOpen] = useState(false);
   const [documentModal, setDocumentModal] = useState<{ label: string; field: ReviewableField; expirationDate?: string } | null>(null);
   const profileImageInput = useRef<HTMLInputElement>(null);
-  const refresh = () => driverWorkspaceClientService.getSummary().then(setSummary).catch(() => setSummary(null));
+  const refresh = () => driverWorkspaceClientService.getSummary().then((value) => {setSummary(value); setLoadError("");}).catch((reason: unknown) => setLoadError(reason instanceof Error ? reason.message : "Unable to load settings."));
   useEffect(() => { void refresh(); }, []);
+  if (!summary && loadError) return <section className="mx-auto max-w-xl rounded-2xl bg-white p-6 shadow-sm"><h1 className="text-xl font-bold">Unable to load driver settings</h1><p className="mt-2 text-sm text-slate-600">{loadError}</p><button onClick={() => void refresh()} className="mt-4 rounded-xl bg-orange-600 px-4 py-2 text-sm font-bold text-white">Retry</button></section>;
   if (!summary) return <PageContentSkeleton cards={2} rows={5} />;
 
   const uploadProfilePhoto = async (file: File) => {
@@ -72,7 +75,7 @@ export default function DriverSettingsPage() {
     try { setBusy(true); setMessage(""); await driverImageService.uploadOriginalImage({ driverId: user.uid, field: choice.field, file: values.file }); await driverWorkspaceClientService.submitDocumentReplacement({ field: choice.field, expirationDate: values.expirationDate, issuingState: values.issuingState, provider: values.provider }); await refresh(); setDocumentModal(null); setMessage("Replacement submitted for administrator review."); } catch (error) { setMessage(error instanceof Error ? error.message : "Unable to submit the replacement."); } finally { setBusy(false); }
   };
   const connectStripe = async () => { try { setBusy(true); await driverStripeConnectClientService.createOrRetrieveAccount(); const onboarding = await driverStripeConnectClientService.createOnboardingLink(); window.location.assign(onboarding.onboarding.url); } catch (error) { setMessage(error instanceof Error ? error.message : "Unable to start Stripe onboarding."); } finally { setBusy(false); } };
-  const requestDeletion = async () => { if (!window.confirm("Request account deletion? Your account will be locked while an administrator reviews it.")) return; try { setBusy(true); await httpsCallable(functions, "requestAccountDeletion")({ ownerType: "driver", reasonCode: "no_longer_needed", reasonDetails: null }); await signOut(auth); window.location.assign("/login?accountDeletion=review"); } catch (error) { setMessage(error instanceof Error ? error.message : "Unable to request deletion."); } finally { setBusy(false); } };
+  const requestDeletion = async () => { if (!window.confirm("Request account deletion? Your account will be locked while an administrator reviews it.")) return; try { setBusy(true); await httpsCallable(functions, "requestAccountDeletion")({ ownerType: "driver", reasonCode: "no_longer_needed", reasonDetails: null }); await accountLogoutService.logout(); window.location.assign("/login?accountDeletion=review"); } catch (error) { setMessage(error instanceof Error ? error.message : "Unable to request deletion."); } finally { setBusy(false); } };
   const documentDetails = new Map(summary.documents.map((document) => [document.label, document]));
   const radius = summary.profile.serviceArea.approvedRadiusMiles ?? summary.profile.serviceArea.preferredRadiusMiles;
 
@@ -81,6 +84,7 @@ export default function DriverSettingsPage() {
     <article className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-100"><div className="flex items-center gap-3"><div className="rounded-full bg-orange-50 p-3"><FileUp className="h-5 w-5 text-orange-600" /></div><div><p className="font-bold">Documents</p><p className="text-sm text-slate-500">Replacement uploads return to administrator review.</p></div></div><div className="mt-4 divide-y divide-slate-100">{replacements.map((item) => { const detail = documentDetails.get(item.label.startsWith("Driver license") ? "Driver license" : item.label); const expiration = detail?.expirationDate ? " · Expires " + new Date(detail.expirationDate + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : " · Expiration date not provided"; return <div key={item.field} className="flex items-center justify-between gap-3 py-3"><div><p className="text-sm font-semibold">{item.label}</p><p className="mt-1 text-xs capitalize text-slate-500">{detail?.reviewStatus ?? "missing"}{expiration}</p></div><button disabled={busy} onClick={() => setDocumentModal({ ...item, expirationDate: detail?.expirationDate })} className="shrink-0 rounded-lg border border-orange-200 px-3 py-2 text-xs font-bold text-orange-700 hover:bg-orange-50 disabled:opacity-50">Replace</button></div>; })}</div></article>
     <article className="rounded-2xl bg-green-50 p-5 ring-1 ring-green-100"><p className="font-bold text-green-950">Delivery radius and payment policy</p><p className="mt-2 text-sm text-green-900">Your current {summary.profile.serviceArea.approvedRadiusMiles ? "approved" : "requested"} service radius is <strong>{radius ?? "not set"} miles</strong>. Final assignments are based on administrator approval and available delivery areas.</p><p className="mt-3 text-sm text-green-900">For each completed delivery, you receive <strong>70% of the delivery fee</strong> and <strong>100% of customer tips</strong>. LIA retains 30% of the delivery fee to operate the platform.</p></article>
     <article className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-100"><div className="flex items-center gap-3"><div className="rounded-full bg-orange-50 p-3"><BadgeDollarSign className="h-5 w-5 text-orange-600" /></div><div><p className="font-bold">Payout account</p><p className="text-sm text-slate-500">{stripeLabel(summary)}</p></div></div><div className="mt-4 flex flex-wrap gap-2"><button disabled={busy} onClick={() => void connectStripe()} className="rounded-xl bg-orange-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{summary.stripe.status === "not_started" ? "Connect Stripe" : "Update Stripe"}</button><button disabled={busy} onClick={() => void driverStripeConnectClientService.getAccountStatus().then(() => refresh()).catch((error) => setMessage(error.message))} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold">View payout status</button></div></article>
+    <DeviceNotificationTestPanel description="Receive approval, document, support, and payout updates on this device." />
     <DriverPasswordSection onMessage={setMessage} />
     <article className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-100"><p className="font-bold">Support resources</p><div className="mt-3 grid gap-2"><button type="button" onClick={() => setHelpCenterOpen(true)} className="flex items-center justify-between rounded-xl px-2 py-2 text-left text-sm font-medium hover:bg-slate-50">Help Center <HelpCircle className="h-4 w-4" /></button></div></article>
     <AccountSupportForm accountLabel="driver" />

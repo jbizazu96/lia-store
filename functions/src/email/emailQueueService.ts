@@ -13,6 +13,7 @@ export type EmailCategory =
   | "store_new_order"
   | "store_refund_claim"
   | "store_inventory_digest"
+  | "driver_shipday_credentials"
   | "admin_support"
   | "admin_refund"
   | "admin_order_zone";

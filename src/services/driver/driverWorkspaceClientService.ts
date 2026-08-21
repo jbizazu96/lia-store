@@ -80,8 +80,13 @@ export const driverWorkspaceClientService = {
       onboardingStep: string;
       isApproved: boolean;
       status: "draft" | "pending_review" | "approved" | "rejected" | "suspended";
+      reason: string | null;
     }>("getDriverWorkspaceEntry"),
     { ttlMs: 15_000 },
+  ),
+
+  reopenRejectedApplication: () => call<{success: boolean; onboardingStep: string}>(
+    "reopenRejectedDriverApplication"
   ),
 
   getSummary: () => loadCached(
@@ -100,12 +105,13 @@ export const driverWorkspaceClientService = {
     return writeCached("driver-workspace-summary", summary, { ttlMs: 15_000 });
   },
 
-  getPayments: () => loadCached(
-    "driver-workspace-payments",
+  getPayments: (options: {cursor?: string | null; pageSize?: number} = {}) => loadCached(
+    `driver-workspace-payments:${options.cursor ?? "first"}:${options.pageSize ?? 25}`,
     () => call<{
       payments: DriverPayment[];
       totals: DriverPaymentTotals;
-    }>("getDriverWorkspacePayments"),
+      nextCursor: string | null;
+    }>("getDriverWorkspacePayments", options),
     { ttlMs: 30_000 },
   ),
 

@@ -43,14 +43,12 @@ import {
   usePathname,
 } from "next/navigation";
 import {
-  auth,
-} from "@/lib/firebase";
-import {
   AdminNotificationBell,
 } from "@/components/admin/AdminNotificationBell";
 import {useAdminAccess} from "@/context/AdminAccessContext";
 import {requiredAdminPermission} from "@/services/admin/adminAccessRoutes";
 import type {AdminPermission} from "@/types/adminAccess";
+import {accountLogoutService} from "@/services/auth/customerLogoutService";
 
 export function AdminAppShell({
   children,
@@ -93,7 +91,7 @@ export function AdminAppShell({
   }, [can, pathname, router, visibleNavigation]);
 
   const signOut = async () => {
-    await auth.signOut();
+    await accountLogoutService.logout();
     router.replace("/login");
   };
 

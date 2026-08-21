@@ -13,8 +13,10 @@ import * as admin from "firebase-admin";
 import {normalizeUsStateCode} from "../common/usStateCodes";
 import {resolveDeliveryZoneForAddress, zoneFields} from "../delivery/deliveryZoneAssignmentService";
 import {
+  AggregateField,
   FieldValue,
   getFirestore,
+  Timestamp,
 } from "firebase-admin/firestore";
 import {
   HttpsError,
@@ -26,6 +28,7 @@ import {
 import {
   getDriverApplicationPolicy,
 } from "../admin/driverApplicationPolicy";
+import {enforceCallableAbuseProtection} from "../security/callableAbuseProtection";
 
 /*
  * Callable modules can be evaluated before index.ts reaches its shared
@@ -96,18 +99,34 @@ async function requireDriver(uid: string) {
   return driver;
 }
 
-async function getPayments(uid: string) {
+async function requireApprovedDriver(uid: string) {
+  const driver = await requireDriver(uid);
+  const data = driver.data() ?? {};
+  if (data.isApproved !== true || valueString(data.status) !== "approved") {
+    throw new HttpsError("permission-denied", "Your driver application must be approved before accessing this workspace.");
+  }
+  return driver;
+}
+
+async function getPayments(uid: string, pageSize = 25, cursor = "") {
   /*
    * Marketplace settlement now records every recipient obligation in
    * paymentTransfers.  The old payouts collection is not part of the live
    * transfer flow, so reading it made the driver app show zero earnings.
    */
-  const snapshot = await db.collection("paymentTransfers")
+  let query = db.collection("paymentTransfers")
     .where("recipient.id", "==", uid)
     .where("recipient.type", "==", "driver")
     .orderBy("updatedAt", "desc")
-    .limit(100)
-    .get();
+    .limit(pageSize);
+  if (cursor) {
+    const cursorDocument = await db.collection("paymentTransfers").doc(cursor).get();
+    if (!cursorDocument.exists || cursorDocument.data()?.recipient?.id !== uid || cursorDocument.data()?.recipient?.type !== "driver") {
+      throw new HttpsError("invalid-argument", "The payment-history cursor is invalid.");
+    }
+    query = query.startAfter(cursorDocument);
+  }
+  const snapshot = await query.get();
   const orderIds = Array.from(new Set(
     snapshot.docs
       .map((document) => valueString(document.data().orderId))
@@ -145,23 +164,24 @@ async function getPayments(uid: string) {
   }).sort((left, right) => (right.paidAt ?? right.createdAt ?? "").localeCompare(left.paidAt ?? left.createdAt ?? ""));
 }
 
-function totalsFor(payments: Array<{ amount: number; status: string; paidAt: string | null; createdAt: string | null }>) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const week = new Date(today);
-  week.setDate(today.getDate() - 6);
+async function paymentTotals(uid: string) {
+  const base = db.collection("paymentTransfers")
+    .where("recipient.id", "==", uid)
+    .where("recipient.type", "==", "driver");
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const week = new Date(today); week.setDate(today.getDate() - 6);
   const month = new Date(today.getFullYear(), today.getMonth(), 1);
-  const paid = payments.filter((payment) => payment.status === "paid");
-  const totalAfter = (after: Date) => paid.filter((payment) => new Date(payment.paidAt ?? payment.createdAt ?? 0) >= after).reduce((sum, payment) => sum + payment.amount, 0);
-
-  return {
-    today: totalAfter(today),
-    week: totalAfter(week),
-    month: totalAfter(month),
-    lifetime: paid.reduce((sum, payment) => sum + payment.amount, 0),
-    pending: payments.filter((payment) => payment.status === "pending").reduce((sum, payment) => sum + payment.amount, 0),
-    paid: paid.reduce((sum, payment) => sum + payment.amount, 0),
-  };
+  const sum = async (query: FirebaseFirestore.Query) => ((await query.aggregate({total: AggregateField.sum("amount")}).get()).data().total ?? 0) / 100;
+  const [todayTotal, weekTotal, monthTotal, lifetime, pending, eligible, processing] = await Promise.all([
+    sum(base.where("status", "==", "completed").where("completedAt", ">=", Timestamp.fromDate(today))),
+    sum(base.where("status", "==", "completed").where("completedAt", ">=", Timestamp.fromDate(week))),
+    sum(base.where("status", "==", "completed").where("completedAt", ">=", Timestamp.fromDate(month))),
+    sum(base.where("status", "==", "completed")),
+    sum(base.where("status", "==", "pending")),
+    sum(base.where("status", "==", "eligible")),
+    sum(base.where("status", "==", "processing")),
+  ]);
+  return {today: todayTotal, week: weekTotal, month: monthTotal, lifetime, pending: pending + eligible + processing, paid: lifetime};
 }
 
 function documentStatus(label: string, value: unknown) {
@@ -175,7 +195,7 @@ function documentStatus(label: string, value: unknown) {
 }
 
 async function getSummary(uid: string) {
-  const [driver, payments] = await Promise.all([requireDriver(uid), getPayments(uid)]);
+  const [driver, payments, totals] = await Promise.all([requireApprovedDriver(uid), getPayments(uid, 1), paymentTotals(uid)]);
   const data = driver.data() ?? {};
   const address = isRecord(data.address) ? data.address : {};
   const serviceArea = isRecord(data.serviceArea) ? data.serviceArea : {};
@@ -202,7 +222,7 @@ async function getSummary(uid: string) {
     stripe: { status: valueString(data.stripeAccountStatus) || "not_started", transfersEnabled: data.stripeTransfersEnabled === true, payoutsEnabled: data.stripePayoutsEnabled === true, requiresAction: data.stripeRequiresAction === true },
     documents: [documentStatus("Driver license", data.driversLicense), documentStatus("Vehicle insurance", data.vehicleInsurance), documentStatus("Vehicle registration", data.vehicleRegistration)],
     lastPayment: payments.find((payment) => payment.status === "paid") ?? null,
-    totals: totalsFor(payments),
+    totals,
   };
 }
 
@@ -235,6 +255,8 @@ export const getDriverWorkspaceEntry = onCall({ region: "us-central1" }, async (
   if (!driver.exists || driver.data()?.ownerUid !== request.auth.uid) return { hasApplication: false, onboardingCompleted: false, onboardingStep: "personal-information", isApproved: false, status: "draft" };
   const data = driver.data() ?? {};
   const status = valueString(data.status);
+  const applicationReview = isRecord(data.applicationReview) ? data.applicationReview : {};
+  const suspension = isRecord(data.suspension) ? data.suspension : {};
   return {
     hasApplication: true,
     onboardingCompleted: data.onboardingCompleted === true,
@@ -243,7 +265,27 @@ export const getDriverWorkspaceEntry = onCall({ region: "us-central1" }, async (
     status: status === "suspended" ? "suspended" : status === "approved"
       ? "approved"
       : status === "rejected" ? "rejected" : "pending_review",
+    reason: status === "suspended"
+      ? valueString(suspension.reason) || null
+      : valueString(applicationReview.reason) || null,
   };
+});
+
+export const reopenRejectedDriverApplication = onCall({ region: "us-central1" }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Sign in to correct your driver application.");
+  const driver = await requireDriver(request.auth.uid);
+  if (valueString(driver.data()?.status) !== "rejected") {
+    throw new HttpsError("failed-precondition", "Only a rejected application can be reopened.");
+  }
+  await driver.ref.update({
+    status: "draft",
+    isApproved: false,
+    onboardingCompleted: false,
+    onboardingStep: "personal-information",
+    "applicationReview.reopenedAt": FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+  return {success: true, onboardingStep: "personal-information"};
 });
 
 export const getDriverWorkspaceSummary = onCall({ region: "us-central1" }, async (request) => {
@@ -253,14 +295,18 @@ export const getDriverWorkspaceSummary = onCall({ region: "us-central1" }, async
 
 export const getDriverWorkspacePayments = onCall({ region: "us-central1" }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in to view payments.");
-  await requireDriver(request.auth.uid);
-  const payments = await getPayments(request.auth.uid);
-  return { payments, totals: totalsFor(payments) };
+  await requireApprovedDriver(request.auth.uid);
+  const input = isRecord(request.data) ? request.data : {};
+  const requestedSize = Number(input.pageSize);
+  const pageSize = Number.isInteger(requestedSize) ? Math.min(50, Math.max(1, requestedSize)) : 25;
+  const cursor = valueString(input.cursor);
+  const [payments, totals] = await Promise.all([getPayments(request.auth.uid, pageSize, cursor), paymentTotals(request.auth.uid)]);
+  return { payments, totals, nextCursor: payments.length === pageSize ? payments.at(-1)?.id ?? null : null };
 });
 
 export const getDriverWorkspaceNotifications = onCall({ region: "us-central1" }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in to view notifications.");
-  await requireDriver(request.auth.uid);
+  await requireApprovedDriver(request.auth.uid);
   const snapshot = await db.collection("users").doc(request.auth.uid).collection("notifications").orderBy("createdAt", "desc").limit(50).get();
   return { notifications: snapshot.docs.map((document) => { const data = document.data(); return { id: document.id, title: valueString(data.title) || "Driver update", body: valueString(data.body) || "You have a new driver account update.", type: valueString(data.type) || "system", read: data.read === true, createdAt: iso(data.createdAt), deepLink: valueString(data.deepLink) || undefined }; }) };
 });
@@ -325,6 +371,7 @@ export const submitDriverDocumentReplacement = onCall({ region: "us-central1" },
 
 export const updateDriverWorkspaceProfile = onCall({ region: "us-central1", secrets: [googleMapsApiKey] }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in to update your profile.");
+  await enforceCallableAbuseProtection({operation: "driver-profile-update", uid: request.auth.uid, appCheckVerified: Boolean(request.app), maximumRequests: 30, windowSeconds: 3_600});
   const input = isRecord(request.data) && isRecord(request.data.profile) ? request.data.profile : {};
   const address = isRecord(input.address) ? input.address : {};
   const serviceArea = isRecord(input.serviceArea) ? input.serviceArea : {};
@@ -341,19 +388,35 @@ export const updateDriverWorkspaceProfile = onCall({ region: "us-central1", secr
   const year = typeof vehicle.year === "number" ? vehicle.year : null;
   const currentYear = new Date().getFullYear() + 1;
   if (!firstName || !lastName || !/^\(\d{3}\) \d{3} - \d{4}$/.test(phone) || !valueString(address.street).trim() || !valueString(address.city).trim() || !addressState || !valueString(address.zip).trim() || !valueString(serviceArea.city).trim() || !serviceAreaState || !radius || radius <= 0 || radius > policy.maximumPreferredRadiusMiles || !valueString(vehicle.make).trim() || !valueString(vehicle.model).trim() || !year || year < 1900 || year > currentYear || !valueString(vehicle.color).trim() || !valueString(vehicle.licensePlate).trim() || !registrationState) throw new HttpsError("invalid-argument", `Complete your profile, address, service area, and vehicle information using valid values. Requested radius must be at most ${policy.maximumPreferredRadiusMiles} miles.`);
-  const rawAddress = valueString(address.street) + (valueString(address.apartment).trim() ? ", " + valueString(address.apartment) : "") + ", " + valueString(address.city) + ", " + addressState + " " + valueString(address.zip);
-  const location = await geocodeAddress(rawAddress);
-  if (!location) throw new HttpsError("invalid-argument", "We could not verify your home address. Check the street, city, state, and ZIP code.");
-  const zone = await resolveDeliveryZoneForAddress(address.city, addressState, address.zip, location.placeId);
   const driver = await requireDriver(request.auth.uid);
+  const existingAddress = isRecord(driver.data()?.address) ? driver.data()?.address as Record<string, unknown> : {};
+  const addressChanged = upper(valueString(existingAddress.street)) !== upper(valueString(address.street)) ||
+    upper(valueString(existingAddress.apartment)) !== upper(valueString(address.apartment)) ||
+    upper(valueString(existingAddress.city)) !== upper(valueString(address.city)) ||
+    valueString(existingAddress.state) !== addressState ||
+    upper(valueString(existingAddress.zip)) !== upper(valueString(address.zip));
+  let location = {
+    formattedAddress: valueString(existingAddress.formattedAddress),
+    latitude: typeof existingAddress.latitude === "number" ? existingAddress.latitude : NaN,
+    longitude: typeof existingAddress.longitude === "number" ? existingAddress.longitude : NaN,
+    placeId: valueString(existingAddress.placeId) || null,
+  };
+  let zone: Awaited<ReturnType<typeof resolveDeliveryZoneForAddress>> = null;
+  if (addressChanged || !Number.isFinite(location.latitude) || !Number.isFinite(location.longitude)) {
+    const rawAddress = valueString(address.street) + (valueString(address.apartment).trim() ? ", " + valueString(address.apartment) : "") + ", " + valueString(address.city) + ", " + addressState + " " + valueString(address.zip);
+    const verified = await geocodeAddress(rawAddress);
+    if (!verified) throw new HttpsError("invalid-argument", "We could not verify your home address. Check the street, city, state, and ZIP code.");
+    location = verified;
+    zone = await resolveDeliveryZoneForAddress(address.city, addressState, address.zip, location.placeId);
+  }
   const existingVehicle = isRecord(driver.data()?.vehicle) ? driver.data()?.vehicle as Record<string, unknown> : {};
   const vehicleRequiresReview = existingVehicle.make !== valueString(vehicle.make).trim() || existingVehicle.model !== valueString(vehicle.model).trim() || existingVehicle.year !== year || existingVehicle.licensePlate !== upper(valueString(vehicle.licensePlate)) || existingVehicle.registrationState !== registrationState;
   const existingArea = isRecord(driver.data()?.serviceArea) ? driver.data()?.serviceArea as Record<string, unknown> : {};
   await Promise.all([
     driver.ref.update({
       firstName, middleName: middleName || null, lastName, phone,
-      address: { street: upper(valueString(address.street)), apartment: upper(valueString(address.apartment)) || null, city: upper(valueString(address.city)), state: addressState, zip: upper(valueString(address.zip)), formattedAddress: upper(location.formattedAddress), latitude: location.latitude, longitude: location.longitude, ...zoneFields(zone) },
-      homeZoneId: zone?.id ?? null, homeZoneName: zone?.name ?? null, zoneAssignmentSource: "automatic",
+      address: { street: upper(valueString(address.street)), apartment: upper(valueString(address.apartment)) || null, city: upper(valueString(address.city)), state: addressState, zip: upper(valueString(address.zip)), formattedAddress: upper(location.formattedAddress), latitude: location.latitude, longitude: location.longitude, ...(addressChanged ? zoneFields(zone) : {}) },
+      ...(addressChanged ? {homeZoneId: zone?.id ?? null, homeZoneName: zone?.name ?? null, zoneAssignmentSource: "automatic"} : {}),
       serviceArea: { city: upper(valueString(serviceArea.city)), state: serviceAreaState, preferredRadiusMiles: radius, approvedRadiusMiles: typeof existingArea.approvedRadiusMiles === "number" ? existingArea.approvedRadiusMiles : null },
       vehicle: { make: valueString(vehicle.make).trim(), model: valueString(vehicle.model).trim(), year, color: valueString(vehicle.color).trim(), licensePlate: upper(valueString(vehicle.licensePlate)), registrationState },
       ...(vehicleRequiresReview ? { "vehicleInsurance.reviewStatus": "pending", "vehicleInsurance.rejectionReason": null, "vehicleInsurance.reviewedAt": null, "vehicleInsurance.reviewedBy": null, "vehicleRegistration.reviewStatus": "pending", "vehicleRegistration.rejectionReason": null, "vehicleRegistration.reviewedAt": null, "vehicleRegistration.reviewedBy": null } : {}),

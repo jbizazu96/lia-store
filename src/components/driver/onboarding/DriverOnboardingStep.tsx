@@ -213,7 +213,7 @@ function DriverOnboardingStepContent({
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { user, draft, loading, error } = useDriverOnboarding();
+  const { user, draft, loading, error, refresh } = useDriverOnboarding();
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [personal, setPersonal] = useState({ firstName: "", middleName: "", lastName: "", phone: "", email: "", dateOfBirth: "" });
@@ -250,7 +250,8 @@ function DriverOnboardingStepContent({
   }, [searchParams, step]);
 
   if (loading) return <BrandedLoader message="Loading driver onboarding" />;
-  if (!user || !draft) return null;
+  if (!user) return <main className="mx-auto flex min-h-screen max-w-lg items-center p-6"><section className="w-full rounded-2xl bg-white p-6 shadow-sm"><h1 className="text-xl font-bold">Sign in required</h1><p className="mt-2 text-sm text-slate-600">Sign in again to continue your driver application.</p><button onClick={() => router.replace("/login")} className="mt-4 rounded-xl bg-orange-600 px-4 py-2 text-sm font-bold text-white">Go to login</button></section></main>;
+  if (!draft) return <main className="mx-auto flex min-h-screen max-w-lg items-center p-6"><section className="w-full rounded-2xl bg-white p-6 shadow-sm"><h1 className="text-xl font-bold">Unable to load your application</h1><p className="mt-2 text-sm text-slate-600">{error ?? "Your driver application is temporarily unavailable."}</p><button onClick={() => void refresh()} className="mt-4 rounded-xl bg-orange-600 px-4 py-2 text-sm font-bold text-white">Retry</button></section></main>;
 
   const policy = draft.applicationPolicy;
   const maximumPreferredRadiusMiles = policy?.maximumPreferredRadiusMiles ?? 50;

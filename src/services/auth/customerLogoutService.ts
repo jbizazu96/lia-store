@@ -56,7 +56,7 @@ async function cleanupCurrentRegistration(): Promise<void> {
   return cleanupInFlight;
 }
 
-export const customerLogoutService = {
+export const accountLogoutService = {
   async logout(): Promise<void> {
     await cleanupCurrentRegistration();
     await signOut(auth);
@@ -72,3 +72,6 @@ export const customerLogoutService = {
     });
   },
 };
+
+/* Compatibility export while customer callers migrate to the role-neutral name. */
+export const customerLogoutService = accountLogoutService;

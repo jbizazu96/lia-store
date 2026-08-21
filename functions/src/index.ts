@@ -66,6 +66,7 @@ export {
 } from "./callable/driverOnboarding";
 export {
   getDriverWorkspaceEntry,
+  reopenRejectedDriverApplication,
   getDriverWorkspaceSummary,
   getDriverWorkspacePayments,
   getDriverWorkspaceNotifications,

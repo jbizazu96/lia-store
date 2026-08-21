@@ -33,6 +33,7 @@ import {
   getDriverApplicationPolicy,
   type DriverApplicationPolicy,
 } from "../admin/driverApplicationPolicy";
+import {isDriverPayoutReady} from "../admin/driverApprovalReadiness";
 import {isStoreReadyForActivation} from "../services/store/storeApprovalPolicy";
 
 if (admin.apps.length === 0) {
@@ -557,6 +558,10 @@ export const decideAdminApplication = onCall(
     if (outcome === "approved" && data.onboardingCompleted !== true) {
       throw new HttpsError("failed-precondition", "The applicant has not submitted a complete onboarding application.");
     }
+    if (outcome === "approved" && type === "driver" && driverPolicy?.requireStripeAccount &&
+      !isDriverPayoutReady(data)) {
+      throw new HttpsError("failed-precondition", "The driver's Stripe payout account must be fully verified and payout-ready before approval.");
+    }
     if (outcome === "approved" && type === "store" && !hasCurrentStoreMerchantAgreement(data)) {
       throw new HttpsError("failed-precondition", "The store owner has not accepted the current LIA Merchant Agreement.");
     }
@@ -670,6 +675,9 @@ export const setAdminDriverApproval = onCall(
         (policy.requireApprovedDocumentsForApproval &&
           !allRequiredDriverDocumentsApproved(data, policy))) {
         throw new HttpsError("failed-precondition", "Approve every required document before approving this driver.");
+      }
+      if (policy.requireStripeAccount && !isDriverPayoutReady(data)) {
+        throw new HttpsError("failed-precondition", "The driver's Stripe payout account must be fully verified and payout-ready before approval.");
       }
     }
 

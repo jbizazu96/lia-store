@@ -14,6 +14,7 @@ function statusInfo(status: DriverWorkspaceSummary["status"]) { if (status === "
 
 export default function DriverDashboardPage() {
   const [summary, setSummary] = useState<DriverWorkspaceSummary | null>(null);
+  const [error, setError] = useState("");
   useEffect(() => {
     let unsubscribeStatus: (() => void) | null = null;
 
@@ -26,9 +27,10 @@ export default function DriverDashboardPage() {
         return;
       }
 
+      setError("");
       void driverWorkspaceClientService.getSummary()
         .then(setSummary)
-        .catch(() => setSummary(null));
+        .catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "Unable to load the dashboard."));
 
       /* The projection intentionally excludes address, vehicle, and document URLs. */
       unsubscribeStatus = onSnapshot(
@@ -93,6 +95,7 @@ export default function DriverDashboardPage() {
       unsubscribeStatus?.();
     };
   }, []);
+  if (!summary && error) return <section className="mx-auto max-w-xl rounded-2xl bg-white p-6 shadow-sm"><h1 className="text-xl font-bold">Unable to load the driver dashboard</h1><p className="mt-2 text-sm text-slate-600">{error}</p><button onClick={() => window.location.reload()} className="mt-4 rounded-xl bg-orange-600 px-4 py-2 text-sm font-bold text-white">Retry</button></section>;
   if (!summary) return <PageContentSkeleton />;
   const [label, color, Icon] = statusInfo(summary.status);
   const docsApproved = summary.documents.filter((document) => document.reviewStatus === "approved").length;
