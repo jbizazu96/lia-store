@@ -101,8 +101,8 @@ export function AdminAppShell({
     <div className="min-h-screen bg-slate-50 text-slate-900 [&_a[href]]:cursor-pointer [&_button:not(:disabled)]:cursor-pointer [&_button:disabled]:cursor-not-allowed">
       <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-slate-200 bg-white px-4 md:hidden">
         <div className="flex items-center gap-2">
-          <Image src="/icon/icon-192.png" alt="LIA" width={28} height={28} className="rounded-md" />
-          <p className="font-bold text-orange-600">LIA Admin</p>
+          <Image src="/brand/lia-logo-transparent-256.png" alt="LIA" width={42} height={28} className="h-7 w-[42px] object-contain" />
+          <p className="font-bold text-orange-600">Admin</p>
         </div>
         <div className="flex items-center gap-1">
           <AdminNotificationBell />
@@ -117,8 +117,8 @@ export function AdminAppShell({
       <aside className={`fixed inset-y-0 left-0 z-40 flex w-72 flex-col overflow-hidden border-r border-slate-200 bg-white p-5 transition-transform duration-200 md:translate-x-0 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`}>
         <div className="mb-8 flex shrink-0 items-center justify-between">
           <div className="flex items-center gap-2">
-            <Image src="/icon/icon-192.png" alt="LIA" width={30} height={30} className="rounded-md" />
-            <p className="text-xl font-bold text-orange-600">LIA Admin</p>
+            <Image src="/brand/lia-logo-transparent-256.png" alt="LIA" width={48} height={30} className="h-[30px] w-12 object-contain" />
+            <p className="text-xl font-bold text-orange-600">Admin</p>
           </div>
           <button type="button" onClick={() => setSidebarOpen(false)} className="rounded-lg p-2 hover:bg-orange-50 md:hidden" aria-label="Close admin navigation">
             <X className="h-5 w-5" />

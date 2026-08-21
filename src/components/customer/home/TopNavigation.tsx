@@ -27,13 +27,13 @@ export function TopNavigation({
           <div className="flex min-w-0 flex-1 items-center gap-2">
             {/* Logo */}
             <Link href="/home" className="shrink-0">
-            <div className="relative w-8 h-8">
+            <div className="relative h-8 w-12">
               <Image
-                src="/icon/icon-192.png"
-                alt=" LIA Logo"
+                src="/brand/lia-logo-transparent-256.png"
+                alt="LIA"
                 fill
-                sizes="32px"
-                className="w-12 h-12 object-contain"
+                sizes="48px"
+                className="object-contain"
               />
             </div>
             </Link>

@@ -48,9 +48,8 @@ export default function HomePage() {
       <header className="fixed inset-x-0 top-0 z-50 border-b border-white/60 bg-white/80 backdrop-blur-xl">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-3 px-4 sm:h-18 sm:px-6 lg:px-8">
           <Link href="/" className="flex min-w-0 items-center gap-2.5" aria-label="LIA Marketplace home">
-            <Image src="/icon/icon-192.png" alt="" width={38} height={38} className="h-9 w-9 rounded-xl" priority />
+            <Image src="/brand/lia-logo-transparent-256.png" alt="LIA" width={72} height={38} className="h-9 w-[72px] object-contain" priority />
             <div className="min-w-0 leading-none">
-              <span className="block text-lg font-black tracking-tight text-slate-950">LIA</span>
               <span className="hidden text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 sm:block">Marketplace</span>
             </div>
           </Link>
@@ -160,7 +159,7 @@ export default function HomePage() {
       <footer className="border-t border-slate-200 bg-slate-50">
         <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
           <div className="grid gap-8 md:grid-cols-[1.3fr_1fr_1fr]">
-            <div><div className="flex items-center gap-2.5"><Image src="/icon/icon-192.png" alt="" width={38} height={38} className="rounded-xl"/><div><p className="font-black">LIA Marketplace</p><p className="text-xs text-slate-500">Local marketplace and delivery</p></div></div><p className="mt-4 max-w-sm text-sm leading-6 text-slate-600">Helping independent stores serve their communities through thoughtful technology and reliable delivery coordination.</p></div>
+            <div><div className="flex items-center gap-3"><Image src="/brand/lia-logo-transparent-256.png" alt="LIA" width={84} height={44} className="h-11 w-[84px] object-contain"/><div><p className="font-black">Marketplace</p><p className="text-xs text-slate-500">Local marketplace and delivery</p></div></div><p className="mt-4 max-w-sm text-sm leading-6 text-slate-600">Helping independent stores serve their communities through thoughtful technology and reliable delivery coordination.</p></div>
             <div><p className="text-sm font-black">Explore</p><div className="mt-4 grid gap-3 text-sm text-slate-600"><Link href="#how-it-works" className="hover:text-orange-700">How it works</Link><Link href="#partners" className="hover:text-orange-700">For store partners</Link><Link href="/register" className="hover:text-orange-700">Create an account</Link><Link href="/login" className="hover:text-orange-700">Sign in</Link></div></div>
             <div><p className="text-sm font-black">Support and legal</p><div className="mt-4 grid gap-3 text-sm text-slate-600"><PublicSupportButton className="text-left hover:text-orange-700">Contact support</PublicSupportButton><a href="mailto:info@liamarketplace.com" className="hover:text-orange-700">info@liamarketplace.com</a><Link href="/legal" className="hover:text-orange-700">Legal documents</Link><Link href="/legal/customer-terms" className="hover:text-orange-700">Customer Terms</Link><Link href="/legal/refund-policy" className="hover:text-orange-700">Refund and Cancellation Policy</Link><a href="tel:+18336724143" className="hover:text-orange-700">(833) 672-4143</a></div></div>
           </div>
