@@ -295,7 +295,7 @@ export default function DashboardPage() {
       </motion.div>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         {statCards.map(
           (stat, index) => (
             <motion.div
@@ -312,22 +312,22 @@ export default function DashboardPage() {
                 delay:
                   index * 0.05,
               }}
-              className="rounded-2xl bg-white p-6 shadow-sm"
+              className="min-w-0 overflow-hidden rounded-xl border border-gray-100 bg-white p-2.5 shadow-sm"
             >
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="text-sm text-gray-500">
+              <div className="flex min-w-0 items-start justify-between gap-1.5">
+                <div className="min-w-0">
+                  <p className="text-[11px] leading-tight text-gray-500">
                     {stat.title}
                   </p>
 
-                  <p className="mt-1 text-2xl font-bold text-gray-800">
+                  <p className="mt-0.5 truncate text-lg font-bold tabular-nums text-gray-800" title={String(stat.value)}>
                     {stat.value}
                   </p>
 
                   {stat.growth !==
                     undefined && (
-                    <p className="mt-1 text-xs text-green-600">
-                      <TrendingUp className="mr-1 inline h-3 w-3" />
+                    <p className="mt-0.5 truncate text-[10px] text-green-600" title={`${stat.growth >= 0 ? "+" : ""}${stat.growth.toFixed(1)}% vs last week`}>
+                      <TrendingUp className="mr-0.5 inline h-2.5 w-2.5" />
 
                       {stat.growth >= 0
                         ? "+"
@@ -338,10 +338,10 @@ export default function DashboardPage() {
                 </div>
 
                 <div
-                  className={`${stat.background} rounded-xl p-3`}
+                  className={`${stat.background} shrink-0 rounded-lg p-1.5`}
                 >
                   <stat.icon
-                    className={`h-6 w-6 ${stat.text}`}
+                    className={`h-3.5 w-3.5 ${stat.text}`}
                   />
                 </div>
               </div>

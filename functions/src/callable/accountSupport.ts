@@ -5,6 +5,8 @@ import {requireAdminPermission} from "../admin/adminAuthorizationService";
 import {writeAdminAuditLog} from "../admin/adminAuditLogService";
 import {enforceCallableAbuseProtection} from "../security/callableAbuseProtection";
 import {notificationService} from "../services/notificationService";
+import {enqueueEmail} from "../email/emailQueueService";
+import {driverAccountActivityEmail} from "../email/emailTemplates";
 
 if (admin.apps.length === 0) admin.initializeApp();
 const db = getFirestore("default");
@@ -86,6 +88,10 @@ export const respondAdminAccountSupportRequest = onCall({region: "us-central1"},
   if (ownerId) {
     await db.collection("users").doc(ownerId).collection("notifications").doc(`account-support-${requestId}`).set({title: "LIA Support replied", body: message.slice(0, 300), type: "system", deepLink: text(data.ownerType) === "driver" ? "/driver/settings" : "/store/settings?section=support", read: false, createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp()}, {merge: true});
     try { await notificationService.sendToUser(ownerId, "LIA Support replied", message.slice(0, 300), text(data.ownerType) === "driver" ? "/driver/settings" : "/store/settings?section=support"); } catch (error) { console.error("Support response push failed.", {requestId, error}); }
+    if (text(data.ownerType) === "driver") {
+      const template = driverAccountActivityEmail({driverName: text(data.ownerName) || "Driver", title: "LIA Support replied", summary: message, badge: "LIA SUPPORT", actionLabel: "Open Driver Settings", url: "https://www.liamarketplace.com/driver/settings"});
+      await enqueueEmail({dedupeKey: `driver-support-response:${requestId}:${status}:${message}`, category: "driver_support", to: text(data.ownerEmail), ...template, tags: {driver_id: ownerId, support_request_id: requestId}});
+    }
   }
   await writeAdminAuditLog(administrator, {action: "account_support_replied", targetType: "account_support_request", targetId: requestId, reason: message, details: {status, ownerId}});
   return {success: true};

@@ -14,6 +14,13 @@ export type EmailCategory =
   | "store_refund_claim"
   | "store_inventory_digest"
   | "driver_shipday_credentials"
+  | "driver_payout"
+  | "driver_refund_reversal"
+  | "driver_support"
+  | "driver_account_deletion"
+  | "driver_account_status"
+  | "driver_document"
+  | "driver_stripe"
   | "admin_support"
   | "admin_refund"
   | "admin_order_zone";

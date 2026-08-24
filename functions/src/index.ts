@@ -31,6 +31,13 @@ export {
 export {
   storeStripeStatusNotifications,
 } from "./triggers/storeStripeStatusNotifications";
+export {
+  driverAccountDeletionNotifications,
+  driverAccountNotifications,
+  driverPaymentNotifications,
+  driverRefundReversalNotifications,
+  remindExpiringDriverDocuments,
+} from "./triggers/driverNotifications";
 import * as admin from "firebase-admin";
 import {onCall, HttpsError} from "firebase-functions/v2/https";
 import {onSchedule} from "firebase-functions/v2/scheduler"; 

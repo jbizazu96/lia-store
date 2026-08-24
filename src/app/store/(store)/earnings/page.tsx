@@ -126,6 +126,11 @@ export default function EarningsPage() {
     URL.revokeObjectURL(url);
   };
 
+  const currency = (value: number) => new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+  }).format(value);
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -148,37 +153,33 @@ export default function EarningsPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         {[
           {
             title: "Net Lifetime Earnings",
-            value: `$${stats.totalEarnings.toFixed(2)}`,
+            value: currency(stats.totalEarnings),
             icon: DollarSign,
-            color: "bg-blue-500",
             bgColor: "bg-blue-50",
             textColor: "text-blue-600",
           },
           {
             title: "This Week",
-            value: `$${stats.weeklyEarnings.toFixed(2)}`,
+            value: currency(stats.weeklyEarnings),
             icon: TrendingUp,
-            color: "bg-green-500",
             bgColor: "bg-green-50",
             textColor: "text-green-600",
           },
           {
             title: "Pending LIA Transfer",
-            value: `$${stats.pendingBalance.toFixed(2)}`,
+            value: currency(stats.pendingBalance),
             icon: TrendingDown,
-            color: "bg-yellow-500",
             bgColor: "bg-yellow-50",
             textColor: "text-yellow-600",
           },
           {
             title: "This Month",
-            value: `$${stats.monthlyEarnings.toFixed(2)}`,
+            value: currency(stats.monthlyEarnings),
             icon: Calendar,
-            color: "bg-purple-500",
             bgColor: "bg-purple-50",
             textColor: "text-purple-600",
           },
@@ -188,15 +189,15 @@ export default function EarningsPage() {
             initial={{opacity: 0, y: 20}}
             animate={{opacity: 1, y: 0}}
             transition={{delay: index * 0.05}}
-            className="bg-white rounded-2xl p-6 shadow-sm"
+            className="min-w-0 overflow-hidden rounded-xl border border-gray-100 bg-white p-2.5 shadow-sm"
           >
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-sm text-gray-500">{stat.title}</p>
-                <p className="text-2xl font-bold text-gray-800 mt-1">{stat.value}</p>
+            <div className="flex min-w-0 items-start justify-between gap-1.5">
+              <div className="min-w-0">
+                <p className="text-[11px] leading-tight text-gray-500">{stat.title}</p>
+                <p className="mt-0.5 truncate text-lg font-bold tabular-nums text-gray-800" title={stat.value}>{stat.value}</p>
               </div>
-              <div className={`${stat.bgColor} p-3 rounded-xl`}>
-                <stat.icon className={`w-6 h-6 ${stat.textColor}`} />
+              <div className={`${stat.bgColor} shrink-0 rounded-lg p-1.5`}>
+                <stat.icon className={`h-3.5 w-3.5 ${stat.textColor}`} />
               </div>
             </div>
           </motion.div>

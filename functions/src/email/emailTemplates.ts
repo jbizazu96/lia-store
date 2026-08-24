@@ -175,3 +175,29 @@ export function driverShipdayCredentialsEmail(input: {driverName: string; email:
   const text = `Hi ${name}, your LIA driver application was approved.\n\nUse the Shipday Driver app.\nEmail: ${input.email}\nTemporary password: ${input.temporaryPassword}\n\nSign in and change this temporary password immediately. Never share it.`;
   return {subject: title, text, html: layout({title, preheader: "Your approved LIA driver account is ready for Shipday.", body})};
 }
+
+export function driverAccountActivityEmail(input: {
+  driverName: string;
+  title: string;
+  summary: string;
+  badge: string;
+  actionLabel: string;
+  url: string;
+}) {
+  const name = input.driverName.trim() || "Driver";
+  const title = input.title.trim() || "Driver account update";
+  const summary = input.summary.trim() || "There is an update to your LIA driver account.";
+  const badge = input.badge.trim() || "DRIVER UPDATE";
+  const body = `<div style="display:inline-block;padding:6px 10px;border-radius:999px;background:#fff7ed;color:${brandDark};font-size:12px;font-weight:800">${escapeHtml(badge)}</div><p style="margin:18px 0 0;line-height:1.65;color:#374151">Hi ${escapeHtml(name)}, ${escapeHtml(summary)}</p><p style="margin:16px 0 0;font-size:13px;line-height:1.6;color:${muted}">Open your protected LIA driver workspace for the current status and additional details.</p>`;
+  const text = `Hi ${name}, ${summary}\n\nOpen your protected LIA driver workspace: ${input.url}`;
+  return {
+    subject: title,
+    text,
+    html: layout({
+      title,
+      preheader: summary,
+      body,
+      action: {label: input.actionLabel, url: input.url},
+    }),
+  };
+}
