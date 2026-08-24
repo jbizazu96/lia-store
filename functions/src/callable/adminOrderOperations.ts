@@ -69,9 +69,25 @@ function listItem(document: FirebaseFirestore.QueryDocumentSnapshot) {
 export const getAdminOrders = onCall({region: "us-central1"}, async (request) => {
   await requireAdminPermission(request, "orders");
   const input = record(request.data); const status = text(input.status) || "all"; const exception = text(input.exception) || "all";
-  const snapshot = await db.collection("orders").where("checkoutStatus", "==", "confirmed").orderBy("createdAt", "desc").limit(100).get();
-  const orders = snapshot.docs.map(listItem).filter((item) => (status === "all" || item.status === status) && (exception === "all" || item.exceptions.includes(exception)));
-  return {orders};
+  const cursorId = text(input.cursor);
+  let cursor = cursorId ? await db.collection("orders").doc(cursorId).get() : null;
+  const orders: ReturnType<typeof listItem>[] = [];
+  let exhausted = false;
+  while (orders.length < 50 && !exhausted) {
+    let query = db.collection("orders").where("checkoutStatus", "==", "confirmed").orderBy("createdAt", "desc").limit(100);
+    if (cursor?.exists) query = query.startAfter(cursor);
+    const snapshot = await query.get();
+    let consumed = 0;
+    for (const document of snapshot.docs) {
+      consumed += 1;
+      cursor = document;
+      const item = listItem(document);
+      if ((status === "all" || item.status === status) && (exception === "all" || item.exceptions.includes(exception))) orders.push(item);
+      if (orders.length >= 50) break;
+    }
+    exhausted = consumed === snapshot.size && snapshot.size < 100;
+  }
+  return {orders, nextCursor: exhausted ? null : cursor?.id ?? null};
 });
 
 export const getAdminOrder = onCall({region: "us-central1"}, async (request) => {

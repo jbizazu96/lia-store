@@ -26,7 +26,7 @@ export const ADMIN_PERMISSION_LABELS: Record<AdminPermission, string> = {
   drivers: "Driver applications",
   customers: "Customers",
   delivery_zones: "Delivery zones",
-  product_categories: "Product categories",
+  product_categories: "Catalog management",
   reports: "Reports",
   deletion_requests: "Deletion requests",
   orders: "Orders and delivery",

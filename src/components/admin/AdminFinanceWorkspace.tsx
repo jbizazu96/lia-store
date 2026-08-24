@@ -13,7 +13,6 @@
 import {useEffect, useState} from "react";
 import {AlertTriangle, Banknote, CircleDollarSign, LoaderCircle, RotateCcw} from "lucide-react";
 import {adminWorkspaceClientService} from "@/services/admin/adminWorkspaceClientService";
-import Link from "next/link";
 import type {AdminFinanceOverview} from "@/types/adminWorkspace";
 
 type Tab = "transfers" | "settlements" | "refunds";
@@ -27,14 +26,15 @@ export function AdminFinanceWorkspace() {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  useEffect(() => { void (async () => { try { setData(await adminWorkspaceClientService.getFinanceOverview()); } catch (reason) { setError(reason instanceof Error ? reason.message : "Unable to load financial records."); } finally { setLoading(false); } })(); }, []);
+  const load = async () => { try { setLoading(true); setError(""); setData(await adminWorkspaceClientService.getFinanceOverview()); } catch (reason) { setError(reason instanceof Error ? reason.message : "Unable to load financial records."); } finally { setLoading(false); } };
+  useEffect(() => { void load(); }, []);
   if (loading) return <div className="flex min-h-64 items-center justify-center"><LoaderCircle className="h-8 w-8 animate-spin text-orange-600"/></div>;
-  if (error || !data) return <p className="rounded-xl border border-red-100 bg-red-50 p-4 text-sm text-red-700">{error || "Financial records are unavailable."}</p>;
+  if (error || !data) return <div className="rounded-xl border border-red-100 bg-red-50 p-4 text-sm text-red-700"><p>{error || "Financial records are unavailable."}</p><button data-admin-read-action type="button" onClick={() => void load()} className="mt-3 rounded-full bg-red-700 px-4 py-2 font-bold text-white">Try again</button></div>;
   const matches = (...values: Array<string | null>) => { const query = search.trim().toLowerCase(); return !query || values.some((value) => (value ?? "").toLowerCase().includes(query)); };
   const transfers = data.transfers.filter((item) => matches(item.orderNumber, item.orderId, item.recipientType, item.status, item.recipientId));
   const refunds = data.refunds.filter((item) => matches(item.orderNumber, item.orderId, item.scope, item.reason, item.status));
   const settlements = data.settlements.filter((item) => matches(item.orderNumber, item.orderId, item.status));
-  return <section><div className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-sm font-bold tracking-wide text-orange-600">FINANCE</p><h1 className="mt-1 text-3xl font-bold tracking-tight">Payouts, transfers & refunds</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">Read-only financial oversight. Transfer obligations are created after delivery; Stripe processing remains in the protected backend.</p></div><Link href="/admin/finance/lia-report" className="rounded-xl bg-orange-600 px-4 py-2.5 text-sm font-bold text-white">View LIA report</Link></div>
+  return <section><div><p className="text-sm font-bold tracking-wide text-orange-600">FINANCE</p><h1 className="mt-1 text-3xl font-bold tracking-tight">Payouts, transfers & refunds</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">Read-only financial oversight. Transfer obligations are created after delivery; Stripe processing remains in the protected backend.</p></div>
     <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><Metric icon={<Banknote/>} label="Completed payouts" value={cash(data.metrics.completedTransferAmount)} tone="text-green-700 bg-green-50"/><Metric icon={<CircleDollarSign/>} label="Pending payouts" value={cash(data.metrics.pendingTransferAmount)} tone="text-blue-700 bg-blue-50"/><Metric icon={<AlertTriangle/>} label="Failed transfers" value={String(data.metrics.failedTransfers)} tone="text-red-700 bg-red-50"/><Metric icon={<RotateCcw/>} label="Pending refunds" value={String(data.metrics.pendingRefunds)} tone="text-amber-800 bg-amber-50"/></div>
     <div className="mt-7 flex flex-wrap gap-2">{(["transfers", "settlements", "refunds"] as Tab[]).map((value) => <button data-admin-read-action key={value} type="button" onClick={() => setTab(value)} className={"rounded-full px-4 py-2 text-sm font-bold capitalize " + (tab === value ? "bg-orange-600 text-white" : "bg-white text-slate-600 ring-1 ring-slate-200")}>{value}</button>)}</div>
     <label className="mt-5 block max-w-lg text-sm font-bold text-slate-700">Search finance records<input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Order number, type, status, recipient…" className="mt-2 block w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 font-medium"/></label>

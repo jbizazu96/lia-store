@@ -33,6 +33,14 @@ const db = getFirestore("default");
 const STORE_PRODUCT_INDEX_VERSION = 2;
 const DEFAULT_PRODUCT_PAGE_SIZE = 25;
 const MAXIMUM_PRODUCT_PAGE_SIZE = 50;
+const DEFAULT_LOW_STOCK_THRESHOLD = 10;
+
+async function configuredLowStockThreshold(): Promise<number> {
+  const value = Number((await db.collection("settings").doc("productCatalog").get()).data()?.lowStockThreshold);
+  return Number.isInteger(value) && value >= 0 && value <= 100_000
+    ? value
+    : DEFAULT_LOW_STOCK_THRESHOLD;
+}
 
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -360,6 +368,7 @@ export const mutateStoreProduct = onCall({ region: "us-central1" }, async (reque
   const input = record(request.data);
   const action = text(input.action, 40);
   const store = await ownedStore(request.auth.uid);
+  const lowStockThreshold = await configuredLowStockThreshold();
   if (action === "create" || action === "duplicate") {
     await enforceCallableAbuseProtection({
       operation: `store-product-${action}`,
@@ -371,6 +380,7 @@ export const mutateStoreProduct = onCall({ region: "us-central1" }, async (reque
   }
   if (action === "create") {
     const data = editableProductData(input.product);
+    data.lowStockThreshold = lowStockThreshold;
     data.sku = normalizedSku(data.sku);
     await requireConfiguredCategory(data.category);
     await requireConfiguredSizeUnit(data.size);
@@ -417,7 +427,7 @@ export const mutateStoreProduct = onCall({ region: "us-central1" }, async (reque
         const current = snapshot.data() ?? {};
         const stock = row.stock === undefined || row.stock === "" ? Number(current.stock) : Math.floor(nonNegativeNumber(Number(row.stock), "Product stock"));
         const price = row.price === undefined || row.price === "" ? Number(current.price) : nonNegativeNumber(Number(row.price), "Product price");
-        transaction.update(snapshot.ref, {stock, price, inventoryValue: stock * price, updatedAt: FieldValue.serverTimestamp()});
+        transaction.update(snapshot.ref, {stock, price, lowStockThreshold, isLowStock: isConfiguredLowStock(stock, lowStockThreshold), inventoryValue: stock * price, updatedAt: FieldValue.serverTimestamp()});
         transaction.create(db.collection("storeInventoryAuditLogs").doc(), inventoryAuditData({storeId: store.id, productId: snapshot.id, productName: text(current.name, 200), action: "csv_inventory_update", actorUid: request.auth!.uid, previous: {stock: current.stock, price: current.price}, next: {stock, price}}));
       });
     });
@@ -460,6 +470,7 @@ export const mutateStoreProduct = onCall({ region: "us-central1" }, async (reque
 
   if (action === "duplicate") {
     const data = editableProductData(existing.data());
+    data.lowStockThreshold = lowStockThreshold;
     data.sku = "";
     await requireConfiguredCategory(data.category);
     const created = await db.collection("products").add({
@@ -489,6 +500,7 @@ export const mutateStoreProduct = onCall({ region: "us-central1" }, async (reque
 
   if (action === "update") {
     const updates = editableProductData(input.product, false);
+    updates.lowStockThreshold = lowStockThreshold;
     if (updates.sku !== undefined) updates.sku = normalizedSku(updates.sku);
     if (updates.category !== undefined) await requireConfiguredCategory(updates.category);
     if (updates.size !== undefined) {

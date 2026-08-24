@@ -52,12 +52,18 @@ export const backfillAdminPlatformDailyReports = onCall(
   },
   async (request) => {
     const administrator = await requireAdminPermission(request, "reports", "write");
+    const input = request.data && typeof request.data === "object" ? request.data as Record<string, unknown> : {};
+    const orderCursor = typeof input.orderCursor === "string" ? input.orderCursor : "";
+    const customerCursor = typeof input.customerCursor === "string" ? input.customerCursor : "";
+    const ordersDone = input.ordersDone === true;
+    const customersDone = input.customersDone === true;
+    let orderQuery = db.collection("orders").orderBy(admin.firestore.FieldPath.documentId()).limit(MAX_BACKFILL_DOCUMENTS);
+    let customerQuery = db.collection("users").where("accountType", "==", "customer").orderBy(admin.firestore.FieldPath.documentId()).limit(MAX_BACKFILL_DOCUMENTS);
+    if (orderCursor) orderQuery = orderQuery.startAfter(orderCursor);
+    if (customerCursor) customerQuery = customerQuery.startAfter(customerCursor);
     const [orders, customers] = await Promise.all([
-      db.collection("orders").limit(MAX_BACKFILL_DOCUMENTS).get(),
-      db.collection("users")
-        .where("accountType", "==", "customer")
-        .limit(MAX_BACKFILL_DOCUMENTS)
-        .get(),
+      ordersDone ? Promise.resolve({docs: [], size: 0} as unknown as FirebaseFirestore.QuerySnapshot) : orderQuery.get(),
+      customersDone ? Promise.resolve({docs: [], size: 0} as unknown as FirebaseFirestore.QuerySnapshot) : customerQuery.get(),
     ]);
 
     await inBatches(orders.docs, async (document) => {
@@ -86,6 +92,8 @@ export const backfillAdminPlatformDailyReports = onCall(
       ordersScanned: orders.size,
       customersScanned: customers.size,
       limited,
+      nextOrderCursor: orders.size === MAX_BACKFILL_DOCUMENTS ? orders.docs.at(-1)?.id ?? null : null,
+      nextCustomerCursor: customers.size === MAX_BACKFILL_DOCUMENTS ? customers.docs.at(-1)?.id ?? null : null,
     };
   }
 );

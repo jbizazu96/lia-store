@@ -25,8 +25,8 @@ async function call<T>(name: string, data?: unknown): Promise<T> {
 }
 
 export const adminNotificationClientService = {
-  getNotifications: () => call<{notifications: AdminNotification[]}>(
-    "getAdminNotifications"
+  getNotifications: (cursor?: string) => call<{notifications: AdminNotification[]; unreadCount: number; nextCursor: string | null}>(
+    "getAdminNotifications", cursor ? {cursor} : undefined
   ),
 
   markRead: async (notificationId: string) => {

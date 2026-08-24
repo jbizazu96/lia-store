@@ -172,8 +172,15 @@ export interface AdminFinanceOverview {
 export interface AdminLiaFinanceReport {
   window: {allocationCount: number; limited: boolean};
   revenue: {grossCustomerPayments: number; grossPlatformRevenue: number; refundAmount: number; platformRefundImpact: number; stripeProcessingFees: number; netPlatformRevenue: number; salesTaxCollected: number; driverTipsCollected: number; participantTransfersCompleted: number};
+  stores: Array<{
+    storeId: string; storeName: string; orderCount: number;
+    grossCustomerPayments: number; grossProductSales: number; salesTaxCollected: number;
+    storeCommission: number; storeAllocation: number; storeRefundReversals: number; netStoreAllocation: number;
+    driverAllocation: number; driverTips: number; customerRefunds: number;
+    liaRevenue: number; liaRefundImpact: number; stripeProcessingFees: number; netLiaRevenue: number;
+  }>;
 }
-export interface AdminCommissionSettings { defaultStoreCommissionBasisPoints: number; defaultDriverCommissionBasisPoints: number; stores: Array<{id: string; name: string; overrideBasisPoints: number | null}>; }
+export interface AdminCommissionSettings { defaultStoreCommissionBasisPoints: number; defaultDriverCommissionBasisPoints: number; stores: Array<{id: string; name: string; overrideBasisPoints: number | null}>; nextCursor: string | null; }
 
 export interface AdminStoreApplicationPolicy {
   requiredDocuments: {

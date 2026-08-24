@@ -10,6 +10,9 @@ import {writeAdminAuditLog} from "../admin/adminAuditLogService";
 if (admin.apps.length === 0) admin.initializeApp();
 const db = getFirestore("default");
 const MAX_ICON_BYTES = 3 * 1024 * 1024;
+const CATALOG_POLICY_REFERENCE = db.collection("settings").doc("productCatalog");
+const DEFAULT_LOW_STOCK_THRESHOLD = 10;
+const DEFAULT_INVENTORY_EMAILS_PER_DAY = 1;
 const DEFAULT_SIZE_UNITS = [
   {id: "each", label: "Each"}, {id: "oz", label: "Ounce (oz)"},
   {id: "lb", label: "Pound (lb)"}, {id: "g", label: "Gram (g)"},
@@ -49,6 +52,60 @@ async function sizeUnits() {
     label: text(document.data().label, 80) || document.id,
   })).sort((first, second) => first.label.localeCompare(second.label));
 }
+
+function wholeNumber(value: unknown, fallback: number, minimum: number, maximum: number): number {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed >= minimum && parsed <= maximum ? parsed : fallback;
+}
+
+export const getAdminProductCatalogPolicy = onCall({region: "us-central1"}, async (request) => {
+  await requireAdminPermission(request, "product_categories");
+  const policy = (await CATALOG_POLICY_REFERENCE.get()).data() ?? {};
+  return {
+    lowStockThreshold: wholeNumber(policy.lowStockThreshold, DEFAULT_LOW_STOCK_THRESHOLD, 0, 100_000),
+    inventoryEmailsPerDay: wholeNumber(policy.inventoryEmailsPerDay, DEFAULT_INVENTORY_EMAILS_PER_DAY, 0, 4),
+  };
+});
+
+export const saveAdminProductCatalogPolicy = onCall({region: "us-central1", timeoutSeconds: 540}, async (request) => {
+  const administrator = await requireAdminPermission(request, "product_categories", "write");
+  const input = record(request.data);
+  const lowStockThreshold = wholeNumber(input.lowStockThreshold, -1, 0, 100_000);
+  const inventoryEmailsPerDay = wholeNumber(input.inventoryEmailsPerDay, -1, 0, 4);
+  if (lowStockThreshold < 0) throw new HttpsError("invalid-argument", "Enter a low-stock threshold from 0 to 100,000.");
+  if (inventoryEmailsPerDay < 0) throw new HttpsError("invalid-argument", "Choose between 0 and 4 inventory emails per day.");
+
+  const existing = (await CATALOG_POLICY_REFERENCE.get()).data() ?? {};
+  let productsUpdated = 0;
+  if (wholeNumber(existing.lowStockThreshold, DEFAULT_LOW_STOCK_THRESHOLD, 0, 100_000) !== lowStockThreshold) {
+    const products = await db.collection("products").select("stock").get();
+    const writer = db.bulkWriter();
+    products.docs.forEach((product) => {
+      const stock = Math.max(0, Math.floor(Number(product.data().stock) || 0));
+      writer.update(product.ref, {
+        lowStockThreshold,
+        isLowStock: stock > 0 && stock <= lowStockThreshold,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+    });
+    await writer.close();
+    productsUpdated = products.size;
+  }
+
+  await CATALOG_POLICY_REFERENCE.set({
+    lowStockThreshold,
+    inventoryEmailsPerDay,
+    updatedAt: FieldValue.serverTimestamp(),
+    updatedBy: administrator.uid,
+  }, {merge: true});
+  await writeAdminAuditLog(administrator, {
+    action: "product_catalog_policy.updated",
+    targetType: "setting",
+    targetId: "productCatalog",
+    details: {lowStockThreshold, inventoryEmailsPerDay, productsUpdated},
+  });
+  return {success: true, productsUpdated};
+});
 
 export const getStoreProductSizeUnits = onCall({region: "us-central1"}, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in to load product size units.");

@@ -25,6 +25,7 @@ import {
   Users,
   ClipboardList,
 } from "lucide-react";
+import Link from "next/link";
 import {
   PageContentSkeleton,
 } from "@/components/ui/PageContentSkeleton";
@@ -36,11 +37,11 @@ import type {
 } from "@/types/adminWorkspace";
 
 const cards = (overview: AdminWorkspaceOverview) => [
-  {label: "Store applications", value: overview.reviewQueue.pendingStoreApplications, icon: Building2, tone: "text-orange-700 bg-orange-50"},
-  {label: "Driver applications", value: overview.reviewQueue.pendingDriverApplications, icon: Truck, tone: "text-blue-700 bg-blue-50"},
-  {label: "Deletion requests", value: overview.reviewQueue.pendingDeletionRequests, icon: FileWarning, tone: "text-violet-700 bg-violet-50"},
-  {label: "Failed transfers", value: overview.reviewQueue.failedTransfers, icon: CreditCard, tone: "text-red-700 bg-red-50"},
-  {label: "Pending refunds", value: overview.reviewQueue.pendingRefunds, icon: AlertTriangle, tone: "text-amber-800 bg-amber-50"},
+  {label: "Store applications", value: overview.reviewQueue.pendingStoreApplications, href: "/admin/store-applications?status=pending_review", icon: Building2, tone: "text-orange-700 bg-orange-50"},
+  {label: "Driver applications", value: overview.reviewQueue.pendingDriverApplications, href: "/admin/driver-applications?status=pending_review", icon: Truck, tone: "text-blue-700 bg-blue-50"},
+  {label: "Deletion requests", value: overview.reviewQueue.pendingDeletionRequests, href: "/admin/deletion-requests?status=pending_review", icon: FileWarning, tone: "text-violet-700 bg-violet-50"},
+  {label: "Failed transfers", value: overview.reviewQueue.failedTransfers, href: "/admin/finance", icon: CreditCard, tone: "text-red-700 bg-red-50"},
+  {label: "Pending refunds", value: overview.reviewQueue.pendingRefunds, href: "/admin/refund-claims", icon: AlertTriangle, tone: "text-amber-800 bg-amber-50"},
 ];
 
 const totalCards = (overview: AdminWorkspaceOverview) => [
@@ -53,6 +54,10 @@ const totalCards = (overview: AdminWorkspaceOverview) => [
 export default function AdminOverviewPage() {
   const [overview, setOverview] = useState<AdminWorkspaceOverview | null>(null);
   const [error, setError] = useState("");
+  const load = () => {
+    setError("");
+    void adminWorkspaceClientService.getOverview().then(setOverview).catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "Unable to load the administrative review queue."));
+  };
 
   useEffect(() => {
     let active = true;
@@ -83,6 +88,7 @@ export default function AdminOverviewPage() {
         <div className="w-full rounded-2xl border border-red-100 bg-white p-6 shadow-sm">
           <h1 className="text-xl font-bold">Unable to load Admin overview</h1>
           <p className="mt-2 text-sm text-slate-600">{error}</p>
+          <button data-admin-read-action type="button" onClick={load} className="mt-5 rounded-full bg-orange-600 px-5 py-2.5 text-sm font-bold text-white">Try again</button>
         </div>
       </section>
     );
@@ -111,11 +117,11 @@ export default function AdminOverviewPage() {
         {cards(loadedOverview).map((card) => {
           const Icon = card.icon;
           return (
-            <article key={card.label} className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-100">
+            <Link key={card.label} href={card.href} className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-100 transition hover:-translate-y-0.5 hover:ring-orange-200">
               <div className={`inline-flex rounded-xl p-2.5 ${card.tone}`}><Icon className="h-5 w-5" /></div>
               <p className="mt-4 text-3xl font-bold text-slate-950">{card.value}</p>
               <p className="mt-1 text-sm font-medium text-slate-500">{card.label}</p>
-            </article>
+            </Link>
           );
         })}
       </div>
@@ -125,7 +131,7 @@ export default function AdminOverviewPage() {
           <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-orange-700" />
           <div>
             <h2 className="font-bold text-slate-900">Admin actions are server protected</h2>
-            <p className="mt-1 text-sm leading-6 text-slate-600">Approvals, suspensions, refunds, payouts, and deletion decisions will be added as audited server actions. This dashboard does not expose private application records to the browser.</p>
+            <p className="mt-1 text-sm leading-6 text-slate-600">Approvals, suspensions, refunds, financial controls, and deletion decisions run through permission-checked Functions and create administrator audit records. Private operational records are not directly exposed through browser Firestore access.</p>
           </div>
         </div>
       </article>

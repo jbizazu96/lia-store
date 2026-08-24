@@ -89,6 +89,7 @@ export function ApplicationReviewWorkspace({
   const router = useRouter();
   const [status, setStatus] = useState<AdminApplicationStatus>(initialStatus);
   const [applications, setApplications] = useState<AdminApplicationListItem[]>([]);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [counts, setCounts] = useState<AdminApplicationCounts>({
     pending_review: 0,
     approved: 0,
@@ -106,15 +107,16 @@ export function ApplicationReviewWorkspace({
   const [suspensionTarget, setSuspensionTarget] = useState(false);
   const [approvedRadius, setApprovedRadius] = useState("");
 
-  const loadApplications = async () => {
+  const loadApplications = async (cursor?: string) => {
     if (applicationId) return;
     setLoading(true);
     setError("");
     try {
       const result = type === "store"
-        ? await adminWorkspaceClientService.getStoreApplications(status)
-        : await adminWorkspaceClientService.getDriverApplications(status);
-      setApplications(result.applications);
+        ? await adminWorkspaceClientService.getStoreApplications(status, cursor)
+        : await adminWorkspaceClientService.getDriverApplications(status, cursor);
+      setApplications((current) => cursor ? [...current, ...result.applications] : result.applications);
+      setNextCursor(result.nextCursor);
       setCounts(result.counts);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Unable to load applications.");
@@ -362,7 +364,7 @@ export function ApplicationReviewWorkspace({
       <div className={`mt-6 grid gap-6 ${applicationId ? "max-w-5xl" : "xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.4fr)]"}`}>
         {!applicationId && <section className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-100">
           <div className="border-b border-slate-100 px-5 py-4"><h2 className="font-bold">{statuses.find((item) => item.value === status)?.label}</h2></div>
-          {loading ? <div className="p-5 text-sm text-slate-500">Loading applications…</div> : applications.length === 0 ? <div className="p-8 text-center text-sm text-slate-500">No applications in this review queue.</div> : <div className="divide-y divide-slate-100">{applications.map((application) => <button key={application.id} type="button" onClick={() => openApplication(application)} className="flex w-full items-center gap-3 px-5 py-4 text-left transition hover:bg-orange-50/40"><div className="min-w-0 flex-1"><p className="truncate font-bold text-slate-900">{application.name}</p><p className="mt-1 truncate text-sm text-slate-500">{type === "store" ? application.ownerName : "Applicant"} · {[application.city, application.state].filter(Boolean).join(", ") || "Location pending"}</p><p className="mt-1 text-xs text-slate-400">Submitted {displayDate(application.submittedAt)}</p></div><ChevronRight className="h-5 w-5 shrink-0 text-slate-400" /></button>)}</div>}
+          {loading ? <div className="p-5 text-sm text-slate-500">Loading applications…</div> : applications.length === 0 ? <div className="p-8 text-center text-sm text-slate-500">No applications in this review queue.</div> : <><div className="divide-y divide-slate-100">{applications.map((application) => <button data-admin-read-action key={application.id} type="button" onClick={() => openApplication(application)} className="flex w-full items-center gap-3 px-5 py-4 text-left transition hover:bg-orange-50/40"><div className="min-w-0 flex-1"><p className="truncate font-bold text-slate-900">{application.name}</p><p className="mt-1 truncate text-sm text-slate-500">{type === "store" ? application.ownerName : "Applicant"} · {[application.city, application.state].filter(Boolean).join(", ") || "Location pending"}</p><p className="mt-1 text-xs text-slate-400">Submitted {displayDate(application.submittedAt)}</p></div><ChevronRight className="h-5 w-5 shrink-0 text-slate-400" /></button>)}</div>{nextCursor && <div className="border-t border-slate-100 p-4"><button data-admin-read-action type="button" onClick={() => void loadApplications(nextCursor)} className="w-full rounded-full border border-slate-200 px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50">Load more</button></div>}</>}
         </section>}
 
         <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-100 sm:p-6">

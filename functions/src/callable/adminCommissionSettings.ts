@@ -34,13 +34,18 @@ function basisPoints(value: unknown): number {
 
 export const getAdminCommissionSettings = onCall({region: "us-central1"}, async (request) => {
   await requireAdminPermission(request, "settings");
+  const input = request.data && typeof request.data === "object" ? request.data as Record<string, unknown> : {};
+  const cursorId = text(input.cursor);
+  const cursor = cursorId ? await db.collection("stores").doc(cursorId).get() : null;
+  let storeQuery = db.collection("stores").orderBy("name").limit(50);
+  if (cursor?.exists) storeQuery = storeQuery.startAfter(cursor);
   const [settings, stores] = await Promise.all([
     db.collection("settings").doc("marketplacePayment").get(),
-    db.collection("stores").orderBy("name").limit(100).get(),
+    storeQuery.get(),
   ]);
   const defaultStoreCommissionBasisPoints = typeof settings.data()?.defaultStoreCommissionBasisPoints === "number" ? settings.data()!.defaultStoreCommissionBasisPoints : DEFAULT_STORE_COMMISSION_BPS;
   const defaultDriverCommissionBasisPoints = typeof settings.data()?.defaultDriverCommissionBasisPoints === "number" ? settings.data()!.defaultDriverCommissionBasisPoints : DEFAULT_DRIVER_COMMISSION_BPS;
-  return {defaultStoreCommissionBasisPoints, defaultDriverCommissionBasisPoints, stores: stores.docs.map((store) => ({id: store.id, name: text(store.data().name) || "Unnamed store", overrideBasisPoints: typeof store.data().paymentSettings?.storeCommissionBasisPoints === "number" ? store.data().paymentSettings.storeCommissionBasisPoints : null}))};
+  return {defaultStoreCommissionBasisPoints, defaultDriverCommissionBasisPoints, stores: stores.docs.map((store) => ({id: store.id, name: text(store.data().name) || "Unnamed store", overrideBasisPoints: typeof store.data().paymentSettings?.storeCommissionBasisPoints === "number" ? store.data().paymentSettings.storeCommissionBasisPoints : null})), nextCursor: stores.size === 50 ? stores.docs.at(-1)?.id ?? null : null};
 });
 export const saveAdminDefaultDriverCommission = onCall({region: "us-central1"}, async (request) => {
   const administrator = await requireAdminPermission(request, "settings", "write");

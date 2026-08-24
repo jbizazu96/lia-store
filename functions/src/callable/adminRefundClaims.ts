@@ -112,25 +112,44 @@ function summary(
 }
 
 export const getAdminRefundClaims = onCall({region: "us-central1"}, async (request) => {
-  await requireAdminPermission(request, "refunds"); const requestedStatus = text(record(request.data).status) || "pending_review";
+  await requireAdminPermission(request, "refunds"); const input = record(request.data); const requestedStatus = text(input.status) || "pending_review"; let cursor = text(input.cursor);
   const valid = new Set(["pending_review", "approved", "rejected", "all"]); if (!valid.has(requestedStatus)) throw new HttpsError("invalid-argument", "Choose a valid claim status.");
-  const snapshot = requestedStatus === "all" ? await db.collection("refundClaims").orderBy("createdAt", "desc").limit(100).get() : await db.collection("refundClaims").where("status", "==", requestedStatus).limit(100).get();
-  const orders = snapshot.docs.length
+  const documents: FirebaseFirestore.QueryDocumentSnapshot[] = [];
+  let exhausted = false;
+  while (documents.length < 40 && !exhausted) {
+    let query = db.collection("refundClaims").orderBy(admin.firestore.FieldPath.documentId()).limit(100);
+    if (cursor) query = query.startAfter(cursor);
+    const page = await query.get();
+    let consumed = 0;
+    for (const document of page.docs) {
+      consumed += 1;
+      cursor = document.id;
+      if (requestedStatus === "all" || status(document.data().status) === requestedStatus) documents.push(document);
+      if (documents.length >= 40) break;
+    }
+    exhausted = consumed === page.size && page.size < 100;
+  }
+  const orders = documents.length
     ? await db.getAll(
-      ...snapshot.docs.map((document) =>
+      ...documents.map((document) =>
         db.collection("orders").doc(text(document.data().orderId))
       )
     )
     : [];
-  const all = snapshot.docs
+  const all = documents
     .map((document, index) =>
       summary(document, record(orders[index]?.data()))
     )
     .sort((left, right) =>
       (right.createdAt ?? "").localeCompare(left.createdAt ?? "")
     );
-  const countsSnapshot = await db.collection("refundClaims").limit(500).get(); const counts = {pending_review: 0, approved: 0, rejected: 0}; countsSnapshot.docs.forEach((document) => { const value = status(document.data().status); if (value in counts) counts[value as keyof typeof counts] += 1; });
-  return {claims: all, counts, limited: snapshot.size === 100 || countsSnapshot.size === 500};
+  const [pending, approved, rejected] = await Promise.all([
+    db.collection("refundClaims").where("status", "==", "pending_review").count().get(),
+    db.collection("refundClaims").where("status", "==", "approved").count().get(),
+    db.collection("refundClaims").where("status", "==", "rejected").count().get(),
+  ]);
+  const counts = {pending_review: pending.data().count, approved: approved.data().count, rejected: rejected.data().count};
+  return {claims: all, counts, limited: !exhausted, nextCursor: exhausted ? null : cursor};
 });
 
 export const getAdminRefundClaim = onCall({region: "us-central1"}, async (request) => {

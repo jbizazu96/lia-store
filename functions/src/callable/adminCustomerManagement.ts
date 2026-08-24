@@ -33,7 +33,8 @@ if (admin.apps.length === 0) {
 }
 
 const db = getFirestore("default");
-const MAX_CUSTOMERS = 100;
+const CUSTOMER_PAGE_SIZE = 40;
+const CUSTOMER_SCAN_SIZE = 100;
 const MAX_RECENT_ORDERS = 20;
 
 type Data = Record<string, unknown>;
@@ -143,32 +144,46 @@ export const getAdminCustomers = onCall(
     const input = record(request.data);
     const search = text(input.search).toLowerCase();
     const status = text(input.status) || "all";
+    let cursor = text(input.cursor);
 
     if (!["all", "active", "suspended"].includes(status)) {
       throw new HttpsError("invalid-argument", "Choose a valid account status.");
     }
 
-    const snapshot = await db.collection("users")
-      .where("accountType", "==", "customer")
-      .limit(MAX_CUSTOMERS)
-      .get();
-    const all = snapshot.docs.map(customerListItem);
+    const [total, suspended] = await Promise.all([
+      db.collection("users").where("accountType", "==", "customer").count().get(),
+      db.collection("users").where("accountType", "==", "customer").where("isActive", "==", false).count().get(),
+    ]);
     const counts = {
-      total: all.length,
-      active: all.filter((item) => item.accountStatus === "active").length,
-      suspended: all.filter((item) => item.accountStatus === "suspended").length,
+      total: total.data().count,
+      active: total.data().count - suspended.data().count,
+      suspended: suspended.data().count,
     };
-    const customers = all
-      .filter((item) => status === "all" || item.accountStatus === status)
-      .filter((item) => !search || [
-        item.id,
-        item.name,
-        item.email,
-        item.phone,
-      ].some((value) => value.toLowerCase().includes(search)))
-      .sort((left, right) => (right.createdAt ?? "").localeCompare(left.createdAt ?? ""));
+    const customers: ReturnType<typeof customerListItem>[] = [];
+    let exhausted = false;
+    while (customers.length < CUSTOMER_PAGE_SIZE && !exhausted) {
+      let query = db.collection("users")
+        .where("accountType", "==", "customer")
+        .orderBy(admin.firestore.FieldPath.documentId())
+        .limit(CUSTOMER_SCAN_SIZE);
+      if (cursor) query = query.startAfter(cursor);
+      const snapshot = await query.get();
+      let consumed = 0;
+      for (const document of snapshot.docs) {
+        consumed += 1;
+        cursor = document.id;
+        const item = customerListItem(document);
+        const matches = (status === "all" || item.accountStatus === status) && (!search || [
+          item.id, item.name, item.email, item.phone,
+        ].some((value) => value.toLowerCase().includes(search)));
+        if (matches) customers.push(item);
+        if (customers.length >= CUSTOMER_PAGE_SIZE) break;
+      }
+      exhausted = consumed === snapshot.size && snapshot.size < CUSTOMER_SCAN_SIZE;
+    }
+    customers.sort((left, right) => (right.createdAt ?? "").localeCompare(left.createdAt ?? ""));
 
-    return { customers, counts, limited: snapshot.size === MAX_CUSTOMERS };
+    return {customers, counts, limited: !exhausted, nextCursor: exhausted ? null : cursor};
   }
 );
 

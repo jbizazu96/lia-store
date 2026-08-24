@@ -23,7 +23,7 @@ if (admin.apps.length === 0) {
 }
 
 const db = getFirestore("default");
-const MAX_AUDIT_LOGS = 100;
+const MAX_AUDIT_LOGS = 50;
 
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -73,12 +73,30 @@ export const getAdminAuditLogs = onCall(
     await requireMasterAdmin(request);
     const input = record(request.data);
     const search = text(input.search).toLowerCase();
+    const cursorId = text(input.cursor);
+    let cursor = cursorId ? await db.collection("adminAuditLogs").doc(cursorId).get() : null;
+    const logs: Array<ReturnType<typeof mapLog>> = [];
+    let exhausted = false;
+    while (logs.length < MAX_AUDIT_LOGS && !exhausted) {
+      let query = db.collection("adminAuditLogs").orderBy("createdAt", "desc").limit(100);
+      if (cursor?.exists) query = query.startAfter(cursor);
+      const snapshot = await query.get();
+      let consumed = 0;
+      for (const document of snapshot.docs) {
+        consumed += 1;
+        cursor = document;
+        const log = mapLog(document);
+        if (!search || searchable(log).some((value) => value.toLowerCase().includes(search))) logs.push(log);
+        if (logs.length >= MAX_AUDIT_LOGS) break;
+      }
+      exhausted = consumed === snapshot.size && snapshot.size < 100;
+    }
 
-    const snapshot = await db.collection("adminAuditLogs")
-      .orderBy("createdAt", "desc")
-      .limit(MAX_AUDIT_LOGS)
-      .get();
-    const logs = snapshot.docs.map((document) => {
+    return {logs, limited: !exhausted, nextCursor: exhausted ? null : cursor?.id ?? null};
+  }
+);
+
+function mapLog(document: FirebaseFirestore.QueryDocumentSnapshot) {
       const data = document.data();
       const actor = record(data.actor);
       const target = record(data.target);
@@ -99,18 +117,8 @@ export const getAdminAuditLogs = onCall(
         details: safeDetails(data.details),
         createdAt: date(data.createdAt),
       };
-    }).filter((log) => !search || [
-      log.action,
-      log.actor.email,
-      log.target.type,
-      log.target.id,
-      log.reason ?? "",
-      ...Object.entries(log.details).map(([key, value]) => `${key} ${String(value)}`),
-    ].some((value) => value.toLowerCase().includes(search)));
+}
 
-    return {
-      logs,
-      limited: snapshot.size === MAX_AUDIT_LOGS,
-    };
-  }
-);
+function searchable(log: ReturnType<typeof mapLog>): string[] {
+  return [log.action, log.actor.email, log.target.type, log.target.id, log.reason ?? "", ...Object.entries(log.details).map(([key, value]) => `${key} ${String(value)}`)];
+}

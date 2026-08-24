@@ -11,6 +11,6 @@ async function call<T>(name: string, data: Record<string, unknown> = {}): Promis
 
 export const accountSupportClientService = {
   create: (input: {reason: AccountSupportReason; message: string}) => call<{success: boolean; requestId: string}>("createAccountSupportRequest", input),
-  listAdmin: (status = "all") => call<{requests: AccountSupportRequest[]}>("getAdminAccountSupportRequests", {status}),
+  listAdmin: (status = "all", cursor?: string) => call<{requests: AccountSupportRequest[]; nextCursor: string | null}>("getAdminAccountSupportRequests", {status, ...(cursor ? {cursor} : {})}),
   respondAdmin: (input: {requestId: string; message: string; status: "in_review" | "responded" | "resolved"}) => call<{success: boolean}>("respondAdminAccountSupportRequest", input),
 };

@@ -58,8 +58,16 @@ export const getAdminNotifications = onCall(
   {region: "us-central1"},
   async (request) => {
     const administrator = await requireActiveAdmin(request);
-    const snapshot = await db.collection("admins").doc(administrator.uid)
-      .collection("notifications").orderBy("createdAt", "desc").limit(100).get();
+    const input = request.data && typeof request.data === "object" ? request.data as Record<string, unknown> : {};
+    const cursorId = text(input.cursor);
+    const collection = db.collection("admins").doc(administrator.uid).collection("notifications");
+    const cursor = cursorId ? await collection.doc(cursorId).get() : null;
+    let query = collection.orderBy("createdAt", "desc").limit(40);
+    if (cursor?.exists) query = query.startAfter(cursor);
+    const [snapshot, unread] = await Promise.all([
+      query.get(),
+      collection.where("read", "==", false).count().get(),
+    ]);
 
     const notifications = await Promise.all(
       snapshot.docs.map(async (document) => {
@@ -110,6 +118,8 @@ export const getAdminNotifications = onCall(
 
     return {
       notifications,
+      unreadCount: unread.data().count,
+      nextCursor: snapshot.size === 40 ? snapshot.docs.at(-1)?.id ?? null : null,
     };
   }
 );
@@ -139,18 +149,22 @@ export const markAllAdminNotificationsRead = onCall(
   {region: "us-central1"},
   async (request) => {
     const administrator = await requireActiveAdmin(request);
-    const snapshot = await db.collection("admins").doc(administrator.uid)
-      .collection("notifications").get();
-    const unread = snapshot.docs.filter((document) => document.data().read !== true);
-    for (let start = 0; start < unread.length; start += 450) {
+    const collection = db.collection("admins").doc(administrator.uid).collection("notifications");
+    let marked = 0;
+    while (true) {
+      const snapshot = await collection.where("read", "==", false).limit(450).get();
+      const unread = snapshot.docs;
+      if (unread.length === 0) break;
       const batch = db.batch();
-      unread.slice(start, start + 450).forEach((document) => batch.update(document.ref, {
+      unread.forEach((document) => batch.update(document.ref, {
         read: true,
         updatedAt: FieldValue.serverTimestamp(),
       }));
       await batch.commit();
+      marked += unread.length;
+      if (unread.length < 450) break;
     }
-    return {success: true, marked: unread.length};
+    return {success: true, marked};
   },
 );
 

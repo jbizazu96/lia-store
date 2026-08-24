@@ -52,11 +52,15 @@ export default function AdminNotificationsPage() {
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
   const [error, setError] = useState("");
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
 
   const load = () => void adminNotificationClientService
     .getNotifications()
     .then((result) => {
       setNotifications(result.notifications);
+      setUnreadCount(result.unreadCount);
+      setNextCursor(result.nextCursor);
       setError("");
     })
     .catch((reason: unknown) => {
@@ -66,8 +70,10 @@ export default function AdminNotificationsPage() {
 
   useEffect(() => {
     load();
-    const interval = window.setInterval(load, 30_000);
-    return () => window.clearInterval(interval);
+    const refresh = () => { if (document.visibilityState === "visible") load(); };
+    document.addEventListener("visibilitychange", refresh);
+    window.addEventListener("focus", refresh);
+    return () => { document.removeEventListener("visibilitychange", refresh); window.removeEventListener("focus", refresh); };
   }, []);
 
   const openNotification = async (notification: AdminNotification) => {
@@ -77,6 +83,7 @@ export default function AdminNotificationsPage() {
         setNotifications((current) => current.map((item) => item.id === notification.id
           ? {...item, read: true}
           : item));
+        setUnreadCount((current) => Math.max(0, current - 1));
       }
 
       if (notification.deepLink) router.push(notification.deepLink);
@@ -90,6 +97,7 @@ export default function AdminNotificationsPage() {
     try {
       const result = await adminNotificationClientService.clear();
       setNotifications([]);
+      setUnreadCount(0);
       if (result.hasMore) load();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Unable to clear notifications.");
@@ -103,6 +111,7 @@ export default function AdminNotificationsPage() {
     try {
       await adminNotificationClientService.markAllRead();
       setNotifications((current) => current.map((notification) => ({...notification, read: true})));
+      setUnreadCount(0);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Unable to mark notifications as read.");
     } finally {
@@ -112,7 +121,7 @@ export default function AdminNotificationsPage() {
 
   if (loading) return <PageContentSkeleton />;
 
-  const unread = notifications.filter((notification) => !notification.read).length;
+  const unread = unreadCount;
 
   return (
     <section className="mx-auto max-w-3xl">
@@ -181,6 +190,7 @@ export default function AdminNotificationsPage() {
           ))}
         </div>
       )}
+      {nextCursor && <button data-admin-read-action type="button" onClick={() => void adminNotificationClientService.getNotifications(nextCursor).then((result) => { setNotifications((current) => [...current, ...result.notifications]); setNextCursor(result.nextCursor); setUnreadCount(result.unreadCount); }).catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "Unable to load more notifications."))} className="mt-4 rounded-full border border-slate-200 bg-white px-5 py-2.5 text-sm font-bold">Load more notifications</button>}
     </section>
   );
 }

@@ -69,10 +69,25 @@ export const createPublicSupportRequest = onCall({region: "us-central1"}, async 
 
 export const getAdminAccountSupportRequests = onCall({region: "us-central1"}, async (request) => {
   await requireAdminPermission(request, "support");
-  const requestedStatus = text(record(request.data).status) || "all";
-  const snapshot = await db.collection("accountSupportRequests").orderBy("createdAt", "desc").limit(100).get();
-  const requests = snapshot.docs.map((document) => mapRequest(document.id, document.data())).filter((item) => requestedStatus === "all" || item.status === requestedStatus);
-  return {requests};
+  const input = record(request.data); const requestedStatus = text(input.status) || "all"; const cursorId = text(input.cursor);
+  let cursor = cursorId ? await db.collection("accountSupportRequests").doc(cursorId).get() : null;
+  const requests: ReturnType<typeof mapRequest>[] = [];
+  let exhausted = false;
+  while (requests.length < 40 && !exhausted) {
+    let query = db.collection("accountSupportRequests").orderBy("createdAt", "desc").limit(100);
+    if (cursor?.exists) query = query.startAfter(cursor);
+    const snapshot = await query.get();
+    let consumed = 0;
+    for (const document of snapshot.docs) {
+      consumed += 1;
+      cursor = document;
+      const item = mapRequest(document.id, document.data());
+      if (requestedStatus === "all" || item.status === requestedStatus) requests.push(item);
+      if (requests.length >= 40) break;
+    }
+    exhausted = consumed === snapshot.size && snapshot.size < 100;
+  }
+  return {requests, nextCursor: exhausted ? null : cursor?.id ?? null};
 });
 
 export const respondAdminAccountSupportRequest = onCall({region: "us-central1"}, async (request) => {

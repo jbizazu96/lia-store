@@ -104,18 +104,21 @@ export function AdminRefundClaimsWorkspace() {
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
   const [error, setError] = useState("");
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
 
-  const load = async () => {
+  const load = async (cursor?: string) => {
     setLoading(true);
 
     try {
       const result =
         await adminWorkspaceClientService.getRefundClaims(
-          status
+          status,
+          cursor,
         );
 
-      setClaims(result.claims);
+      setClaims((current) => cursor ? [...current, ...result.claims] : result.claims);
       setCounts(result.counts);
+      setNextCursor(result.nextCursor);
     } catch (reason) {
       setError(
         reason instanceof Error
@@ -259,6 +262,7 @@ export function AdminRefundClaimsWorkspace() {
           )}
         </div>
       )}
+      {!loading && nextCursor && <button data-admin-read-action type="button" onClick={() => void load(nextCursor)} className="mt-4 rounded-full border border-slate-200 bg-white px-5 py-2.5 text-sm font-bold">Load more claims</button>}
 
       {selected && (
         <ClaimModal

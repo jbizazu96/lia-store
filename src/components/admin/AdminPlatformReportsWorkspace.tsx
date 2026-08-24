@@ -68,10 +68,19 @@ export function AdminPlatformReportsWorkspace() {
     setError("");
 
     try {
-      const result = await adminWorkspaceClientService.backfillPlatformReports();
+      let orderCursor: string | undefined; let customerCursor: string | undefined; let ordersDone = false; let customersDone = false;
+      let ordersScanned = 0; let customersScanned = 0;
+      do {
+        const result = await adminWorkspaceClientService.backfillPlatformReports({orderCursor, customerCursor, ordersDone, customersDone});
+        ordersScanned += result.ordersScanned; customersScanned += result.customersScanned;
+        orderCursor = result.nextOrderCursor ?? undefined;
+        customerCursor = result.nextCustomerCursor ?? undefined;
+        ordersDone = !result.nextOrderCursor;
+        customersDone = !result.nextCustomerCursor;
+        setBackfillMessage(`Synchronizing history… ${ordersScanned} orders and ${customersScanned} customers processed.`);
+      } while (!ordersDone || !customersDone);
       setBackfillMessage(
-        `Report history synchronized from ${result.ordersScanned} orders and ${result.customersScanned} customers.` +
-        (result.limited ? " The current backfill window reached 1,000 records." : "")
+        `Report history synchronized from ${ordersScanned} orders and ${customersScanned} customers.`
       );
       setReport(await adminWorkspaceClientService.getPlatformReport(periodDays));
     } catch (reason) {

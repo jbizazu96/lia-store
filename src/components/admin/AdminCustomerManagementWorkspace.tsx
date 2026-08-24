@@ -82,12 +82,13 @@ export function AdminCustomerManagementWorkspace() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [working, setWorking] = useState(false);
   const [limited, setLimited] = useState(false);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [suspensionMode, setSuspensionMode] = useState(false);
   const [reason, setReason] = useState("");
   const [zones, setZones] = useState<DeliveryZone[]>([]);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (cursor?: string) => {
     setLoading(true);
     setError("");
 
@@ -95,10 +96,12 @@ export function AdminCustomerManagementWorkspace() {
       const result = await adminWorkspaceClientService.getCustomers({
         search,
         status: filter,
+        ...(cursor ? {cursor} : {}),
       });
-      setCustomers(result.customers);
+      setCustomers((current) => cursor ? [...current, ...result.customers] : result.customers);
       setCounts(result.counts);
       setLimited(result.limited);
+      setNextCursor(result.nextCursor);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Unable to load customers.");
     } finally {
@@ -192,7 +195,7 @@ export function AdminCustomerManagementWorkspace() {
       </label>
     </div>
 
-    {limited && <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Showing the first 100 customers. Refine the search to find a specific account.</p>}
+    {limited && <p className="mt-4 rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">More matching customers are available. Load the next page to continue.</p>}
     {error && <p className="mt-4 rounded-xl border border-red-100 bg-red-50 p-4 text-sm text-red-700">{error}</p>}
     {loading ? <Loading /> : <div className="mt-6 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-100">
       {customers.length === 0 ? <p className="p-10 text-center text-sm text-slate-500">No customers match these filters.</p> : <div className="divide-y divide-slate-100">
@@ -203,6 +206,7 @@ export function AdminCustomerManagementWorkspace() {
         </button>)}
       </div>}
     </div>}
+    {!loading && nextCursor && <button data-admin-read-action type="button" onClick={() => void load(nextCursor)} className="mt-4 rounded-full border border-slate-200 bg-white px-5 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50">Load more customers</button>}
 
     {(detailLoading || selected) && <div className="fixed inset-0 z-50 flex items-end bg-slate-950/35 p-0 sm:items-center sm:justify-center sm:p-6">
       <div className="max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-t-3xl bg-white p-5 shadow-2xl sm:rounded-3xl sm:p-7">

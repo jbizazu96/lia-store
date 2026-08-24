@@ -296,31 +296,75 @@ export const getAdminWorkspaceOverview = onCall(
  * applications, private document images, and decisions are retrieved through
  * separate authenticated calls below.
  */
+const ADMIN_APPLICATION_PAGE_SIZE = 40;
+const ADMIN_APPLICATION_SCAN_SIZE = 100;
+
+async function applicationCounts(collection: "stores" | "drivers") {
+  const [pending, approved, rejected] = await Promise.all([
+    db.collection(collection).where("status", "==", "pending_review").count().get(),
+    db.collection(collection).where("status", "==", "approved").count().get(),
+    db.collection(collection).where("status", "==", "rejected").count().get(),
+  ]);
+  return {
+    pending_review: pending.data().count,
+    approved: approved.data().count,
+    rejected: rejected.data().count,
+  };
+}
+
+async function applicationPage<T extends {status: string; submittedAt: string | null}>(input: {
+  collection: "stores" | "drivers";
+  status: string;
+  cursor: string;
+  map: (document: FirebaseFirestore.QueryDocumentSnapshot) => T;
+}) {
+  const items: T[] = [];
+  let cursor = input.cursor;
+  let exhausted = false;
+
+  while (items.length < ADMIN_APPLICATION_PAGE_SIZE && !exhausted) {
+    let query = db.collection(input.collection)
+      .orderBy(admin.firestore.FieldPath.documentId())
+      .limit(ADMIN_APPLICATION_SCAN_SIZE);
+    if (cursor) query = query.startAfter(cursor);
+    const snapshot = await query.get();
+    let consumed = 0;
+    for (const document of snapshot.docs) {
+      consumed += 1;
+      cursor = document.id;
+      const item = input.map(document);
+      if (item.status === input.status) items.push(item);
+      if (items.length >= ADMIN_APPLICATION_PAGE_SIZE) break;
+    }
+    exhausted = consumed === snapshot.size && snapshot.size < ADMIN_APPLICATION_SCAN_SIZE;
+  }
+
+  return {
+    applications: sortedNewest(items),
+    nextCursor: exhausted ? null : cursor,
+  };
+}
+
 export const getAdminStoreApplications = onCall(
   {region: "us-central1"},
   async (request) => {
     await requireAdminPermission(request, "stores");
     const policy = await getStoreApplicationPolicy();
-    const status = text(record(request.data).status) || "pending_review";
+    const input = record(request.data);
+    const status = text(input.status) || "pending_review";
+    const cursor = text(input.cursor);
 
     if (!["draft", "pending_review", "approved", "rejected", "suspended"].includes(status)) {
       throw new HttpsError("invalid-argument", "A valid application status is required.");
     }
 
-    const snapshot = await db.collection("stores")
-      .limit(100)
-      .get();
-
-    const allApplications = snapshot.docs.map((document) =>
-      storeListItem(document, policy),
-    );
+    const [page, counts] = await Promise.all([
+      applicationPage({collection: "stores", status, cursor, map: (document) => storeListItem(document, policy)}),
+      applicationCounts("stores"),
+    ]);
     return {
-      applications: sortedNewest(allApplications.filter((item) => item.status === status)),
-      counts: {
-        pending_review: allApplications.filter((item) => item.status === "pending_review").length,
-        approved: allApplications.filter((item) => item.status === "approved").length,
-        rejected: allApplications.filter((item) => item.status === "rejected").length,
-      },
+      ...page,
+      counts,
     };
   }
 );
@@ -330,26 +374,21 @@ export const getAdminDriverApplications = onCall(
   async (request) => {
     await requireAdminPermission(request, "drivers");
     const policy = await getDriverApplicationPolicy();
-    const status = text(record(request.data).status) || "pending_review";
+    const input = record(request.data);
+    const status = text(input.status) || "pending_review";
+    const cursor = text(input.cursor);
 
     if (!["draft", "pending_review", "approved", "rejected", "suspended"].includes(status)) {
       throw new HttpsError("invalid-argument", "A valid application status is required.");
     }
 
-    const snapshot = await db.collection("drivers")
-      .limit(100)
-      .get();
-
-    const allApplications = snapshot.docs.map((document) =>
-      driverListItem(document, policy),
-    );
+    const [page, counts] = await Promise.all([
+      applicationPage({collection: "drivers", status, cursor, map: (document) => driverListItem(document, policy)}),
+      applicationCounts("drivers"),
+    ]);
     return {
-      applications: sortedNewest(allApplications.filter((item) => item.status === status)),
-      counts: {
-        pending_review: allApplications.filter((item) => item.status === "pending_review").length,
-        approved: allApplications.filter((item) => item.status === "approved").length,
-        rejected: allApplications.filter((item) => item.status === "rejected").length,
-      },
+      ...page,
+      counts,
     };
   }
 );

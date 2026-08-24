@@ -12,7 +12,6 @@
 import * as admin from "firebase-admin";
 import {
   getFirestore,
-  Timestamp,
 } from "firebase-admin/firestore";
 import {
   HttpsError,
@@ -47,18 +46,6 @@ function dayKey(value: Date): string {
   return value.toISOString().slice(0, 10);
 }
 
-function asDate(value: unknown): Date | null {
-  if (value && typeof value === "object" && "toDate" in value && typeof value.toDate === "function") {
-    const result = value.toDate();
-    return result instanceof Date ? result : null;
-  }
-  if (typeof value === "string") {
-    const result = new Date(value);
-    return Number.isNaN(result.getTime()) ? null : result;
-  }
-  return null;
-}
-
 function requestedPeriod(value: unknown): number {
   const period = number(value) || 30;
 
@@ -79,7 +66,7 @@ export const getAdminPlatformReport = onCall(
     beginning.setUTCDate(beginning.getUTCDate() - (periodDays - 1));
 
     const endingDay = dayKey(new Date());
-    const [dailyReports, activeStores, approvedDrivers, ordersSnapshot, customersSnapshot, storesSnapshot, zonesSnapshot] = await Promise.all([
+    const [dailyReports, activeStores, approvedDrivers, zoneDailyReports, customersSnapshot, storesSnapshot] = await Promise.all([
       db.collection("platformDailyReports")
         .where("date", ">=", dayKey(beginning))
         .where("date", "<=", endingDay)
@@ -94,13 +81,13 @@ export const getAdminPlatformReport = onCall(
         .where("status", "==", "approved")
         .count()
         .get(),
-      db.collection("orders")
-        .where("createdAt", ">=", Timestamp.fromDate(beginning))
-        .limit(5001)
+      db.collection("platformDailyZoneReports")
+        .where("date", ">=", dayKey(beginning))
+        .where("date", "<=", endingDay)
+        .orderBy("date", "asc")
         .get(),
       db.collection("users").where("accountType", "==", "customer").get(),
       db.collection("stores").get(),
-      db.collection("deliveryZones").get(),
     ]);
 
     const days = Array.from({ length: periodDays }, (_, index) => {
@@ -134,10 +121,6 @@ export const getAdminPlatformReport = onCall(
       (total, item) => total + item.grossSalesAmount,
       0,
     );
-    const zoneNames = new Map(zonesSnapshot.docs.map((document) => [
-      document.id,
-      text(document.data().name) || "Delivery zone",
-    ]));
     const zoneTotals = new Map<string, {
       pricingZoneId: string | null;
       pricingZoneName: string;
@@ -153,29 +136,19 @@ export const getAdminPlatformReport = onCall(
     let routeMiles = 0;
     let zoneOrderCount = 0;
     let peakSurchargeAmount = 0;
-    ordersSnapshot.docs.slice(0, 5000).forEach((document) => {
+    zoneDailyReports.docs.forEach((document) => {
       const data = document.data();
-      const payment = record(data.payment);
-      if (data.checkoutStatus !== "confirmed" || payment.status !== "paid") return;
-      const confirmedAt = asDate(payment.paidAt) ?? asDate(data.createdAt);
-      if (!confirmedAt || confirmedAt < beginning) return;
-      const pricing = record(data.pricing);
-      const pricingPolicy = record(data.pricingPolicy);
       const pricingZoneId = text(data.pricingZoneId) || null;
       const key = pricingZoneId ?? "default_pricing";
-      const distance = Math.max(0, number(data.trustedRouteDistanceMiles) || number(record(data.delivery).distanceMiles));
-      const revenueAmount = Math.max(0, number(pricing.totalAmount));
-      const isOrderZone = data.zoneAccessType === "customer_order_zone";
-      const customerZoneId = text(data.customerHomeZoneId);
-      const storeZoneId = text(data.storeHomeZoneId);
-      const isCrossZone = Boolean(customerZoneId && storeZoneId && customerZoneId !== storeZoneId);
-      const appliedPeak = Math.max(0,
-        number(pricing.peakSurchargeAmount) ||
-        (pricing.isPeakTime === true ? number(pricingPolicy.peakSurchargeCents) : 0),
-      );
+      const orders = Math.max(0, number(data.orders));
+      const distance = Math.max(0, number(data.routeMiles));
+      const revenueAmount = Math.max(0, number(data.revenueAmount));
+      const exceptionCount = Math.max(0, number(data.orderZoneExceptions));
+      const crossZoneCount = Math.max(0, number(data.crossZoneDeliveries));
+      const appliedPeak = Math.max(0, number(data.peakSurchargeAmount));
       const current = zoneTotals.get(key) ?? {
         pricingZoneId,
-        pricingZoneName: pricingZoneId ? zoneNames.get(pricingZoneId) ?? "Deleted or renamed zone" : "Default Customer Pricing",
+        pricingZoneName: text(data.pricingZoneName) || (pricingZoneId ? "Delivery zone" : "Default Customer Pricing"),
         orders: 0,
         revenueAmount: 0,
         routeMiles: 0,
@@ -183,17 +156,17 @@ export const getAdminPlatformReport = onCall(
         crossZoneDeliveries: 0,
         peakSurchargeAmount: 0,
       };
-      current.orders += 1;
+      current.orders += orders;
       current.revenueAmount += revenueAmount;
       current.routeMiles += distance;
-      current.orderZoneExceptions += isOrderZone ? 1 : 0;
-      current.crossZoneDeliveries += isCrossZone ? 1 : 0;
+      current.orderZoneExceptions += exceptionCount;
+      current.crossZoneDeliveries += crossZoneCount;
       current.peakSurchargeAmount += appliedPeak;
       zoneTotals.set(key, current);
-      zoneOrderCount += 1;
+      zoneOrderCount += orders;
       routeMiles += distance;
-      orderZoneExceptions += isOrderZone ? 1 : 0;
-      crossZoneDeliveries += isCrossZone ? 1 : 0;
+      orderZoneExceptions += exceptionCount;
+      crossZoneDeliveries += crossZoneCount;
       peakSurchargeAmount += appliedPeak;
     });
     const zones = [...zoneTotals.values()].map((zone) => ({
@@ -223,7 +196,7 @@ export const getAdminPlatformReport = onCall(
       },
       daily: days,
       zones,
-      zoneReportingLimited: ordersSnapshot.size > 5000,
+      zoneReportingLimited: false,
     };
   }
 );

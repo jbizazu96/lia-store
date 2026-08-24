@@ -12,6 +12,7 @@ export function requiredAdminPermission(pathname: string): AdminPermission | "ma
   if (pathname.startsWith("/admin/reports")) return "reports";
   if (pathname.startsWith("/admin/deletion-requests")) return "deletion_requests";
   if (pathname.startsWith("/admin/orders")) return "orders";
+  if (pathname.startsWith("/admin/lia-finance")) return "finance";
   if (pathname.startsWith("/admin/finance")) return "finance";
   if (pathname.startsWith("/admin/refund-claims")) return "refunds";
   if (pathname.startsWith("/admin/support")) return "support";

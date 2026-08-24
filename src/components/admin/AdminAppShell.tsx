@@ -36,6 +36,7 @@ import {
   ListTree,
   Headphones,
   Scale,
+  Landmark,
   X,
 } from "lucide-react";
 import {
@@ -60,23 +61,24 @@ export function AdminAppShell({
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const {can, canWrite, isMaster} = useAdminAccess();
 
-  const navigation: Array<{href: string; label: string; icon: typeof LayoutDashboard; permission: AdminPermission | "master"}> = [
-    {href: "/admin", label: "Overview", icon: LayoutDashboard, permission: "overview"},
-    {href: "/admin/store-applications", label: "Store applications", icon: Store, permission: "stores"},
-    {href: "/admin/driver-applications", label: "Driver applications", icon: Truck, permission: "drivers"},
-    {href: "/admin/customers", label: "Customers", icon: UsersRound, permission: "customers"},
-    {href: "/admin/delivery-zones", label: "Delivery zones", icon: MapPinned, permission: "delivery_zones"},
-    {href: "/admin/product-categories", label: "Product categories", icon: ListTree, permission: "product_categories"},
-    {href: "/admin/reports", label: "Reports", icon: ChartNoAxesCombined, permission: "reports"},
-    {href: "/admin/deletion-requests", label: "Deletion requests", icon: FileWarning, permission: "deletion_requests"},
-    {href: "/admin/orders", label: "Orders & delivery", icon: ClipboardList, permission: "orders"},
-    {href: "/admin/finance", label: "Finance", icon: CircleDollarSign, permission: "finance"},
-    {href: "/admin/refund-claims", label: "Refund claims", icon: RotateCcw, permission: "refunds"},
-    {href: "/admin/support", label: "Support requests", icon: Headphones, permission: "support"},
-    {href: "/admin/legal-documents", label: "Legal documents", icon: Scale, permission: "legal_documents"},
-    {href: "/admin/promotions", label: "Home promotions", icon: Tag, permission: "promotions"},
-    {href: "/admin/settings", label: "Platform settings", icon: Settings, permission: "settings"},
-    {href: "/admin/users", label: "Admin users", icon: UserCog, permission: "master"},
+  const navigation: Array<{href: string; label: string; group: string; icon: typeof LayoutDashboard; permission: AdminPermission | "master"}> = [
+    {href: "/admin", label: "Overview", group: "Operations", icon: LayoutDashboard, permission: "overview"},
+    {href: "/admin/orders", label: "Orders & delivery", group: "Operations", icon: ClipboardList, permission: "orders"},
+    {href: "/admin/support", label: "Support requests", group: "Operations", icon: Headphones, permission: "support"},
+    {href: "/admin/store-applications", label: "Store applications", group: "Marketplace", icon: Store, permission: "stores"},
+    {href: "/admin/driver-applications", label: "Driver applications", group: "Marketplace", icon: Truck, permission: "drivers"},
+    {href: "/admin/customers", label: "Customers", group: "Marketplace", icon: UsersRound, permission: "customers"},
+    {href: "/admin/delivery-zones", label: "Delivery zones", group: "Marketplace", icon: MapPinned, permission: "delivery_zones"},
+    {href: "/admin/product-categories", label: "Catalog management", group: "Catalog", icon: ListTree, permission: "product_categories"},
+    {href: "/admin/promotions", label: "Home promotions", group: "Catalog", icon: Tag, permission: "promotions"},
+    {href: "/admin/finance", label: "Finance operations", group: "Finance", icon: CircleDollarSign, permission: "finance"},
+    {href: "/admin/lia-finance", label: "LIA Finance", group: "Finance", icon: Landmark, permission: "finance"},
+    {href: "/admin/refund-claims", label: "Refund claims", group: "Finance", icon: RotateCcw, permission: "refunds"},
+    {href: "/admin/reports", label: "Reports", group: "Governance", icon: ChartNoAxesCombined, permission: "reports"},
+    {href: "/admin/deletion-requests", label: "Deletion requests", group: "Governance", icon: FileWarning, permission: "deletion_requests"},
+    {href: "/admin/legal-documents", label: "Legal documents", group: "Governance", icon: Scale, permission: "legal_documents"},
+    {href: "/admin/settings", label: "Platform settings", group: "Configuration", icon: Settings, permission: "settings"},
+    {href: "/admin/users", label: "Admin users", group: "Administration", icon: UserCog, permission: "master"},
   ];
   const visibleNavigation = navigation.filter((item) => item.permission === "master" ? isMaster : can(item.permission));
   const requiredPermission = requiredAdminPermission(pathname);
@@ -124,14 +126,12 @@ export function AdminAppShell({
         </div>
 
         <nav className="min-h-0 flex-1 space-y-2 overflow-y-auto overflow-x-hidden overscroll-contain pb-[max(1rem,env(safe-area-inset-bottom))] pr-1 [scrollbar-gutter:stable]">
-          {visibleNavigation.map((item) => {
+          {visibleNavigation.map((item, index) => {
             const Icon = item.icon;
             const active = item.href === "/admin" ? pathname === "/admin" : pathname.startsWith(item.href);
-            return <Link key={item.href} onClick={() => setSidebarOpen(false)} href={item.href} className={`flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition ${active ? "bg-orange-50 text-orange-700" : "text-slate-600 hover:bg-slate-50"}`}><Icon className="h-5 w-5" />{item.label}</Link>;
+            const showGroup = index === 0 || visibleNavigation[index - 1]?.group !== item.group;
+            return <div key={item.href}>{showGroup && <p className={`${index ? "mt-5" : ""} px-3 pb-1 text-[10px] font-black uppercase tracking-[0.16em] text-slate-400`}>{item.group}</p>}<Link onClick={() => setSidebarOpen(false)} href={item.href} className={`flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition ${active ? "bg-orange-50 text-orange-700" : "text-slate-600 hover:bg-slate-50"}`}><Icon className="h-5 w-5" />{item.label}</Link></div>;
           })}
-          <div className="my-5 rounded-xl bg-slate-50 p-3 text-xs leading-5 text-slate-500">
-            Activation, delivery operations, financial controls, and platform settings will appear here as their protected workflows are added.
-          </div>
           <div className="border-t border-slate-200 pt-4">
             <div className="mb-3 flex items-center gap-2 px-3 text-xs font-bold uppercase tracking-wide text-slate-400">
               <ShieldCheck className="h-4 w-4" />
@@ -145,7 +145,7 @@ export function AdminAppShell({
         </nav>
       </aside>
 
-      <main className="mx-auto min-h-screen max-w-7xl p-4 md:ml-72 md:p-8">
+      <main className="min-h-screen min-w-0 overflow-x-hidden p-4 md:ml-72 md:p-8">
         <div className="mb-4 hidden justify-end md:flex">
           <AdminNotificationBell />
         </div>

@@ -45,16 +45,19 @@ export function AdminNotificationBell() {
   const reference = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const [notifications, setNotifications] = useState<AdminNotification[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   const load = () => void adminNotificationClientService
     .getNotifications()
-    .then((result) => setNotifications(result.notifications))
+    .then((result) => { setNotifications(result.notifications); setUnreadCount(result.unreadCount); })
     .catch(() => setNotifications([]));
 
   useEffect(() => {
     load();
-    const interval = window.setInterval(load, 30_000);
-    return () => window.clearInterval(interval);
+    const refresh = () => { if (document.visibilityState === "visible") load(); };
+    document.addEventListener("visibilitychange", refresh);
+    window.addEventListener("focus", refresh);
+    return () => { document.removeEventListener("visibilitychange", refresh); window.removeEventListener("focus", refresh); };
   }, []);
 
   useEffect(() => listenForNotificationMutations("admin", (mutation) => {
@@ -63,6 +66,7 @@ export function AdminNotificationBell() {
       : mutation.action === "clear-all"
         ? []
         : current.map((item) => ({...item, read: true})));
+    setUnreadCount((current) => mutation.action === "read-one" ? Math.max(0, current - 1) : 0);
   }), []);
 
   useEffect(() => {
@@ -83,6 +87,7 @@ export function AdminNotificationBell() {
     setNotifications((current) => current.map((item) => item.id === notification.id
       ? {...item, read: true}
       : item));
+    if (!notification.read) setUnreadCount((current) => Math.max(0, current - 1));
     void adminNotificationClientService.markRead(notification.id)
       .catch(() => undefined);
 
@@ -98,9 +103,9 @@ export function AdminNotificationBell() {
         aria-label="Open admin notifications"
       >
         <Bell className="h-5 w-5" />
-        {unread.length > 0 && (
+        {unreadCount > 0 && (
           <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-white px-1 text-[10px] font-bold text-orange-700 ring-1 ring-orange-200">
-            {unread.length > 9 ? "9+" : unread.length}
+            {unreadCount > 9 ? "9+" : unreadCount}
           </span>
         )}
       </button>

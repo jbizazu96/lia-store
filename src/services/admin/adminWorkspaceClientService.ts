@@ -179,16 +179,16 @@ export const adminWorkspaceClientService = {
     {ttlMs: 15_000}
   ),
 
-  getStoreApplications: (status: AdminApplicationStatus = "pending_review") =>
-    call<{applications: AdminApplicationListItem[]; counts: AdminApplicationCounts}>(
+  getStoreApplications: (status: AdminApplicationStatus = "pending_review", cursor?: string) =>
+    call<{applications: AdminApplicationListItem[]; counts: AdminApplicationCounts; nextCursor: string | null}>(
       "getAdminStoreApplications",
-      {status}
+      {status, ...(cursor ? {cursor} : {})}
     ),
 
-  getDriverApplications: (status: AdminApplicationStatus = "pending_review") =>
-    call<{applications: AdminApplicationListItem[]; counts: AdminApplicationCounts}>(
+  getDriverApplications: (status: AdminApplicationStatus = "pending_review", cursor?: string) =>
+    call<{applications: AdminApplicationListItem[]; counts: AdminApplicationCounts; nextCursor: string | null}>(
       "getAdminDriverApplications",
-      {status}
+      {status, ...(cursor ? {cursor} : {})}
     ),
 
   getStoreApplication: (storeId: string) =>
@@ -327,8 +327,8 @@ export const adminWorkspaceClientService = {
   reinstateAccountDeletionRequest: (requestId: string) =>
     call<{success: boolean}>("reinstateAdminAccountDeletionRequest", {requestId}),
 
-  getOrders: (input?: {status?: string; exception?: string}) =>
-    call<{orders: AdminOrderListItem[]}>("getAdminOrders", input),
+  getOrders: (input?: {status?: string; exception?: string; cursor?: string}) =>
+    call<{orders: AdminOrderListItem[]; nextCursor: string | null}>("getAdminOrders", input),
 
   getOrder: (orderId: string) =>
     call<AdminOrderDetail>("getAdminOrder", {orderId}),
@@ -338,7 +338,7 @@ export const adminWorkspaceClientService = {
 
   getLiaFinanceReport: () =>
     call<AdminLiaFinanceReport>("getAdminLiaFinanceReport"),
-  getCommissionSettings: () => call<AdminCommissionSettings>("getAdminCommissionSettings"),
+  getCommissionSettings: (cursor?: string) => call<AdminCommissionSettings>("getAdminCommissionSettings", cursor ? {cursor} : undefined),
   getMarketplacePricingPolicy: () => call<{policy: Record<string, number | boolean> | null}>("getAdminMarketplacePricingPolicy"),
   saveDefaultStoreCommission: (basisPoints: number) => call<{success: boolean}>("saveAdminDefaultStoreCommission", {basisPoints}),
   saveDefaultDriverCommission: (basisPoints: number) => call<{success: boolean}>("saveAdminDefaultDriverCommission", {basisPoints}),
@@ -350,24 +350,27 @@ export const adminWorkspaceClientService = {
   saveDriverApplicationPolicy: (policy: AdminDriverApplicationPolicy) => call<{success: boolean}>("saveAdminDriverApplicationPolicy", {policy}),
   getOrderDeliveryPolicy: () => call<{policy: AdminOrderDeliveryPolicy}>("getAdminOrderDeliveryPolicy"),
   saveOrderDeliveryPolicy: (policy: AdminOrderDeliveryPolicy) => call<{success: boolean}>("saveAdminOrderDeliveryPolicy", {policy}),
-  getCustomers: (input?: {search?: string; status?: "all" | "active" | "suspended"}) => call<{
+  getCustomers: (input?: {search?: string; status?: "all" | "active" | "suspended"; cursor?: string}) => call<{
     customers: AdminCustomerListItem[];
     counts: {total: number; active: number; suspended: number};
     limited: boolean;
+    nextCursor: string | null;
   }>("getAdminCustomers", input),
   getCustomer: (customerId: string) => call<AdminCustomerDetail>("getAdminCustomer", {customerId}),
   setCustomerSuspension: (customerId: string, isSuspended: boolean, reason?: string) => call<{success: boolean}>("setAdminCustomerSuspension", {customerId, isSuspended, ...(reason ? {reason} : {})}),
   decideOrderZoneRequest: (input: {requestId: string; decision: "approved" | "rejected"; message: string; zoneId?: string}) => call<{success: boolean}>("decideAdminOrderZoneRequest", input),
   getPlatformReport: (periodDays: 7 | 30 | 90 | number) => call<AdminPlatformReport>("getAdminPlatformReport", {periodDays}),
-  backfillPlatformReports: () => call<{success: boolean; ordersScanned: number; customersScanned: number; limited: boolean}>("backfillAdminPlatformDailyReports"),
+  backfillPlatformReports: (input?: {orderCursor?: string; customerCursor?: string; ordersDone?: boolean; customersDone?: boolean}) => call<{success: boolean; ordersScanned: number; customersScanned: number; limited: boolean; nextOrderCursor: string | null; nextCustomerCursor: string | null}>("backfillAdminPlatformDailyReports", input),
   reindexCatalogSearch: (afterStoreId?: string) => call<{
     success: boolean;
     storesProcessed: number;
     nextAfterStoreId: string | null;
   }>("reindexAdminCatalogSearch", afterStoreId ? {afterStoreId} : undefined),
-  getAuditLogs: (search = "") => call<{logs: AdminAuditLog[]; limited: boolean}>("getAdminAuditLogs", {search}),
+  getAuditLogs: (search = "", cursor?: string) => call<{logs: AdminAuditLog[]; limited: boolean; nextCursor: string | null}>("getAdminAuditLogs", {search, ...(cursor ? {cursor} : {})}),
   getHomePromotions: () => call<{promotions: HomePromotion[]}>("getAdminHomePromotions"),
   getProductCategories: () => call<{categories: Array<{id: string; name: string; iconUrl: string; freshnessEligible: boolean}>}>("getAdminProductCategories"),
+  getProductCatalogPolicy: () => call<{lowStockThreshold: number; inventoryEmailsPerDay: number}>("getAdminProductCatalogPolicy"),
+  saveProductCatalogPolicy: (policy: {lowStockThreshold: number; inventoryEmailsPerDay: number}) => call<{success: boolean; productsUpdated: number}>("saveAdminProductCatalogPolicy", policy),
   createProductCategory: (category: {name: string; freshnessEligible: boolean}) => call<{id: string}>("createAdminProductCategory", category),
   updateProductCategory: (id: string, category: {name: string; freshnessEligible: boolean}) => call<{success: boolean}>("updateAdminProductCategory", {id, ...category}),
   uploadProductCategoryIcon: async (id: string, file: File) => {
@@ -424,11 +427,12 @@ export const adminWorkspaceClientService = {
     serviceZoneIds?: string[];
     orderZoneIds?: string[];
   }) => call<{success: boolean}>("setAdminAccountZoneAssignment", input),
-  getRefundClaims: (status = "pending_review") => call<{
+  getRefundClaims: (status = "pending_review", cursor?: string) => call<{
     claims: AdminRefundClaimListItem[];
     counts: {pending_review: number; approved: number; rejected: number};
     limited: boolean;
-  }>("getAdminRefundClaims", {status}),
+    nextCursor: string | null;
+  }>("getAdminRefundClaims", {status, ...(cursor ? {cursor} : {})}),
   getRefundClaim: (claimId: string) =>
     call<AdminRefundClaimDetail>("getAdminRefundClaim", {claimId}),
   decideRefundClaim: (input: {

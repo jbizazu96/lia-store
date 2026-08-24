@@ -29,6 +29,12 @@ interface OrderContribution {
   grossCustomerPayments: number;
   outcomeDay: string | null;
   outcomeStatus: OutcomeStatus;
+  pricingZoneId: string | null;
+  pricingZoneName: string;
+  routeMiles: number;
+  orderZoneException: boolean;
+  crossZoneDelivery: boolean;
+  peakSurchargeAmount: number;
 }
 
 function record(value: unknown): Data {
@@ -90,6 +96,8 @@ function orderContribution(data: Data): OrderContribution {
       grossCustomerPayments: 0,
       outcomeDay: null,
       outcomeStatus: null,
+      pricingZoneId: null, pricingZoneName: "Default Customer Pricing", routeMiles: 0,
+      orderZoneException: false, crossZoneDelivery: false, peakSurchargeAmount: 0,
     };
   }
 
@@ -103,12 +111,23 @@ function orderContribution(data: Data): OrderContribution {
   const outcomeAt = outcomeStatus
     ? historyOutcomeDate(data, status) ?? asDate(data.updatedAt) ?? confirmedAt
     : null;
+  const delivery = record(data.delivery);
+  const pricingPolicy = record(data.pricingPolicy);
+  const pricingZoneId = text(data.pricingZoneId) || null;
+  const customerZoneId = text(data.customerHomeZoneId);
+  const storeZoneId = text(data.storeHomeZoneId);
 
   return {
     confirmedDay: confirmedAt ? utcDay(confirmedAt) : null,
     grossCustomerPayments: Math.max(0, number(pricing.totalAmount)),
     outcomeDay: outcomeAt ? utcDay(outcomeAt) : null,
     outcomeStatus,
+    pricingZoneId,
+    pricingZoneName: text(data.pricingZoneName) || text(pricingPolicy.zoneName) || (pricingZoneId ? "Delivery zone" : "Default Customer Pricing"),
+    routeMiles: Math.max(0, number(data.trustedRouteDistanceMiles) || number(delivery.distanceMiles)),
+    orderZoneException: data.zoneAccessType === "customer_order_zone",
+    crossZoneDelivery: Boolean(customerZoneId && storeZoneId && customerZoneId !== storeZoneId),
+    peakSurchargeAmount: Math.max(0, number(pricing.peakSurchargeAmount) || (pricing.isPeakTime === true ? number(pricingPolicy.peakSurchargeCents) : 0)),
   };
 }
 
@@ -122,6 +141,12 @@ function savedContribution(data: Data): OrderContribution {
     outcomeStatus: outcome === "delivered" || outcome === "cancelled"
       ? outcome
       : null,
+    pricingZoneId: text(data.pricingZoneId) || null,
+    pricingZoneName: text(data.pricingZoneName) || "Default Customer Pricing",
+    routeMiles: Math.max(0, number(data.routeMiles)),
+    orderZoneException: data.orderZoneException === true,
+    crossZoneDelivery: data.crossZoneDelivery === true,
+    peakSurchargeAmount: Math.max(0, number(data.peakSurchargeAmount)),
   };
 }
 
@@ -132,7 +157,36 @@ function sameContribution(
   return left.confirmedDay === right.confirmedDay &&
     left.grossCustomerPayments === right.grossCustomerPayments &&
     left.outcomeDay === right.outcomeDay &&
-    left.outcomeStatus === right.outcomeStatus;
+    left.outcomeStatus === right.outcomeStatus &&
+    left.pricingZoneId === right.pricingZoneId &&
+    left.pricingZoneName === right.pricingZoneName &&
+    left.routeMiles === right.routeMiles &&
+    left.orderZoneException === right.orderZoneException &&
+    left.crossZoneDelivery === right.crossZoneDelivery &&
+    left.peakSurchargeAmount === right.peakSurchargeAmount;
+}
+
+function incrementZoneReport(
+  transaction: FirebaseFirestore.Transaction,
+  contribution: OrderContribution,
+  direction: 1 | -1,
+): void {
+  if (!contribution.confirmedDay) return;
+  const zoneKey = contribution.pricingZoneId ?? "default_pricing";
+  const reference = db.collection("platformDailyZoneReports")
+    .doc(`${contribution.confirmedDay}_${zoneKey}`);
+  transaction.set(reference, {
+    date: contribution.confirmedDay,
+    pricingZoneId: contribution.pricingZoneId,
+    pricingZoneName: contribution.pricingZoneName,
+    orders: FieldValue.increment(direction),
+    revenueAmount: FieldValue.increment(direction * contribution.grossCustomerPayments),
+    routeMiles: FieldValue.increment(direction * contribution.routeMiles),
+    orderZoneExceptions: FieldValue.increment(direction * (contribution.orderZoneException ? 1 : 0)),
+    crossZoneDeliveries: FieldValue.increment(direction * (contribution.crossZoneDelivery ? 1 : 0)),
+    peakSurchargeAmount: FieldValue.increment(direction * contribution.peakSurchargeAmount),
+    updatedAt: FieldValue.serverTimestamp(),
+  }, {merge: true});
 }
 
 function incrementReport(
@@ -166,6 +220,7 @@ function applyContributionDelta(
       confirmedOrders: -1,
       grossCustomerPayments: -previous.grossCustomerPayments,
     });
+    incrementZoneReport(transaction, previous, -1);
   }
 
   if (previous.outcomeDay && previous.outcomeStatus) {
@@ -179,6 +234,7 @@ function applyContributionDelta(
       confirmedOrders: 1,
       grossCustomerPayments: next.grossCustomerPayments,
     });
+    incrementZoneReport(transaction, next, 1);
   }
 
   if (next.outcomeDay && next.outcomeStatus) {
@@ -199,13 +255,15 @@ export async function synchronizeOrderDailyReport(
     grossCustomerPayments: 0,
     outcomeDay: null,
     outcomeStatus: null,
+    pricingZoneId: null, pricingZoneName: "Default Customer Pricing", routeMiles: 0,
+    orderZoneException: false, crossZoneDelivery: false, peakSurchargeAmount: 0,
   };
 
   await db.runTransaction(async (transaction) => {
     const existing = await transaction.get(contributionReference);
     const previous = existing.exists
       ? savedContribution(existing.data() ?? {})
-      : {confirmedDay: null, grossCustomerPayments: 0, outcomeDay: null, outcomeStatus: null};
+      : {confirmedDay: null, grossCustomerPayments: 0, outcomeDay: null, outcomeStatus: null, pricingZoneId: null, pricingZoneName: "Default Customer Pricing", routeMiles: 0, orderZoneException: false, crossZoneDelivery: false, peakSurchargeAmount: 0};
 
     if (sameContribution(previous, next)) return;
 
