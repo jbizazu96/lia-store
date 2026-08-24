@@ -328,7 +328,7 @@ function StoreLayoutContent({ children }: { children: React.ReactNode }) {
             {/* Central Logo Image */}
             <div className="relative w-16 h-16 z-10 bg-white/80 backdrop-blur-md rounded-full border-2 border-yellow-400/50 shadow-[0_0_30px_rgba(234,179,8,0.15)] flex items-center justify-center overflow-hidden">
               <img 
-                src="/icon/icon-192.png" 
+                src="/icon/icon-192.png"
                 alt="LIA Logo" 
                 className="w-12 h-12 object-contain" 
               />

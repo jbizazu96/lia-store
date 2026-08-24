@@ -66,3 +66,6 @@ profile with the printer before a production run.
 
 `scripts/generate_brand_assets.py` recreates all derived files from
 `public/icon/lia-brand-concept-v5-transparent.png`. It requires Pillow.
+It writes both `public/favicon.ico` and Next.js App Router's
+`src/app/favicon.ico` so the automatic browser favicon cannot drift from the
+approved brand source.

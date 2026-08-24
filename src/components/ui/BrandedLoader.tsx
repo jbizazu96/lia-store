@@ -58,7 +58,7 @@ export function BrandedLoader({message = "Loading..."}: BrandedLoaderProps) {
           {/* Central Logo Image */}
           <div className="relative w-16 h-16 z-10 bg-white/80 backdrop-blur-md rounded-full border-2 border-orange-400/50 shadow-[0_0_30px_rgba(251,146,60,0.15)] flex items-center justify-center overflow-hidden">
             <Image
-              src="/icon/icon-192.png" 
+              src="/icon/icon-192.png"
               alt="LIA Logo" 
               width={48}
               height={48}

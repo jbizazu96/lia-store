@@ -91,11 +91,16 @@ def main() -> None:
 
     favicon_sizes = (16, 32, 48, 96)
     favicons = [compose_square(logo, size, 0.82, WHITE) for size in favicon_sizes]
-    compose_square(logo, 96, 0.82, WHITE).save(
-        ROOT / "public/favicon.ico",
-        format="ICO",
-        sizes=[(size, size) for size in favicon_sizes],
-    )
+    # Next.js' ICO decoder requires PNG-backed icon frames to be RGBA. Pillow
+    # otherwise preserves the opaque white canvas as RGB inside the ICO, which
+    # browsers accept but Next's production image pipeline rejects.
+    favicon_master = compose_square(logo, 96, 0.82, WHITE).convert("RGBA")
+    for favicon_path in (ROOT / "public/favicon.ico", ROOT / "src/app/favicon.ico"):
+        favicon_master.save(
+            favicon_path,
+            format="ICO",
+            sizes=[(size, size) for size in favicon_sizes],
+        )
     for size, image in zip(favicon_sizes, favicons):
         save_png(image, ICON_DIR / f"favicon-{size}x{size}.png")
 
