@@ -39,6 +39,7 @@ import {
 import {
   BrandedLoader,
 } from "@/components/ui/BrandedLoader";
+import {useStoreWorkspace} from "@/context/StoreWorkspaceContext";
 
 import {
   EmptyOrders,
@@ -64,6 +65,9 @@ import {useDebouncedValue} from "@/hooks/useDebouncedValue";
 */
 
 export default function StoreOrdersPage() {
+  const {entry} = useStoreWorkspace();
+  const staffUser = entry?.access.role === "staff";
+  const readOnly = staffUser && entry.access.permissions.orders === "read";
   const router = useRouter();
 
   const searchParams =
@@ -226,6 +230,7 @@ export default function StoreOrdersPage() {
       </div>
 
       {/* Statistics */}
+      {readOnly && <div className="rounded-xl border border-blue-100 bg-blue-50 p-3 text-sm font-semibold text-blue-800">Read-only order access. Contact the store owner to request order-management permission.</div>}
       <OrderStats {...stats} />
 
       {/* Filters */}
@@ -282,6 +287,7 @@ export default function StoreOrdersPage() {
                   key={order.id}
                   order={order}
                   index={index}
+                  hideFinancials={staffUser}
                 />
               )
             )}

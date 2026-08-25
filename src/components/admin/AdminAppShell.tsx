@@ -37,6 +37,7 @@ import {
   Headphones,
   Scale,
   Landmark,
+  Activity,
   X,
 } from "lucide-react";
 import {
@@ -63,6 +64,7 @@ export function AdminAppShell({
 
   const navigation: Array<{href: string; label: string; group: string; icon: typeof LayoutDashboard; permission: AdminPermission | "master"}> = [
     {href: "/admin", label: "Overview", group: "Operations", icon: LayoutDashboard, permission: "overview"},
+    {href: "/admin/operations", label: "System operations", group: "Operations", icon: Activity, permission: "operations"},
     {href: "/admin/orders", label: "Orders & delivery", group: "Operations", icon: ClipboardList, permission: "orders"},
     {href: "/admin/support", label: "Support requests", group: "Operations", icon: Headphones, permission: "support"},
     {href: "/admin/store-applications", label: "Store applications", group: "Marketplace", icon: Store, permission: "stores"},

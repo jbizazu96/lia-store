@@ -37,6 +37,7 @@ export interface ActiveAdmin {
 
 export const ADMIN_PERMISSIONS = [
   "overview",
+  "operations",
   "stores",
   "drivers",
   "customers",

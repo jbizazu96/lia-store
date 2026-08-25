@@ -22,6 +22,7 @@ import {
   grantStoreUploadClaim,
 } from "../services/store/storeUploadClaimService";
 import {enforceCallableAbuseProtection} from "../security/callableAbuseProtection";
+import {requireStoreWorkspaceAccess} from "../services/store/storeAccessService";
 
 if (admin.apps.length === 0) {
   admin.initializeApp();
@@ -51,13 +52,8 @@ function identifier(value: unknown, field: string): string {
 }
 
 async function requireOwnedApprovedProduct(uid: string, productId: string) {
-  const user = await db.collection("users").doc(uid).get();
-
-  if (user.data()?.accountType !== "store_owner") {
-    throw new HttpsError("permission-denied", "Only store owners can manage product images.");
-  }
-
-  const storeId = text(user.data()?.storeId, 200);
+  const {store: authorizedStore} = await requireStoreWorkspaceAccess(uid, "products", "write");
+  const storeId = authorizedStore.id;
   const [store, product] = await Promise.all([
     storeId ? db.collection("stores").doc(storeId).get() : Promise.resolve(null),
     db.collection("products").doc(productId).get(),
@@ -65,7 +61,7 @@ async function requireOwnedApprovedProduct(uid: string, productId: string) {
 
   if (
     !store?.exists ||
-    store.data()?.ownerId !== uid ||
+    store.data()?.ownerId !== authorizedStore.data()?.ownerId ||
     store.data()?.isApproved !== true ||
     store.data()?.onboardingCompleted !== true ||
     !product.exists ||

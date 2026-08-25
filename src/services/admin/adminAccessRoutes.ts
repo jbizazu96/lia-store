@@ -4,6 +4,7 @@ export function requiredAdminPermission(pathname: string): AdminPermission | "ma
   if (pathname.startsWith("/admin/users")) return "master";
   if (pathname.startsWith("/admin/settings/audit-logs")) return "master";
   if (pathname === "/admin") return "overview";
+  if (pathname.startsWith("/admin/operations")) return "operations";
   if (pathname.startsWith("/admin/store-applications")) return "stores";
   if (pathname.startsWith("/admin/driver-applications")) return "drivers";
   if (pathname.startsWith("/admin/customers")) return "customers";

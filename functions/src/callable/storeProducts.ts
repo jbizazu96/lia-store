@@ -24,6 +24,7 @@ import {
 import {createCatalogSearchTokens, normalizeCatalogSearchText} from "../services/catalog/catalogSearchTokens";
 import {enforceCallableAbuseProtection} from "../security/callableAbuseProtection";
 import {isConfiguredLowStock, normalizeStoreSku, retailInventoryValue} from "../services/store/storeInventoryPolicy";
+import {requireStoreWorkspaceAccess} from "../services/store/storeAccessService";
 
 if (admin.apps.length === 0) {
   admin.initializeApp();
@@ -193,29 +194,7 @@ function editableProductData(
 }
 
 async function ownedStore(uid: string) {
-  const user = await db.collection("users").doc(uid).get();
-
-  if (user.data()?.accountType !== "store_owner") {
-    throw new HttpsError("permission-denied", "Only store owners can manage products.");
-  }
-
-  const storeId = typeof user.data()?.storeId === "string"
-    ? user.data()!.storeId.trim()
-    : "";
-  const store = storeId
-    ? await db.collection("stores").doc(storeId).get()
-    : null;
-
-  if (
-    !store?.exists ||
-    store.data()?.ownerId !== uid ||
-    store.data()?.isApproved !== true ||
-    store.data()?.onboardingCompleted !== true
-  ) {
-    throw new HttpsError("permission-denied", "Your approved store is required to manage products.");
-  }
-
-  return store;
+  return (await requireStoreWorkspaceAccess(uid, "products", "read")).store;
 }
 
 function productSearchFields(data: Record<string, unknown>) {
@@ -367,7 +346,7 @@ export const mutateStoreProduct = onCall({ region: "us-central1" }, async (reque
 
   const input = record(request.data);
   const action = text(input.action, 40);
-  const store = await ownedStore(request.auth.uid);
+  const store = (await requireStoreWorkspaceAccess(request.auth.uid, "products", "write")).store;
   const lowStockThreshold = await configuredLowStockThreshold();
   if (action === "create" || action === "duplicate") {
     await enforceCallableAbuseProtection({

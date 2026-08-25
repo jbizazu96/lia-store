@@ -21,6 +21,7 @@ import type {
   DeliveryZone,
   DeliveryZoneDraft,
 } from "@/types/deliveryZone";
+import {useAdminConfirmation} from "@/context/AdminConfirmationContext";
 
 const STATE_CODES = [
   "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA",
@@ -70,6 +71,7 @@ function zoneDraft(zone: DeliveryZone): DeliveryZoneDraft {
 }
 
 export function AdminDeliveryZonesWorkspace() {
+  const confirm = useAdminConfirmation();
   const [zones, setZones] = useState<DeliveryZone[]>([]);
   const [editingId, setEditingId] = useState<string | null | undefined>(undefined);
   const [draft, setDraft] = useState<DeliveryZoneDraft | null>(null);
@@ -175,7 +177,7 @@ export function AdminDeliveryZonesWorkspace() {
   };
 
   const removeCity = async (cityKey: string, label: string) => {
-    if (!editingId || !window.confirm(`Remove ${label} from this delivery zone?`)) return;
+    if (!editingId || !await confirm({title: "Remove city from zone?", description: `Remove ${label} from this delivery zone? Accounts are not reassigned automatically.`, confirmationLabel: "Remove city", tone: "warning"})) return;
     setError("");
     setSuccess("");
     try {
@@ -188,7 +190,7 @@ export function AdminDeliveryZonesWorkspace() {
   };
 
   const deleteZone = async (zone: DeliveryZone) => {
-    if (!window.confirm(`Delete ${zone.name}? This cannot be undone.`)) return;
+    if (!await confirm({title: "Delete delivery zone?", description: `Delete ${zone.name}? This cannot be undone. Resolve account assignments before continuing.`, confirmationLabel: "Delete zone", tone: "danger"})) return;
     setError("");
     setSuccess("");
     try {
@@ -202,7 +204,7 @@ export function AdminDeliveryZonesWorkspace() {
   };
 
   const backfillAssignments = async () => {
-    if (!window.confirm("Assign active delivery zones to existing customers, stores, and drivers? Existing admin assignments will be preserved.")) return;
+    if (!await confirm({title: "Run zone assignment backfill?", description: "Active zones will be assigned to existing customers, stores, and drivers. Existing administrator assignments are preserved.", confirmationLabel: "Run assignment", tone: "warning"})) return;
     setBackfilling(true);
     setError("");
     setSuccess("");

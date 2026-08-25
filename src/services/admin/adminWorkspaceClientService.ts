@@ -44,6 +44,10 @@ import type {
   AdminAuditLog,
   AdminRefundClaimDetail,
   AdminRefundClaimListItem,
+  AdminOperationsOverview,
+  AdminSearchResult,
+  AdminOperationalControls,
+  AdminDailyFinanceReport,
 } from "@/types/adminWorkspace";
 import type {HomePromotion} from "@/types/homePromotion";
 import type {StoreContractWorkspace} from "@/types/storeContract";
@@ -338,6 +342,13 @@ export const adminWorkspaceClientService = {
 
   getLiaFinanceReport: () =>
     call<AdminLiaFinanceReport>("getAdminLiaFinanceReport"),
+  getOperationsOverview: () => call<AdminOperationsOverview>("getAdminOperationsOverview"),
+  searchWorkspace: (query: string) => call<{results: AdminSearchResult[]}>("searchAdminWorkspace", {query}),
+  retryFailedJob: (type: string, id: string, reason: string) => call<{success: boolean}>("retryAdminFailedJob", {type, id, reason}),
+  getDailyFinanceReports: () => call<{reports: AdminDailyFinanceReport[]}>("getAdminDailyFinanceReports"),
+  runDailyFinancialReconciliation: (date: string) => call<{report: AdminDailyFinanceReport}>("runAdminDailyFinancialReconciliation", {date}),
+  getOperationalControls: () => call<{controls: AdminOperationalControls}>("getAdminOperationalControls"),
+  saveOperationalControls: (controls: AdminOperationalControls) => call<{success: boolean; controls: AdminOperationalControls}>("saveAdminOperationalControls", {controls}),
   getCommissionSettings: (cursor?: string) => call<AdminCommissionSettings>("getAdminCommissionSettings", cursor ? {cursor} : undefined),
   getMarketplacePricingPolicy: () => call<{policy: Record<string, number | boolean> | null}>("getAdminMarketplacePricingPolicy"),
   saveDefaultStoreCommission: (basisPoints: number) => call<{success: boolean}>("saveAdminDefaultStoreCommission", {basisPoints}),

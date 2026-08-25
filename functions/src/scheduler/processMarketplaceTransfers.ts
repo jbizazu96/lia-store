@@ -36,6 +36,7 @@ import {
 import {
   paymentTransferScheduler,
 } from "../payment/marketplace/paymentTransferScheduler";
+import {transfersOperationallyPaused} from "../callable/adminOperations";
 
 /*
 |--------------------------------------------------------------------------
@@ -78,6 +79,10 @@ export const processMarketplaceTransfers =
     },
 
     async () => {
+      if (await transfersOperationallyPaused()) {
+        console.warn("Marketplace transfer processing is paused by an audited administrator control.");
+        return;
+      }
       console.log(
         "Starting marketplace transfer processing..."
       );

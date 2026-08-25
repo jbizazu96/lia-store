@@ -34,6 +34,8 @@ beforeEach(async () => {
       db.doc("users/customer-2").set({uid: "customer-2", accountType: "customer"}),
       db.doc("users/store-owner").set({uid: "store-owner", accountType: "store_owner"}),
       db.doc("users/other-store-owner").set({uid: "other-store-owner", accountType: "store_owner"}),
+      db.doc("users/store-staff").set({uid: "store-staff", accountType: "store_staff", isActive: true}),
+      db.doc("storeStaff/store-staff").set({storeId: "store-1", ownerId: "store-owner", isActive: true, permissions: {orders: "read"}}),
       db.doc("admins/master-admin").set({
         email: "master@lia.test",
         isActive: true,
@@ -44,6 +46,7 @@ beforeEach(async () => {
         onboardingCompleted: true,
         isApproved: true,
       }),
+      db.doc("storeWorkspaceStatuses/store-owner").set({isApproved: true, status: "approved"}),
       db.doc("storePublicProfiles/store-1").set({name: "Test Store", isActive: true}),
       db.doc("productPublicProfiles/product-1").set({name: "Rice", storeId: "store-1"}),
       db.doc("users/customer-1/notifications/notification-1").set({title: "Order update"}),
@@ -98,6 +101,12 @@ describe("Firestore account isolation", () => {
 });
 
 describe("Firestore marketplace access", () => {
+  it("lets active store staff watch only their assigned owner's workspace status", async () => {
+    const db = testEnv.authenticatedContext("store-staff").firestore();
+    await assertSucceeds(db.doc("storeWorkspaceStatuses/store-owner").get());
+    await assertFails(db.doc("storeWorkspaceStatuses/other-store-owner").get());
+    await assertFails(db.doc("storeStaff/store-staff").get());
+  });
   it("allows public reads only from sanitized catalog projections", async () => {
     const publicDb = testEnv.unauthenticatedContext().firestore();
     await assertSucceeds(publicDb.doc("storePublicProfiles/store-1").get());

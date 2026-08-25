@@ -50,6 +50,7 @@ import {
 import {
   OrderInvestigationNotice,
 } from "@/components/store/orders/OrderInvestigationNotice";
+import {useStoreWorkspace} from "@/context/StoreWorkspaceContext";
 
 interface OrderDetailsPageProps {
   params: Promise<{
@@ -58,6 +59,9 @@ interface OrderDetailsPageProps {
 }
 
 export default function OrderDetailsPage({params}: OrderDetailsPageProps) {
+  const {entry} = useStoreWorkspace();
+  const staffUser = entry?.access.role === "staff";
+  const readOnly = staffUser && entry.access.permissions.orders === "read";
   const {orderId} = use(params);
   const router = useRouter();
   const {
@@ -325,8 +329,8 @@ export default function OrderDetailsPage({params}: OrderDetailsPageProps) {
             </div>
           </div>
 
-          {/* Customer delivery and service fees are excluded from store accounting. */}
-          <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+          {/* Financial details are owner-only. */}
+          {!staffUser && <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
             <h3 className="font-bold text-gray-800 mb-4">Store Accounting</h3>
             <div className="space-y-2">
               <div className="flex justify-between text-sm">
@@ -356,9 +360,9 @@ export default function OrderDetailsPage({params}: OrderDetailsPageProps) {
                 {order.storeFinancials?.refundStatus && <div className="flex justify-between"><span>Refund</span><span className="font-medium capitalize">{order.storeFinancials.refundStatus.replaceAll("_", " ")}</span></div>}
               </div>
             </div>
-          </div>
+          </div>}
 
-          <OrderActions
+          {!readOnly && <OrderActions
             status={order.status}
             cancellationReason={
               order.cancellationReason
@@ -367,7 +371,7 @@ export default function OrderDetailsPage({params}: OrderDetailsPageProps) {
             onStatusUpdate={
               handleStatusUpdate
             }
-          />
+          />}
         </div>
       </div>
     </div>

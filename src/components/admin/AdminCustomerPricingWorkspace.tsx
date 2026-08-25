@@ -4,6 +4,7 @@ import Link from "next/link";
 import {useCallback, useEffect, useState} from "react";
 import {ArrowLeft, LoaderCircle, RotateCcw} from "lucide-react";
 import {adminWorkspaceClientService} from "@/services/admin/adminWorkspaceClientService";
+import {useAdminConfirmation} from "@/context/AdminConfirmationContext";
 
 interface MarketplacePricingPolicy {
   maxRadiusMiles: number;
@@ -87,6 +88,7 @@ interface ZonePricingScope {
 }
 
 export function AdminCustomerPricingWorkspace({zoneId}: {zoneId?: string}) {
+  const confirm = useAdminConfirmation();
   const [policy, setPolicy] = useState<MarketplacePricingPolicy | null>(null);
   const [draft, setDraft] = useState<Record<EditablePricingField, string> | null>(null);
   const [zone, setZone] = useState<ZonePricingScope | null>(null);
@@ -165,7 +167,7 @@ export function AdminCustomerPricingWorkspace({zoneId}: {zoneId?: string}) {
   };
 
   const resetToDefaults = async () => {
-    if (!zoneId || !window.confirm("Reset this zone to the default customer pricing?")) return;
+    if (!zoneId || !await confirm({title: "Reset zone pricing?", description: "This zone will immediately inherit Default Customer Pricing. Existing orders keep their saved pricing snapshot.", confirmationLabel: "Reset pricing", tone: "warning"})) return;
     setResetting(true);
     setError("");
     setSaved(false);

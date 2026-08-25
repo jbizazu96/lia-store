@@ -1,5 +1,6 @@
 export const ADMIN_PERMISSIONS = [
   "overview",
+  "operations",
   "stores",
   "drivers",
   "customers",
@@ -22,6 +23,7 @@ export type AdminPermissions = Partial<Record<AdminPermission, AdminAccessLevel>
 
 export const ADMIN_PERMISSION_LABELS: Record<AdminPermission, string> = {
   overview: "Overview",
+  operations: "System operations",
   stores: "Store applications",
   drivers: "Driver applications",
   customers: "Customers",

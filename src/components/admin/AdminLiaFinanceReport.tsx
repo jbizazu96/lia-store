@@ -14,6 +14,7 @@ import {useEffect, useState} from "react";
 import {Banknote, ChevronDown, Landmark, LoaderCircle, ReceiptText, RotateCcw, Store} from "lucide-react";
 import {adminWorkspaceClientService} from "@/services/admin/adminWorkspaceClientService";
 import type {AdminLiaFinanceReport} from "@/types/adminWorkspace";
+import {AdminDailyFinanceReports} from "@/components/admin/AdminDailyFinanceReports";
 
 const cash = (amount: number) => new Intl.NumberFormat("en-US", {style: "currency", currency: "USD"}).format(amount / 100);
 
@@ -29,6 +30,7 @@ export function AdminLiaFinanceReport() {
     <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-5"><Card icon={<Landmark/>} title="Net LIA revenue" value={cash(revenue.netPlatformRevenue)} tone="bg-green-50 text-green-800"/><Card icon={<ReceiptText/>} title="Gross LIA revenue" value={cash(revenue.grossPlatformRevenue)} tone="bg-blue-50 text-blue-800"/><Card icon={<Banknote/>} title="Stripe processing fees" value={cash(revenue.stripeProcessingFees)} tone="bg-violet-50 text-violet-800"/><Card icon={<RotateCcw/>} title="LIA refund impact" value={cash(revenue.platformRefundImpact)} tone="bg-red-50 text-red-800"/><Card icon={<Banknote/>} title="Customer payments" value={cash(revenue.grossCustomerPayments)} tone="bg-orange-50 text-orange-800"/></div>
     <section className="mt-6 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-100"><h2 className="font-bold">How the money is represented</h2><div className="mt-4 grid gap-3 text-sm sm:grid-cols-2"><Line label="Completed store and driver payouts" value={cash(revenue.participantTransfersCompleted)}/><Line label="Customer refund total" value={cash(revenue.refundAmount)}/><Line label="Sales tax collected for stores" value={cash(revenue.salesTaxCollected)}/><Line label="Driver tips collected" value={cash(revenue.driverTipsCollected)}/></div><p className="mt-5 border-t border-slate-100 pt-4 text-xs leading-5 text-slate-500">Sales tax and tips are included in customer payments but are not LIA revenue. Completed participant payouts are shown separately because they are money LIA sends to stores and drivers after delivery.</p></section>
     <StoreFinanceReports stores={report.stores ?? []} />
+    <AdminDailyFinanceReports />
   </section>;
 }
 

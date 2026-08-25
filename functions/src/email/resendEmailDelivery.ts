@@ -3,6 +3,7 @@ import {FieldValue, getFirestore, Timestamp} from "firebase-admin/firestore";
 import {defineSecret, defineString} from "firebase-functions/params";
 import {onDocumentCreated} from "firebase-functions/v2/firestore";
 import {onSchedule} from "firebase-functions/v2/scheduler";
+import {getOperationalControlsForJobs} from "../callable/adminOperations";
 
 if (admin.apps.length === 0) admin.initializeApp();
 const db = getFirestore("default");
@@ -77,7 +78,8 @@ export const retryQueuedEmails = onSchedule({schedule: "every 15 minutes", regio
 });
 
 export const cleanupEmailJobs = onSchedule({schedule: "every day 03:30", region: "us-central1", timeZone: "America/Chicago"}, async () => {
-  const cutoff = Timestamp.fromMillis(Date.now() - 90 * 24 * 60 * 60 * 1_000);
+  const controls = await getOperationalControlsForJobs();
+  const cutoff = Timestamp.fromMillis(Date.now() - controls.emailJobRetentionDays * 24 * 60 * 60 * 1_000);
   const snapshot = await db.collection("emailJobs").where("createdAt", "<", cutoff).limit(400).get();
   if (snapshot.empty) return;
   const batch = db.batch();

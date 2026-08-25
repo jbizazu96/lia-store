@@ -24,6 +24,17 @@ export interface AdminWorkspaceOverview {
   };
 }
 
+export interface AdminSearchResult {type: string; id: string; title: string; subtitle: string; href: string}
+export interface AdminOperationsOverview {
+  controls: AdminOperationalControls;
+  health: {status: "healthy" | "attention"; failedJobs: number; fatalClientErrors: number; lastReconciliationAt: string | null};
+  failedJobs: Array<{id: string; orderId: string; status: string; error: string | null; updatedAt: string | null; type: string; title: string; href: string}>;
+  errors: Array<{id: string; area?: string; message?: string; createdAt: string | null}>;
+  actionQueue: Array<{type: string; label: string; count: number; href: string}>;
+}
+export interface AdminOperationalControls {checkoutPaused: boolean; transfersPaused: boolean; maintenanceMode: boolean; checkoutMessage: string; notificationReadRetentionDays: number; notificationAbsoluteRetentionDays: number; emailJobRetentionDays: number; resolvedSupportRetentionDays: number}
+export interface AdminDailyFinanceReport {id: string; date: string; totals: {customerPayments: number; platformRevenue: number; stripeFees: number; refunds: number; storeAllocated: number; driverAllocated: number; transfersCompleted: number}; expectedTransfers: number; discrepancyAmount: number; reconciled: boolean; ledgerEventCount: number; orderCount: number; generatedAt: string | null}
+
 export type AdminApplicationStatus =
   | "draft"
   | "pending_review"

@@ -100,6 +100,9 @@ export interface UpdateStoreOrderStatusInput {
   */
   requesterUid: string;
 
+  /* Store identity already authorized by the callable. */
+  authorizedStoreId?: string;
+
   /*
     Firestore order document ID.
   */
@@ -504,10 +507,9 @@ async function updateStoreOrderStatus(
           ? order.store.ownerId.trim()
           : "";
 
-      if (
-        !storeOwnerUid ||
-        storeOwnerUid !== requesterUid
-      ) {
+      const orderStoreId = typeof order.store?.id === "string" ? order.store.id.trim() : "";
+      const authorizedStoreId = input.authorizedStoreId?.trim() ?? "";
+      if (!storeOwnerUid || (authorizedStoreId ? orderStoreId !== authorizedStoreId : storeOwnerUid !== requesterUid)) {
         throw new OrderStatusServiceError(
           "FORBIDDEN",
           "You are not authorized to update this order."

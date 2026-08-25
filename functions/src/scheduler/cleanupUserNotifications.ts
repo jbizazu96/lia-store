@@ -1,11 +1,10 @@
 import * as admin from "firebase-admin";
 import {getFirestore, Timestamp} from "firebase-admin/firestore";
 import {onSchedule} from "firebase-functions/v2/scheduler";
+import {getOperationalControlsForJobs} from "../callable/adminOperations";
 
 if (admin.apps.length === 0) admin.initializeApp();
 const db = getFirestore("default");
-const READ_RETENTION_DAYS = 90;
-const ABSOLUTE_RETENTION_DAYS = 180;
 const QUERY_PAGE_SIZE = 500;
 const MAXIMUM_SCANNED_PER_RUN = 5000;
 
@@ -15,8 +14,8 @@ function userNotificationPath(path: string): boolean {
 
 /**
  * Keeps user notification subcollections bounded without relying on TTL field
- * configuration. Read notifications expire after 90 days and unread records
- * receive a 180-day hard cap.
+ * configuration. The audited operational policy supplies both retention
+ * windows, with server-enforced minimum and maximum limits.
  */
 export const cleanupUserNotifications = onSchedule(
   {
@@ -26,12 +25,15 @@ export const cleanupUserNotifications = onSchedule(
     retryCount: 1,
   },
   async () => {
+    const controls = await getOperationalControlsForJobs();
+    const readRetentionDays = controls.notificationReadRetentionDays;
+    const absoluteRetentionDays = controls.notificationAbsoluteRetentionDays;
     const now = Date.now();
     const readCutoff = Timestamp.fromMillis(
-      now - READ_RETENTION_DAYS * 24 * 60 * 60 * 1000
+      now - readRetentionDays * 24 * 60 * 60 * 1000
     );
     const absoluteCutoffMillis =
-      now - ABSOLUTE_RETENTION_DAYS * 24 * 60 * 60 * 1000;
+      now - absoluteRetentionDays * 24 * 60 * 60 * 1000;
     let lastDocument: FirebaseFirestore.QueryDocumentSnapshot | null = null;
     let scanned = 0;
     let deleted = 0;
@@ -71,8 +73,8 @@ export const cleanupUserNotifications = onSchedule(
     console.info("User notification retention cleanup completed.", {
       scanned,
       deleted,
-      readRetentionDays: READ_RETENTION_DAYS,
-      absoluteRetentionDays: ABSOLUTE_RETENTION_DAYS,
+      readRetentionDays,
+      absoluteRetentionDays,
     });
   }
 );

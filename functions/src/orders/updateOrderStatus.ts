@@ -48,7 +48,7 @@ import {
   isShipdayFulfillmentError,
   shipdayFulfillmentService,
 } from "./shipdayFulfillmentService";
-import {requireApprovedStore} from "../services/store/storeAccessService";
+import {requireStoreWorkspaceAccess} from "../services/store/storeAccessService";
 import {enforceCallableAbuseProtection} from "../security/callableAbuseProtection";
 
 
@@ -381,7 +381,7 @@ export const updateOrderStatus =
       }
 
       /* Every fulfillment action requires current administrative approval. */
-      await requireApprovedStore(request.auth.uid);
+      const {store} = await requireStoreWorkspaceAccess(request.auth.uid, "orders", "write");
       await enforceCallableAbuseProtection({
         operation: "store-order-status-update",
         uid: request.auth.uid,
@@ -405,6 +405,8 @@ export const updateOrderStatus =
             .updateStoreOrderStatus({
               requesterUid:
                 request.auth.uid,
+
+              authorizedStoreId: store.id,
 
               orderId,
 

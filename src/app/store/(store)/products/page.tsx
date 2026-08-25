@@ -46,6 +46,7 @@ import {
 import {
   ProductCard,
 } from "@/components/store/products/ProductCard";
+import {useStoreWorkspace} from "@/context/StoreWorkspaceContext";
 
 import {
   ProductFilters,
@@ -75,6 +76,8 @@ function parseCsvLine(line: string): string[] {
 }
 
 export default function ProductsPage() {
+  const {entry} = useStoreWorkspace();
+  const readOnly = entry?.access.role === "staff" && entry.access.permissions.products === "read";
   const router = useRouter();
   const categories = useProductCategories();
   const [searchQuery, setSearchQuery] = useState("");
@@ -265,25 +268,26 @@ export default function ProductsPage() {
           </p>
         </div>
 
-        <Link
+        {!readOnly && <Link
           href="/store/products/add"
           className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-orange-500 to-orange-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:from-orange-600 hover:to-orange-700 hover:shadow-lg"
         >
           <Plus className="h-4 w-4" />
           Add Product
-        </Link>
+        </Link>}
       </div>
 
       <ProductStats {...stats} />
 
-      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-gray-100 bg-white p-3 text-sm">
+      {readOnly && <div className="rounded-xl border border-blue-100 bg-blue-50 p-3 text-sm font-semibold text-blue-800">Read-only product access. Contact the store owner to request editing permission.</div>}
+      {!readOnly && <div className="flex flex-wrap items-center gap-2 rounded-xl border border-gray-100 bg-white p-3 text-sm">
         <span className="mr-auto text-gray-500">{selectedIds.size} selected</span>
         <button type="button" disabled={selectedIds.size === 0 || bulkSaving} onClick={() => void bulkAvailability(true)} className="rounded-lg bg-green-50 px-3 py-2 font-semibold text-green-700 disabled:opacity-40">Activate</button>
         <button type="button" disabled={selectedIds.size === 0 || bulkSaving} onClick={() => void bulkAvailability(false)} className="rounded-lg bg-gray-100 px-3 py-2 font-semibold text-gray-700 disabled:opacity-40">Deactivate</button>
         <button type="button" onClick={exportLoadedProducts} className="rounded-lg border border-gray-200 px-3 py-2 font-semibold text-gray-700">Export loaded CSV</button>
         <input ref={importInputRef} type="file" accept=".csv,text/csv" className="hidden" onChange={(event) => {const file = event.target.files?.[0]; if (file) void importInventoryCsv(file);}} />
         <button type="button" disabled={bulkSaving} onClick={() => importInputRef.current?.click()} className="rounded-lg border border-gray-200 px-3 py-2 font-semibold text-gray-700 disabled:opacity-40">Import inventory CSV</button>
-      </div>
+      </div>}
 
       <ProductFilters
         searchQuery={searchQuery}
@@ -326,7 +330,7 @@ export default function ProductsPage() {
             >
               Clear all filters
             </button>
-          ) : (
+          ) : readOnly ? null : (
             <Link
               href="/store/products/add"
               className="mt-4 inline-block rounded-xl bg-orange-500 px-6 py-3 font-semibold text-white transition hover:bg-orange-600"
@@ -375,6 +379,7 @@ export default function ProductsPage() {
                     }}
                   >
                     <ProductCard
+                      readOnly={readOnly}
                       product={product}
                       categoryName={category.name}
                       onToggleActive={

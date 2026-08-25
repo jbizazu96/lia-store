@@ -11,6 +11,7 @@ import {
   type AdminPermissions,
   type ManagedAdminUser,
 } from "@/types/adminAccess";
+import {useAdminConfirmation} from "@/context/AdminConfirmationContext";
 
 type Draft = {displayName: string; email: string; password: string; permissions: AdminPermissions};
 const emptyDraft: Draft = {displayName: "", email: "", password: "", permissions: {}};
@@ -31,6 +32,7 @@ function setPermission(
 }
 
 export function AdminUsersWorkspace() {
+  const confirm = useAdminConfirmation();
   const [users, setUsers] = useState<ManagedAdminUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState<string | null>(null);
@@ -68,7 +70,7 @@ export function AdminUsersWorkspace() {
   };
 
   const remove = async (user: ManagedAdminUser) => {
-    if (!window.confirm(`Delete ${user.email}? This removes their Firebase Authentication account and admin access.`)) return;
+    if (!await confirm({title: "Delete administrator?", description: `Delete ${user.email}? This removes the Firebase Authentication account and all admin access.`, confirmationLabel: "Delete administrator", tone: "danger"})) return;
     setWorking(user.uid); setError(""); setMessage("");
     try { await adminUserClientService.delete(user.uid); setMessage("Staff administrator deleted."); await load(); }
     catch (reason) { setError(reason instanceof Error ? reason.message : "Unable to delete the administrator."); }

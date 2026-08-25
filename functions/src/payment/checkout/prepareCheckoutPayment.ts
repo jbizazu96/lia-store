@@ -115,6 +115,7 @@ import type {
 import type {
   ReusableCheckoutSession,
 } from "./checkoutSessionTypes";
+import {checkoutOperationalGuard} from "../../callable/adminOperations";
 
 
 /*
@@ -587,6 +588,7 @@ export const prepareCheckoutPayment =
           "You must sign in before preparing payment."
         );
       }
+      await checkoutOperationalGuard();
 
       await enforceCallableAbuseProtection({
         operation: "prepare-checkout-payment",

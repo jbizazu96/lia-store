@@ -5,6 +5,7 @@ import {useEffect, useState} from "react";
 import {Pencil, Plus, Trash2} from "lucide-react";
 import {adminWorkspaceClientService} from "@/services/admin/adminWorkspaceClientService";
 import type {HomePromotion, HomePromotionTheme} from "@/types/homePromotion";
+import {useAdminConfirmation} from "@/context/AdminConfirmationContext";
 
 type Draft = Omit<HomePromotion, "id">;
 const blank = (): Draft => ({title: "", subtitle: "", ctaLabel: "Shop now", targetPath: "/home", theme: "orange", startsAt: null, endsAt: null, position: 0, isActive: false});
@@ -12,6 +13,7 @@ const themes: HomePromotionTheme[] = ["orange", "green", "blue", "purple"];
 const localDate = (value: string | null) => value ? new Date(value).toISOString().slice(0, 16) : "";
 
 export function AdminHomePromotionsWorkspace() {
+  const confirm = useAdminConfirmation();
   const [promotions, setPromotions] = useState<HomePromotion[]>([]);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -22,7 +24,7 @@ export function AdminHomePromotionsWorkspace() {
   useEffect(() => { void load(); }, []);
   const edit = (promotion?: HomePromotion) => { setError(""); setEditingId(promotion?.id ?? null); setDraft(promotion ? {...promotion} : blank()); };
   const save = async () => { if (!draft) return; setSaving(true); setError(""); try { await adminWorkspaceClientService.saveHomePromotion(editingId, {...draft, startsAt: draft.startsAt ? new Date(draft.startsAt).toISOString() : null, endsAt: draft.endsAt ? new Date(draft.endsAt).toISOString() : null}); setDraft(null); setEditingId(null); await load(); } catch (reason) { setError(reason instanceof Error ? reason.message : "Unable to save the banner."); } finally { setSaving(false); } };
-  const remove = async (id: string) => { if (!window.confirm("Delete this promotion banner?")) return; try { await adminWorkspaceClientService.deleteHomePromotion(id); await load(); } catch (reason) { setError(reason instanceof Error ? reason.message : "Unable to delete the banner."); } };
+  const remove = async (id: string) => { if (!await confirm({title: "Delete promotion banner?", description: "This removes the banner from the customer home page and cannot be undone.", confirmationLabel: "Delete banner", tone: "danger"})) return; try { await adminWorkspaceClientService.deleteHomePromotion(id); await load(); } catch (reason) { setError(reason instanceof Error ? reason.message : "Unable to delete the banner."); } };
   return <section><div className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-sm font-bold tracking-wide text-orange-600">CUSTOMER HOME</p><h1 className="mt-1 text-3xl font-bold">Promotion banners</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">Create the live banners shown on the customer home page. Only active banners within their optional schedule are visible.</p></div><button type="button" onClick={() => edit()} className="inline-flex items-center gap-2 rounded-xl bg-orange-600 px-4 py-2.5 text-sm font-bold text-white"><Plus className="h-4 w-4"/>Add banner</button></div>{error && <p className="mt-4 rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}
     {draft && <PromotionForm draft={draft} setDraft={setDraft} saving={saving} onCancel={() => { setDraft(null); setEditingId(null); }} onSave={() => void save()}/>}
     <div className="mt-6 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-100">{loading ? <p className="p-8 text-center text-sm text-slate-500">Loading promotion banners…</p> : promotions.length === 0 ? <p className="p-8 text-center text-sm text-slate-500">No home promotion banners yet.</p> : <div className="divide-y divide-slate-100">{promotions.map((promotion) => <article key={promotion.id} className="flex flex-wrap items-center gap-4 px-5 py-4"><div className={`h-12 w-2 rounded-full ${tone(promotion.theme)}`}/><div className="min-w-0 flex-1"><p className="font-bold">{promotion.title}</p><p className="mt-1 text-sm text-slate-500">{promotion.subtitle}</p><p className="mt-1 text-xs text-slate-400">Position {promotion.position} · {promotion.isActive ? "Active" : "Inactive"}</p></div><button type="button" onClick={() => edit(promotion)} className="rounded-lg p-2.5 text-slate-600 hover:bg-slate-100" aria-label={`Edit ${promotion.title}`}><Pencil className="h-4 w-4"/></button><button type="button" onClick={() => void remove(promotion.id)} className="rounded-lg p-2.5 text-red-600 hover:bg-red-50" aria-label={`Delete ${promotion.title}`}><Trash2 className="h-4 w-4"/></button></article>)}</div>}</div>

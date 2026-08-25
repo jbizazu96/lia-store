@@ -33,7 +33,7 @@ import {
 import {PLATFORM_REPORTING_TIME_ZONE} from "../payment/pricing/paymentPricingConfig";
 import {resolveDeliveryZoneForAddress} from "../delivery/deliveryZoneAssignmentService";
 import {createCatalogSearchTokens, normalizeCatalogSearchText} from "../services/catalog/catalogSearchTokens";
-import {requireApprovedStore, requireOwnedStore} from "../services/store/storeAccessService";
+import {requireApprovedStore, requireOwnedStore, requireStoreWorkspaceAccess} from "../services/store/storeAccessService";
 import {enforceCallableAbuseProtection} from "../security/callableAbuseProtection";
 import {hasStoreAddressChanged} from "../services/store/storeSettingsPolicy";
 import {
@@ -590,15 +590,21 @@ export const getStoreWorkspaceSettings = onCall({ region: "us-central1" }, async
 export const getStoreWorkspaceEntry = onCall({ region: "us-central1" }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in to open the store app.");
   const user = await db.collection("users").doc(request.auth.uid).get();
-  if (user.data()?.accountType !== "store_owner") throw new HttpsError("permission-denied", "Only store owners can access this workspace.");
+  const accountType = user.data()?.accountType;
+  if (accountType !== "store_owner" && accountType !== "store_staff") throw new HttpsError("permission-denied", "Only authorized store users can access this workspace.");
   try {
-    const store = await requireOwnedStore(request.auth.uid);
-    await refreshStoreUploadClaim(request.auth.uid, store.id);
+    const resolved = accountType === "store_staff" ? await requireStoreWorkspaceAccess(request.auth.uid) : null;
+    const store = resolved?.store ?? await requireOwnedStore(request.auth.uid);
+    const access = resolved?.access ?? {uid: request.auth.uid, storeId: store.id, ownerId: request.auth.uid, role: "owner" as const, permissions: {orders: "write" as const, products: "write" as const}};
+    if (access.role === "owner" || access.permissions.products === "write") {
+      await refreshStoreUploadClaim(request.auth.uid, store.id);
+    }
     const data = store.data() ?? {};
     const applicationReview = isRecord(data.applicationReview) ? data.applicationReview : {};
     const suspension = isRecord(data.suspension) ? data.suspension : {};
     const performance = await store.ref.collection("reporting").doc("lifetime").get();
-    const pendingOrderCount = performance.exists
+    const canSeeOrders = access.role === "owner" || Boolean(access.permissions.orders);
+    const pendingOrderCount = !canSeeOrders ? 0 : performance.exists
       ? nonNegativeCentAmount(performance.data()?.activeOrders)
       : (await db.collection("orders")
         .where("store.id", "==", store.id)
@@ -623,6 +629,7 @@ export const getStoreWorkspaceEntry = onCall({ region: "us-central1" }, async (r
         approvalRevoked: Boolean(data.approvalRevokedAt),
       },
       pendingOrderCount,
+      access,
     };
   } catch (error) {
     if (error instanceof HttpsError && error.code === "not-found") {
@@ -647,7 +654,7 @@ export const getStoreWorkspaceOrders = onCall({region: "us-central1", timeoutSec
   const search = normalizeCatalogSearchText(text(input.search));
   const from = storedDate(input.from);
   const to = storedDate(input.to);
-  const store = await requireApprovedStore(request.auth.uid);
+  const {store, access} = await requireStoreWorkspaceAccess(request.auth.uid, "orders", "read");
   await enforceCallableAbuseProtection({
     operation: search ? "store-order-search" : "store-order-history",
     uid: request.auth.uid,
@@ -682,7 +689,7 @@ export const getStoreWorkspaceOrders = onCall({region: "us-central1", timeoutSec
   }
   const [orders, stats] = await Promise.all([query.get(), storeOrderCounts(store.id)]);
   const ordersLoadedAt = Date.now();
-  const financials = await storeOrderFinancialSummaries(store.id, orders.docs);
+  const financials = access.role === "owner" ? await storeOrderFinancialSummaries(store.id, orders.docs) : new Map<string, unknown>();
   const completedAt = Date.now();
 
   console.info("Store order history loaded.", {
@@ -712,13 +719,13 @@ export const getStoreWorkspaceOrder = onCall({ region: "us-central1" }, async (r
   const orderId = text(input.orderId);
   if (!orderId || orderId.includes("/")) throw new HttpsError("invalid-argument", "A valid order ID is required.");
 
-  const store = await requireApprovedStore(request.auth.uid);
+  const {store, access} = await requireStoreWorkspaceAccess(request.auth.uid, "orders", "read");
   const order = await db.collection("orders").doc(orderId).get();
   if (!order.exists || order.data()?.checkoutStatus !== "confirmed" || order.data()?.payment?.status !== "paid" || order.data()?.store?.id !== store.id) {
     throw new HttpsError("not-found", "The order could not be found.");
   }
   await enforceCallableAbuseProtection({operation: "store-order-detail", uid: request.auth.uid, appCheckVerified: Boolean(request.app), maximumRequests: 240, windowSeconds: 600});
-  const financials = await storeOrderFinancialSummaries(store.id, [order]);
+  const financials = access.role === "owner" ? await storeOrderFinancialSummaries(store.id, [order]) : new Map<string, unknown>();
 
   return {
     order: {

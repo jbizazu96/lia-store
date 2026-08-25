@@ -11,6 +11,7 @@ import {
 export type CurrentAccountType =
   | "customer"
   | "store_owner"
+  | "store_staff"
   | "driver"
   | "admin";
 

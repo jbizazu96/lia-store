@@ -26,6 +26,7 @@ import {
   Clock,
   History,
   Headphones,
+  Users,
 } from "lucide-react";
 import { auth } from "@/lib/firebase";
 import {
@@ -44,6 +45,7 @@ const DangerSection = dynamic(() => import("@/components/store/settings/DangerSe
 const StoreSchedule = dynamic(() => import("@/components/store/settings/StoreSchedule").then((module) => module.StoreSchedule));
 const SettingsActivitySection = dynamic(() => import("@/components/store/settings/SettingsActivitySection").then((module) => module.SettingsActivitySection));
 const AccountSupportForm = dynamic(() => import("@/components/support/AccountSupportForm").then((module) => module.AccountSupportForm));
+const StoreStaffSection = dynamic(() => import("@/components/store/settings/StoreStaffSection").then((module) => module.StoreStaffSection));
 import { useUnsavedChanges } from "@/hooks/useUnsavedChanges";
 import { useConfirmation } from "@/context/ConfirmationContext";
 import { useSuccessToast } from "@/context/SuccessToastContext";
@@ -63,6 +65,7 @@ type SettingsSection =
   | "security"
   | "activity"
   | "support"
+  | "users"
   | "danger";
 
 
@@ -89,6 +92,7 @@ function isSettingsSection(
     value === "security" ||
     value === "activity" ||
     value === "support" ||
+    value === "users" ||
     value === "danger"
   );
 }
@@ -292,6 +296,7 @@ export default function SettingsPage() {
     { id: "notifications", label: "Notifications", icon: Bell },
     { id: "security", label: "Security", icon: Shield },
     { id: "support", label: "LIA Support", icon: Headphones },
+    { id: "users", label: "User Administration", icon: Users },
     { id: "activity", label: "Settings Activity", icon: History },
     { id: "danger", label: "Danger Zone", icon: AlertTriangle },
   ];
@@ -418,6 +423,7 @@ export default function SettingsPage() {
             )}
             {activeSection === "activity" && <SettingsActivitySection />}
             {activeSection === "support" && <AccountSupportForm accountLabel="store" />}
+            {activeSection === "users" && <StoreStaffSection />}
             {activeSection === "danger" && (
               <DangerSection />
             )}

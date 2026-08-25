@@ -53,6 +53,13 @@ service cloud.firestore {
       ).data.accountType;
     }
 
+    function isStoreStaffForOwner(ownerId) {
+      return signedIn() &&
+        exists(/databases/$(database)/documents/storeStaff/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/storeStaff/$(request.auth.uid)).data.ownerId == ownerId &&
+        get(/databases/$(database)/documents/storeStaff/$(request.auth.uid)).data.isActive == true;
+    }
+
     function isAdmin() {
       return signedIn() &&
         exists(
@@ -550,8 +557,14 @@ service cloud.firestore {
 
     /* Store owners can watch their own lifecycle status, not stores/{id}. */
     match /storeWorkspaceStatuses/{ownerId} {
-      allow get: if isOperationalAccount(ownerId);
+      allow get: if isOperationalAccount(ownerId) || isStoreStaffForOwner(ownerId);
       allow list, create, update, delete: if false;
+    }
+
+
+    /* Staff assignments are server-managed and never client-readable. */
+    match /storeStaff/{staffId} {
+      allow read, write: if false;
     }
 
     /*

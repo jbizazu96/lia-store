@@ -25,6 +25,7 @@ const db = getFirestore("default");
 export type ApplicationAccountType =
   | "customer"
   | "store_owner"
+  | "store_staff"
   | "driver"
   | "admin";
 
@@ -33,6 +34,7 @@ function isApplicationAccountType(
 ): value is Exclude<ApplicationAccountType, "admin"> {
   return value === "customer" ||
     value === "store_owner" ||
+    value === "store_staff" ||
     value === "driver";
 }
 

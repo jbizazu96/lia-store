@@ -4,6 +4,7 @@ import {
 import {
   AdminGuard,
 } from "@/components/admin/AdminGuard";
+import {AdminConfirmationProvider} from "@/context/AdminConfirmationContext";
 
 /*
  * The admin route is protected twice: this client guard verifies the
@@ -17,7 +18,7 @@ export default function AdminLayout({
 }) {
   return (
     <AdminGuard>
-      <AdminAppShell>{children}</AdminAppShell>
+      <AdminConfirmationProvider><AdminAppShell>{children}</AdminAppShell></AdminConfirmationProvider>
     </AdminGuard>
   );
 }

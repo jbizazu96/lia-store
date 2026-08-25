@@ -126,6 +126,13 @@ export interface StoreWorkspaceEntry {
     approvalRevoked: boolean;
   }) | null;
   pendingOrderCount: number;
+  access: {
+    uid: string;
+    storeId: string;
+    ownerId: string;
+    role: "owner" | "staff";
+    permissions: Partial<Record<"orders" | "products", "read" | "write">>;
+  };
 }
 
 async function call<T>(

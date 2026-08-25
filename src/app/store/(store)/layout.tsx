@@ -189,7 +189,7 @@ function StoreLayoutContent({ children }: { children: React.ReactNode }) {
   useEffect(() => setPendingOrdersCount(entry?.pendingOrderCount ?? 0), [entry?.pendingOrderCount]);
 
   // Navigation items with dynamic badge
-  const navItems = [
+  const allNavItems = [
     { name: "Dashboard", icon: LayoutDashboard, href: "/store/dashboard" },
     { name: "Orders", icon: ShoppingBag, href: "/store/store-orders", badge: pendingOrdersCount > 0 ? pendingOrdersCount.toString() : undefined },
     { name: "Products", icon: Package, href: "/store/products" },
@@ -197,6 +197,12 @@ function StoreLayoutContent({ children }: { children: React.ReactNode }) {
     { name: "Analytics", icon: BarChart3, href: "/store/analytics" },
     { name: "Settings", icon: Settings, href: "/store/settings" },
   ];
+  const navItems = entry?.access.role === "staff"
+    ? allNavItems.filter((item) =>
+      (item.href === "/store/store-orders" && Boolean(entry.access.permissions.orders)) ||
+      (item.href === "/store/products" && Boolean(entry.access.permissions.products)),
+    )
+    : allNavItems;
 
   // Route from the shared workspace entry; child hooks reuse the same result.
   useEffect(() => {
@@ -206,9 +212,21 @@ function StoreLayoutContent({ children }: { children: React.ReactNode }) {
     const data = entry.store;
     if (!data.onboardingCompleted) { router.replace(`/store/onboarding/${data.onboardingStep || "owner"}`); return; }
     if (!data.isApproved) { router.replace("/store/pending-approval"); return; }
+    if (entry.access.role === "staff") {
+      const allowed = (pathname.startsWith("/store/store-orders") && Boolean(entry.access.permissions.orders)) ||
+        (pathname.startsWith("/store/products") && Boolean(entry.access.permissions.products));
+      if (!allowed) {
+        router.replace(entry.access.permissions.orders ? "/store/store-orders" : "/store/products");
+        return;
+      }
+      if (entry.access.permissions.products === "read" && /^\/store\/products\/(add|[^/]+)$/.test(pathname)) {
+        router.replace("/store/products");
+        return;
+      }
+    }
     setStoreData({id: data.id, name: data.name, logoUrl: data.logoUrl, isApproved: true, isActive: data.isActive});
     setLoading(false);
-  }, [entry, router, user, workspaceLoading]);
+  }, [entry, pathname, router, user, workspaceLoading]);
 
   // Handle logout
   const handleLogout = async () => {
@@ -653,6 +671,7 @@ export default function StoreLayout({
     <RoleGuard
       allowedAccountTypes={[
         "store_owner",
+        "store_staff",
       ]}
     >
       <StoreWorkspaceProvider>

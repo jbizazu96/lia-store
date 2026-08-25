@@ -41,6 +41,7 @@ interface ProductCardProps {
   mutating?: boolean;
   selected?: boolean;
   onSelectionChange?: (selected: boolean) => void;
+  readOnly?: boolean;
 }
 
 export function ProductCard({
@@ -53,6 +54,7 @@ export function ProductCard({
   mutating = false,
   selected = false,
   onSelectionChange,
+  readOnly = false,
 }: ProductCardProps) {
   const [showMenu, setShowMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -118,7 +120,7 @@ export function ProductCard({
     >
       {/* Image - Fixed ratio with object-cover */}
       <div className={`relative w-full aspect-square overflow-visible rounded-t-xl ${isOutOfStock ? "bg-slate-200" : "bg-gray-50"}`}>
-        {onSelectionChange && <label className="absolute bottom-1.5 right-1.5 z-30 flex h-8 w-8 items-center justify-center rounded-full bg-white shadow"><input type="checkbox" checked={selected} onChange={(event) => onSelectionChange(event.target.checked)} className="h-4 w-4 accent-orange-500" aria-label={`Select ${product.name}`} /></label>}
+        {!readOnly && onSelectionChange && <label className="absolute bottom-1.5 right-1.5 z-30 flex h-8 w-8 items-center justify-center rounded-full bg-white shadow"><input type="checkbox" checked={selected} onChange={(event) => onSelectionChange(event.target.checked)} className="h-4 w-4 accent-orange-500" aria-label={`Select ${product.name}`} /></label>}
         {product.imageUrl ? (
           <Image
             src={productImageSelector.getUrl(
@@ -173,7 +175,7 @@ export function ProductCard({
         </div>
 
         {/* Three-dot Menu */}
-        <div ref={menuRef} className="absolute right-1.5 top-1.5 z-30">
+        {!readOnly && <div ref={menuRef} className="absolute right-1.5 top-1.5 z-30">
           <button
             onClick={toggleMenu}
             disabled={mutating}
@@ -224,7 +226,7 @@ export function ProductCard({
               </motion.div>
             )}
           </AnimatePresence>
-        </div>
+        </div>}
       </div>
 
       {/* Info - Compact */}
@@ -265,7 +267,7 @@ export function ProductCard({
         </div>
 
         {/* Quick Actions - Two buttons side by side */}
-        <div className="flex items-center gap-1 pt-1 border-t border-gray-100">
+        {!readOnly && <div className="flex items-center gap-1 pt-1 border-t border-gray-100">
           {/* Active/Inactive Button */}
           <button
             onClick={() => onToggleActive(product.id, product.isAvailable)}
@@ -295,8 +297,8 @@ export function ProductCard({
             {product.featured ? "Featured" : "Feature"}
           </button>
 
-        </div>
-        {product.imageStatus === "failed" && <Link href={`/store/products/${product.id}`} className="mt-2 block rounded-full bg-red-50 px-2 py-1 text-center text-[10px] font-semibold text-red-700">Retry image upload</Link>}
+        </div>}
+        {!readOnly && product.imageStatus === "failed" && <Link href={`/store/products/${product.id}`} className="mt-2 block rounded-full bg-red-50 px-2 py-1 text-center text-[10px] font-semibold text-red-700">Retry image upload</Link>}
       </div>
       {mutating && <div className="absolute inset-0 z-40 flex items-center justify-center rounded-xl bg-white/60 text-xs font-semibold text-gray-700 backdrop-blur-[1px]">Saving…</div>}
     </motion.div>

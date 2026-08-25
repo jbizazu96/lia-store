@@ -10,7 +10,7 @@ import {storeWorkspaceClientService} from "@/services/store/storeWorkspaceClient
 import {currentAccountClientService} from "@/services/user/currentAccountClientService";
 
 interface PostLoginResult {
-  accountType: "customer" | "store_owner" | "driver" | "admin";
+  accountType: "customer" | "store_owner" | "store_staff" | "driver" | "admin";
   hasAddress: boolean;
   storeStatus: "approved" | "pending" | "none";
   storeName?: string;
@@ -36,7 +36,7 @@ export async function handlePostLogin(uid: string): Promise<PostLoginResult> {
   let storeName = "";
   let storeId = "";
 
-  if (accountType === "store_owner") {
+  if (accountType === "store_owner" || accountType === "store_staff") {
     const entry = await storeWorkspaceClientService.getEntry();
 
     if (entry.hasStore && entry.store) {

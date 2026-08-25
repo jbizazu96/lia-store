@@ -4,6 +4,7 @@ import {useEffect, useState} from "react";
 import Image from "next/image";
 import {BellRing, Download, ImagePlus, ListTree, LoaderCircle, Pencil, Plus, Ruler, Trash2, X} from "lucide-react";
 import {adminWorkspaceClientService} from "@/services/admin/adminWorkspaceClientService";
+import {useAdminConfirmation} from "@/context/AdminConfirmationContext";
 
 interface ProductCategoryItem {id: string; name: string; iconUrl: string; freshnessEligible: boolean}
 
@@ -137,6 +138,7 @@ function CatalogInventoryPolicy() {
 interface SizeUnitItem {id: string; label: string}
 
 function SizeUnitsManager() {
+  const confirm = useAdminConfirmation();
   const [units, setUnits] = useState<SizeUnitItem[]>([]);
   const [editing, setEditing] = useState<SizeUnitItem | null | undefined>(undefined);
   const [code, setCode] = useState("");
@@ -173,7 +175,7 @@ function SizeUnitsManager() {
     finally {setWorking(false);}
   };
   const remove = async (unit: SizeUnitItem) => {
-    if (!window.confirm(`Remove ${unit.label} from future product forms? Existing products will keep this unit.`)) return;
+    if (!await confirm({title: "Remove size unit?", description: `Remove ${unit.label} from future product forms? Existing products keep the saved unit.`, confirmationLabel: "Remove unit", tone: "danger"})) return;
     setWorking(true); setError(""); setMessage("");
     try {await adminWorkspaceClientService.deleteProductSizeUnit(unit.id); await load(); setMessage("Size unit removed. Existing products were not changed.");}
     catch (reason) {setError(reason instanceof Error ? reason.message : "Unable to remove the size unit.");}

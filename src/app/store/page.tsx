@@ -45,11 +45,11 @@ function StorePageContent() {
           if (storeData.onboardingCompleted === true) {
             const isApproved = storeData.isApproved === true;
 
-            router.replace(
-              isApproved
-                ? "/store/dashboard"
-                : "/store/pending-approval"
-            );
+            router.replace(isApproved
+              ? entry.access.role === "staff"
+                ? entry.access.permissions.orders ? "/store/store-orders" : "/store/products"
+                : "/store/dashboard"
+              : "/store/pending-approval");
           } else {
             router.replace(`/store/onboarding/${storeData.onboardingStep || "owner"}`);
           }
@@ -92,6 +92,7 @@ export default function StorePage() {
     <RoleGuard
       allowedAccountTypes={[
         "store_owner",
+        "store_staff",
       ]}
     >
       <StorePageContent />

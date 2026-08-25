@@ -27,9 +27,10 @@ import {OrderInvestigationNotice} from "./OrderInvestigationNotice";
 interface OrderCardProps {
   order: Order;
   index: number;
+  hideFinancials?: boolean;
 }
 
-export function OrderCard({order, index}: OrderCardProps) {
+export function OrderCard({order, index, hideFinancials = false}: OrderCardProps) {
   const grossStoreAmount = order.storeFinancials?.grossStoreAmount ??
     order.pricing.subtotal + order.pricing.tax;
   const unitCount = order.items.reduce((total, item) => total + Math.max(0, item.quantity || 0), 0);
@@ -81,10 +82,10 @@ export function OrderCard({order, index}: OrderCardProps) {
               {order.customer.address || "Address not set"}
             </div>
             {/* ✅ Show calculated store total */}
-            <div className="flex items-center gap-1.5 text-green-600 font-medium">
+            {!hideFinancials && <div className="flex items-center gap-1.5 text-green-600 font-medium">
               <DollarSign className="w-4 h-4" />
               <span title={financialLabel}>{formatOrderCurrency(financialAmount)}</span>
-            </div>
+            </div>}
           </div>
         </div>
 

@@ -103,7 +103,7 @@ export default function LoginPage() {
   Handle post-login routing based on account type.
   */
   const handlePostLogin = async (uid: string) => {
-    let accountType: "customer" | "store_owner" | "driver" | "admin";
+    let accountType: "customer" | "store_owner" | "store_staff" | "driver" | "admin";
 
     try {
       accountType = (await currentAccountClientService.get()).accountType;
@@ -140,7 +140,7 @@ export default function LoginPage() {
     /*
       Store Owner Flow - Redirect to Premium Dashboard.
     */
-    if (accountType === "store_owner") {
+    if (accountType === "store_owner" || accountType === "store_staff") {
       /*
        * Store applications are private. The callable derives the owned
        * store from the verified Firebase session rather than exposing a
@@ -153,6 +153,10 @@ export default function LoginPage() {
         const storeName = entry.store.name || "Your Store";
 
         if (isApproved) {
+          if (entry.access.role === "staff") {
+            router.replace(entry.access.permissions.orders ? "/store/store-orders" : "/store/products");
+            return;
+          }
           // ✅ Redirect to the premium dashboard - use /store/dashboard NOT /(store)/dashboard
           router.replace("/store/dashboard");
           return;

@@ -4,12 +4,14 @@ import {FileText, LoaderCircle, Trash2, Upload, ExternalLink} from "lucide-react
 import {useEffect, useRef, useState} from "react";
 import {adminWorkspaceClientService} from "@/services/admin/adminWorkspaceClientService";
 import type {StoreContractSummary, StoreContractWorkspace} from "@/types/storeContract";
+import {useAdminConfirmation} from "@/context/AdminConfirmationContext";
 
 function fileSize(bytes: number): string {
   return bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
 export function StoreContractSection({storeId, disabled}: {storeId: string; disabled?: boolean}) {
+  const confirm = useAdminConfirmation();
   const input = useRef<HTMLInputElement>(null);
   const [workspace, setWorkspace] = useState<StoreContractWorkspace | null>(null);
   const [selected, setSelected] = useState<StoreContractSummary | null>(null);
@@ -75,7 +77,7 @@ export function StoreContractSection({storeId, disabled}: {storeId: string; disa
   };
 
   const remove = async (contract: StoreContractSummary) => {
-    if (!window.confirm(`Remove ${contract.fileName}? This cannot be undone.`)) return;
+    if (!await confirm({title: "Remove signed contract?", description: `Remove ${contract.fileName}? This cannot be undone and the store will lose access to this copy.`, confirmationLabel: "Remove contract", tone: "danger"})) return;
     setWorking(true); setError("");
     try {
       await adminWorkspaceClientService.deleteStoreContract(storeId, contract.id);

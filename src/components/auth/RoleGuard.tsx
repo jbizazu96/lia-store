@@ -42,6 +42,7 @@ import {customerLogoutService} from "@/services/auth/customerLogoutService";
 export type AccountType =
   | "customer"
   | "store_owner"
+  | "store_staff"
   | "driver"
   | "admin";
 
@@ -55,6 +56,7 @@ function getAccountHome(
 ): string {
   switch (accountType) {
     case "store_owner":
+    case "store_staff":
       return "/store/dashboard";
     case "admin":
       return "/admin";

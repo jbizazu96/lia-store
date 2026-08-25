@@ -64,7 +64,7 @@ export function StoreWorkspaceProvider({children}: {children: React.ReactNode}) 
 
   useEffect(() => {
     if (!user || !entry?.store) return;
-    return onSnapshot(doc(db, "storeWorkspaceStatuses", user.uid), (snapshot) => {
+    return onSnapshot(doc(db, "storeWorkspaceStatuses", entry.access.ownerId), (snapshot) => {
       if (!snapshot.exists()) return;
       const status = snapshot.data();
       const lifecycleStatus = ["draft", "pending_review", "approved", "rejected", "suspended"]
