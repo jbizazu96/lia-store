@@ -14,10 +14,18 @@ const policy: MarketplacePricingPolicy = {
   peakSurchargeCents: 300,
   freeDeliveryMinimumCents: 10_000,
   defaultMinimumOrderCents: 2_000,
+  pickupEnabled: true,
+  pickupMaximumDistanceMiles: 30,
+  pickupMinimumOrderCents: 1_500,
+  pickupPreparationMinutes: 30,
+  pickupServiceFeeRate: 0.02,
+  pickupMinimumServiceFeeCents: 99,
+  pickupMaximumServiceFeeCents: 499,
   serviceFeeRate: 0.05,
   minimumServiceFeeCents: 100,
   maximumServiceFeeCents: 500,
   salesTaxRate: 0.07,
+  driverMinimumPayCents: 599,
   freeDeliveryDriverIncentiveWithoutTipCents: 500,
   freeDeliveryDriverIncentiveWithTipCents: 300,
 };
@@ -56,5 +64,10 @@ describe("customer delivery pricing", () => {
 
   it("never bills negative distance", () => {
     expect(calculateDeliveryFee(-10, 0, policy, false).deliveryFee).toBe(6);
+  });
+
+  it("uses pickup-specific service-fee settings for pickup estimates", () => {
+    const result = calculateDeliveryFee(0, 100, policy, false, true, "pickup");
+    expect(result.serviceFee).toBe(2);
   });
 });

@@ -7,12 +7,13 @@ import {
 import type {CartItem} from "@/types/cart";
 import type {CustomerProfile} from "@/services/user/customerProfileClientService";
 import type {CustomerTermsStatus} from "@/services/legal/customerLegalClientService";
+import type {FulfillmentType} from "@/types/fulfillment";
 
 export interface CustomerStartup {
   accountType: "customer";
   profile: CustomerProfile;
   legal: CustomerTermsStatus;
-  cart: {items: CartItem[]};
+  cart: {items: CartItem[]; fulfillmentType: FulfillmentType};
   favoriteStores: {storeIds: string[]};
 }
 

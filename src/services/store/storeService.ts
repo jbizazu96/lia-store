@@ -136,6 +136,12 @@ function mapStoreDocument(
       : undefined,
 
     minimumOrder: number(data.minimumOrder, 20),
+    pickupEnabled: data.pickupEnabled === true,
+    pickupPreparationMinutes: Math.min(
+      240,
+      Math.max(5, Math.round(number(data.pickupPreparationMinutes, 30))),
+    ),
+    pickupInstructions: optionalText(data.pickupInstructions),
 
     isApproved: isStoreApproved(data),
     isActive: isStoreActive(data),

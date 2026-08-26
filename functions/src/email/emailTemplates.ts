@@ -69,7 +69,7 @@ function detailRow(label: string, value: string, strong = false): string {
   return `<tr><td style="padding:8px 0;color:${muted};font-size:14px">${escapeHtml(label)}</td><td align="right" style="padding:8px 0;color:${ink};font-size:14px;${strong ? "font-weight:800" : "font-weight:600"}">${escapeHtml(value)}</td></tr>`;
 }
 
-function receipt(input: {storeName: string; orderNumber: string; items: EmailReceiptItem[]; pricing: EmailReceiptPricing}): string {
+function receipt(input: {storeName: string; orderNumber: string; items: EmailReceiptItem[]; pricing: EmailReceiptPricing; fulfillmentType?: "delivery" | "pickup"}): string {
   const itemRows = input.items.slice(0, 20).map((item) => {
     const description = `${Math.max(1, Math.round(item.quantity))} × ${item.name}${item.size ? ` · ${item.size}` : ""}`;
     return detailRow(description, money(item.lineTotalAmount, input.pricing.currency));
@@ -84,7 +84,7 @@ function receipt(input: {storeName: string; orderNumber: string; items: EmailRec
         ${itemRows}${extraItems}
         <tr><td colspan="2" style="padding-top:8px;border-top:1px solid #e5e7eb"></td></tr>
         ${detailRow("Subtotal", money(pricing.subtotalAmount, pricing.currency))}
-        ${detailRow("Delivery fee", money(pricing.deliveryFeeAmount, pricing.currency))}
+        ${detailRow(input.fulfillmentType === "pickup" ? "Pickup fee" : "Delivery fee", money(pricing.deliveryFeeAmount, pricing.currency))}
         ${pricing.serviceFeeAmount > 0 ? detailRow("Service fee", money(pricing.serviceFeeAmount, pricing.currency)) : ""}
         ${detailRow("Tax", money(pricing.taxAmount, pricing.currency))}
         ${pricing.tipAmount > 0 ? detailRow("Driver tip", money(pricing.tipAmount, pricing.currency)) : ""}
@@ -111,18 +111,20 @@ export function passwordResetEmail(input: {displayName: string; url: string}) {
   return {subject: title, text, html: layout({title, preheader: "A secure password reset was requested for your LIA account.", body, action: {label: "Reset password", url: input.url}})};
 }
 
-export function newOrderEmail(input: {storeName: string; orderNumber: string; url: string}) {
-  const title = `New paid order ${input.orderNumber}`;
-  const text = `${input.storeName}, you received a new paid order. Open LIA to review and accept it: ${input.url}`;
-  const body = `<div style="display:inline-block;padding:6px 10px;border-radius:999px;background:#fff7ed;color:${brandDark};font-size:12px;font-weight:800">NEW ORDER</div><p style="margin:18px 0 0;line-height:1.65;color:#374151">${escapeHtml(input.storeName)}, you received a new paid customer order. Open the secure store workspace to review the items and begin fulfillment.</p>`;
+export function newOrderEmail(input: {storeName: string; orderNumber: string; url: string; fulfillmentType?: "delivery" | "pickup"}) {
+  const fulfillment = input.fulfillmentType === "pickup" ? "pickup" : "delivery";
+  const title = `New paid ${fulfillment} order ${input.orderNumber}`;
+  const text = `${input.storeName}, you received a new paid ${fulfillment} order. Open LIA to review and accept it: ${input.url}`;
+  const body = `<div style="display:inline-block;padding:6px 10px;border-radius:999px;background:#fff7ed;color:${brandDark};font-size:12px;font-weight:800">NEW ${fulfillment.toUpperCase()} ORDER</div><p style="margin:18px 0 0;line-height:1.65;color:#374151">${escapeHtml(input.storeName)}, you received a new paid ${fulfillment} order. Open the secure store workspace to review the items and begin fulfillment.</p>`;
   return {subject: title, text, html: layout({title, preheader: `A new paid order is ready for ${input.storeName}.`, body, action: {label: "Review order", url: input.url}})};
 }
 
-export function deliveredOrderEmail(input: {customerName: string; storeName: string; orderNumber: string; url: string; items: EmailReceiptItem[]; pricing: EmailReceiptPricing}) {
-  const title = `Order ${input.orderNumber} was delivered`;
+export function deliveredOrderEmail(input: {customerName: string; storeName: string; orderNumber: string; url: string; items: EmailReceiptItem[]; pricing: EmailReceiptPricing; fulfillmentType?: "delivery" | "pickup"}) {
+  const pickup = input.fulfillmentType === "pickup";
+  const title = `Order ${input.orderNumber} was ${pickup ? "picked up" : "delivered"}`;
   const textItems = input.items.map((item) => `${Math.max(1, Math.round(item.quantity))} x ${item.name}: ${money(item.lineTotalAmount, input.pricing.currency)}`).join("\n");
-  const text = `${input.customerName}, your LIA order from ${input.storeName} was delivered.\n\nOrder: ${input.orderNumber}\n${textItems}\nTotal: ${money(input.pricing.totalAmount, input.pricing.currency)}\n\nView your protected delivery confirmation and leave feedback: ${input.url}`;
-  const body = `<div style="display:inline-block;padding:6px 10px;border-radius:999px;background:#ecfdf5;color:#047857;font-size:12px;font-weight:800">DELIVERED</div><p style="margin:18px 0 0;line-height:1.65;color:#374151">Hi ${escapeHtml(input.customerName)}, your order from <strong>${escapeHtml(input.storeName)}</strong> has been delivered. Thank you for supporting an independent local business.</p>${receipt(input)}<p style="margin:20px 0 0;font-size:13px;line-height:1.6;color:${muted}">Delivery confirmation and any delivery photo remain protected inside your LIA account.</p>`;
+  const text = `${input.customerName}, your LIA order from ${input.storeName} was ${pickup ? "picked up" : "delivered"}.\n\nOrder: ${input.orderNumber}\n${textItems}\nTotal: ${money(input.pricing.totalAmount, input.pricing.currency)}\n\nView your order confirmation and leave feedback: ${input.url}`;
+  const body = `<div style="display:inline-block;padding:6px 10px;border-radius:999px;background:#ecfdf5;color:#047857;font-size:12px;font-weight:800">${pickup ? "PICKED UP" : "DELIVERED"}</div><p style="margin:18px 0 0;line-height:1.65;color:#374151">Hi ${escapeHtml(input.customerName)}, your order from <strong>${escapeHtml(input.storeName)}</strong> has been ${pickup ? "picked up" : "delivered"}. Thank you for supporting an independent local business.</p>${receipt(input)}<p style="margin:20px 0 0;font-size:13px;line-height:1.6;color:${muted}">${pickup ? "Your pickup confirmation" : "Delivery confirmation and any delivery photo"} remains protected inside your LIA account.</p>`;
   return {subject: title, text, html: layout({title, preheader: `${input.orderNumber} from ${input.storeName} has arrived.`, body, action: {label: "View order and leave feedback", url: input.url}})};
 }
 

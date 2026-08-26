@@ -517,6 +517,7 @@ export const saveAdminDeliveryZonePricing = onCall(
         zoneName: text(snapshot.data()?.name, 80),
         maximumRouteMiles,
         baseDeliveryFeeCents: policy.baseDeliveryFeeCents,
+        driverMinimumPayCents: policy.driverMinimumPayCents,
         serviceFeeRate: policy.serviceFeeRate,
         peakSurchargeCents: policy.peakSurchargeCents,
         peakSurchargeEnabled: policy.peakSurchargeEnabled,

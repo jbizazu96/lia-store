@@ -86,4 +86,6 @@ estimatedDeliveryTime: string;
   zoneAccessAllowed: boolean;
 
   zoneAccessType: ZoneAccessType;
+
+  pickupZoneAccessAllowed: boolean;
 }

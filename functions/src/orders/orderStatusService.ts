@@ -135,6 +135,7 @@ export interface UpdateStoreOrderStatusInput {
 */
 
 export interface UpdateStoreOrderStatusResult {
+  fulfillmentType: "delivery" | "pickup";
   orderId: string;
 
   orderNumber: string;
@@ -165,6 +166,7 @@ export interface UpdateStoreOrderStatusResult {
 */
 
 interface StatusWorkflowOrder {
+  fulfillmentType?: unknown;
   orderNumber?: unknown;
 
   status?: unknown;
@@ -359,7 +361,8 @@ function normalizeCancellationReason(
 
 function buildStatusNote(
   newStatus: StoreControlledOrderStatus,
-  cancellationReason: string | null
+  cancellationReason: string | null,
+  fulfillmentType: "delivery" | "pickup",
 ): string {
   if (
     newStatus === "cancelled" &&
@@ -381,8 +384,9 @@ function buildStatusNote(
     preparing:
       "The store started preparing the order.",
 
-    ready_for_pickup:
-      "The order is ready for driver pickup.",
+    ready_for_pickup: fulfillmentType === "pickup"
+      ? "The order is ready for customer pickup."
+      : "The order is ready for driver pickup.",
   };
 
   if (newStatus === "cancelled") {
@@ -533,6 +537,7 @@ async function updateStoreOrderStatus(
 
       const previousStatus =
         order.status;
+      const fulfillmentType = order.fulfillmentType === "pickup" ? "pickup" : "delivery";
 
       const orderNumber =
         typeof order.orderNumber ===
@@ -552,6 +557,7 @@ async function updateStoreOrderStatus(
         newStatus
       ) {
         return {
+          fulfillmentType,
           orderId:
             orderSnapshot.id,
 
@@ -607,7 +613,8 @@ async function updateStoreOrderStatus(
               note:
                 buildStatusNote(
                   newStatus,
-                  cancellationReason
+                  cancellationReason,
+                  fulfillmentType,
                 ),
 
               changedBy: {
@@ -633,6 +640,7 @@ async function updateStoreOrderStatus(
       );
 
       return {
+        fulfillmentType,
         orderId:
           orderSnapshot.id,
 

@@ -1,7 +1,7 @@
 import * as admin from "firebase-admin";
 import {getFirestore} from "firebase-admin/firestore";
 import {HttpsError, onCall} from "firebase-functions/v2/https";
-import {loadCustomerCart} from "./customerCart";
+import {loadCustomerCartState} from "./customerCart";
 import {
   customerFavoriteStoreIds,
   customerProfileResponse,
@@ -49,9 +49,9 @@ export const getCustomerStartup = onCall(
       );
     }
 
-    const [documents, cartItems] = await Promise.all([
+    const [documents, cart] = await Promise.all([
       getCurrentCustomerLegalDocuments(db),
-      loadCustomerCart(uid),
+      loadCustomerCartState(uid),
     ]);
 
     const pendingDocuments = documents.filter((document) =>
@@ -67,7 +67,7 @@ export const getCustomerStartup = onCall(
         documents,
         pendingDocuments,
       },
-      cart: {items: cartItems},
+      cart,
       favoriteStores: {
         storeIds: customerFavoriteStoreIds(data.favoriteStoreIds),
       },

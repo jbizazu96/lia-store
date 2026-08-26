@@ -167,6 +167,15 @@ export interface DeliveryInfo {
   estimatedMinutes?: number;
 }
 
+export interface PickupInfo {
+  storeAddress?: string;
+  instructions?: string | null;
+  customerInstructions?: string | null;
+  preparationMinutes?: number;
+  readyAt?: Date;
+  pickedUpAt?: Date;
+}
+
 /* ==========================================================================
    PAYMENT
    ========================================================================== */
@@ -296,6 +305,7 @@ export interface OrderInvestigation {
  * Main Order object used throughout the application.
  */
 export interface Order {
+  fulfillmentType: "delivery" | "pickup";
   /**
    * Firestore document ID.
    */
@@ -329,7 +339,8 @@ export interface Order {
   /**
    * Delivery information.
    */
-  delivery: DeliveryInfo;
+  delivery?: DeliveryInfo;
+  pickup?: PickupInfo;
 
   /**
    * Current order status.

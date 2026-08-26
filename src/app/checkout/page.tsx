@@ -47,6 +47,7 @@ import {
 
 import {
   useEffect,
+  useRef,
   useState,
 } from "react";
 
@@ -85,7 +86,8 @@ import {
 import {
   useCheckoutPricing,
 } from "@/hooks/useCheckoutPricing";
-import {useApplicableMarketplacePricing} from "@/hooks/useMarketplacePricingPolicy";
+import {useApplicableMarketplacePricing, useMarketplacePricingPolicy} from "@/hooks/useMarketplacePricingPolicy";
+import {isPickupLocationAllowed} from "@/services/pricing/pickupAvailability";
 
 import {
   usePrepareCheckoutPayment,
@@ -179,13 +181,15 @@ export default function CheckoutPage() {
     items,
     totalPrice,
     clearCart,
+    fulfillmentType,
+    setFulfillmentType,
   } = useCart();
 
   const storeId =
     items[0]?.storeId;
   const applicablePricing = useApplicableMarketplacePricing(storeId);
   const marketplacePolicy = applicablePricing?.policy ?? null;
-
+  const defaultMarketplacePolicy = useMarketplacePricingPolicy();
 
   /*
   |--------------------------------------------------------------------------
@@ -236,6 +240,8 @@ export default function CheckoutPage() {
     setDeliveryInstructions,
   ] = useState("");
 
+  const [pickupInstructions, setPickupInstructions] = useState("");
+
   const [
     tip,
     setTip,
@@ -281,7 +287,56 @@ export default function CheckoutPage() {
     store,
 
     address,
+    fulfillmentType,
   });
+  const pickupZoneAllowed = applicablePricing?.pickupDecision?.allowed === true;
+  const pickupLocationAllowed = isPickupLocationAllowed(
+    defaultMarketplacePolicy,
+    pickupZoneAllowed,
+    distanceError ? null : distanceMiles,
+  );
+  const effectiveStorePickupEnabled =
+    applicablePricing?.storePickupEnabled ?? store?.pickupEnabled === true;
+  const pickupAvailabilityResolved =
+    pickupZoneAllowed || Boolean(store && address && !isCalculatingDistance);
+  const deliveryZoneAllowed = applicablePricing?.decision?.allowed === true;
+  const deliveryLocationAllowed = deliveryZoneAllowed && (
+    applicablePricing?.decision?.zoneAccessType === "customer_order_zone" ||
+    (!distanceError && distanceMiles <= (marketplacePolicy?.maxRadiusMiles ?? 0))
+  );
+  const deliveryAvailabilityResolved = Boolean(
+    applicablePricing && store && address && !isCalculatingDistance
+  );
+  const pickupOnly =
+    pickupLocationAllowed &&
+    effectiveStorePickupEnabled &&
+    defaultMarketplacePolicy?.pickupEnabled === true &&
+    deliveryAvailabilityResolved &&
+    !deliveryLocationAllowed;
+
+  useEffect(() => {
+    if (fulfillmentType === "delivery" && pickupOnly) {
+      setFulfillmentType("pickup");
+      return;
+    }
+    if (
+      fulfillmentType === "pickup" &&
+      pickupAvailabilityResolved &&
+      (!defaultMarketplacePolicy?.pickupEnabled ||
+        !effectiveStorePickupEnabled ||
+        !pickupLocationAllowed)
+    ) {
+      setFulfillmentType("delivery");
+    }
+  }, [
+    defaultMarketplacePolicy?.pickupEnabled,
+    fulfillmentType,
+    pickupAvailabilityResolved,
+    pickupLocationAllowed,
+    pickupOnly,
+    setFulfillmentType,
+    effectiveStorePickupEnabled,
+  ]);
 
 
   /*
@@ -323,7 +378,18 @@ export default function CheckoutPage() {
 
       clearError:
         clearPaymentPreparationError,
+      resetPreparedPayment,
     } = usePrepareCheckoutPayment();
+
+    const previousFulfillmentType = useRef(fulfillmentType);
+    useEffect(() => {
+      if (previousFulfillmentType.current === fulfillmentType) return;
+      previousFulfillmentType.current = fulfillmentType;
+      resetPreparedPayment();
+      setCheckoutStep("review");
+      setTip(fulfillmentType === "pickup" ? 0 : 3);
+      setPaymentConfirmationError(null);
+    }, [fulfillmentType, resetPreparedPayment]);
 
     const {
         failureMessage:
@@ -369,12 +435,12 @@ export default function CheckoutPage() {
     !storeStatus.isOpen;
 
   const isOutsideDeliveryRadius =
-    address !== null &&
-    applicablePricing?.decision?.zoneAccessType !== "customer_order_zone" &&
-    distanceMiles >
-      (marketplacePolicy?.maxRadiusMiles ?? Infinity);
+    fulfillmentType === "delivery" &&
+    deliveryAvailabilityResolved &&
+    !deliveryLocationAllowed;
 
   const isDeliveryDistanceUnavailable =
+    fulfillmentType === "delivery" &&
     address !== null &&
     distanceError !== null;
 
@@ -598,7 +664,7 @@ export default function CheckoutPage() {
         return;
       }
 
-      if (!address) {
+      if (fulfillmentType === "delivery" && !address) {
         setCheckoutError(
           "Please add a delivery address."
         );
@@ -615,6 +681,20 @@ export default function CheckoutPage() {
           "The selected store could not be loaded."
         );
 
+        return;
+      }
+
+      if (
+        fulfillmentType === "pickup" &&
+        (!defaultMarketplacePolicy?.pickupEnabled ||
+          !effectiveStorePickupEnabled ||
+          !pickupLocationAllowed)
+      ) {
+        setCheckoutError(
+          defaultMarketplacePolicy?.pickupEnabled && effectiveStorePickupEnabled
+            ? `This store is outside your delivery access and farther than the ${defaultMarketplacePolicy.pickupMaximumDistanceMiles}-mile pickup threshold.`
+            : "Pickup is not currently available from this store."
+        );
         return;
       }
 
@@ -643,10 +723,12 @@ export default function CheckoutPage() {
       }
 
       if (
-        address.latitude ===
-          undefined ||
-        address.longitude ===
-          undefined
+        fulfillmentType === "delivery" &&
+        address &&
+        (
+          address.latitude === undefined ||
+          address.longitude === undefined
+        )
       ) {
         setCheckoutError(
           "Your delivery address needs valid map coordinates."
@@ -720,7 +802,9 @@ export default function CheckoutPage() {
               })
             ),
 
-          deliveryAddress: {
+          fulfillmentType,
+
+          ...(fulfillmentType === "delivery" && address ? {deliveryAddress: {
             street:
               address.street,
 
@@ -742,14 +826,17 @@ export default function CheckoutPage() {
             formattedAddress:
               address
                 .formattedAddress,
-          },
+          }} : {}),
 
-          deliveryInstructions:
-            deliveryInstructions
-              .trim() ||
-            undefined,
+          deliveryInstructions: fulfillmentType === "delivery"
+            ? deliveryInstructions.trim() || undefined
+            : undefined,
 
-          tip,
+          pickupInstructions: fulfillmentType === "pickup"
+            ? pickupInstructions.trim() || undefined
+            : undefined,
+
+          tip: fulfillmentType === "pickup" ? 0 : tip,
         });
 
       if (!result) {
@@ -1024,7 +1111,9 @@ const handleViewOrder =
           </div>
 
           <p className="mt-4 text-xs leading-5 text-gray-400">
-            You can follow preparation and delivery updates from your order page.
+            {fulfillmentType === "pickup"
+              ? "We will notify you when your order is ready and show your secure pickup code on the order page."
+              : "You can follow preparation and delivery updates from your order page."}
           </p>
 
           <div className="mt-6 space-y-3">
@@ -1233,7 +1322,41 @@ const handleViewOrder =
           </div>
         )}
 
-        <section className="space-y-2">
+        <section className="grid grid-cols-2 gap-2 rounded-xl border border-gray-200 p-1.5">
+          <button
+            type="button"
+            onClick={() => setFulfillmentType("delivery")}
+            disabled={pickupOnly}
+            className={`rounded-lg px-3 py-2.5 text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-40 ${
+              fulfillmentType === "delivery"
+                ? "bg-orange-500 text-white shadow-sm"
+                : "text-gray-600 hover:bg-gray-50"
+            }`}
+          >
+            Delivery
+          </button>
+          <button
+            type="button"
+            onClick={() => setFulfillmentType("pickup")}
+            disabled={!defaultMarketplacePolicy?.pickupEnabled || !effectiveStorePickupEnabled || (pickupAvailabilityResolved && !pickupLocationAllowed)}
+            className={`rounded-lg px-3 py-2.5 text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-40 ${
+              fulfillmentType === "pickup"
+                ? "bg-orange-500 text-white shadow-sm"
+                : "text-gray-600 hover:bg-gray-50"
+            }`}
+          >
+            Pickup
+          </button>
+        </section>
+        {pickupOnly && (
+          <div className="rounded-xl border border-orange-200 bg-orange-50 p-3 text-center">
+            <p className="text-sm font-medium text-orange-800">
+              Delivery is unavailable because this store is outside your delivery zone or delivery distance. This order is available for customer pickup only.
+            </p>
+          </div>
+        )}
+
+        {fulfillmentType === "delivery" && <section className="space-y-2">
           <h2 className="px-1 text-base font-extrabold text-gray-900">Delivery Information</h2>
           <DeliveryAddressSection
           address={
@@ -1249,17 +1372,20 @@ const handleViewOrder =
             openAddressModal
           }
           />
-        </section>
+        </section>}
 
         <section className="space-y-2">
-          <h2 className="px-1 text-base font-extrabold text-gray-900">Delivery Instructions</h2>
+          <h2 className="px-1 text-base font-extrabold text-gray-900">
+            {fulfillmentType === "pickup" ? "Pickup Instructions" : "Delivery Instructions"}
+          </h2>
           <DeliveryInstructions
           value={
-            deliveryInstructions
+            fulfillmentType === "delivery" ? deliveryInstructions : pickupInstructions
           }
           onChange={
-            setDeliveryInstructions
+            fulfillmentType === "delivery" ? setDeliveryInstructions : setPickupInstructions
           }
+          fulfillmentType={fulfillmentType}
           />
         </section>
 
@@ -1277,12 +1403,13 @@ const handleViewOrder =
             ""
           }
           storeAddress={
-            store?.address ??
+            store?.formattedAddress || store?.address ||
             ""
           }
+          fulfillmentType={fulfillmentType}
         />
 
-        <section className="space-y-2">
+        {fulfillmentType === "delivery" && <section className="space-y-2">
           <div className="flex items-center justify-between gap-3 px-1"><h2 className="text-base font-extrabold text-gray-900">Driver Tip</h2><span className="text-xs font-semibold text-gray-400">100% goes to driver</span></div>
           <TipSelector
           selectedTip={
@@ -1292,7 +1419,22 @@ const handleViewOrder =
             setTip
           }
           />
-        </section>
+        </section>}
+
+        {fulfillmentType === "pickup" && store && (
+          <div className="rounded-xl border border-orange-100 bg-orange-50 p-4 text-sm text-orange-950">
+            <p className="font-bold">Pickup at {store.name}</p>
+            <p className="mt-1 text-orange-800">
+              {store.formattedAddress || `${store.address}, ${store.city}, ${store.state} ${store.zip}`}
+            </p>
+            <p className="mt-2 text-xs text-orange-700">
+              Usually ready in about {store.pickupPreparationMinutes ?? defaultMarketplacePolicy?.pickupPreparationMinutes ?? 30} minutes. Wait for the ready notification before traveling to the store.
+            </p>
+            {store.pickupInstructions && (
+              <p className="mt-2 text-xs font-medium text-orange-800">{store.pickupInstructions}</p>
+            )}
+          </div>
+        )}
 
         {isStoreClosed && (
           <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-center">

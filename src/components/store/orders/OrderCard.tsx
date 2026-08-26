@@ -59,6 +59,9 @@ export function OrderCard({order, index, hideFinancials = false}: OrderCardProps
               {displayOrderNumber(order.orderNumber)}
             </span>
             <StatusBadge status={order.status} size="sm" />
+            <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${order.fulfillmentType === "pickup" ? "bg-purple-50 text-purple-700" : "bg-blue-50 text-blue-700"}`}>
+              {order.fulfillmentType === "pickup" ? "Customer pickup" : "Delivery"}
+            </span>
             <OrderInvestigationNotice
               investigation={order.liaInvestigation}
               compact
@@ -79,7 +82,7 @@ export function OrderCard({order, index, hideFinancials = false}: OrderCardProps
             </div>
             <div className="flex items-center gap-1.5 text-gray-600">
               <MapPin className="w-4 h-4" />
-              {order.customer.address || "Address not set"}
+              {order.fulfillmentType === "pickup" ? "Pickup at store" : order.customer.address || "Address not set"}
             </div>
             {/* ✅ Show calculated store total */}
             {!hideFinancials && <div className="flex items-center gap-1.5 text-green-600 font-medium">

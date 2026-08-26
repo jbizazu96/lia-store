@@ -427,6 +427,18 @@ function mapTrustedStore(
       ? data.serviceZoneIds.filter((value): value is string => typeof value === "string" && value.trim().length > 0)
       : [],
 
+    pickupEnabled: data.pickupEnabled === true,
+
+    pickupPreparationMinutes:
+      Number.isInteger(data.pickupPreparationMinutes) && data.pickupPreparationMinutes >= 5
+        ? data.pickupPreparationMinutes
+        : null,
+
+    pickupInstructions:
+      typeof data.pickupInstructions === "string" && data.pickupInstructions.trim()
+        ? data.pickupInstructions.trim()
+        : null,
+
     stripeAccountId,
 
     stripeTransfersEnabled,

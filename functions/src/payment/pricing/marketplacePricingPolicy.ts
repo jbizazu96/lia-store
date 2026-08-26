@@ -23,6 +23,14 @@ export interface MarketplacePricingPolicy {
   minimumServiceFeeCents: number;
   maximumServiceFeeCents: number;
   salesTaxRate: number;
+  driverMinimumPayCents: number;
+  pickupEnabled: boolean;
+  pickupMaximumDistanceMiles: number;
+  pickupMinimumOrderCents: number;
+  pickupPreparationMinutes: number;
+  pickupServiceFeeRate: number;
+  pickupMinimumServiceFeeCents: number;
+  pickupMaximumServiceFeeCents: number;
   freeDeliveryDriverIncentiveWithoutTipCents: number;
   freeDeliveryDriverIncentiveWithTipCents: number;
 }
@@ -39,6 +47,13 @@ export const MARKETPLACE_PRICING_POLICY_FIELDS = [
   "minimumServiceFeeCents",
   "maximumServiceFeeCents",
   "salesTaxRate",
+  "driverMinimumPayCents",
+  "pickupMaximumDistanceMiles",
+  "pickupMinimumOrderCents",
+  "pickupPreparationMinutes",
+  "pickupServiceFeeRate",
+  "pickupMinimumServiceFeeCents",
+  "pickupMaximumServiceFeeCents",
   "freeDeliveryDriverIncentiveWithoutTipCents",
   "freeDeliveryDriverIncentiveWithTipCents",
 ] as const satisfies ReadonlyArray<keyof MarketplacePricingPolicy>;
@@ -46,6 +61,21 @@ export const MARKETPLACE_PRICING_POLICY_FIELDS = [
 export function parseMarketplacePricingPolicy(
   input: Record<string, unknown>,
 ): MarketplacePricingPolicy {
+  // Keep already-saved policies readable until an admin configures the
+  // guarantee. Every subsequent save persists this field explicitly.
+  input = {
+    ...input,
+    driverMinimumPayCents: input.driverMinimumPayCents ?? 0,
+    pickupMaximumDistanceMiles:
+      input.pickupMaximumDistanceMiles ?? input.maxRadiusMiles ?? 25,
+    pickupMinimumOrderCents: input.pickupMinimumOrderCents ?? input.defaultMinimumOrderCents,
+    pickupPreparationMinutes: input.pickupPreparationMinutes ?? 30,
+    pickupServiceFeeRate: input.pickupServiceFeeRate ?? input.serviceFeeRate,
+    pickupMinimumServiceFeeCents:
+      input.pickupMinimumServiceFeeCents ?? input.minimumServiceFeeCents,
+    pickupMaximumServiceFeeCents:
+      input.pickupMaximumServiceFeeCents ?? input.maximumServiceFeeCents,
+  };
   const policy = {} as MarketplacePricingPolicy;
 
   for (const field of MARKETPLACE_PRICING_POLICY_FIELDS) {
@@ -62,19 +92,29 @@ export function parseMarketplacePricingPolicy(
    * explicitly enables peak pricing for the default policy or a zone.
    */
   policy.peakSurchargeEnabled = input.peakSurchargeEnabled === true;
+  policy.pickupEnabled = input.pickupEnabled === true;
 
   const integerFields: Array<keyof MarketplacePricingPolicy> = [
     "maxRadiusMiles", "baseDeliveryFeeCents", "baseDistanceMiles",
     "costPerMileCents", "peakSurchargeCents", "freeDeliveryMinimumCents",
     "defaultMinimumOrderCents", "minimumServiceFeeCents",
     "maximumServiceFeeCents", "freeDeliveryDriverIncentiveWithoutTipCents",
-    "freeDeliveryDriverIncentiveWithTipCents",
+    "freeDeliveryDriverIncentiveWithTipCents", "driverMinimumPayCents",
+    "pickupMinimumOrderCents", "pickupPreparationMinutes",
+    "pickupMaximumDistanceMiles",
+    "pickupMinimumServiceFeeCents", "pickupMaximumServiceFeeCents",
   ];
   if (integerFields.some((field) => !Number.isInteger(policy[field])) ||
     policy.maxRadiusMiles < 1 ||
     policy.baseDistanceMiles > policy.maxRadiusMiles ||
+    policy.driverMinimumPayCents > policy.baseDeliveryFeeCents ||
     policy.minimumServiceFeeCents > policy.maximumServiceFeeCents ||
+    policy.pickupPreparationMinutes < 5 ||
+    policy.pickupPreparationMinutes > 240 ||
+    policy.pickupMaximumDistanceMiles < 1 ||
+    policy.pickupMinimumServiceFeeCents > policy.pickupMaximumServiceFeeCents ||
     policy.serviceFeeRate > 1 ||
+    policy.pickupServiceFeeRate > 1 ||
     policy.salesTaxRate > 1) {
     throw new Error("Marketplace pricing policy contains unsupported values.");
   }

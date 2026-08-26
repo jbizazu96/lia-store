@@ -31,6 +31,9 @@ import { DistanceWarningModal } from "@/components/customer/store/DistanceWarnin
 import { BottomBar } from "@/components/customer/store/BottomBar";
 import { ProductCard } from "@/components/customer/store/ProductCard";
 import { CustomerPageSkeleton } from "@/components/customer/ui/CustomerPageSkeleton";
+import {CustomerFulfillmentSelector} from "@/components/customer/store/CustomerFulfillmentSelector";
+import {useMarketplacePricingPolicy} from "@/hooks/useMarketplacePricingPolicy";
+import {isPickupLocationAllowed} from "@/services/pricing/pickupAvailability";
 import type { Product } from "@/types/product";
 
 interface StoreCategoryPageProps {
@@ -73,6 +76,12 @@ export default function StoreCategoryPage({
      */
     skipDistanceWarning: true,
   });
+  const pickupPolicy = useMarketplacePricingPolicy();
+  const pickupLocationAllowed = Boolean(store && isPickupLocationAllowed(
+    pickupPolicy,
+    store.pickupZoneAccessAllowed,
+    store.distance,
+  ));
 
   const {
     addItem,
@@ -80,6 +89,8 @@ export default function StoreCategoryPage({
     getItemQuantity,
     getStoreItemCount,
     getStoreTotalPrice,
+    fulfillmentType,
+    setFulfillmentType,
   } = useCart();
 
   const category = categories.find(
@@ -173,7 +184,7 @@ export default function StoreCategoryPage({
       return;
     }
 
-    if (isOutsideDeliveryRadius) {
+    if (isOutsideDeliveryRadius && !(fulfillmentType === "pickup" && store.pickupEnabled && pickupLocationAllowed)) {
       openDistanceWarning();
       return;
     }
@@ -217,6 +228,7 @@ export default function StoreCategoryPage({
   ) => {
     if (
       isOutsideDeliveryRadius &&
+      !(fulfillmentType === "pickup" && store?.pickupEnabled && pickupLocationAllowed) &&
       quantity > getItemQuantity(productId)
     ) {
       openDistanceWarning();
@@ -269,6 +281,16 @@ export default function StoreCategoryPage({
             : category?.name ?? "Category"}
         </h1>
       </header>
+
+      <CustomerFulfillmentSelector
+        compact
+        fulfillmentType={fulfillmentType}
+        onChange={setFulfillmentType}
+        storeId={store.id}
+        storePickupEnabled={store.pickupEnabled === true}
+        distanceMiles={store.distance}
+        deliveryAvailable={!isOutsideDeliveryRadius}
+      />
 
       {hasFreshProducts && (
         <div className="mb-5 flex items-center gap-2.5 rounded-2xl bg-emerald-50 px-3.5 py-3 text-sm font-semibold text-emerald-900">
@@ -347,7 +369,12 @@ export default function StoreCategoryPage({
               closeDistanceWarning();
               router.push("/home");
             }}
-            onContinue={closeDistanceWarning}
+            onContinue={() => {
+              if (store.pickupEnabled && pickupLocationAllowed && isOutsideDeliveryRadius) {
+                setFulfillmentType("pickup");
+              }
+              closeDistanceWarning();
+            }}
           />
         )}
       </AnimatePresence>

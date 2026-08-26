@@ -50,6 +50,7 @@ import {
 } from "./shipdayFulfillmentService";
 import {requireStoreWorkspaceAccess} from "../services/store/storeAccessService";
 import {enforceCallableAbuseProtection} from "../security/callableAbuseProtection";
+import {pickupFulfillmentService} from "./pickupFulfillmentService";
 
 
 /*
@@ -278,6 +279,7 @@ function mapShipdayError(
 
   case "CHECKOUT_NOT_CONFIRMED":
   case "PAYMENT_NOT_CONFIRMED":
+  case "PICKUP_ORDER_NOT_SUPPORTED":
   case "ORDER_NOT_PREPARING":
   case "ORDER_NOT_READY_FOR_PICKUP":
   case "SHIPDAY_ORDER_MISSING":
@@ -434,6 +436,20 @@ if (
   statusResult.currentStatus ===
   "preparing"
 ) {
+  if (statusResult.fulfillmentType === "pickup") {
+    return {
+      success: true,
+      orderId: statusResult.orderId,
+      orderNumber: statusResult.orderNumber,
+      previousStatus: statusResult.previousStatus,
+      currentStatus: statusResult.currentStatus,
+      changedAt: statusResult.changedAt,
+      changed: statusResult.changed,
+      newlyReadyForPickup: statusResult.newlyReadyForPickup,
+      shipday: {attempted: false, created: false, orderId: null, message: "Shipday is not used for customer pickup."},
+      message: statusResult.changed ? "The pickup order is now being prepared." : "The pickup order is already being prepared.",
+    };
+  }
   try {
     const shipdayResult =
       await shipdayFulfillmentService
@@ -514,6 +530,21 @@ if (
   statusResult.currentStatus ===
   "ready_for_pickup"
 ) {
+  if (statusResult.fulfillmentType === "pickup") {
+    await pickupFulfillmentService.ensurePickupCode(statusResult.orderId, store.id);
+    return {
+      success: true,
+      orderId: statusResult.orderId,
+      orderNumber: statusResult.orderNumber,
+      previousStatus: statusResult.previousStatus,
+      currentStatus: statusResult.currentStatus,
+      changedAt: statusResult.changedAt,
+      changed: statusResult.changed,
+      newlyReadyForPickup: statusResult.newlyReadyForPickup,
+      shipday: {attempted: false, created: false, orderId: null, message: "Shipday is not used for customer pickup."},
+      message: statusResult.changed ? "The order is ready for customer pickup." : "The order is already ready for customer pickup.",
+    };
+  }
   try {
     const shipdayResult =
       await shipdayFulfillmentService

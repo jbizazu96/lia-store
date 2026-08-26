@@ -26,9 +26,12 @@ import {
   type CartItem,
 } from "@/services/cart/cartService";
 import {customerStartupClientService} from "@/services/user/customerStartupClientService";
+import type {FulfillmentType} from "@/types/fulfillment";
 
 interface CartContextType {
   items: CartItem[];
+  fulfillmentType: FulfillmentType;
+  setFulfillmentType: (value: FulfillmentType) => void;
   itemCount: number;
   totalPrice: number;
   addItem: (
@@ -63,6 +66,8 @@ const CartContext = createContext<CartContextType | undefined>(undefined);
 
 export function CartProvider({children}: {children: ReactNode}) {
   const [items, setItems] = useState<CartItem[]>([]);
+  const [fulfillmentType, setFulfillmentType] =
+    useState<FulfillmentType>("delivery");
   const [isLoading, setIsLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isCustomerCartSession, setIsCustomerCartSession] =
@@ -118,18 +123,20 @@ export function CartProvider({children}: {children: ReactNode}) {
        * its cart into a newly signed-in customer's memory or Firestore cart.
        */
       setItems([]);
+      setFulfillmentType("delivery");
 
       if (user) {
         setIsLoading(true);
         try {
-          const savedItems = (await customerStartupClientService.get()).cart.items;
+          const savedCart = (await customerStartupClientService.get()).cart;
 
           if (!active || auth.currentUser?.uid !== user.uid) {
             return;
           }
 
-          if (savedItems) {
-            setItems(savedItems);
+          if (savedCart.items) {
+            setItems(savedCart.items);
+            setFulfillmentType(savedCart.fulfillmentType ?? "delivery");
           } else {
             setItems([]);
           }
@@ -194,7 +201,8 @@ export function CartProvider({children}: {children: ReactNode}) {
       if (items.length > 0) {
         void saveCartToFirestore(
           currentUser.uid,
-          items
+          items,
+          fulfillmentType,
         ).catch((error: unknown) => {
           console.error(
             "Unable to save cart:",
@@ -215,7 +223,7 @@ export function CartProvider({children}: {children: ReactNode}) {
     }, 500);
 
     return () => clearTimeout(timeoutId);
-  }, [items, currentUser, isLoading, isCustomerCartSession]);
+  }, [items, fulfillmentType, currentUser, isLoading, isCustomerCartSession]);
 /**
  * Add a product to the cart.
  *
@@ -326,6 +334,7 @@ const addItem = async (
   const clearCart =
   async (): Promise<void> => {
     setItems([]);
+    setFulfillmentType("delivery");
 
     if (currentUser && isCustomerCartSession) {
       await clearCartFromFirestore(
@@ -345,6 +354,7 @@ const addItem = async (
     );
 
     setItems(result.items);
+    setFulfillmentType(result.fulfillmentType);
     return {
       skippedProductNames: result.skippedProductNames,
     };
@@ -388,6 +398,8 @@ const addItem = async (
   return (
     <CartContext.Provider value={{
       items,
+      fulfillmentType,
+      setFulfillmentType,
       itemCount,
       totalPrice,
       addItem,

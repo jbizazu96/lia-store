@@ -50,6 +50,9 @@ export interface Store {
   distance?: number;
   deliveryFee?: number;
   minimumOrder: number;
+  pickupEnabled?: boolean;
+  pickupPreparationMinutes?: number;
+  pickupInstructions?: string;
   /* Approval unlocks owner tools; activation publishes to customers. */
   isApproved: boolean;
   isActive: boolean;

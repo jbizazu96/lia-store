@@ -68,7 +68,7 @@ export async function queueStoreNewOrderEmail(orderId: string, ownerUid = ""): P
   const resolvedOwnerUid = ownerUid || text(currentStoreData.ownerId) || text(store.ownerId);
   const owner = resolvedOwnerUid ? await db.collection("users").doc(resolvedOwnerUid).get() : null;
   const email = text(owner?.data()?.email) || text(currentStoreData.email) || text(store.email);
-  const template = newOrderEmail({storeName: text(store.name) || "Your store", orderNumber: text(data.orderNumber) || orderId.slice(0, 8), url: absolute(`/store/store-orders/${encodeURIComponent(orderId)}`)});
+  const template = newOrderEmail({storeName: text(store.name) || "Your store", orderNumber: text(data.orderNumber) || orderId.slice(0, 8), fulfillmentType: data.fulfillmentType === "pickup" ? "pickup" : "delivery", url: absolute(`/store/store-orders/${encodeURIComponent(orderId)}`)});
   await enqueueEmail({dedupeKey: `store-new-order:${orderId}`, category: "store_new_order", to: email, ...template, tags: {order_id: orderId}});
 }
 
@@ -81,6 +81,7 @@ export async function queueCustomerDeliveredEmail(orderId: string, customerUid: 
   const name = text(customer.data()?.displayName) || text(embedded.name) || "Customer";
   const embeddedStore = data.store && typeof data.store === "object" && !Array.isArray(data.store) ? data.store as Record<string, unknown> : {};
   const template = deliveredOrderEmail({
+    fulfillmentType: data.fulfillmentType === "pickup" ? "pickup" : "delivery",
     customerName: name,
     storeName: text(embeddedStore.name) || "your local store",
     orderNumber: text(data.orderNumber) || orderId.slice(0, 8),

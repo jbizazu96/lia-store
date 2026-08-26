@@ -42,6 +42,7 @@ import {
   type StoreAnalyticsPeriod,
 } from "../reporting/storeAnalyticsPeriod";
 import {backfillStorePerformanceSummaries} from "../reporting/storePerformanceSummaryService";
+import {syncStorePublicProfile} from "../services/store/storePublicProfileService";
 
 if (admin.apps.length === 0) {
   admin.initializeApp();
@@ -515,6 +516,9 @@ function settingsStore(data: Record<string, unknown>, id: string) {
     rating: typeof data.rating === "number" ? data.rating : 0, isOpen: data.isOpen === true,
     schedule: Array.isArray(data.schedule) ? serialize(data.schedule) : [],
     isApproved: data.isApproved === true, isActive: data.isActive === true,
+    pickupEnabled: data.pickupEnabled === true,
+    pickupPreparationMinutes: Math.min(240, Math.max(5, Math.round(Number(data.pickupPreparationMinutes) || 30))),
+    pickupInstructions: text(data.pickupInstructions),
     businessType: text(data.businessType),
     registeredName: text(data.registeredName),
     ein: text(data.ein),
@@ -1151,7 +1155,7 @@ export const saveStoreWorkspaceSettings = onCall({ region: "us-central1", secret
   });
   const payload = isRecord(request.data) ? request.data : {};
   const section = text(payload.section);
-  if (!["profile", "business", "notifications"].includes(section)) {
+  if (!["profile", "business", "fulfillment", "notifications"].includes(section)) {
     throw new HttpsError("invalid-argument", "Choose a valid settings section to save.");
   }
   const storeInput = isRecord(payload.store) ? payload.store : {};
@@ -1227,6 +1231,22 @@ export const saveStoreWorkspaceSettings = onCall({ region: "us-central1", secret
       throw new HttpsError("invalid-argument", "Complete valid business information. An EIN must use the format 00-0000000.");
     }
     Object.assign(updates, {businessType, registeredName, ein, businessStructure});
+  } else if (section === "fulfillment") {
+    const pickupPreparationMinutes = Number(storeInput.pickupPreparationMinutes);
+    const pickupInstructions = text(storeInput.pickupInstructions).trim();
+    if (
+      !Number.isSafeInteger(pickupPreparationMinutes) ||
+      pickupPreparationMinutes < 5 ||
+      pickupPreparationMinutes > 240 ||
+      pickupInstructions.length > 500
+    ) {
+      throw new HttpsError("invalid-argument", "Pickup preparation must be 5 to 240 minutes and instructions cannot exceed 500 characters.");
+    }
+    Object.assign(updates, {
+      pickupEnabled: storeInput.pickupEnabled === true,
+      pickupPreparationMinutes,
+      pickupInstructions,
+    });
   } else {
     Object.assign(updates, {
       orderNotifications: storeInput.orderNotifications !== false,
@@ -1251,6 +1271,7 @@ export const saveStoreWorkspaceSettings = onCall({ region: "us-central1", secret
   }));
   await batch.commit();
   const [updatedStore, updatedUser] = await Promise.all([store.ref.get(), db.collection("users").doc(request.auth.uid).get()]);
+  await syncStorePublicProfile(store.id, updatedStore.data());
   return { store: settingsStore(updatedStore.data() ?? {}, store.id), user: settingsUser(updatedUser.data() ?? {}) };
 });
 

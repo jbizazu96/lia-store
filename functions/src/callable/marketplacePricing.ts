@@ -5,7 +5,10 @@ import {
   parseMarketplacePricingPolicy,
   type MarketplacePricingPolicy,
 } from "../payment/pricing/marketplacePricingPolicy";
-import {resolveZonePricingDecision} from "../payment/pricing/zonePricingResolutionService";
+import {
+  resolvePickupZoneDecision,
+  resolveZonePricingDecision,
+} from "../payment/pricing/zonePricingResolutionService";
 import {
   ORDER_DELIVERY_POLICY_DOCUMENT,
   parseOrderDeliveryPolicy,
@@ -38,9 +41,17 @@ function zonePolicy(
   const maximumRouteMiles = zone.get("maximumRouteMiles");
   try {
     const policy = parseMarketplacePricingPolicy(record(zone.get("pricingPolicy")));
-    return typeof maximumRouteMiles === "number"
-      ? {...policy, maxRadiusMiles: maximumRouteMiles}
-      : policy;
+    return {
+      ...policy,
+      ...(typeof maximumRouteMiles === "number" ? {maxRadiusMiles: maximumRouteMiles} : {}),
+      pickupEnabled: defaultPolicy.pickupEnabled,
+      pickupMaximumDistanceMiles: defaultPolicy.pickupMaximumDistanceMiles,
+      pickupMinimumOrderCents: defaultPolicy.pickupMinimumOrderCents,
+      pickupPreparationMinutes: defaultPolicy.pickupPreparationMinutes,
+      pickupServiceFeeRate: defaultPolicy.pickupServiceFeeRate,
+      pickupMinimumServiceFeeCents: defaultPolicy.pickupMinimumServiceFeeCents,
+      pickupMaximumServiceFeeCents: defaultPolicy.pickupMaximumServiceFeeCents,
+    };
   } catch {
     return typeof maximumRouteMiles === "number"
       ? {...defaultPolicy, maxRadiusMiles: maximumRouteMiles}
@@ -75,6 +86,9 @@ export const getMarketplacePricing = onCall({region: "us-central1"}, async (requ
     decision: snapshot.exists
       ? resolveZonePricingDecision(customer, record(snapshot.data()))
       : null,
+    pickupDecision: snapshot.exists
+      ? resolvePickupZoneDecision(customer, record(snapshot.data()))
+      : null,
   }));
   const uniqueZoneIds = [...new Set(decisions.flatMap(({decision}) =>
     decision?.allowed && decision.pricingZoneId ? [decision.pricingZoneId] : []
@@ -89,8 +103,8 @@ export const getMarketplacePricing = onCall({region: "us-central1"}, async (requ
     zonePolicy(zoneSnapshots[index], defaultPolicy),
   ]));
 
-  const entries = decisions.flatMap(({snapshot, decision}) => {
-    if (!snapshot.exists || !decision) return [];
+  const entries = decisions.flatMap(({snapshot, decision, pickupDecision}) => {
+    if (!snapshot.exists || !decision || !pickupDecision) return [];
     const store = record(snapshot.data());
     const pricingZoneName = decision.pricingZoneId === decision.customerHomeZoneId
       ? (typeof customer.homeZoneName === "string" && customer.homeZoneName.trim()
@@ -105,6 +119,8 @@ export const getMarketplacePricing = onCall({region: "us-central1"}, async (requ
     return [[snapshot.id, {
       policy,
       decision: {...decision, pricingZoneName},
+      pickupDecision,
+      storePickupEnabled: store.pickupEnabled === true,
     }] as const];
   });
   const byStoreId = Object.fromEntries(entries);

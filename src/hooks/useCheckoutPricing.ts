@@ -45,6 +45,7 @@ import type {
   CheckoutTotals,
 } from "@/app/checkout/types";
 import {startCustomerPerformanceTrace} from "@/services/performance/customerPerformanceService";
+import type {FulfillmentType} from "@/types/fulfillment";
 
 /*
 |--------------------------------------------------------------------------
@@ -60,6 +61,7 @@ interface UseCheckoutPricingParams {
   store: Store | null;
 
   address: CheckoutAddress | null;
+  fulfillmentType: FulfillmentType;
 }
 
 /*
@@ -102,9 +104,10 @@ export function useCheckoutPricing({
   tip,
   store,
   address,
+  fulfillmentType,
 }: UseCheckoutPricingParams): UseCheckoutPricingResult {
   const marketplacePolicy =
-    useMarketplacePricingPolicy(store?.id);
+    useMarketplacePricingPolicy(fulfillmentType === "pickup" ? undefined : store?.id);
   const orderDeliveryPolicy = useOrderDeliveryPolicy(store?.id);
   const [distanceMiles, setDistanceMiles] = useState(0);
   const [isCalculatingDistance, setIsCalculatingDistance] = useState(false);
@@ -197,17 +200,25 @@ export function useCheckoutPricing({
       isMounted = false;
       pricingTrace.stop({status: "cancelled"});
     };
-  }, [store, address]);
+  }, [store, address, fulfillmentType]);
 
   return useMemo(() => {
     const pricing = marketplacePolicy
-      ? calculateDeliveryFee(distanceMiles, subtotal, marketplacePolicy)
+      ? calculateDeliveryFee(
+          distanceMiles,
+          subtotal,
+          marketplacePolicy,
+          marketplacePolicy.peakSurchargeEnabled,
+          true,
+          fulfillmentType,
+        )
       : null;
 
-    const deliveryFee =
-      pricing?.deliveryFee ?? 0;
+    const deliveryFee = fulfillmentType === "pickup"
+      ? 0
+      : pricing?.deliveryFee ?? 0;
 
-    const originalDeliveryFee = Math.round(
+    const originalDeliveryFee = fulfillmentType === "pickup" ? 0 : Math.round(
       (
         (pricing?.breakdown.distanceFee ?? 0) +
         (pricing?.breakdown.peakSurcharge ?? 0)
@@ -245,7 +256,7 @@ export function useCheckoutPricing({
       deliveryFee +
       serviceFee +
       tax +
-      tip;
+      (fulfillmentType === "pickup" ? 0 : tip);
 
     return {
       distanceMiles,
@@ -274,7 +285,7 @@ export function useCheckoutPricing({
         originalDeliveryFee,
         serviceFee,
         tax,
-        tip,
+        tip: fulfillmentType === "pickup" ? 0 : tip,
         total,
       },
     };
@@ -286,5 +297,6 @@ export function useCheckoutPricing({
     distanceError,
     marketplacePolicy,
     orderDeliveryPolicy,
+    fulfillmentType,
   ]);
 }

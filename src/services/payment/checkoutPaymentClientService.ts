@@ -36,6 +36,7 @@ import type {
   PrepareCheckoutPaymentInput,
   PrepareCheckoutPaymentResult,
 } from "@/types/checkoutPayment";
+import type {FulfillmentType} from "@/types/fulfillment";
 
 
 /*
@@ -55,6 +56,7 @@ const functions =
   and displays money as dollars.
 */
 export interface PrepareCustomerPaymentInput {
+  fulfillmentType: FulfillmentType;
   storeId: string;
 
   contactName: string;
@@ -63,10 +65,10 @@ export interface PrepareCustomerPaymentInput {
 
   items: CheckoutPaymentItemInput[];
 
-  deliveryAddress:
-    CheckoutPaymentAddressInput;
+  deliveryAddress?: CheckoutPaymentAddressInput;
 
   deliveryInstructions?: string;
+  pickupInstructions?: string;
 
   /*
     Example:
@@ -200,6 +202,7 @@ async function prepareCheckoutPayment(
   > {
   const request:
   PrepareCheckoutPaymentInput = {
+      fulfillmentType: input.fulfillmentType,
       storeId:
         input.storeId,
 
@@ -218,10 +221,10 @@ async function prepareCheckoutPayment(
       deliveryInstructions:
         input.deliveryInstructions,
 
+      pickupInstructions: input.pickupInstructions,
+
       tipAmountCents:
-        dollarsToCents(
-          input.tip
-        ),
+        input.fulfillmentType === "pickup" ? 0 : dollarsToCents(input.tip),
     };
 
   const callable =

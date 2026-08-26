@@ -27,6 +27,7 @@ import {
   History,
   Headphones,
   Users,
+  ShoppingBag,
 } from "lucide-react";
 import { auth } from "@/lib/firebase";
 import {
@@ -46,6 +47,7 @@ const StoreSchedule = dynamic(() => import("@/components/store/settings/StoreSch
 const SettingsActivitySection = dynamic(() => import("@/components/store/settings/SettingsActivitySection").then((module) => module.SettingsActivitySection));
 const AccountSupportForm = dynamic(() => import("@/components/support/AccountSupportForm").then((module) => module.AccountSupportForm));
 const StoreStaffSection = dynamic(() => import("@/components/store/settings/StoreStaffSection").then((module) => module.StoreStaffSection));
+const FulfillmentSection = dynamic(() => import("@/components/store/settings/FulfillmentSection").then((module) => module.FulfillmentSection));
 import { useUnsavedChanges } from "@/hooks/useUnsavedChanges";
 import { useConfirmation } from "@/context/ConfirmationContext";
 import { useSuccessToast } from "@/context/SuccessToastContext";
@@ -60,6 +62,7 @@ type SettingsSection =
   | "profile"
   | "business"
   | "schedule"
+  | "fulfillment"
   | "payment"
   | "notifications"
   | "security"
@@ -87,6 +90,7 @@ function isSettingsSection(
     value === "profile" ||
     value === "business" ||
     value === "schedule" ||
+    value === "fulfillment" ||
     value === "payment" ||
     value === "notifications" ||
     value === "security" ||
@@ -103,7 +107,7 @@ function isSettingsSection(
   never make the page look dirty. Only compare fields this settings UI can
   actually edit and save through saveStoreWorkspaceSettings().
 */
-type SavableSettingsSection = "profile" | "business" | "notifications";
+type SavableSettingsSection = "profile" | "business" | "fulfillment" | "notifications";
 
 function sectionFingerprint(
   section: SavableSettingsSection,
@@ -122,6 +126,11 @@ function sectionFingerprint(
     businessType: store.businessType, registeredName: store.registeredName,
     ein: store.ein, businessStructure: store.businessStructure,
   });
+  if (section === "fulfillment") return JSON.stringify({
+    pickupEnabled: store.pickupEnabled,
+    pickupPreparationMinutes: store.pickupPreparationMinutes,
+    pickupInstructions: store.pickupInstructions,
+  });
   return JSON.stringify({
     orderNotifications: store.orderNotifications,
     paymentNotifications: store.paymentNotifications,
@@ -139,6 +148,7 @@ function mergeSavedSection(
   const fields: Record<SavableSettingsSection, Array<keyof StoreWorkspaceStore>> = {
     profile: ["name", "email", "phone", "description", "address", "city", "state", "zip", "country", "formattedAddress", "latitude", "longitude", "placeId"],
     business: ["businessType", "registeredName", "ein", "businessStructure"],
+    fulfillment: ["pickupEnabled", "pickupPreparationMinutes", "pickupInstructions"],
     notifications: ["orderNotifications", "paymentNotifications", "productStockNotifications", "emailNotifications", "pushNotifications"],
   };
   const next = {...current};
@@ -174,9 +184,9 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
   const [savedFingerprints, setSavedFingerprints] = useState<Record<SavableSettingsSection, string> | null>(null);
-  const savableSection = activeSection === "profile" || activeSection === "business" || activeSection === "notifications" ? activeSection : null;
+  const savableSection = activeSection === "profile" || activeSection === "business" || activeSection === "fulfillment" || activeSection === "notifications" ? activeSection : null;
   const activeSectionIsDirty = Boolean(savableSection && savedFingerprints && sectionFingerprint(savableSection, storeData, userData) !== savedFingerprints[savableSection]);
-  const hasUnsavedChanges = Boolean(savedFingerprints && storeData && (["profile", "business", "notifications"] as const).some((section) => sectionFingerprint(section, storeData, userData) !== savedFingerprints[section]));
+  const hasUnsavedChanges = Boolean(savedFingerprints && storeData && (["profile", "business", "fulfillment", "notifications"] as const).some((section) => sectionFingerprint(section, storeData, userData) !== savedFingerprints[section]));
 
   useUnsavedChanges(hasUnsavedChanges);
   const { confirm } = useConfirmation();
@@ -205,6 +215,7 @@ export default function SettingsPage() {
         setSavedFingerprints({
           profile: sectionFingerprint("profile", workspace.store, workspace.user),
           business: sectionFingerprint("business", workspace.store, workspace.user),
+          fulfillment: sectionFingerprint("fulfillment", workspace.store, workspace.user),
           notifications: sectionFingerprint("notifications", workspace.store, workspace.user),
         });
 
@@ -226,11 +237,17 @@ export default function SettingsPage() {
       setSaveMessage("");
 
       if (!auth.currentUser || !storeData) return;
-      if (activeSection !== "profile" && activeSection !== "business" && activeSection !== "notifications") return;
+      if (activeSection !== "profile" && activeSection !== "business" && activeSection !== "fulfillment" && activeSection !== "notifications") return;
 
       const confirmed = await confirm({
           title: "Save store changes?",
-          message: activeSection === "profile" ? "Your updated store profile and location will be saved." : activeSection === "business" ? "Your updated business information will be saved." : "Your notification preferences will be saved.",
+          message: activeSection === "profile"
+            ? "Your updated store profile and location will be saved."
+            : activeSection === "business"
+              ? "Your updated business information will be saved."
+              : activeSection === "fulfillment"
+                ? "Your customer pickup availability, preparation time, and instructions will be saved."
+                : "Your notification preferences will be saved.",
           confirmLabel: "Save changes",
           cancelLabel: "Keep editing",
         });
@@ -292,6 +309,7 @@ export default function SettingsPage() {
     { id: "profile", label: "Store Profile", icon: Store },
     { id: "business", label: "Business Info", icon: Building },
     { id: "schedule", label: "Store Schedule", icon: Clock },
+    { id: "fulfillment", label: "Delivery & Pickup", icon: ShoppingBag },
     { id: "payment", label: "Payment & Payouts", icon: CreditCard },
     { id: "notifications", label: "Notifications", icon: Bell },
     { id: "security", label: "Security", icon: Shield },
@@ -309,7 +327,7 @@ export default function SettingsPage() {
           <h1 className="text-2xl font-bold text-gray-800">Settings</h1>
           <p className="text-gray-500 text-sm">Manage your store and account settings</p>
         </div>
-        {(activeSection === "profile" || activeSection === "business" || activeSection === "notifications") && <button
+        {(activeSection === "profile" || activeSection === "business" || activeSection === "fulfillment" || activeSection === "notifications") && <button
           type="button"
           onClick={handleSave}
           disabled={saving || !activeSectionIsDirty}
@@ -405,6 +423,9 @@ export default function SettingsPage() {
                 setStoreData={setStoreData}
                 storeId={storeId}
               />
+            )}
+            {activeSection === "fulfillment" && (
+              <FulfillmentSection storeData={storeData} setStoreData={setStoreData} />
             )}
             {activeSection === "payment" && (
               <PaymentSection 

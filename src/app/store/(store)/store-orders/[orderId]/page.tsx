@@ -204,7 +204,9 @@ export default function OrderDetailsPage({params}: OrderDetailsPageProps) {
 
       <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
         <div className="flex items-center justify-between">
-          {ORDER_STATUS_STEPS.map((step, index) => {
+          {ORDER_STATUS_STEPS
+            .filter((step) => order.fulfillmentType !== "pickup" || step.key !== "out_for_delivery")
+            .map((step, index) => {
             const iscompleted = index <= currentStepIndex;
             const Icon = step.icon;
             const timestamp =
@@ -224,7 +226,9 @@ export default function OrderDetailsPage({params}: OrderDetailsPageProps) {
                   <p className={`text-xs font-medium mt-1 ${
                     iscompleted ? "text-gray-800" : "text-gray-400"
                   }`}>
-                    {step.label}
+                  {order.fulfillmentType === "pickup" && step.key === "ready_for_pickup"
+                    ? "Ready for customer pickup"
+                    : step.label}
                   </p>
                   {timestamp && (
                     <p className="text-[10px] text-gray-400 mt-0.5">
@@ -241,10 +245,11 @@ export default function OrderDetailsPage({params}: OrderDetailsPageProps) {
             );
           })}
         </div>
-        {/* ✅ Note about LIA handling delivery */}
         <div className="mt-4 pt-4 border-t border-gray-100">
           <p className="text-xs text-gray-400 text-center">
-            📦 LIA handles delivery. Updates for &quot;Out for Delivery&quot; and &quot;Completed&quot; are automatic.
+            {order.fulfillmentType === "pickup"
+              ? "Customer pickup: ask for the six-digit pickup code before completing the order. Shipday is not used."
+              : "LIA handles delivery. Out for Delivery and Completed updates are automatic."}
           </p>
         </div>
       </div>
@@ -320,10 +325,16 @@ export default function OrderDetailsPage({params}: OrderDetailsPageProps) {
                   <span className="text-gray-600">{order.customer.phone}</span>
                 </div>
               )}
-              {order.customer.address && (
+              {order.fulfillmentType === "delivery" && order.customer.address && (
                 <div className="flex items-start gap-3">
                   <MapPin className="w-4 h-4 text-gray-400 mt-0.5" />
                   <span className="text-gray-600">{order.customer.address}</span>
+                </div>
+              )}
+              {order.fulfillmentType === "pickup" && (
+                <div className="flex items-start gap-3">
+                  <MapPin className="w-4 h-4 text-orange-500 mt-0.5" />
+                  <span className="font-medium text-orange-700">Customer will pick up at the store</span>
                 </div>
               )}
             </div>
@@ -364,6 +375,16 @@ export default function OrderDetailsPage({params}: OrderDetailsPageProps) {
 
           {!readOnly && <OrderActions
             status={order.status}
+            fulfillmentType={order.fulfillmentType}
+            onCompletePickup={async (code) => {
+              setUpdating(true);
+              try {
+                await orderService.completePickup(order.id, code);
+                await refreshOrder();
+              } finally {
+                setUpdating(false);
+              }
+            }}
             cancellationReason={
               order.cancellationReason
             }

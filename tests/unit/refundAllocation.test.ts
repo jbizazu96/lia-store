@@ -17,6 +17,7 @@ const input = {
   allocationPolicy: {
     storeCommissionBasisPoints: 1_000,
     driverCommissionBasisPoints: 3_000,
+    driverMinimumPayCents: 0,
     freeDeliveryMinimumCents: 10_000,
     freeDeliveryDriverIncentiveWithoutTipCents: 500,
     freeDeliveryDriverIncentiveWithTipCents: 300,
@@ -54,5 +55,20 @@ describe("marketplace refund allocation", () => {
       ...input,
       originalPayment: {...input.originalPayment, totalAmount: 1},
     })).toThrowError(/components do not equal/i);
+  });
+
+  it("never creates a driver reversal for a pickup refund", () => {
+    const result = calculatePaymentRefundAllocation({
+      ...input,
+      fulfillmentType: "pickup",
+      originalPayment: {
+        ...input.originalPayment,
+        deliveryFeeAmount: 0,
+        driverTipAmount: 0,
+        totalAmount: 11_100,
+      },
+    });
+    expect(result.driverReversalAmount).toBe(0);
+    expect(result.totalAmount).toBe(11_100);
   });
 });

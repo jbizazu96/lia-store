@@ -74,6 +74,11 @@ export const saveAdminMarketplacePricingPolicy = onCall({region: "us-central1"},
       freeDeliveryMinimumCents: policy.freeDeliveryMinimumCents,
       peakSurchargeEnabled: policy.peakSurchargeEnabled,
       peakSurchargeCents: policy.peakSurchargeCents,
+      pickupEnabled: policy.pickupEnabled,
+      pickupMaximumDistanceMiles: policy.pickupMaximumDistanceMiles,
+      pickupServiceFeeRate: policy.pickupServiceFeeRate,
+      pickupMinimumServiceFeeCents: policy.pickupMinimumServiceFeeCents,
+      pickupMaximumServiceFeeCents: policy.pickupMaximumServiceFeeCents,
     },
   });
   return {success:true};

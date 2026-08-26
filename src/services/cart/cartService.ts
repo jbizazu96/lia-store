@@ -20,6 +20,7 @@ import {
 import type {
   CartItem,
 } from "@/types/cart";
+import type {FulfillmentType} from "@/types/fulfillment";
 
 export type {
   CartItem,
@@ -60,11 +61,12 @@ function requireCurrentCustomer(
 
 export async function saveCartToFirestore(
   userId: string,
-  items: CartItem[]
+  items: CartItem[],
+  fulfillmentType: FulfillmentType,
 ): Promise<void> {
   requireCurrentCustomer(userId);
 
-  await call("saveCustomerCart", { items });
+  await call("saveCustomerCart", {items, fulfillmentType});
 }
 
 export async function loadCartFromFirestore(
@@ -77,6 +79,13 @@ export async function loadCartFromFirestore(
   }>("getCustomerCart");
 
   return response.items;
+}
+
+export async function loadCartStateFromFirestore(
+  userId: string,
+): Promise<{items: CartItem[]; fulfillmentType: FulfillmentType}> {
+  requireCurrentCustomer(userId);
+  return call("getCustomerCart");
 }
 
 export async function clearCartFromFirestore(
@@ -92,6 +101,7 @@ export async function repeatCompletedOrderInCart(
   orderId: string,
 ): Promise<{
   items: CartItem[];
+  fulfillmentType: FulfillmentType;
   skippedProductNames: string[];
 }> {
   requireCurrentCustomer(userId);

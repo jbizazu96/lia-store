@@ -181,7 +181,7 @@ export default function OrdersPage() {
             <div className="min-w-0 flex-1">
               <h2 className="text-sm font-extrabold text-gray-900">Your orders</h2>
               <p className="mt-0.5 text-xs font-medium text-gray-500">
-                Track deliveries and review previous purchases.
+                Track deliveries, pickups, and previous purchases.
               </p>
             </div>
             <span className="relative rounded-full bg-white/85 px-2.5 py-1 text-xs font-extrabold text-orange-700 shadow-sm">
@@ -219,7 +219,7 @@ export default function OrdersPage() {
             </h2>
             <p className="text-gray-500 text-sm mb-6 max-w-xs mx-auto">
               Start shopping and your orders will appear here. 
-              Local favorites delivered to your door!
+              Choose delivery or customer pickup from participating stores.
             </p>
 
             <Link
@@ -233,7 +233,7 @@ export default function OrdersPage() {
             <div className="mt-8 flex flex-col gap-3 text-sm text-gray-400">
               <div className="flex items-center justify-center gap-2">
                 <Truck className="w-4 h-4" />
-                <span>Fast delivery in 30-45 min</span>
+                <span>Delivery and pickup options</span>
               </div>
               <div className="flex items-center justify-center gap-2">
                 <MapPin className="w-4 h-4" />
@@ -303,6 +303,9 @@ export default function OrdersPage() {
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-4 text-sm text-gray-500">
                         <span>{order.items.length} item{order.items.length !== 1 ? 's' : ''}</span>
+                        <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-bold text-gray-600">
+                          {order.fulfillmentType === "pickup" ? "Pickup" : "Delivery"}
+                        </span>
                       </div>
                       <div className="flex items-center gap-3">
                         <span className="text-lg font-extrabold text-gray-900">
@@ -318,13 +321,18 @@ export default function OrdersPage() {
                       </div>
                     </div>
                     
-                    {/* ✅ Delivery Address - Properly formatted from object */}
-                    {order.customer.address && (
+                    {order.fulfillmentType === "delivery" && order.customer.address && (
                       <div className="flex items-center gap-1.5 text-xs text-gray-400 mt-1">
                         <MapPin className="w-3.5 h-3.5 flex-shrink-0" />
                         <span className="truncate">
                           {order.customer.address}
                         </span>
+                      </div>
+                    )}
+                    {order.fulfillmentType === "pickup" && (
+                      <div className="flex items-center gap-1.5 text-xs text-orange-600 mt-1">
+                        <ShoppingBag className="w-3.5 h-3.5 flex-shrink-0" />
+                        <span>Pickup at {order.store.name}</span>
                       </div>
                     )}
                   </div>

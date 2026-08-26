@@ -52,6 +52,7 @@ import { syncShipdayDeliveries } from "./scheduler/syncShipdayDeliveries";
 import {
   prepareCheckoutPayment,
 } from "./payment/checkout/prepareCheckoutPayment";
+export {getCustomerPickupCode, completeCustomerPickup, cleanupExpiredPickupCodes} from "./orders/pickupFulfillmentService";
 import {
   cleanupDeliveryRouteCache,
   getStoreDeliveryRoutes,

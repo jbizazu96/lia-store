@@ -86,7 +86,7 @@ export function PricingFeesModal({
                 <h3 className="font-extrabold text-slate-900">Service fee</h3>
                 <p className="mt-1">
                   LIA applies a service fee to support ordering, payment processing, and customer service.
-                  {policy && ` It is ${(policy.serviceFeeRate * 100).toFixed(1)}% of the item subtotal, with a minimum of ${money(policy.minimumServiceFeeCents)} and a maximum of ${money(policy.maximumServiceFeeCents)}.`}
+                  {policy && ` Delivery orders use ${(policy.serviceFeeRate * 100).toFixed(1)}%, with a minimum of ${money(policy.minimumServiceFeeCents)} and a maximum of ${money(policy.maximumServiceFeeCents)}. Pickup orders use ${((policy.pickupServiceFeeRate ?? policy.serviceFeeRate) * 100).toFixed(1)}%, with a minimum of ${money(policy.pickupMinimumServiceFeeCents ?? policy.minimumServiceFeeCents)} and a maximum of ${money(policy.pickupMaximumServiceFeeCents ?? policy.maximumServiceFeeCents)}.`}
                 </p>
               </div>
               <div>

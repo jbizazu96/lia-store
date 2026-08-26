@@ -44,6 +44,7 @@ import { useCustomerFavoriteStores } from "@/hooks/useCustomerFavoriteStores";
 import { Heart, ShoppingBag, Sparkles } from "lucide-react";
 import { MarketplaceCategoryNav } from "@/components/customer/home/MarketplaceCategoryNav";
 import {marketplacePricingClientService} from "@/services/pricing/marketplacePricingClientService";
+import {isPickupLocationAllowed} from "@/services/pricing/pickupAvailability";
 import type {MarketplacePricingPolicy} from "@/services/pricing/marketplacePricingClientService";
 import {startCustomerPerformanceTrace} from "@/services/performance/customerPerformanceService";
 
@@ -58,7 +59,7 @@ const AddressesModal = dynamic(
 
 export default function CustomerHomePage() {
   const router = useRouter();
-  const { itemCount, totalPrice } = useCart();
+  const { itemCount, totalPrice, setFulfillmentType } = useCart();
   const [userName, setUserName] = useState("Customer");
   const [deliveryAddress, setDeliveryAddress] =
     useState<CustomerProfileAddress | null>(null);
@@ -119,6 +120,7 @@ export default function CustomerHomePage() {
         maxDeliveryMiles: Number.MAX_SAFE_INTEGER,
         zoneAccessAllowed: true,
         zoneAccessType: "default_pricing",
+        pickupZoneAccessAllowed: false,
       }))
       .filter((store) =>
         (storeFilter === "all" || store.isFavorite) &&
@@ -344,6 +346,10 @@ export default function CustomerHomePage() {
               zoneAccessAllowed: applicable?.decision?.allowed ?? true,
               zoneAccessType:
                 applicable?.decision?.zoneAccessType ?? "default_pricing",
+              pickupZoneAccessAllowed:
+                applicable?.pickupDecision?.allowed ?? false,
+              storePickupEnabled:
+                applicable?.storePickupEnabled ?? store.pickupEnabled === true,
             })];
           });
         };
@@ -456,11 +462,11 @@ export default function CustomerHomePage() {
   const handleStoreClick = (store: CustomerStore) => {
     const distance = store.distance;
     const maxRadius = store.maxDeliveryMiles || marketplacePolicy?.maxRadiusMiles || 0;
-    
-    if (
+    const deliveryUnavailable =
       !store.zoneAccessAllowed ||
-      (store.zoneAccessType !== "customer_order_zone" && distance > maxRadius)
-    ) {
+      (store.zoneAccessType !== "customer_order_zone" && distance > maxRadius);
+
+    if (deliveryUnavailable) {
       setSelectedStore(store);
       setSelectedDistance(distance);
       setShowDistanceWarning(true);
@@ -472,6 +478,17 @@ export default function CustomerHomePage() {
   // Handle continue from warning modal
   const handleContinueToStore = () => {
     if (selectedStore) {
+      if (
+        marketplacePolicy?.pickupEnabled === true &&
+        selectedStore.pickupEnabled === true &&
+        isPickupLocationAllowed(
+          marketplacePolicy,
+          selectedStore.pickupZoneAccessAllowed,
+          selectedDistance,
+        )
+      ) {
+        setFulfillmentType("pickup");
+      }
       setShowDistanceWarning(false);
       const searchParams = new URLSearchParams({
         distance: String(selectedStore.distance),
@@ -647,6 +664,7 @@ export default function CustomerHomePage() {
                     onFavoriteChange={setFavorite}
                     priority={index === 0}
                     pricingLoading={deliveryDetailsLoading}
+                    pickupAvailable={marketplacePolicy?.pickupEnabled === true && store.pickupEnabled === true && isPickupLocationAllowed(marketplacePolicy, store.pickupZoneAccessAllowed, store.distance)}
                   />
                 </motion.div>
                 ))}
@@ -686,6 +704,7 @@ export default function CustomerHomePage() {
                       onClick={() => handleStoreClick(store)}
                       onFavoriteChange={setFavorite}
                       priority={displayedNearbyStores.length === 0 && index === 0}
+                      pickupAvailable={marketplacePolicy?.pickupEnabled === true && store.pickupEnabled === true && isPickupLocationAllowed(marketplacePolicy, store.pickupZoneAccessAllowed, store.distance)}
                     />
                   </motion.div>
                 ))}
@@ -737,6 +756,8 @@ export default function CustomerHomePage() {
             storeCity={selectedStore.city}
             distance={selectedDistance}
             zoneAccessAllowed={selectedStore.zoneAccessAllowed}
+            pickupAvailable={marketplacePolicy?.pickupEnabled === true && selectedStore.pickupEnabled === true && isPickupLocationAllowed(marketplacePolicy, selectedStore.pickupZoneAccessAllowed, selectedDistance)}
+            storePickupEnabled={selectedStore.pickupEnabled === true}
             onClose={() => setShowDistanceWarning(false)}
             onContinue={handleContinueToStore}
           />

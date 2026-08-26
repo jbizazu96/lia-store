@@ -20,6 +20,7 @@ interface StoreCardProps {
   ) => Promise<void>;
   priority?: boolean;
   pricingLoading?: boolean;
+  pickupAvailable?: boolean;
 }
 
 export function StoreCard({
@@ -28,13 +29,15 @@ export function StoreCard({
   onFavoriteChange,
   priority = false,
   pricingLoading = false,
+  pickupAvailable = false,
 }: StoreCardProps) {
   const [isSavingFavorite, setIsSavingFavorite] = useState(false);
   const maxRadius = store.maxDeliveryMiles || Infinity;
   const distance = store.distance || 0;
   const isTooFar =
     store.zoneAccessType !== "customer_order_zone" && distance > maxRadius;
-  const isUnavailable = isTooFar || !store.zoneAccessAllowed;
+  const deliveryUnavailable = isTooFar || !store.zoneAccessAllowed;
+  const isUnavailable = deliveryUnavailable && !pickupAvailable;
   const zoneLabel = store.zoneAccessType === "same_home_zone"
     ? "Home zone"
     : store.zoneAccessType === "store_service_zone"
@@ -89,6 +92,8 @@ export function StoreCard({
               <AlertCircle className="w-3 h-3" />
               <span>{isTooFar ? "Outside delivery radius" : "Outside your delivery zones"}</span>
             </div>
+          ) : pickupAvailable && deliveryUnavailable ? (
+            <div className="rounded-full bg-white/95 px-3 py-1.5 text-xs font-bold text-orange-700 shadow-sm">Pickup available</div>
           ) : zoneLabel ? (
             <div className="rounded-full bg-white/95 px-3 py-1.5 text-xs font-bold text-slate-700 shadow-sm">{zoneLabel}</div>
           ) : null}
@@ -147,8 +152,10 @@ export function StoreCard({
           {!storeStatus.isOpen && <><span>·</span><span>{storeStatus.statusText}</span></>}
         </div>
 
-        <p className={`text-sm font-medium ${isTooFar ? "text-red-500" : "text-slate-500"}`}>
-          {isTooFar ? "Delivery unavailable" : `${deliveryFee} delivery fee`}
+        <p className={`text-sm font-medium ${deliveryUnavailable && !pickupAvailable ? "text-red-500" : "text-slate-500"}`}>
+          {deliveryUnavailable
+            ? pickupAvailable ? "Delivery unavailable · Customer pickup available" : "Delivery unavailable"
+            : `${deliveryFee} delivery fee${pickupAvailable ? " · Pickup available" : ""}`}
         </p>
         </>}
       </div>

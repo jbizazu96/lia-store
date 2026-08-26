@@ -139,46 +139,27 @@ export const marketplaceSettlementOnOrderCompleted =
         }
       );
 
-      /*
-      |--------------------------------------------------------------------------
-      | Delivery Confirmation
-      |--------------------------------------------------------------------------
-      |
-      | LIA currently releases store and driver funds only when:
-      |
-      | - order.status === completed
-      | - shipday.status === delivered
-      |
-      | The activation service validates these conditions again using a fresh
-      | trusted Firestore read.
-      |
-      */
+      const pickupCompleted =
+        after.fulfillmentType === "pickup" &&
+        Boolean(after.pickup?.pickedUpAt) &&
+        typeof after.pickup?.handedOffBy === "string";
 
-      if (
-        after.shipday
-          ?.status !==
-        "delivered"
-      ) {
+      const deliveryCompleted =
+        after.fulfillmentType !== "pickup" &&
+        after.shipday?.status === "delivered";
+
+      if (!pickupCompleted && !deliveryCompleted) {
         console.error(
-          "Completed order cannot be settled because Shipday delivery is not confirmed.",
+          "Completed order cannot be settled because fulfillment is not confirmed.",
           {
             orderId,
-
-            shipdayStatus:
-              after.shipday
-                ?.status ??
-              null,
+            fulfillmentType: after.fulfillmentType ?? "delivery",
+            shipdayStatus: after.shipday?.status ?? null,
+            pickupCompleted,
           }
         );
-
-        /*
-         * Throwing causes Firebase to report the financial workflow failure.
-         *
-         * The order remains completed. No Stripe transfer occurs because the
-         * activation service was not called.
-         */
         throw new Error(
-          "Shipday delivery confirmation is required before marketplace settlement."
+          "Trusted fulfillment confirmation is required before marketplace settlement."
         );
       }
 

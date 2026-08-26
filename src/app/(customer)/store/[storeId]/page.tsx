@@ -42,6 +42,8 @@ import {
 import { useCart } from "@/context/CartContext";
 import { useCustomerStore } from "@/hooks/useCustomerStore";
 import { useCustomerFavoriteStores } from "@/hooks/useCustomerFavoriteStores";
+import {useMarketplacePricingPolicy} from "@/hooks/useMarketplacePricingPolicy";
+import {isPickupLocationAllowed} from "@/services/pricing/pickupAvailability";
 import { promotionService } from "@/services/promotion/promotionService";
 
 import { BottomBar } from "@/components/customer/store/BottomBar";
@@ -51,6 +53,7 @@ import { ProductSection } from "@/components/customer/store/ProductSection";
 import { PromoBanner } from "@/components/customer/store/PromoBanner";
 import { StoreHeader } from "@/components/customer/store/StoreHeader";
 import { StoreInfo } from "@/components/customer/store/StoreInfo";
+import {CustomerFulfillmentSelector} from "@/components/customer/store/CustomerFulfillmentSelector";
 import { CustomerPageState } from "@/components/customer/ui/CustomerPageState";
 import type { Product } from "@/types/product";
 
@@ -92,6 +95,8 @@ export default function StorePage({
     getItemQuantity,
     getStoreItemCount,
     getStoreTotalPrice,
+    fulfillmentType,
+    setFulfillmentType,
   } = useCart();
 
   /*
@@ -140,6 +145,12 @@ export default function StorePage({
     estimatedTimeParam,
     skipDistanceWarning,
   });
+  const pickupPolicy = useMarketplacePricingPolicy();
+  const pickupLocationAllowed = Boolean(store && isPickupLocationAllowed(
+    pickupPolicy,
+    store.pickupZoneAccessAllowed,
+    store.distance,
+  ));
 
   const {
     isFavorite,
@@ -182,7 +193,7 @@ export default function StorePage({
       return;
     }
 
-    if (isOutsideDeliveryRadius) {
+    if (isOutsideDeliveryRadius && !(fulfillmentType === "pickup" && store.pickupEnabled && pickupLocationAllowed)) {
       openDistanceWarning();
       return;
     }
@@ -248,6 +259,7 @@ export default function StorePage({
   ) => {
     if (
       isOutsideDeliveryRadius &&
+      !(fulfillmentType === "pickup" && store?.pickupEnabled && pickupLocationAllowed) &&
       newQuantity >
       getItemQuantity(productId)
     ) {
@@ -268,6 +280,9 @@ export default function StorePage({
   */
 
   const handleContinueToStore = () => {
+    if (store?.pickupEnabled && pickupLocationAllowed && isOutsideDeliveryRadius) {
+      setFulfillmentType("pickup");
+    }
     closeDistanceWarning();
   };
 
@@ -484,6 +499,15 @@ export default function StorePage({
             )
           }
         />
+
+      <CustomerFulfillmentSelector
+        fulfillmentType={fulfillmentType}
+        onChange={setFulfillmentType}
+        storeId={store.id}
+        storePickupEnabled={store.pickupEnabled === true}
+        distanceMiles={store.distance}
+        deliveryAvailable={!isOutsideDeliveryRadius}
+      />
 
       {store.promotions.length > 0 && (
         <div className="mx-auto mt-5 max-w-2xl px-4">

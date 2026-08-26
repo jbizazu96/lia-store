@@ -33,6 +33,7 @@ import type {
 */
 export type CheckoutPaymentValidationErrorCode =
   | "INVALID_REQUEST"
+  | "INVALID_FULFILLMENT_TYPE"
   | "INVALID_STORE_ID"
   | "INVALID_CONTACT_NAME"
   | "INVALID_CONTACT_PHONE"
@@ -404,6 +405,14 @@ export function validatePrepareCheckoutPaymentRequest(
       "A valid store ID is required."
     );
 
+  const fulfillmentType = value.fulfillmentType;
+  if (fulfillmentType !== "delivery" && fulfillmentType !== "pickup") {
+    throw new CheckoutPaymentValidationError(
+      "INVALID_FULFILLMENT_TYPE",
+      "Choose delivery or customer pickup."
+    );
+  }
+
     /*
 |--------------------------------------------------------------------------
 | Delivery Contact
@@ -486,16 +495,23 @@ if (
       validateItem
     );
 
-  const deliveryAddress =
-    validateDeliveryAddress(
-      value.deliveryAddress
-    );
+  const deliveryAddress = fulfillmentType === "delivery"
+    ? validateDeliveryAddress(value.deliveryAddress)
+    : undefined;
 
   const deliveryInstructions =
     optionalString(
       value.deliveryInstructions,
       "INVALID_DELIVERY_INSTRUCTIONS",
       "Delivery instructions must be 500 characters or fewer.",
+      500
+    );
+
+  const pickupInstructions =
+    optionalString(
+      value.pickupInstructions,
+      "INVALID_DELIVERY_INSTRUCTIONS",
+      "Pickup instructions must be 500 characters or fewer.",
       500
     );
 
@@ -511,6 +527,13 @@ if (
     throw new CheckoutPaymentValidationError(
       "INVALID_TIP",
       "The selected tip amount is invalid."
+    );
+  }
+
+  if (fulfillmentType === "pickup" && Number(tipAmountCents) !== 0) {
+    throw new CheckoutPaymentValidationError(
+      "INVALID_TIP",
+      "Customer pickup orders cannot include a driver tip."
     );
   }
 
@@ -535,6 +558,8 @@ if (
   return {
     storeId,
 
+    fulfillmentType,
+
     contactName,
 
     contactPhone,
@@ -544,6 +569,8 @@ if (
     deliveryAddress,
 
     deliveryInstructions,
+
+    pickupInstructions,
 
     tipAmountCents:
         Number(tipAmountCents),

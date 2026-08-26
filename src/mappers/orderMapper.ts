@@ -144,6 +144,8 @@ export function mapOrderData(id: string, data: DocumentData): Order {
   return {
     id,
 
+    fulfillmentType: data.fulfillmentType === "pickup" ? "pickup" : "delivery",
+
     orderNumber: data.orderNumber ?? "",
 
     customer: data.customer,
@@ -155,6 +157,12 @@ export function mapOrderData(id: string, data: DocumentData): Order {
     pricing: data.pricing,
 
     delivery: data.delivery,
+
+    pickup: data.pickup ? {
+      ...data.pickup,
+      readyAt: toOptionalDate(data.pickup.readyAt),
+      pickedUpAt: toOptionalDate(data.pickup.pickedUpAt),
+    } : undefined,
 
     status: data.status as OrderStatus,
 

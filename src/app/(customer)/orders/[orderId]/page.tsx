@@ -17,7 +17,7 @@ import {
 } from "@/config/orderStatus";
 import { useCustomerOrder } from "@/hooks/useCustomerOrder";
 import {useRouter} from "next/navigation";
-import { use, useState } from "react";
+import { use, useEffect, useState } from "react";
 import Image from "next/image";
 import {
   formatProductName,
@@ -38,6 +38,7 @@ import { DeliveryProofCard } from "@/components/customer/orders/DeliveryProofCar
 import { useCart } from "@/context/CartContext";
 import { useConfirmation } from "@/context/ConfirmationContext";
 import { useSuccessToast } from "@/context/SuccessToastContext";
+import {getCustomerPickupCode} from "@/services/order/customerPickupService";
 
 
 interface OrderPageProps {
@@ -55,6 +56,7 @@ export default function OrderDetailPage({params}: OrderPageProps) {
   const { showSuccess } = useSuccessToast();
   const [repeatingOrder, setRepeatingOrder] = useState(false);
   const [repeatOrderError, setRepeatOrderError] = useState("");
+  const [pickupCodeResult, setPickupCodeResult] = useState<{orderId: string; code: string} | null>(null);
   const {
       order,
       loading,
@@ -63,6 +65,17 @@ export default function OrderDetailPage({params}: OrderPageProps) {
     } = useCustomerOrder({
       orderId,
     });
+
+  useEffect(() => {
+    if (order?.fulfillmentType !== "pickup" || order.status !== "ready_for_pickup") {
+      return;
+    }
+    let active = true;
+    void getCustomerPickupCode(order.id)
+      .then((code) => { if (active) setPickupCodeResult({orderId: order.id, code}); })
+      .catch(() => undefined);
+    return () => { active = false; };
+  }, [order?.fulfillmentType, order?.id, order?.status]);
 
   const handleReturn = () => {
     router.push("/orders");
@@ -251,6 +264,16 @@ export default function OrderDetailPage({params}: OrderPageProps) {
           </div>
         )}
 
+        {order.fulfillmentType === "pickup" && order.status === "ready_for_pickup" && (
+          <div className="rounded-2xl border border-orange-200 bg-orange-50 p-5 text-center shadow-sm">
+            <p className="text-sm font-bold text-orange-900">Your order is ready for pickup</p>
+            <p className="mt-1 text-xs text-orange-700">Show this code to the store only after you receive your order.</p>
+            <p className="mt-4 font-mono text-3xl font-black tracking-[0.3em] text-orange-700">
+              {pickupCodeResult?.orderId === order.id ? pickupCodeResult.code : "••••••"}
+            </p>
+          </div>
+        )}
+
         <OrderHelpSection
           orderId={orderId}
           canRequestRefund={order.status === "completed" || isCancelled}
@@ -274,7 +297,9 @@ export default function OrderDetailPage({params}: OrderPageProps) {
             <div className="absolute left-4 top-6 bottom-6 w-0.5 bg-gray-200" />
             
             <div className="space-y-6">
-              {ORDER_STATUS_STEPS.map((step, index) => {
+              {ORDER_STATUS_STEPS
+                .filter((step) => order.fulfillmentType !== "pickup" || step.key !== "out_for_delivery")
+                .map((step, index) => {
                 const Icon = step.icon;
                 const timestamp =
                   getStatusTimestamp(
@@ -306,7 +331,9 @@ export default function OrderDetailPage({params}: OrderPageProps) {
                     <div className="flex-1 pt-0.5">
                       <div className="flex items-center gap-2">
                         <p className={`font-medium text-sm ${completed ? "text-gray-800" : "text-gray-400"}`}>
-                          {step.label}
+                          {order.fulfillmentType === "pickup" && step.key === "ready_for_pickup"
+                            ? "Ready for your pickup"
+                            : step.label}
                         </p>
                         {step.key === order.status && (
                           <span className="text-xs bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full">
@@ -377,20 +404,25 @@ export default function OrderDetailPage({params}: OrderPageProps) {
           
         </div>
 
-        {/* Delivery Address */}
+        {/* Fulfillment location */}
         <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-[0_6px_18px_rgba(15,23,42,0.08)]">
           <div className="flex items-center gap-2 mb-3">
             <MapPin className="w-5 h-5 text-orange-500" />
-            <h3 className="font-semibold text-gray-800">Delivery Address</h3>
+            <h3 className="font-semibold text-gray-800">
+              {order.fulfillmentType === "pickup" ? "Pickup Location" : "Delivery Address"}
+            </h3>
           </div>
           <div className="bg-gray-50 rounded-xl p-3">
             <p className="text-sm text-gray-800">
-              {order.customer.address}
+              {order.fulfillmentType === "pickup" ? order.store.address : order.customer.address}
             </p>
+            {order.fulfillmentType === "pickup" && order.pickup?.instructions && (
+              <p className="mt-2 text-xs text-gray-500">{order.pickup.instructions}</p>
+            )}
           </div>
         </div>
 
-        {order.status === "completed" && (
+        {order.fulfillmentType === "delivery" && order.status === "completed" && (
           <DeliveryProofCard
             orderId={order.id}
           />
@@ -461,7 +493,7 @@ export default function OrderDetailPage({params}: OrderPageProps) {
               <span className="text-gray-800">${order.pricing.subtotal.toFixed(2)}</span>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-gray-500">Delivery Fee</span>
+              <span className="text-gray-500">{order.fulfillmentType === "pickup" ? "Pickup fee" : "Delivery Fee"}</span>
               <span className="text-gray-800">{order.pricing.deliveryFee === 0 ? "Free" : `$${order.pricing.deliveryFee.toFixed(2)}`}</span>
             </div>
             <div className="flex justify-between text-sm">

@@ -37,6 +37,7 @@ import {
   userService,
 } from "@/services/user/userService";
 import {startCustomerPerformanceTrace} from "@/services/performance/customerPerformanceService";
+import type {FulfillmentType} from "@/types/fulfillment";
 
 /*
 |--------------------------------------------------------------------------
@@ -48,6 +49,7 @@ interface UseCartPricingParams {
   subtotal: number;
 
   storeId?: string;
+  fulfillmentType: FulfillmentType;
 }
 
 /*
@@ -95,9 +97,10 @@ interface UseCartPricingResult {
 export function useCartPricing({
   subtotal,
   storeId,
+  fulfillmentType,
 }: UseCartPricingParams): UseCartPricingResult {
   const marketplacePolicy =
-    useMarketplacePricingPolicy(storeId);
+    useMarketplacePricingPolicy(fulfillmentType === "pickup" ? undefined : storeId);
   const [
     distanceMiles,
     setDistanceMiles,
@@ -213,7 +216,7 @@ export function useCartPricing({
     return () => {
       isMounted = false;
     };
-  }, [storeId]);
+  }, [storeId, fulfillmentType]);
 
   return useMemo(() => {
     /*
@@ -227,17 +230,25 @@ export function useCartPricing({
     */
 
     const deliveryPricing = marketplacePolicy
-      ? calculateDeliveryFee(distanceMiles ?? 0, subtotal, marketplacePolicy)
+      ? calculateDeliveryFee(
+          distanceMiles ?? 0,
+          subtotal,
+          marketplacePolicy,
+          marketplacePolicy.peakSurchargeEnabled,
+          true,
+          fulfillmentType,
+        )
       : null;
 
-    const deliveryFee =
-      deliveryPricing?.deliveryFee ?? 0;
+    const deliveryFee = fulfillmentType === "pickup"
+      ? 0
+      : deliveryPricing?.deliveryFee ?? 0;
 
     /*
       Keep the pre-promotion price for the cart UI. When delivery is free,
       customers can see the value of the waived fee instead of only $0.00.
     */
-    const originalDeliveryFee = Math.round(
+    const originalDeliveryFee = fulfillmentType === "pickup" ? 0 : Math.round(
       (
         (deliveryPricing?.breakdown.distanceFee ?? 0) +
         (deliveryPricing?.breakdown.peakSurcharge ?? 0)
@@ -316,6 +327,7 @@ export function useCartPricing({
       amountUntilFreeDelivery,
 
       hasFreeDelivery:
+        fulfillmentType === "delivery" &&
         deliveryPricing?.isFreeDelivery === true &&
         subtotal > 0,
 
@@ -331,5 +343,6 @@ export function useCartPricing({
     isCalculatingDelivery,
     deliveryError,
     marketplacePolicy,
+    fulfillmentType,
       ]);
 }

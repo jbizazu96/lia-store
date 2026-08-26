@@ -56,6 +56,9 @@ export interface StoreWorkspaceStore {
   }>;
   isApproved: boolean;
   isActive: boolean;
+  pickupEnabled: boolean;
+  pickupPreparationMinutes: number;
+  pickupInstructions: string;
   businessType: string;
   registeredName: string;
   ein: string;
@@ -310,7 +313,7 @@ export const storeWorkspaceClientService = {
   saveSettings: (
     store: Partial<StoreWorkspaceStore>,
     user: Partial<StoreWorkspaceUser>,
-    section: "profile" | "business" | "notifications",
+    section: "profile" | "business" | "fulfillment" | "notifications",
   ) => call<SettingsResponse>(
     "saveStoreWorkspaceSettings",
     {store, user, section}

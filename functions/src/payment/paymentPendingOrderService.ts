@@ -226,10 +226,9 @@ async function createPaymentPendingOrder(
   }
 
   if (
-    !Number.isFinite(
-      input.distanceMiles
-    ) ||
-    input.distanceMiles <= 0
+    !Number.isFinite(input.distanceMiles) ||
+    (input.checkoutRequest.fulfillmentType === "delivery" && input.distanceMiles <= 0) ||
+    (input.checkoutRequest.fulfillmentType === "pickup" && input.distanceMiles !== 0)
   ) {
     throw new PaymentPendingOrderError(
       "INVALID_DISTANCE",
@@ -271,15 +270,14 @@ async function createPaymentPendingOrder(
       .slice(0, 6)
       .toUpperCase()}`;
 
-  const deliveryAddress =
-    input.checkoutRequest
-      .deliveryAddress;
+  const isPickup = input.checkoutRequest.fulfillmentType === "pickup";
+  const deliveryAddress = input.checkoutRequest.deliveryAddress;
 
   const customerLatitude =
-    deliveryAddress.latitude;
+    isPickup ? input.checkoutData.store.latitude : deliveryAddress?.latitude;
 
   const customerLongitude =
-    deliveryAddress.longitude;
+    isPickup ? input.checkoutData.store.longitude : deliveryAddress?.longitude;
 
   if (
     typeof customerLatitude !== "number" ||
@@ -335,10 +333,7 @@ async function createPaymentPendingOrder(
         phone:
           customerPhone,
 
-        address:
-          formatDeliveryAddress(
-            deliveryAddress
-          ),
+        address: isPickup ? "CUSTOMER PICKUP" : formatDeliveryAddress(deliveryAddress!),
 
         latitude:
           customerLatitude,
@@ -372,6 +367,8 @@ async function createPaymentPendingOrder(
         longitude:
           input.checkoutData.store.longitude,
       },
+
+      fulfillmentType: input.checkoutRequest.fulfillmentType,
 
       /*
         Trusted product snapshots.
@@ -511,9 +508,9 @@ async function createPaymentPendingOrder(
       storeHomeZoneId: input.zoneDecision.storeHomeZoneId,
       pricingZoneId: input.zoneDecision.pricingZoneId,
       zoneAccessType: input.zoneDecision.zoneAccessType,
-      trustedRouteDistanceMiles: input.distanceMiles,
+      trustedRouteDistanceMiles: isPickup ? null : input.distanceMiles,
 
-      delivery: {
+      delivery: isPickup ? null : {
         instructions:
           input.checkoutRequest
             .deliveryInstructions ??
@@ -528,20 +525,20 @@ async function createPaymentPendingOrder(
 
         address: {
           street:
-            deliveryAddress.street,
+            deliveryAddress!.street,
 
           city:
-            deliveryAddress.city,
+            deliveryAddress!.city,
 
           state:
-            deliveryAddress.state,
+            deliveryAddress!.state,
 
           zip:
-            deliveryAddress.zip,
+            deliveryAddress!.zip,
 
           formattedAddress:
             formatDeliveryAddress(
-              deliveryAddress
+              deliveryAddress!
             ),
 
           latitude:
@@ -551,6 +548,19 @@ async function createPaymentPendingOrder(
             customerLongitude,
         },
       },
+
+      pickup: isPickup ? {
+        storeAddress: input.checkoutData.store.address,
+        instructions: input.checkoutData.store.pickupInstructions,
+        customerInstructions: input.checkoutRequest.pickupInstructions ?? null,
+        preparationMinutes: input.estimatedDeliveryMinutes ?? input.pricingPolicy.pickupPreparationMinutes,
+        estimatedReadyAt: null,
+        pickupCodeHash: null,
+        pickupCodeLastFour: null,
+        readyAt: null,
+        pickedUpAt: null,
+        handedOffBy: null,
+      } : null,
 
       /*
         Fulfillment status remains pending, but checkoutStatus prevents
@@ -590,7 +600,7 @@ async function createPaymentPendingOrder(
           FieldValue.serverTimestamp(),
       },
 
-      shipday: {
+      shipday: isPickup ? null : {
         status:
           "pending",
 
@@ -610,8 +620,7 @@ async function createPaymentPendingOrder(
         storeTransferStatus:
           "not_started",
 
-        driverTransferStatus:
-          "not_started",
+        driverTransferStatus: isPickup ? "not_applicable" : "not_started",
       },
 
       createdAt:

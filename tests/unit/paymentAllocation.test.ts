@@ -4,6 +4,7 @@ import {calculatePaymentAllocation} from "../../functions/src/payment/marketplac
 const baseInput = {
   storeCommissionBasisPoints: 1_000,
   driverCommissionBasisPoints: 3_000,
+  driverMinimumPayCents: 0,
   freeDeliveryMinimumCents: 10_000,
   freeDeliveryDriverIncentiveWithoutTipCents: 500,
   freeDeliveryDriverIncentiveWithTipCents: 300,
@@ -37,5 +38,53 @@ describe("marketplace payment allocation", () => {
     expect(result.driver.freeDeliveryIncentive).toBe(500);
     expect(result.driver.transferAmount).toBe(500);
     expect(result.platform.freeDeliveryIncentiveCost).toBe(500);
+  });
+
+  it("guarantees minimum driver pay before tips and reduces LIA commission", () => {
+    const result = calculatePaymentAllocation({
+      ...baseInput,
+      deliveryFee: 599,
+      driverTip: 300,
+      driverMinimumPayCents: 599,
+    });
+    expect(result.driver).toMatchObject({
+      commissionAmount: 0,
+      netDeliveryFee: 599,
+      driverTip: 300,
+      minimumPayAdjustment: 180,
+      transferAmount: 899,
+    });
+    expect(result.platform.driverCommission).toBe(0);
+  });
+
+  it("takes the configured commission after driver pay exceeds the minimum", () => {
+    const result = calculatePaymentAllocation({
+      ...baseInput,
+      deliveryFee: 1_100,
+      driverMinimumPayCents: 599,
+    });
+    expect(result.driver).toMatchObject({
+      commissionAmount: 330,
+      netDeliveryFee: 770,
+      minimumPayAdjustment: 0,
+    });
+  });
+
+  it("creates no driver obligation for customer pickup", () => {
+    const result = calculatePaymentAllocation({
+      ...baseInput,
+      fulfillmentType: "pickup",
+      deliveryFee: 0,
+      driverTip: 0,
+      driverMinimumPayCents: 599,
+    });
+    expect(result.driver).toMatchObject({
+      commissionAmount: 0,
+      netDeliveryFee: 0,
+      driverTip: 0,
+      freeDeliveryIncentive: 0,
+      transferAmount: 0,
+    });
+    expect(result.platform.driverCommission).toBe(0);
   });
 });

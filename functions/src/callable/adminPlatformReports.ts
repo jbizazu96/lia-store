@@ -117,6 +117,14 @@ export const getAdminPlatformReport = onCall(
       (total, document) => total + Math.max(0, number(document.data().cancelledOrders)),
       0,
     );
+    const deliveryOrders = dailyReports.docs.reduce(
+      (total, document) => total + Math.max(0, number(document.data().deliveryOrders)),
+      0,
+    );
+    const pickupOrders = dailyReports.docs.reduce(
+      (total, document) => total + Math.max(0, number(document.data().pickupOrders)),
+      0,
+    );
     const grossSalesAmount = days.reduce(
       (total, item) => total + item.grossSalesAmount,
       0,
@@ -183,6 +191,8 @@ export const getAdminPlatformReport = onCall(
         confirmedOrders: days.reduce((total, item) => total + item.orders, 0),
         deliveredOrders,
         cancelledOrders,
+        deliveryOrders,
+        pickupOrders,
         grossSalesAmount,
         newCustomers: days.reduce((total, item) => total + item.customers, 0),
         activeStores: activeStores.data().count,

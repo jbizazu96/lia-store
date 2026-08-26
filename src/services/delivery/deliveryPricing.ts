@@ -34,6 +34,7 @@ export function calculateDeliveryFee(
   policy: MarketplacePricingPolicy,
   isPeakTime = policy.peakSurchargeEnabled,
   enforceMaximumDistance = true,
+  fulfillmentType: "delivery" | "pickup" = "delivery",
 ): DeliveryPricingResult {
   const baseFee = policy.baseDeliveryFeeCents / 100;
   const baseDistanceMiles = policy.baseDistanceMiles;
@@ -46,11 +47,20 @@ export function calculateDeliveryFee(
   const distanceFee = roundMoney(
     baseFee + Math.max(billableDistance - baseDistanceMiles, 0) * perMileRate,
   );
+  const serviceFeeRate = fulfillmentType === "pickup"
+    ? policy.pickupServiceFeeRate ?? policy.serviceFeeRate
+    : policy.serviceFeeRate;
+  const minimumServiceFeeCents = fulfillmentType === "pickup"
+    ? policy.pickupMinimumServiceFeeCents ?? policy.minimumServiceFeeCents
+    : policy.minimumServiceFeeCents;
+  const maximumServiceFeeCents = fulfillmentType === "pickup"
+    ? policy.pickupMaximumServiceFeeCents ?? policy.maximumServiceFeeCents
+    : policy.maximumServiceFeeCents;
   const serviceFee = roundMoney(Math.max(
-    policy.minimumServiceFeeCents / 100,
+    minimumServiceFeeCents / 100,
     Math.min(
-      subtotal * policy.serviceFeeRate,
-      policy.maximumServiceFeeCents / 100,
+      subtotal * serviceFeeRate,
+      maximumServiceFeeCents / 100,
     ),
   ));
   const deliveryFee = isFreeDelivery

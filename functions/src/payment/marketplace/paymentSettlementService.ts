@@ -47,7 +47,7 @@ export interface CreatePaymentSettlementInput {
 
   storeId: string;
 
-  driverId: string;
+  driverId: string | null;
 
   storeAmount: number;
 
@@ -144,6 +144,16 @@ function requirePositiveCentAmount(
   return value;
 }
 
+function requireNonNegativeCentAmount(value: number, fieldName: string): number {
+  if (!Number.isSafeInteger(value) || value < 0) {
+    throw new PaymentSettlementServiceError(
+      `${fieldName} must be a non-negative integer amount.`,
+      "invalid-amount",
+    );
+  }
+  return value;
+}
+
 /*
 |--------------------------------------------------------------------------
 | Deterministic Settlement ID
@@ -195,11 +205,9 @@ export async function createSettlement(
       "Store ID"
     );
 
-  const driverId =
-    requireIdentifier(
-      input.driverId,
-      "Driver ID"
-    );
+  const driverId = input.driverId === null
+    ? null
+    : requireIdentifier(input.driverId, "Driver ID");
 
   const storeAmount =
     requirePositiveCentAmount(
@@ -208,7 +216,7 @@ export async function createSettlement(
     );
 
   const driverAmount =
-    requirePositiveCentAmount(
+    requireNonNegativeCentAmount(
       input.driverAmount,
       "Driver settlement amount"
     );
@@ -325,6 +333,13 @@ export async function createSettlement(
       };
     }
   );
+
+  if ((driverId === null) !== (driverAmount === 0)) {
+    throw new PaymentSettlementServiceError(
+      "A driver is required exactly when a driver settlement amount exists.",
+      "invalid-driver-allocation",
+    );
+  }
 }
 
 /*

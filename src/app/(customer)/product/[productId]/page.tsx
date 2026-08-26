@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 
 import { useCart } from "@/context/CartContext";
+import {CustomerFulfillmentSelector} from "@/components/customer/store/CustomerFulfillmentSelector";
 import { useSuccessToast } from "@/context/SuccessToastContext";
 import { ProductCard } from "@/components/customer/store/ProductCard";
 import { ProductPrice } from "@/components/ui/ProductPrice";
@@ -47,7 +48,11 @@ import type {
 } from "@/types/product";
 import type { Store } from "@/types/store";
 import {startCustomerPerformanceTrace} from "@/services/performance/customerPerformanceService";
-import {marketplacePricingClientService, type ApplicableMarketplacePricing} from "@/services/pricing/marketplacePricingClientService";
+import {
+  marketplacePricingClientService,
+  type ApplicableMarketplacePricing,
+} from "@/services/pricing/marketplacePricingClientService";
+import {isPickupLocationAllowed} from "@/services/pricing/pickupAvailability";
 
 const DistanceWarningModal = dynamic(
   () => import("@/components/customer/home/DistanceWarningModal")
@@ -113,7 +118,7 @@ function formatPromotionWindow(
 export default function ProductPage({ params }: ProductPageProps) {
   const { productId } = use(params);
   const router = useRouter();
-  const { addItem, getItemQuantity, updateQuantity } = useCart();
+  const { addItem, getItemQuantity, updateQuantity, fulfillmentType, setFulfillmentType } = useCart();
   const { showSuccess } = useSuccessToast();
 
   const [product, setProduct] = useState<Product | null>(null);
@@ -126,6 +131,7 @@ export default function ProductPage({ params }: ProductPageProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [purchaseDistance, setPurchaseDistance] = useState(0);
+  const [purchaseDistanceKnown, setPurchaseDistanceKnown] = useState(false);
   const [purchaseAllowed, setPurchaseAllowed] = useState<boolean | null>(null);
   const [showPurchaseWarning, setShowPurchaseWarning] = useState(false);
   const [applicablePricing, setApplicablePricing] =
@@ -140,6 +146,7 @@ export default function ProductPage({ params }: ProductPageProps) {
       try {
         setLoading(true);
         setError(null);
+        setPurchaseDistanceKnown(false);
 
         /*
          * Keep these public reads separate so a Firestore failure identifies
@@ -215,6 +222,8 @@ export default function ProductPage({ params }: ProductPageProps) {
         const pricing = pricingBootstrap.byStoreId[productData.storeId] ?? {
           policy: pricingBootstrap.policy,
           decision: null,
+          pickupDecision: null,
+          storePickupEnabled: false,
         };
         const distance = route?.distanceMiles ?? 0;
 
@@ -222,6 +231,7 @@ export default function ProductPage({ params }: ProductPageProps) {
         setStore(storeData);
         setApplicablePricing(pricing);
         setPurchaseDistance(distance);
+        setPurchaseDistanceKnown(Boolean(route));
         setPurchaseAllowed(
           Boolean(route) &&
           pricing.decision?.allowed !== false &&
@@ -269,12 +279,22 @@ export default function ProductPage({ params }: ProductPageProps) {
       ? product.promotion
       : null;
   const productSize = product ? formatSize(product) : null;
+  const effectiveStorePickupEnabled =
+    applicablePricing?.storePickupEnabled ?? store?.pickupEnabled === true;
   const canPurchase = Boolean(
     product &&
       product.isAvailable &&
       product.stock > 0 &&
       product.imageStatus === "ready"
   );
+  const hasFulfillmentAccess = purchaseAllowed === true ||
+    (fulfillmentType === "pickup" &&
+      effectiveStorePickupEnabled &&
+      isPickupLocationAllowed(
+        applicablePricing?.policy,
+        applicablePricing?.pickupDecision?.allowed === true,
+        purchaseDistanceKnown ? purchaseDistance : null,
+      ));
   const promotionWindow = activePromotion
     ? formatPromotionWindow(
       activePromotion.startsAt,
@@ -301,7 +321,7 @@ export default function ProductPage({ params }: ProductPageProps) {
 
   const addProductToCart = async (target: Product): Promise<boolean> => {
     if (!store || !target.isAvailable || target.stock <= 0) return false;
-    if (purchaseAllowed !== true) {
+    if (!hasFulfillmentAccess) {
       setShowPurchaseWarning(true);
       return false;
     }
@@ -342,7 +362,7 @@ export default function ProductPage({ params }: ProductPageProps) {
             ) {
               return;
             }
-            if (purchaseAllowed !== true) {
+            if (!hasFulfillmentAccess) {
               setShowPurchaseWarning(true);
               return;
             }
@@ -406,7 +426,7 @@ export default function ProductPage({ params }: ProductPageProps) {
   };
 
   const relatedQuantityChange = (relatedProductId: string, nextQuantity: number) => {
-    if (nextQuantity > getItemQuantity(relatedProductId) && purchaseAllowed !== true) {
+    if (nextQuantity > getItemQuantity(relatedProductId) && !hasFulfillmentAccess) {
       setShowPurchaseWarning(true);
       return;
     }
@@ -514,6 +534,20 @@ export default function ProductPage({ params }: ProductPageProps) {
             </>
           )}
         </section>
+
+        {store && (
+          <div className="px-4 sm:px-6">
+            <CustomerFulfillmentSelector
+              compact
+              fulfillmentType={fulfillmentType}
+              onChange={setFulfillmentType}
+              storeId={store.id}
+              storePickupEnabled={effectiveStorePickupEnabled}
+              distanceMiles={purchaseDistanceKnown ? purchaseDistance : null}
+              deliveryAvailable={purchaseAllowed === true}
+            />
+          </div>
+        )}
 
         <section className="px-4 pb-5 pt-5 sm:px-6">
           {productCategories.find((category) => category.id === product.category)?.freshnessEligible === true && (
@@ -674,8 +708,15 @@ export default function ProductPage({ params }: ProductPageProps) {
           storeCity={store.city}
           distance={purchaseDistance}
           zoneAccessAllowed={applicablePricing?.decision?.allowed ?? false}
+          pickupAvailable={effectiveStorePickupEnabled && isPickupLocationAllowed(applicablePricing?.policy, applicablePricing?.pickupDecision?.allowed === true, purchaseDistanceKnown ? purchaseDistance : null)}
+          storePickupEnabled={effectiveStorePickupEnabled}
           onClose={() => setShowPurchaseWarning(false)}
-          onContinue={() => setShowPurchaseWarning(false)}
+          onContinue={() => {
+            if (effectiveStorePickupEnabled && isPickupLocationAllowed(applicablePricing?.policy, applicablePricing?.pickupDecision?.allowed === true, purchaseDistanceKnown ? purchaseDistance : null)) {
+              setFulfillmentType("pickup");
+            }
+            setShowPurchaseWarning(false);
+          }}
         />
       )}
     </main>

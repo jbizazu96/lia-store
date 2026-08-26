@@ -37,6 +37,8 @@ import type {
 
 interface OrderActionsProps {
   status: OrderStatus;
+  fulfillmentType: "delivery" | "pickup";
+  onCompletePickup: (code: string) => Promise<void>;
 
   cancellationReason?: string;
 
@@ -50,6 +52,8 @@ interface OrderActionsProps {
 
 export function OrderActions({
   status,
+  fulfillmentType,
+  onCompletePickup,
   cancellationReason,
   onStatusUpdate,
   updating,
@@ -63,6 +67,7 @@ export function OrderActions({
     cancellationReasonInput,
     setCancellationReasonInput,
   ] = useState("");
+  const [pickupCode, setPickupCode] = useState("");
 
   /*
   |--------------------------------------------------------------------------
@@ -168,12 +173,38 @@ export function OrderActions({
             "
           >
             {updating
-              ? "Creating Delivery..."
-              : "Mark Ready for Pickup"}
+              ? fulfillmentType === "pickup" ? "Updating..." : "Creating Delivery..."
+              : fulfillmentType === "pickup" ? "Ready for Customer" : "Mark Ready for Driver"}
           </button>
         );
 
       case "ready_for_pickup":
+        if (fulfillmentType === "pickup") {
+          return (
+            <div className="rounded-xl border border-purple-100 bg-purple-50 p-4">
+              <p className="font-semibold text-purple-700">Ready for customer pickup</p>
+              <p className="mt-1 text-sm text-purple-600">Ask the customer for the six-digit pickup code before handing over the order.</p>
+              <div className="mt-3 flex gap-2">
+                <input
+                  inputMode="numeric"
+                  maxLength={6}
+                  value={pickupCode}
+                  onChange={(event) => setPickupCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
+                  placeholder="6-digit code"
+                  className="min-w-0 flex-1 rounded-full border border-purple-200 bg-white px-4 py-2.5 text-center font-mono font-bold tracking-widest outline-none"
+                />
+                <button
+                  type="button"
+                  disabled={updating || pickupCode.length !== 6}
+                  onClick={() => onCompletePickup(pickupCode)}
+                  className="rounded-full bg-purple-600 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50"
+                >
+                  Complete
+                </button>
+              </div>
+            </div>
+          );
+        }
         return (
           <div
             className="

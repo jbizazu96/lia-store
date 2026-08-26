@@ -157,6 +157,7 @@ export interface AdminAccountDeletionRequestDetail {
 }
 
 export interface AdminOrderListItem {
+  fulfillmentType: "delivery" | "pickup";
   id: string; orderNumber: string; status: string; createdAt: string | null;
   storeName: string; customerName: string; totalAmount: number; currency: string;
   paymentStatus: string; driverName: string | null; shipdayStatus: string | null;
@@ -286,6 +287,8 @@ export interface AdminPlatformReport {
     confirmedOrders: number;
     deliveredOrders: number;
     cancelledOrders: number;
+    deliveryOrders: number;
+    pickupOrders: number;
     grossSalesAmount: number;
     newCustomers: number;
     activeStores: number;

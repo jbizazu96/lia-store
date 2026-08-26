@@ -49,6 +49,7 @@ import type {
 */
 
 interface NormalizedCheckoutFingerprint {
+  fulfillmentType: "delivery" | "pickup";
   customerUid: string;
 
   storeId: string;
@@ -76,7 +77,9 @@ interface NormalizedCheckoutFingerprint {
     latitude: number;
 
     longitude: number;
-  };
+  } | null;
+
+  fulfillmentInstructions: string | null;
 
   tipAmount: number;
 
@@ -428,28 +431,20 @@ function normalizeFingerprintInput(
       "A valid store ID is required."
     );
 
-  const latitude =
-    normalizeCoordinate(
-      input.deliveryAddress
-        .latitude,
-      "latitude"
-    );
+  if (input.fulfillmentType !== "delivery" && input.fulfillmentType !== "pickup") {
+    throw new CheckoutSessionFingerprintError("INVALID_ADDRESS", "The fulfillment method is invalid.");
+  }
 
-  const longitude =
-    normalizeCoordinate(
-      input.deliveryAddress
-        .longitude,
-      "longitude"
-    );
-
-  if (
-    latitude === 0 &&
-    longitude === 0
-  ) {
-    throw new CheckoutSessionFingerprintError(
-      "INVALID_ADDRESS",
-      "The delivery coordinates are invalid."
-    );
+  const deliveryAddress = input.fulfillmentType === "delivery"
+    ? input.deliveryAddress
+    : null;
+  if (input.fulfillmentType === "delivery" && !deliveryAddress) {
+    throw new CheckoutSessionFingerprintError("INVALID_ADDRESS", "A delivery address is required.");
+  }
+  const latitude = deliveryAddress ? normalizeCoordinate(deliveryAddress.latitude, "latitude") : 0;
+  const longitude = deliveryAddress ? normalizeCoordinate(deliveryAddress.longitude, "longitude") : 0;
+  if (deliveryAddress && latitude === 0 && longitude === 0) {
+    throw new CheckoutSessionFingerprintError("INVALID_ADDRESS", "The delivery coordinates are invalid.");
   }
 
   return {
@@ -457,36 +452,38 @@ function normalizeFingerprintInput(
 
     storeId,
 
+    fulfillmentType: input.fulfillmentType,
+
     items:
       normalizeItems(
         input.items
       ),
 
-    deliveryAddress: {
+    deliveryAddress: deliveryAddress ? {
       street:
         normalizeAddressText(
-          input.deliveryAddress
+          deliveryAddress
             .street,
           "street"
         ),
 
       city:
         normalizeAddressText(
-          input.deliveryAddress
+          deliveryAddress
             .city,
           "city"
         ),
 
       state:
         normalizeAddressText(
-          input.deliveryAddress
+          deliveryAddress
             .state,
           "state"
         ),
 
       zip:
         normalizeAddressText(
-          input.deliveryAddress
+          deliveryAddress
             .zip,
           "ZIP code"
         ),
@@ -494,7 +491,11 @@ function normalizeFingerprintInput(
       latitude,
 
       longitude,
-    },
+    } : null,
+
+    fulfillmentInstructions: typeof input.fulfillmentInstructions === "string"
+      ? input.fulfillmentInstructions.trim().replace(/\s+/g, " ") || null
+      : null,
 
     tipAmount:
       requireCentAmount(

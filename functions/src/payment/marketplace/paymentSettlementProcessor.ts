@@ -50,7 +50,7 @@ export interface ProcessPaymentSettlementInput {
 
   storeStripeAccountId: string;
 
-  driverStripeAccountId: string;
+  driverStripeAccountId: string | null;
 
   /*
    * Original customer payment that funds both connected-account
@@ -85,7 +85,7 @@ export interface ProcessPaymentSettlementResult {
 
     status:
       MarketplacePaymentTransfer["status"];
-  };
+  } | null;
 }
 
 /*
@@ -376,11 +376,9 @@ export const paymentSettlementProcessor = {
         "Store Stripe account ID"
       );
 
-    const driverStripeAccountId =
-      requireStripeAccountId(
-        input.driverStripeAccountId,
-        "Driver Stripe account ID"
-      );
+    const driverStripeAccountId = input.driverStripeAccountId === null
+      ? null
+      : requireStripeAccountId(input.driverStripeAccountId, "Driver Stripe account ID");
 
     const source =
       requireTransferSource(
@@ -453,11 +451,9 @@ export const paymentSettlementProcessor = {
           "Store ID"
         );
 
-      const driverId =
-        requireIdentifier(
-          settlement.driverId,
-          "Driver ID"
-        );
+      const driverId = settlement.driverId === null
+        ? null
+        : requireIdentifier(settlement.driverId, "Driver ID");
 
       const storeAmount =
         requirePositiveInteger(
@@ -465,11 +461,19 @@ export const paymentSettlementProcessor = {
           "Store settlement amount"
         );
 
-      const driverAmount =
-        requirePositiveInteger(
-          settlement.driverAmount,
-          "Driver settlement amount"
+      const driverAmount = settlement.driverAmount;
+      if (!Number.isSafeInteger(driverAmount) || driverAmount < 0 || (driverId === null) !== (driverAmount === 0)) {
+        throw new PaymentSettlementProcessorError(
+          "The driver settlement allocation is invalid.",
+          {code: "invalid-driver-allocation"},
         );
+      }
+      if ((driverStripeAccountId === null) !== (driverId === null)) {
+        throw new PaymentSettlementProcessorError(
+          "The driver payout account does not match the settlement.",
+          {code: "invalid-driver-allocation"},
+        );
+      }
 
       if (
         settlement.currency !==
@@ -524,7 +528,7 @@ export const paymentSettlementProcessor = {
             "usd",
         });
 
-      const driverCreation =
+      const driverCreation = driverId && driverStripeAccountId ?
         await createTransfer({
           settlementId,
 
@@ -548,7 +552,7 @@ export const paymentSettlementProcessor = {
 
           currency:
             "usd",
-        });
+        }) : null;
 
       /*
        * Retries preserve transfers already processing or completed.
@@ -559,11 +563,9 @@ export const paymentSettlementProcessor = {
           "store"
         );
 
-      const driverTransfer =
-        await ensureTransferEligible(
-          driverCreation.transferId,
-          "driver"
-        );
+      const driverTransfer = driverCreation
+        ? await ensureTransferEligible(driverCreation.transferId, "driver")
+        : null;
 
       return {
         settlementId,
@@ -581,7 +583,7 @@ export const paymentSettlementProcessor = {
             storeTransfer.status,
         },
 
-        driverTransfer: {
+        driverTransfer: driverTransfer && driverCreation ? {
           transferId:
             driverTransfer.id,
 
@@ -590,7 +592,7 @@ export const paymentSettlementProcessor = {
 
           status:
             driverTransfer.status,
-        },
+        } : null,
       };
     } catch (
       error: unknown

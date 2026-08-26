@@ -47,8 +47,9 @@ function exceptions(data: Record<string, unknown>) {
   const pickupWaiting = ["pending", "accepted", "preparing", "ready_for_pickup"].includes(status);
   const hasCarrier = Boolean(text(delivery.driverId) || text(delivery.shipdayCarrierId));
   const result: string[] = [];
+  const customerPickup = data.fulfillmentType === "pickup";
   if (status === "cancelled" || text(shipday.status) === "cancelled") result.push("cancelled");
-  if (text(shipday.orderId) && !hasCarrier && !["delivered", "cancelled", "failed"].includes(text(shipday.status))) result.push("no_driver");
+  if (!customerPickup && text(shipday.orderId) && !hasCarrier && !["delivered", "cancelled", "failed"].includes(text(shipday.status))) result.push("no_driver");
   if (pickupWaiting && ageMinutes >= DELAYED_PICKUP_MINUTES) result.push("delayed_pickup");
   if (text(shipday.status) === "failed" || text(shipday.error)) result.push("shipday_failed");
   return result;
@@ -58,6 +59,7 @@ function listItem(document: FirebaseFirestore.QueryDocumentSnapshot) {
   const delivery = record(data.delivery); const shipday = record(data.shipday); const payment = record(data.payment);
   return {
     id: document.id, orderNumber: text(data.orderNumber) || "Unavailable",
+    fulfillmentType: data.fulfillmentType === "pickup" ? "pickup" : "delivery",
     status: text(data.status) || "pending", createdAt: date(data.createdAt),
     storeName: text(store.name) || "Store", customerName: text(customer.name) || "Customer",
     totalAmount: pricing(data).totalAmount, currency: pricing(data).currency,

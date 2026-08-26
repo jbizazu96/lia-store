@@ -248,6 +248,8 @@ export function useCustomerStore({
         const currentPricing = pricingBootstrap.byStoreId[storeId] ?? {
           policy: pricingBootstrap.policy,
           decision: null,
+          pickupDecision: null,
+          storePickupEnabled: false,
         };
         const currentPolicy = currentPricing.policy;
         const currentOrderDeliveryPolicy = pricingBootstrap.orderDeliveryPolicy;
@@ -422,6 +424,8 @@ export function useCustomerStore({
               maxDeliveryMiles: currentPolicy.maxRadiusMiles,
               zoneAccessAllowed: currentPricing.decision?.allowed ?? true,
               zoneAccessType: currentPricing.decision?.zoneAccessType ?? "default_pricing",
+              pickupZoneAccessAllowed: currentPricing.pickupDecision?.allowed ?? false,
+              storePickupEnabled: currentPricing.storePickupEnabled,
             }
           );
 
@@ -482,6 +486,8 @@ export function useCustomerStore({
                   maxDeliveryMiles: currentStore.maxDeliveryMiles,
                   zoneAccessAllowed: currentStore.zoneAccessAllowed,
                   zoneAccessType: currentStore.zoneAccessType,
+                  pickupZoneAccessAllowed: currentStore.pickupZoneAccessAllowed,
+                  storePickupEnabled: currentStore.pickupEnabled === true,
                 }
               );
             });

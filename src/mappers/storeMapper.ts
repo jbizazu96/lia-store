@@ -21,6 +21,8 @@ interface CustomerStoreOptions {
   maxDeliveryMiles?: number;
   zoneAccessAllowed?: boolean;
   zoneAccessType?: CustomerStore["zoneAccessType"];
+  pickupZoneAccessAllowed?: boolean;
+  storePickupEnabled?: boolean;
 }
 
 /**
@@ -52,6 +54,8 @@ export const storeMapper = {
       maxDeliveryMiles: options.maxDeliveryMiles ?? 0,
       zoneAccessAllowed: options.zoneAccessAllowed ?? true,
       zoneAccessType: options.zoneAccessType ?? "default_pricing",
+      pickupZoneAccessAllowed: options.pickupZoneAccessAllowed ?? false,
+      pickupEnabled: options.storePickupEnabled ?? store.pickupEnabled,
     };
   },
 };

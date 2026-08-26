@@ -34,12 +34,14 @@ import {
  * (USD cents).
  */
 export interface PaymentAllocationInput {
+    fulfillmentType?: "delivery" | "pickup";
     /*
      * Trusted Admin-configured store commission captured for this settlement.
      * When absent, the marketplace policy default applies.
      */
     storeCommissionBasisPoints: number;
     driverCommissionBasisPoints: number;
+    driverMinimumPayCents: number;
     freeDeliveryMinimumCents: number;
     freeDeliveryDriverIncentiveWithoutTipCents: number;
     freeDeliveryDriverIncentiveWithTipCents: number;
@@ -101,6 +103,8 @@ export interface DriverAllocation {
 
     freeDeliveryIncentive: number;
 
+    minimumPayAdjustment: number;
+
     transferAmount: number;
 }
 
@@ -118,6 +122,8 @@ export interface PlatformAllocation {
     totalRevenue: number;
 
     freeDeliveryIncentiveCost: number;
+
+    driverMinimumPaySubsidy: number;
 }
 
 /**
@@ -144,19 +150,38 @@ export function calculatePaymentAllocation(
     input: PaymentAllocationInput
 ): PaymentAllocation {
 
+    const isPickup = input.fulfillmentType === "pickup";
+
     const storeCommission = Math.round(
         input.merchandiseSubtotal *
         input.storeCommissionBasisPoints /
         BASIS_POINTS
     );
 
-    const driverCommission = Math.round(
+    const configuredDriverCommission = isPickup ? 0 : Math.round(
         input.deliveryFee *
         input.driverCommissionBasisPoints /
         BASIS_POINTS
     );
 
+    const commissionBasedDriverPay =
+        input.deliveryFee - configuredDriverCommission;
+    const guaranteedDriverPay = !isPickup && input.deliveryFee > 0
+        ? Math.max(commissionBasedDriverPay, input.driverMinimumPayCents)
+        : 0;
+    const minimumPayAdjustment =
+        guaranteedDriverPay - commissionBasedDriverPay;
+    const driverCommission = Math.max(
+        0,
+        input.deliveryFee - guaranteedDriverPay
+    );
+    const driverMinimumPaySubsidy = Math.max(
+        0,
+        guaranteedDriverPay - input.deliveryFee
+    );
+
     const freeDeliveryIncentive =
+        !isPickup &&
         input.deliveryFee === 0 &&
         input.merchandiseSubtotal >=
             input.freeDeliveryMinimumCents
@@ -190,14 +215,16 @@ export function calculatePaymentAllocation(
             commissionAmount: driverCommission,
 
             netDeliveryFee:
-                input.deliveryFee - driverCommission,
+                guaranteedDriverPay,
 
             driverTip: input.driverTip,
 
             freeDeliveryIncentive,
 
+            minimumPayAdjustment,
+
             transferAmount:
-                (input.deliveryFee - driverCommission)
+                guaranteedDriverPay
                 + input.driverTip
                 + freeDeliveryIncentive,
         },
@@ -214,10 +241,13 @@ export function calculatePaymentAllocation(
                 storeCommission
                 + driverCommission
                 + input.serviceFee
-                - freeDeliveryIncentive,
+                - freeDeliveryIncentive
+                - driverMinimumPaySubsidy,
 
             freeDeliveryIncentiveCost:
                 freeDeliveryIncentive,
+
+            driverMinimumPaySubsidy,
         },
     };
 }

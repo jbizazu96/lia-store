@@ -87,13 +87,20 @@ export class OrderEvents {
    */
   async orderReadyForPickup(
     orderId: string,
-    customerUid: string
+    customerUid: string,
+    fulfillmentType: "delivery" | "pickup",
   ): Promise<void> {
+
+    const customerPickup = fulfillmentType === "pickup";
+    const title = customerPickup ? "Ready For Your Pickup" : "Ready For Driver Pickup";
+    const body = customerPickup
+      ? "Your order is ready. Open LIA to view the pickup code before going to the store."
+      : "A driver will be assigned shortly.";
 
     await notificationStore.createNotification({
       uid: customerUid,
-      title: "Ready For Pickup",
-      body: "A driver will be assigned shortly.",
+      title,
+      body,
       type: "delivery",
       icon: "package-check",
       color: "indigo",
@@ -103,8 +110,8 @@ export class OrderEvents {
 
     await notificationService.sendToUser(
       customerUid,
-      "Ready For Pickup",
-      "A driver will be assigned shortly.",
+      title,
+      body,
       "/orders/" + orderId,
       "orderUpdates",
     );
@@ -145,13 +152,19 @@ export class OrderEvents {
    */
   async orderCompleted(
     orderId: string,
-    customerUid: string
+    customerUid: string,
+    fulfillmentType: "delivery" | "pickup",
   ): Promise<void> {
+
+    const title = fulfillmentType === "pickup" ? "Order Picked Up" : "Order Delivered";
+    const body = fulfillmentType === "pickup"
+      ? "Your pickup is complete. Tap to share your verified store review."
+      : "Your order has been delivered. Tap to share your verified store review.";
 
     await notificationStore.createNotification({
       uid: customerUid,
-      title: "Order Delivered",
-      body: "Your order has been delivered. Tap to share your verified store review.",
+      title,
+      body,
       type: "delivery",
       icon: "check-circle",
       color: "green",
@@ -161,8 +174,8 @@ export class OrderEvents {
 
     await notificationService.sendToUser(
       customerUid,
-      "Order Delivered",
-      "Your order has been delivered. Share your verified store review in LIA.",
+      title,
+      body,
       "/orders/" + orderId,
       "orderUpdates",
     );

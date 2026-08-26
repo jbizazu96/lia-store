@@ -42,7 +42,7 @@ export interface PaymentSettlement {
     /**
      * Driver.
      */
-    driverId: string;
+    driverId: string | null;
 
     /**
      * Store transfer amount.

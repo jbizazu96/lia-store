@@ -53,6 +53,17 @@ export interface CustomerCartItem {
   };
 }
 
+export type CustomerCartFulfillmentType = "delivery" | "pickup";
+
+export interface CustomerCartState {
+  items: CustomerCartItem[];
+  fulfillmentType: CustomerCartFulfillmentType;
+}
+
+function normalizeFulfillmentType(value: unknown): CustomerCartFulfillmentType {
+  return value === "pickup" ? "pickup" : "delivery";
+}
+
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
     ? value as Record<string, unknown>
@@ -244,12 +255,12 @@ function createCartExpiration(): Timestamp {
   );
 }
 
-export async function loadCustomerCart(userId: string): Promise<CustomerCartItem[]> {
+export async function loadCustomerCartState(userId: string): Promise<CustomerCartState> {
   const reference = db.collection("carts").doc(userId);
   const snapshot = await reference.get();
 
   if (!snapshot.exists || snapshot.data()?.userId !== userId) {
-    return [];
+    return {items: [], fulfillmentType: "delivery"};
   }
 
   const expiresAt = snapshot.data()?.expiresAt;
@@ -259,16 +270,23 @@ export async function loadCustomerCart(userId: string): Promise<CustomerCartItem
     expiresAt.toMillis() <= Date.now()
   ) {
     await reference.delete();
-    return [];
+    return {items: [], fulfillmentType: "delivery"};
   }
 
   try {
-    return normalizeCustomerCartItems(snapshot.data()?.items ?? []);
+    return {
+      items: normalizeCustomerCartItems(snapshot.data()?.items ?? []),
+      fulfillmentType: normalizeFulfillmentType(snapshot.data()?.fulfillmentType),
+    };
   } catch {
     /* Remove malformed cart data instead of returning it to the browser. */
     await reference.delete();
-    return [];
+    return {items: [], fulfillmentType: "delivery"};
   }
+}
+
+export async function loadCustomerCart(userId: string): Promise<CustomerCartItem[]> {
+  return (await loadCustomerCartState(userId)).items;
 }
 
 export const getCustomerCart = onCall(
@@ -283,9 +301,7 @@ export const getCustomerCart = onCall(
 
     await requireCustomer(request.auth.uid);
 
-    return {
-      items: await loadCustomerCart(request.auth.uid),
-    };
+    return loadCustomerCartState(request.auth.uid);
   }
 );
 
@@ -301,12 +317,17 @@ export const saveCustomerCart = onCall(
 
     await requireCustomer(request.auth.uid);
 
-    const input = request.data as { items?: unknown } | undefined;
+    const input = request.data as {
+      items?: unknown;
+      fulfillmentType?: unknown;
+    } | undefined;
     const items = normalizeCustomerCartItems(input?.items);
+    const fulfillmentType = normalizeFulfillmentType(input?.fulfillmentType);
 
     await db.collection("carts").doc(request.auth.uid).set({
       userId: request.auth.uid,
       items,
+      fulfillmentType,
       updatedAt: FieldValue.serverTimestamp(),
       expiresAt: createCartExpiration(),
     });
@@ -480,15 +501,21 @@ export const repeatCustomerOrder = onCall(
     }
 
     const normalizedItems = normalizeCustomerCartItems(items);
+    const fulfillmentType: CustomerCartFulfillmentType =
+      orderData.fulfillmentType === "pickup" && currentStore.pickupEnabled === true
+        ? "pickup"
+        : "delivery";
     await db.collection("carts").doc(request.auth.uid).set({
       userId: request.auth.uid,
       items: normalizedItems,
+      fulfillmentType,
       updatedAt: FieldValue.serverTimestamp(),
       expiresAt: createCartExpiration(),
     });
 
     return {
       items: normalizedItems,
+      fulfillmentType,
       skippedProductNames: [...new Set(skippedProductNames)],
     };
   },

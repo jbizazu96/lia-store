@@ -80,6 +80,7 @@ export interface CheckoutPaymentAddressInput {
   function.
 */
 export interface PrepareCheckoutPaymentRequest {
+  fulfillmentType: "delivery" | "pickup";
   /*
     Firestore store document ID.
   */
@@ -109,12 +110,14 @@ export interface PrepareCheckoutPaymentRequest {
   /*
     Customer delivery destination.
   */
-  deliveryAddress: CheckoutPaymentAddressInput;
+  deliveryAddress?: CheckoutPaymentAddressInput;
 
   /*
     Optional delivery instructions.
   */
   deliveryInstructions?: string;
+
+  pickupInstructions?: string;
 
   /*
     Customer-selected driver tip in cents.
@@ -187,6 +190,10 @@ export interface TrustedCheckoutStore {
   homeZoneId: string | null;
 
   serviceZoneIds: string[];
+
+  pickupEnabled: boolean;
+  pickupPreparationMinutes: number | null;
+  pickupInstructions: string | null;
 
   /*
     Connected account used later for store transfers.

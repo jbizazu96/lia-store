@@ -93,7 +93,7 @@ export interface ActivateMarketplaceSettlementResult {
 
   storeTransferCreated: boolean;
 
-  driverTransferId: string;
+  driverTransferId: string | null;
 
   driverTransferCreated: boolean;
 
@@ -328,10 +328,14 @@ function validateOrderState(
     );
   }
 
-  if (
-    order.shipday?.status !==
-    "delivered"
-  ) {
+  if (order.fulfillmentType === "pickup") {
+    if (!order.pickup?.pickedUpAt || typeof order.pickup?.handedOffBy !== "string") {
+      throw new MarketplaceSettlementActivationError(
+        "ORDER_NOT_COMPLETED",
+        "Customer pickup has not been securely confirmed.",
+      );
+    }
+  } else if (order.shipday?.status !== "delivered") {
     throw new MarketplaceSettlementActivationError(
       "ORDER_NOT_COMPLETED",
       "Shipday has not confirmed successful delivery."
@@ -881,9 +885,9 @@ async function activate(
           order
         ),
 
-        getTrustedDriverPayout(
-          order
-        ),
+        order.fulfillmentType === "pickup"
+          ? Promise.resolve(null)
+          : getTrustedDriverPayout(order),
         getConfiguredDriverCommissionBasisPoints(),
       ]);
 
@@ -905,6 +909,7 @@ async function activate(
 
       const allocation =
       calculatePaymentAllocation({
+        fulfillmentType: order.fulfillmentType === "pickup" ? "pickup" : "delivery",
         merchandiseSubtotal:
           pricing.subtotalAmount,
 
@@ -922,6 +927,7 @@ async function activate(
         storeCommissionBasisPoints:
           storePayout.storeCommissionBasisPoints,
         driverCommissionBasisPoints,
+        driverMinimumPayCents: orderPricingPolicy.driverMinimumPayCents,
         freeDeliveryMinimumCents: orderPricingPolicy.freeDeliveryMinimumCents,
         freeDeliveryDriverIncentiveWithoutTipCents:
           orderPricingPolicy.freeDeliveryDriverIncentiveWithoutTipCents,
@@ -951,7 +957,7 @@ async function activate(
           storePayout.storeId,
 
         driverId:
-          driverPayout.driverId,
+          driverPayout?.driverId ?? null,
 
         storeAmount:
           allocation.store
@@ -1051,7 +1057,7 @@ async function activate(
                 storePayout.storeId,
 
               driverId:
-                driverPayout.driverId,
+                driverPayout?.driverId ?? null,
             },
           });
     }
@@ -1080,8 +1086,7 @@ async function activate(
               .stripeAccountId,
 
           driverStripeAccountId:
-            driverPayout
-              .stripeAccountId,
+            driverPayout?.stripeAccountId ?? null,
 
           source: {
             stripePaymentIntentId:
@@ -1145,11 +1150,7 @@ async function activate(
         });
             }
 
-            if (
-              processingResult
-                .driverTransfer
-                .created
-            ) {
+            if (processingResult.driverTransfer?.created && driverPayout) {
               await createLedgerEntry({
           orderId,
 
@@ -1210,14 +1211,10 @@ async function activate(
           .created,
 
       driverTransferId:
-        processingResult
-          .driverTransfer
-          .transferId,
+        processingResult.driverTransfer?.transferId ?? null,
 
       driverTransferCreated:
-        processingResult
-          .driverTransfer
-          .created,
+        processingResult.driverTransfer?.created ?? false,
 
       allocation,
     };

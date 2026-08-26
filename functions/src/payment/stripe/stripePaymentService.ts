@@ -32,6 +32,7 @@ import type {
   Input required to create one platform PaymentIntent.
 */
 export interface CreateOrderPaymentIntentInput {
+  fulfillmentType: "delivery" | "pickup";
   /*
     Firestore order document ID.
 
@@ -454,6 +455,8 @@ async function createOrderPaymentIntent(
 
           liaStoreStripeAccountId:
             storeStripeAccountId,
+
+          liaFulfillmentType: input.fulfillmentType,
 
           liaPaymentArchitecture:
             "separate_charges_and_transfers",

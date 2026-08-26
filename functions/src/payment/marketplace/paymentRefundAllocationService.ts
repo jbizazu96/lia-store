@@ -40,6 +40,7 @@ import {
 */
 
 export interface PaymentRefundAllocationInput {
+  fulfillmentType?: "delivery" | "pickup";
   scope:
     MarketplaceRefundScope;
 
@@ -64,6 +65,7 @@ export interface PaymentRefundAllocationInput {
   allocationPolicy: {
     storeCommissionBasisPoints: number;
     driverCommissionBasisPoints: number;
+    driverMinimumPayCents: number;
     freeDeliveryMinimumCents: number;
     freeDeliveryDriverIncentiveWithoutTipCents: number;
     freeDeliveryDriverIncentiveWithTipCents: number;
@@ -448,7 +450,14 @@ export function calculatePaymentRefundAllocation(
    */
   const refundedAllocation =
     calculatePaymentAllocation({
+      fulfillmentType: input.fulfillmentType,
       ...input.allocationPolicy,
+      // Partial component refunds must not reverse the complete guaranteed
+      // minimum. Full refunds reverse the original guaranteed allocation.
+      driverMinimumPayCents:
+        input.scope === "full"
+          ? input.allocationPolicy.driverMinimumPayCents
+          : 0,
       merchandiseSubtotal:
         refundComponents
           .merchandiseAmount,

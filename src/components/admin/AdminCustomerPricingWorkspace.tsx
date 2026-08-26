@@ -19,20 +19,40 @@ interface MarketplacePricingPolicy {
   minimumServiceFeeCents: number;
   maximumServiceFeeCents: number;
   salesTaxRate: number;
+  driverMinimumPayCents: number;
+  pickupEnabled: boolean;
+  pickupMaximumDistanceMiles: number;
+  pickupMinimumOrderCents: number;
+  pickupPreparationMinutes: number;
+  pickupServiceFeeRate: number;
+  pickupMinimumServiceFeeCents: number;
+  pickupMaximumServiceFeeCents: number;
   freeDeliveryDriverIncentiveWithoutTipCents: number;
   freeDeliveryDriverIncentiveWithTipCents: number;
 }
 
-type EditablePricingField = Exclude<keyof MarketplacePricingPolicy, "peakSurchargeEnabled">;
+type EditablePricingField = Exclude<keyof MarketplacePricingPolicy, "peakSurchargeEnabled" | "pickupEnabled">;
 
 interface FieldDefinition {
   key: EditablePricingField;
   label: string;
   hint: string;
-  unit: "$" | "%" | "miles";
+  unit: "$" | "%" | "miles" | "minutes";
 }
 
 const SECTIONS: Array<{title: string; description: string; fields: FieldDefinition[]}> = [
+  {
+    title: "Customer pickup",
+    description: "Global pickup controls. Customers may pick up outside their assigned zones only while the driving distance stays within the pickup threshold. Pickup never uses Shipday, driver fees, or driver tips.",
+    fields: [
+      {key: "pickupMaximumDistanceMiles", label: "Out-of-zone pickup threshold", hint: "Maximum driving distance allowed for pickup when the store is outside the customer's Home Zone and approved Order Zones. Pickup within an approved zone is not limited by this threshold.", unit: "miles"},
+      {key: "pickupMinimumOrderCents", label: "Pickup minimum order", hint: "Minimum merchandise subtotal required for customer pickup.", unit: "$"},
+      {key: "pickupPreparationMinutes", label: "Default preparation time", hint: "Default number of minutes shown for pickup preparation.", unit: "minutes"},
+      {key: "pickupServiceFeeRate", label: "Pickup service fee rate", hint: "Percentage of the merchandise subtotal charged on pickup orders.", unit: "%"},
+      {key: "pickupMinimumServiceFeeCents", label: "Pickup minimum service fee", hint: "Lowest service fee charged on a pickup order.", unit: "$"},
+      {key: "pickupMaximumServiceFeeCents", label: "Pickup maximum service fee", hint: "Highest service fee charged on a pickup order.", unit: "$"},
+    ],
+  },
   {
     title: "Delivery pricing",
     description: "Used for route-based delivery estimates before checkout.",
@@ -41,6 +61,7 @@ const SECTIONS: Array<{title: string; description: string; fields: FieldDefiniti
       {key: "baseDeliveryFeeCents", label: "Base delivery fee", hint: "Fee charged within the base distance.", unit: "$"},
       {key: "baseDistanceMiles", label: "Base delivery distance", hint: "Miles covered by the base fee.", unit: "miles"},
       {key: "costPerMileCents", label: "Additional cost per mile", hint: "Applied after the base distance.", unit: "$"},
+      {key: "driverMinimumPayCents", label: "Minimum driver pay", hint: "Guaranteed driver earnings from a paid delivery fee, before tips. It cannot exceed the base delivery fee; LIA keeps its configured commission only after this minimum is satisfied.", unit: "$"},
       {key: "peakSurchargeCents", label: "Peak delivery amount", hint: "When peak pricing is enabled, this amount is included in the delivery fee and driver-fee calculation.", unit: "$"},
       {key: "freeDeliveryMinimumCents", label: "Free-delivery order threshold", hint: "Subtotal required for delivery to be free.", unit: "$"},
     ],
@@ -94,6 +115,7 @@ export function AdminCustomerPricingWorkspace({zoneId}: {zoneId?: string}) {
   const [zone, setZone] = useState<ZonePricingScope | null>(null);
   const [inherited, setInherited] = useState(false);
   const [peakSurchargeEnabled, setPeakSurchargeEnabled] = useState(false);
+  const [pickupEnabled, setPickupEnabled] = useState(false);
   const [saving, setSaving] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [error, setError] = useState("");
@@ -116,6 +138,7 @@ export function AdminCustomerPricingWorkspace({zoneId}: {zoneId?: string}) {
       }
       setPolicy(loaded);
       setPeakSurchargeEnabled(loaded.peakSurchargeEnabled === true);
+      setPickupEnabled(loaded.pickupEnabled === true);
       setDraft(Object.fromEntries(
         SECTIONS.flatMap((section) => section.fields).map((field) => [
           field.key,
@@ -135,7 +158,7 @@ export function AdminCustomerPricingWorkspace({zoneId}: {zoneId?: string}) {
 
   const save = async () => {
     if (!draft || !policy) return;
-    const next = {...policy, peakSurchargeEnabled};
+    const next = {...policy, peakSurchargeEnabled, pickupEnabled};
 
     for (const section of SECTIONS) {
       for (const field of section.fields) {
@@ -209,7 +232,7 @@ export function AdminCustomerPricingWorkspace({zoneId}: {zoneId?: string}) {
     {error && <p className="mt-4 rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}
     {saved && <p className="mt-4 rounded-xl bg-green-50 p-3 text-sm text-green-800">Customer pricing policy saved and audited.</p>}
     <div className="mt-6 space-y-5">
-      {SECTIONS.map((section) => <section key={section.title} className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-100">
+      {SECTIONS.filter((section) => !zoneId || section.title !== "Customer pickup").map((section) => <section key={section.title} className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-100">
         <h2 className="font-bold text-slate-950">{section.title}</h2>
         <p className="mt-1 text-sm text-slate-500">{section.description}</p>
         {section.title === "Delivery pricing" && (
@@ -232,12 +255,18 @@ export function AdminCustomerPricingWorkspace({zoneId}: {zoneId?: string}) {
             </button>
           </div>
         )}
+        {section.title === "Customer pickup" && (
+          <div className="mt-5 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-slate-100 bg-slate-50/70 p-4">
+            <div><p className="text-sm font-bold text-slate-900">Pickup ordering</p><p className="mt-1 max-w-xl text-xs leading-5 text-slate-500">{pickupEnabled ? "Enabled globally. Individual stores must also enable pickup." : "Disabled globally. No store can accept pickup orders."}</p></div>
+            <button data-admin-write-action type="button" aria-pressed={pickupEnabled} onClick={() => {setSaved(false); setPickupEnabled((enabled) => !enabled);}} className={"rounded-xl px-4 py-2.5 text-sm font-bold text-white transition " + (pickupEnabled ? "bg-emerald-600 hover:bg-emerald-700" : "bg-slate-700 hover:bg-slate-800")}>{pickupEnabled ? "Disable pickup" : "Enable pickup"}</button>
+          </div>
+        )}
         <div className="mt-5 grid gap-4 md:grid-cols-2">
           {section.fields.map((field) => <label key={field.key} className="block text-sm font-semibold text-slate-800">
             {field.label}
             <span className="mt-1 block text-xs font-normal leading-5 text-slate-500">{field.hint}</span>
             <div className="mt-2 flex overflow-hidden rounded-xl border border-slate-200 bg-white focus-within:ring-2 focus-within:ring-orange-200">
-              <input type="number" min="0" step={field.unit === "miles" ? "1" : "0.01"} value={draft[field.key]} disabled={Boolean(zoneId && field.key === "maxRadiusMiles")} onChange={(event) => { setSaved(false); setDraft({...draft, [field.key]: event.target.value}); }} className="min-w-0 flex-1 px-3 py-2.5 outline-none disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500"/>
+              <input type="number" min="0" step={field.unit === "miles" || field.unit === "minutes" ? "1" : "0.01"} value={draft[field.key]} disabled={Boolean(zoneId && field.key === "maxRadiusMiles")} onChange={(event) => { setSaved(false); setDraft({...draft, [field.key]: event.target.value}); }} className="min-w-0 flex-1 px-3 py-2.5 outline-none disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500"/>
               <span className="border-l border-slate-200 bg-slate-50 px-3 py-2.5 text-xs font-bold text-slate-500">{field.unit}</span>
             </div>
           </label>)}

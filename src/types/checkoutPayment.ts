@@ -85,6 +85,7 @@ export interface CheckoutPaymentAddressInput {
   This intentionally excludes all client-calculated prices and totals.
 */
 export interface PrepareCheckoutPaymentInput {
+  fulfillmentType: "delivery" | "pickup";
   /*
     Firestore store document ID.
   */
@@ -110,12 +111,13 @@ export interface PrepareCheckoutPaymentInput {
   /*
     Customer delivery destination.
   */
-  deliveryAddress: CheckoutPaymentAddressInput;
+  deliveryAddress?: CheckoutPaymentAddressInput;
 
   /*
     Optional delivery instructions.
   */
   deliveryInstructions?: string;
+  pickupInstructions?: string;
 
   /*
     Customer-selected tip in cents.

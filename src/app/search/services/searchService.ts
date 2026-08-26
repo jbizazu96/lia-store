@@ -426,6 +426,8 @@ export async function enrichSearchResults(
       ),
       zoneAccessAllowed: applicable?.decision?.allowed ?? true,
       zoneAccessType: applicable?.decision?.zoneAccessType ?? "default_pricing",
+      pickupZoneAccessAllowed: applicable?.pickupDecision?.allowed ?? false,
+      storePickupEnabled: applicable?.storePickupEnabled ?? false,
     }];
   });
 }

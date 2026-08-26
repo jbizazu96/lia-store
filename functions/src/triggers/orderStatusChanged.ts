@@ -54,6 +54,7 @@ export const orderStatusChanged =
 
       const orderId = event.params.orderId;
       const customerUid = after.customer?.uid;
+      const fulfillmentType = after.fulfillmentType === "pickup" ? "pickup" : "delivery";
 
       if (!customerUid) {
         console.log("Customer UID missing.");
@@ -79,7 +80,8 @@ export const orderStatusChanged =
         case "ready_for_pickup":
           await orderEvents.orderReadyForPickup(
             orderId,
-            customerUid
+            customerUid,
+            fulfillmentType,
           );
           break;
 
@@ -93,7 +95,8 @@ export const orderStatusChanged =
         case "completed":
           await orderEvents.orderCompleted(
             orderId,
-            customerUid
+            customerUid,
+            fulfillmentType,
           );
           break;
 

@@ -25,6 +25,7 @@ type Data = Record<string, unknown>;
 type OutcomeStatus = "delivered" | "cancelled" | null;
 
 interface OrderContribution {
+  fulfillmentType: "delivery" | "pickup" | null;
   confirmedDay: string | null;
   grossCustomerPayments: number;
   outcomeDay: string | null;
@@ -92,6 +93,7 @@ function orderContribution(data: Data): OrderContribution {
 
   if (!paid) {
     return {
+      fulfillmentType: null,
       confirmedDay: null,
       grossCustomerPayments: 0,
       outcomeDay: null,
@@ -116,18 +118,21 @@ function orderContribution(data: Data): OrderContribution {
   const pricingZoneId = text(data.pricingZoneId) || null;
   const customerZoneId = text(data.customerHomeZoneId);
   const storeZoneId = text(data.storeHomeZoneId);
+  const fulfillmentType = data.fulfillmentType === "pickup" ? "pickup" : "delivery";
+  const pickup = fulfillmentType === "pickup";
 
   return {
+    fulfillmentType,
     confirmedDay: confirmedAt ? utcDay(confirmedAt) : null,
     grossCustomerPayments: Math.max(0, number(pricing.totalAmount)),
     outcomeDay: outcomeAt ? utcDay(outcomeAt) : null,
     outcomeStatus,
-    pricingZoneId,
-    pricingZoneName: text(data.pricingZoneName) || text(pricingPolicy.zoneName) || (pricingZoneId ? "Delivery zone" : "Default Customer Pricing"),
-    routeMiles: Math.max(0, number(data.trustedRouteDistanceMiles) || number(delivery.distanceMiles)),
-    orderZoneException: data.zoneAccessType === "customer_order_zone",
-    crossZoneDelivery: Boolean(customerZoneId && storeZoneId && customerZoneId !== storeZoneId),
-    peakSurchargeAmount: Math.max(0, number(pricing.peakSurchargeAmount) || (pricing.isPeakTime === true ? number(pricingPolicy.peakSurchargeCents) : 0)),
+    pricingZoneId: pickup ? "pickup" : pricingZoneId,
+    pricingZoneName: pickup ? "Customer Pickup" : text(data.pricingZoneName) || text(pricingPolicy.zoneName) || (pricingZoneId ? "Delivery zone" : "Default Customer Pricing"),
+    routeMiles: pickup ? 0 : Math.max(0, number(data.trustedRouteDistanceMiles) || number(delivery.distanceMiles)),
+    orderZoneException: !pickup && data.zoneAccessType === "customer_order_zone",
+    crossZoneDelivery: !pickup && Boolean(customerZoneId && storeZoneId && customerZoneId !== storeZoneId),
+    peakSurchargeAmount: pickup ? 0 : Math.max(0, number(pricing.peakSurchargeAmount) || (pricing.isPeakTime === true ? number(pricingPolicy.peakSurchargeCents) : 0)),
   };
 }
 
@@ -135,6 +140,9 @@ function savedContribution(data: Data): OrderContribution {
   const outcome = text(data.outcomeStatus);
 
   return {
+    fulfillmentType: data.fulfillmentType === "pickup"
+      ? "pickup"
+      : data.fulfillmentType === "delivery" ? "delivery" : null,
     confirmedDay: text(data.confirmedDay) || null,
     grossCustomerPayments: Math.max(0, number(data.grossCustomerPayments)),
     outcomeDay: text(data.outcomeDay) || null,
@@ -155,6 +163,7 @@ function sameContribution(
   right: OrderContribution
 ): boolean {
   return left.confirmedDay === right.confirmedDay &&
+    left.fulfillmentType === right.fulfillmentType &&
     left.grossCustomerPayments === right.grossCustomerPayments &&
     left.outcomeDay === right.outcomeDay &&
     left.outcomeStatus === right.outcomeStatus &&
@@ -218,6 +227,7 @@ function applyContributionDelta(
   if (previous.confirmedDay) {
     incrementReport(transaction, previous.confirmedDay, {
       confirmedOrders: -1,
+      ...(previous.fulfillmentType ? {[`${previous.fulfillmentType}Orders`]: -1} : {}),
       grossCustomerPayments: -previous.grossCustomerPayments,
     });
     incrementZoneReport(transaction, previous, -1);
@@ -232,6 +242,7 @@ function applyContributionDelta(
   if (next.confirmedDay) {
     incrementReport(transaction, next.confirmedDay, {
       confirmedOrders: 1,
+      ...(next.fulfillmentType ? {[`${next.fulfillmentType}Orders`]: 1} : {}),
       grossCustomerPayments: next.grossCustomerPayments,
     });
     incrementZoneReport(transaction, next, 1);
@@ -251,6 +262,7 @@ export async function synchronizeOrderDailyReport(
   const contributionReference = db.collection("platformReportContributions")
     .doc("order_" + orderId);
   const next = data ? orderContribution(data) : {
+    fulfillmentType: null,
     confirmedDay: null,
     grossCustomerPayments: 0,
     outcomeDay: null,
@@ -263,7 +275,7 @@ export async function synchronizeOrderDailyReport(
     const existing = await transaction.get(contributionReference);
     const previous = existing.exists
       ? savedContribution(existing.data() ?? {})
-      : {confirmedDay: null, grossCustomerPayments: 0, outcomeDay: null, outcomeStatus: null, pricingZoneId: null, pricingZoneName: "Default Customer Pricing", routeMiles: 0, orderZoneException: false, crossZoneDelivery: false, peakSurchargeAmount: 0};
+      : {fulfillmentType: null, confirmedDay: null, grossCustomerPayments: 0, outcomeDay: null, outcomeStatus: null, pricingZoneId: null, pricingZoneName: "Default Customer Pricing", routeMiles: 0, orderZoneException: false, crossZoneDelivery: false, peakSurchargeAmount: 0};
 
     if (sameContribution(previous, next)) return;
 

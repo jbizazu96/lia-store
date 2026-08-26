@@ -119,6 +119,18 @@ export class OrderService {
     );
   }
 
+  async completePickup(orderId: string, code: string): Promise<void> {
+    const callable = httpsCallable<
+      {orderId: string; code: string},
+      {success: boolean}
+    >(functions, "completeCustomerPickup");
+    const response = await callable({orderId, code});
+    if (!response.data.success) throw new Error("The pickup could not be completed.");
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new Event("lia:store-orders-changed"));
+    }
+  }
+
 }
 
 /**

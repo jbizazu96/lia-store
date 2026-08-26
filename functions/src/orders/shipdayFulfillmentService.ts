@@ -52,6 +52,7 @@ const db =
 */
 
 interface ShipdayFulfillmentOrder {
+  fulfillmentType?: unknown;
   orderNumber?: unknown;
 
   status?: unknown;
@@ -150,6 +151,7 @@ export type ShipdayFulfillmentErrorCode =
   | "ORDER_NOT_FOUND"
   | "CHECKOUT_NOT_CONFIRMED"
   | "PAYMENT_NOT_CONFIRMED"
+  | "PICKUP_ORDER_NOT_SUPPORTED"
   | "ORDER_NOT_PREPARING"
   | "CREATION_IN_PROGRESS"
   | "INVALID_SHIPDAY_RESPONSE"
@@ -347,6 +349,13 @@ function assertOrderCanCreateShipday(
     order
   );
 
+  if (order.fulfillmentType === "pickup") {
+    throw new ShipdayFulfillmentError(
+      "PICKUP_ORDER_NOT_SUPPORTED",
+      "Customer pickup orders must never be sent to Shipday.",
+    );
+  }
+
   if (
     order.status !==
     "preparing"
@@ -365,6 +374,13 @@ function assertOrderCanMarkShipdayReady(
   assertConfirmedAndPaid(
     order
   );
+
+  if (order.fulfillmentType === "pickup") {
+    throw new ShipdayFulfillmentError(
+      "PICKUP_ORDER_NOT_SUPPORTED",
+      "Customer pickup orders must never be sent to Shipday.",
+    );
+  }
 
   if (
     order.status !==

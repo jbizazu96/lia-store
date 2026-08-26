@@ -90,7 +90,11 @@ import {
 import {
   getMarketplacePricingPolicyForZone,
 } from "../pricing/marketplacePricingPolicy";
-import {resolveZonePricingDecision} from "../pricing/zonePricingResolutionService";
+import {
+  isPickupAllowedByZoneOrDistance,
+  resolvePickupZoneDecision,
+  resolveZonePricingDecision,
+} from "../pricing/zonePricingResolutionService";
 
 import {
   isStripeCustomerServiceError,
@@ -681,25 +685,51 @@ export const prepareCheckoutPayment =
         |--------------------------------------------------------------------------
         */
 
-        const destinationLatitude =
-          checkoutRequest
-            .deliveryAddress
-            .latitude;
+        const isPickup = checkoutRequest.fulfillmentType === "pickup";
+        if (isPickup && !checkoutData.store.pickupEnabled) {
+          throw new HttpsError("failed-precondition", "This store is not currently accepting pickup orders.");
+        }
 
-        const destinationLongitude =
-          checkoutRequest
-            .deliveryAddress
-            .longitude;
+        const customerData = customerProfile.data() ?? {};
+        const defaultAddress = customerData.defaultAddress &&
+          typeof customerData.defaultAddress === "object"
+          ? customerData.defaultAddress as Record<string, unknown>
+          : {};
+        const pickupZoneDecision = isPickup
+          ? resolvePickupZoneDecision(
+              customerData,
+              {homeZoneId: checkoutData.store.homeZoneId},
+            )
+          : null;
+        const deliveryZoneDecision = isPickup
+          ? null
+          : resolveZonePricingDecision(
+              customerData,
+              {homeZoneId: checkoutData.store.homeZoneId, serviceZoneIds: checkoutData.store.serviceZoneIds},
+            );
+        const marketplacePricingPolicy = await getMarketplacePricingPolicyForZone(
+          isPickup ? null : deliveryZoneDecision?.pricingZoneId ?? null,
+        );
+
+        const destinationLatitude = isPickup
+          ? defaultAddress.latitude
+          : checkoutRequest.deliveryAddress?.latitude;
+
+        const destinationLongitude = isPickup
+          ? defaultAddress.longitude
+          : checkoutRequest.deliveryAddress?.longitude;
 
         if (
-          typeof destinationLatitude !==
-            "number" ||
-          typeof destinationLongitude !==
-            "number"
+          (!isPickup || pickupZoneDecision?.allowed !== true) && (
+            typeof destinationLatitude !== "number" ||
+            typeof destinationLongitude !== "number"
+          )
         ) {
           throw new HttpsError(
             "failed-precondition",
-            "The delivery address needs valid map coordinates."
+            isPickup
+              ? "Add a verified customer address so LIA can confirm the pickup distance."
+              : "The delivery address needs valid map coordinates."
           );
         }
 
@@ -710,8 +740,9 @@ export const prepareCheckoutPayment =
         |--------------------------------------------------------------------------
         */
 
-        const distanceMiles =
-          await checkoutDistanceService
+        const distanceMiles = isPickup && pickupZoneDecision?.allowed === true
+          ? 0
+          : await checkoutDistanceService
             .getTrustedDrivingDistanceMiles(
               {
                 latitude:
@@ -724,11 +755,9 @@ export const prepareCheckoutPayment =
               },
 
               {
-                latitude:
-                  destinationLatitude,
+                  latitude: destinationLatitude as number,
 
-                longitude:
-                  destinationLongitude,
+                  longitude: destinationLongitude as number,
               },
 
               googleMapsApiKey.value()
@@ -741,18 +770,34 @@ export const prepareCheckoutPayment =
         |--------------------------------------------------------------------------
         */
 
-        const zoneDecision = resolveZonePricingDecision(
-          customerProfile.data() ?? {},
-          {homeZoneId: checkoutData.store.homeZoneId, serviceZoneIds: checkoutData.store.serviceZoneIds},
-        );
+        const pickupDistanceAllowed = isPickup && pickupZoneDecision
+          ? isPickupAllowedByZoneOrDistance(
+              pickupZoneDecision,
+              distanceMiles,
+              marketplacePricingPolicy.pickupMaximumDistanceMiles,
+            )
+          : false;
+        const zoneDecision = isPickup
+          ? pickupZoneDecision?.allowed === true
+            ? pickupZoneDecision
+            : {
+                ...pickupZoneDecision!,
+                pricingZoneId: null,
+                zoneAccessType: "pickup" as const,
+                allowed: pickupDistanceAllowed,
+              }
+          : deliveryZoneDecision!;
         if (!zoneDecision.allowed) {
           throw new HttpsError(
             "failed-precondition",
-            "This store is outside your approved order zones. Contact LIA support for assistance.",
+            isPickup
+              ? `This store is outside your delivery access and farther than the ${marketplacePricingPolicy.pickupMaximumDistanceMiles}-mile pickup threshold.`
+              : "This store is outside your approved order zones. Contact LIA support for assistance.",
           );
         }
-        const marketplacePricingPolicy =
-          await getMarketplacePricingPolicyForZone(zoneDecision.pricingZoneId);
+        if (isPickup && !marketplacePricingPolicy.pickupEnabled) {
+          throw new HttpsError("failed-precondition", "Customer pickup is temporarily unavailable.");
+        }
 
         requireMinimumOrder({
           storeName:
@@ -763,12 +808,14 @@ export const prepareCheckoutPayment =
               .subtotalAmount,
 
           defaultMinimumOrderAmount:
-            marketplacePricingPolicy
-              .defaultMinimumOrderCents,
+            isPickup
+              ? marketplacePricingPolicy.pickupMinimumOrderCents
+              : marketplacePricingPolicy.defaultMinimumOrderCents,
         });
 
         const pricing =
           calculatePaymentPricing({
+            fulfillmentType: checkoutRequest.fulfillmentType,
             subtotalAmount:
               checkoutData
                 .subtotalAmount,
@@ -780,11 +827,11 @@ export const prepareCheckoutPayment =
                 .tipAmountCents,
 
             isPeakTime:
-              marketplacePricingPolicy
+              !isPickup && marketplacePricingPolicy
                 .peakSurchargeEnabled,
 
             enforceMaximumDistance:
-              zoneDecision.zoneAccessType !== "customer_order_zone",
+              !isPickup && zoneDecision.zoneAccessType !== "customer_order_zone",
 
             policy:
               marketplacePricingPolicy,
@@ -868,6 +915,7 @@ export const prepareCheckoutPayment =
           await checkoutSessionService
             .resolveCheckoutSession({
               fingerprintInput: {
+                fulfillmentType: checkoutRequest.fulfillmentType,
                 customerUid:
                   customer.uid,
 
@@ -891,33 +939,35 @@ export const prepareCheckoutPayment =
                     })
                   ),
 
-                deliveryAddress: {
+                deliveryAddress: isPickup ? null : {
                   street:
                     checkoutRequest
-                      .deliveryAddress
+                      .deliveryAddress!
                       .street,
 
                   city:
                     checkoutRequest
-                      .deliveryAddress
+                      .deliveryAddress!
                       .city,
 
                   state:
                     checkoutRequest
-                      .deliveryAddress
+                      .deliveryAddress!
                       .state,
 
                   zip:
                     checkoutRequest
-                      .deliveryAddress
+                      .deliveryAddress!
                       .zip,
 
-                  latitude:
-                    destinationLatitude,
+                  latitude: destinationLatitude as number,
 
-                  longitude:
-                    destinationLongitude,
+                  longitude: destinationLongitude as number,
                 },
+
+                fulfillmentInstructions: isPickup
+                  ? checkoutRequest.pickupInstructions ?? null
+                  : checkoutRequest.deliveryInstructions ?? null,
 
                 tipAmount:
                   pricing.tipAmount,
@@ -1097,10 +1147,9 @@ export const prepareCheckoutPayment =
 
               distanceMiles,
 
-              estimatedDeliveryMinutes:
-                estimateDeliveryMinutes(
-                  distanceMiles
-                ),
+              estimatedDeliveryMinutes: isPickup
+                ? checkoutData.store.pickupPreparationMinutes ?? marketplacePricingPolicy.pickupPreparationMinutes
+                : estimateDeliveryMinutes(distanceMiles),
             });
 
         newlyCreatedOrderId =
@@ -1137,6 +1186,7 @@ export const prepareCheckoutPayment =
             .createOrderPaymentIntent(
               stripe,
               {
+                fulfillmentType: checkoutRequest.fulfillmentType,
                 orderId:
                   pendingOrder.orderId,
 

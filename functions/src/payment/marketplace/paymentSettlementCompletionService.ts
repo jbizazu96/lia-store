@@ -258,6 +258,7 @@ async function complete(
         settlementId,
         "driver"
       );
+    const hasDriverTransfer = settlement.driverId !== null && settlement.driverAmount > 0;
 
     const [
       storeTransfer,
@@ -268,9 +269,7 @@ async function complete(
           storeTransferId
         ),
 
-        getTransfer(
-          driverTransferId
-        ),
+        hasDriverTransfer ? getTransfer(driverTransferId) : Promise.resolve(null),
       ]);
 
     if (!storeTransfer) {
@@ -280,7 +279,7 @@ async function complete(
       );
     }
 
-    if (!driverTransfer) {
+    if (hasDriverTransfer && !driverTransfer) {
       throw new PaymentSettlementCompletionError(
         "DRIVER_TRANSFER_NOT_FOUND",
         "The driver transfer was not found."
@@ -294,20 +293,15 @@ async function complete(
       "store"
     );
 
-    validateTransferRelationship(
-      driverTransfer,
-      settlementId,
-      orderId,
-      "driver"
-    );
+    if (driverTransfer) {
+      validateTransferRelationship(driverTransfer, settlementId, orderId, "driver");
+    }
 
     const storeTransferCompleted =
       storeTransfer.status ===
       "completed";
 
-    const driverTransferCompleted =
-      driverTransfer.status ===
-      "completed";
+    const driverTransferCompleted = !hasDriverTransfer || driverTransfer?.status === "completed";
 
     /*
     |--------------------------------------------------------------------------
@@ -388,7 +382,7 @@ async function complete(
       },
     });
 
-    await createLedgerEntry({
+    if (driverTransfer) await createLedgerEntry({
       orderId,
 
       event:
@@ -435,7 +429,7 @@ async function complete(
 
       amount:
         storeTransfer.amount +
-        driverTransfer.amount,
+        (driverTransfer?.amount ?? 0),
 
       description:
         "Store and driver marketplace settlement completed.",
@@ -451,11 +445,10 @@ async function complete(
             .stripeTransferId,
 
         driverTransferId:
-          driverTransfer.id,
+          driverTransfer?.id ?? null,
 
         driverStripeTransferId:
-          driverTransfer
-            .stripeTransferId,
+          driverTransfer?.stripeTransferId ?? null,
       },
     });
 

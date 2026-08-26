@@ -18,12 +18,14 @@ import type {
   CheckoutItem,
   CheckoutTotals,
 } from "@/app/checkout/types";
+import type {FulfillmentType} from "@/types/fulfillment";
 
 interface OrderSummaryProps {
   items: CheckoutItem[];
   totals: CheckoutTotals;
   storeName?: string;
   storeAddress?: string;
+  fulfillmentType: FulfillmentType;
 }
 
 export function OrderSummary({
@@ -31,6 +33,7 @@ export function OrderSummary({
   totals,
   storeName,
   storeAddress,
+  fulfillmentType,
 }: OrderSummaryProps) {
   const [feeInfoType, setFeeInfoType] = useState<FeeInfoType | null>(null);
   const hasFreeDelivery =
@@ -112,15 +115,19 @@ export function OrderSummary({
         </div>
         
         <div className="flex items-center justify-between gap-4 text-sm">
-          <button
-            type="button"
-            onClick={() => setFeeInfoType("delivery")}
-            className="inline-flex items-center gap-1 text-gray-500 transition hover:text-gray-800"
-            aria-label="Learn about the delivery fee"
-          >
-            Delivery Fee
-            <Info className="h-3.5 w-3.5" aria-hidden="true" />
-          </button>
+          {fulfillmentType === "pickup" ? (
+            <span className="text-gray-500">Pickup fee</span>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setFeeInfoType("delivery")}
+              className="inline-flex items-center gap-1 text-gray-500 transition hover:text-gray-800"
+              aria-label="Learn about the delivery fee"
+            >
+              Delivery Fee
+              <Info className="h-3.5 w-3.5" aria-hidden="true" />
+            </button>
+          )}
 
           {hasFreeDelivery ? (
             <span className="flex items-center gap-2 font-medium text-gray-800">
@@ -165,7 +172,9 @@ export function OrderSummary({
         </div>
         
         <div className="flex justify-between border-t border-gray-200 pt-2 text-lg font-bold">
-          <span className="text-gray-800">Total before tip</span>
+          <span className="text-gray-800">
+            {fulfillmentType === "pickup" ? "Total" : "Total before tip"}
+          </span>
           <span className="text-orange-600">${totalBeforeTip.toFixed(2)}</span>
         </div>
       </div>

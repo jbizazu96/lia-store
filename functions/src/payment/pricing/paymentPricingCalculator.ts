@@ -31,6 +31,7 @@ import type {
 */
 export interface CalculatePaymentPricingInput {
   policy: MarketplacePricingPolicy;
+  fulfillmentType?: "delivery" | "pickup";
   /*
     Trusted merchandise subtotal in cents.
 
@@ -159,22 +160,32 @@ function requireValidDistance(
 */
 function calculateServiceFeeAmount(
   subtotalAmount: number,
-  policy: MarketplacePricingPolicy
+  policy: MarketplacePricingPolicy,
+  fulfillmentType: "delivery" | "pickup",
 ): number {
+  const serviceFeeRate = fulfillmentType === "pickup"
+    ? policy.pickupServiceFeeRate
+    : policy.serviceFeeRate;
+  const minimumServiceFeeCents = fulfillmentType === "pickup"
+    ? policy.pickupMinimumServiceFeeCents
+    : policy.minimumServiceFeeCents;
+  const maximumServiceFeeCents = fulfillmentType === "pickup"
+    ? policy.pickupMaximumServiceFeeCents
+    : policy.maximumServiceFeeCents;
   /*
     Math.round() keeps the percentage result in whole cents.
   */
   const percentageAmount =
     Math.round(
       subtotalAmount *
-      policy.serviceFeeRate
+      serviceFeeRate
     );
 
   return Math.max(
-    policy.minimumServiceFeeCents,
+    minimumServiceFeeCents,
     Math.min(
       percentageAmount,
-      policy.maximumServiceFeeCents
+      maximumServiceFeeCents
     )
   );
 }
@@ -278,33 +289,39 @@ export function calculatePaymentPricing(
       "Subtotal"
     );
 
+  const fulfillmentType = input.fulfillmentType ?? "delivery";
   const tipAmount =
     requireValidCentAmount(
-      input.tipAmount,
+      fulfillmentType === "pickup" ? 0 : input.tipAmount,
       "Tip"
     );
 
   const distanceMiles =
     requireValidDistance(
-      input.distanceMiles,
+      fulfillmentType === "pickup" ? 0 : input.distanceMiles,
       input.policy,
       input.enforceMaximumDistance ?? true,
     );
 
+  const deliveryPricing =
+    fulfillmentType === "pickup"
+      ? {deliveryFeeAmount: 0, isFreeDelivery: false}
+      : calculateDeliveryFeeAmount(
+          subtotalAmount,
+          distanceMiles,
+          input.isPeakTime ?? false,
+          input.policy
+        );
   const {
     deliveryFeeAmount,
     isFreeDelivery,
-  } = calculateDeliveryFeeAmount(
-    subtotalAmount,
-    distanceMiles,
-    input.isPeakTime ?? false,
-    input.policy
-  );
+  } = deliveryPricing;
 
   const serviceFeeAmount =
     calculateServiceFeeAmount(
       subtotalAmount,
-      input.policy
+      input.policy,
+      fulfillmentType,
     );
 
   const taxAmount =
@@ -337,10 +354,10 @@ export function calculatePaymentPricing(
 
     isFreeDelivery,
 
-    isPeakTime: input.isPeakTime === true,
+    isPeakTime: fulfillmentType === "delivery" && input.isPeakTime === true,
 
     peakSurchargeAmount:
-      input.isPeakTime === true && !isFreeDelivery
+      fulfillmentType === "delivery" && input.isPeakTime === true && !isFreeDelivery
         ? input.policy.peakSurchargeCents
         : 0,
   };

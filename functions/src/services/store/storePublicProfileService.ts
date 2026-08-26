@@ -39,6 +39,9 @@ export interface StorePublicProfileSource {
   rating?: unknown;
   reviewCount?: unknown;
   minimumOrder?: unknown;
+  pickupEnabled?: unknown;
+  pickupPreparationMinutes?: unknown;
+  pickupInstructions?: unknown;
   isApproved?: unknown;
   isActive?: unknown;
   isOpen?: unknown;
@@ -127,6 +130,12 @@ export async function syncStorePublicProfile(
         store.minimumOrder,
         30
       ),
+      pickupEnabled: store.pickupEnabled === true,
+      pickupPreparationMinutes: Math.min(
+        240,
+        Math.max(5, Math.round(publicNumber(store.pickupPreparationMinutes, 30))),
+      ),
+      pickupInstructions: publicText(store.pickupInstructions),
       isApproved: true,
       isActive: true,
       isOpen: store.isOpen === true,

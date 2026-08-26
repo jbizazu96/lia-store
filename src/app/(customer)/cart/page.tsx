@@ -12,7 +12,7 @@ import {
 import {
   useCartStoreStatus,
 } from "@/hooks/useCartStoreStatus";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { motion, AnimatePresence } from "framer-motion";
@@ -40,7 +40,11 @@ import {
   formatProductName,
 } from "@/utils/productDisplay";
 import type {FeeInfoType} from "@/components/customer/cart/FeeInfoSheet";
-import {useMarketplacePricingPolicy} from "@/hooks/useMarketplacePricingPolicy";
+import {
+  useApplicableMarketplacePricing,
+  useMarketplacePricingPolicy,
+} from "@/hooks/useMarketplacePricingPolicy";
+import {isPickupLocationAllowed} from "@/services/pricing/pickupAvailability";
 
 const FeeInfoSheet = dynamic(
   () => import("@/components/customer/cart/FeeInfoSheet").then((module) => module.FeeInfoSheet),
@@ -49,9 +53,21 @@ const FeeInfoSheet = dynamic(
 
 export default function CartPage() {
   const router = useRouter();
-  const { items, itemCount, totalPrice, updateQuantity, removeItem, clearCart, isLoading } = useCart();
+  const {
+    items,
+    itemCount,
+    totalPrice,
+    updateQuantity,
+    removeItem,
+    clearCart,
+    isLoading,
+    fulfillmentType,
+    setFulfillmentType,
+  } = useCart();
   const storeId = items[0]?.storeId;
   const marketplacePolicy = useMarketplacePricingPolicy(storeId);
+  const applicablePricing = useApplicableMarketplacePricing(storeId);
+  const defaultMarketplacePolicy = useMarketplacePricingPolicy();
   const storeName = items[0]?.storeName || "Your store";
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
@@ -62,6 +78,7 @@ export default function CartPage() {
   const {
       loading: storeLoading,
       isOpen: isStoreOpen,
+      store,
       error: storeError,
     } = useCartStoreStatus({
       storeId,
@@ -76,12 +93,44 @@ export default function CartPage() {
       total,
       amountUntilFreeDelivery,
       hasFreeDelivery,
+      distanceMiles,
       isCalculatingDelivery,
       deliveryError,
     } = useCartPricing({
       subtotal: totalPrice,
       storeId,
+      fulfillmentType,
     });
+  const pickupZoneAllowed = applicablePricing?.pickupDecision?.allowed === true;
+  const pickupAvailabilityResolved =
+    pickupZoneAllowed ||
+    distanceMiles !== null ||
+    (applicablePricing !== null && deliveryError !== null);
+  const pickupLocationAllowed = isPickupLocationAllowed(
+    defaultMarketplacePolicy,
+    pickupZoneAllowed,
+    distanceMiles,
+  );
+  const effectiveStorePickupEnabled =
+    applicablePricing?.storePickupEnabled ?? store?.pickupEnabled === true;
+  const pickupAvailable =
+    defaultMarketplacePolicy?.pickupEnabled === true &&
+    effectiveStorePickupEnabled &&
+    pickupLocationAllowed;
+  const deliveryZoneAllowed = applicablePricing?.decision?.allowed === true;
+  const deliveryLocationAllowed = deliveryZoneAllowed && (
+    applicablePricing?.decision?.zoneAccessType === "customer_order_zone" ||
+    (distanceMiles !== null && distanceMiles <= (marketplacePolicy?.maxRadiusMiles ?? 0))
+  );
+  const deliveryAvailabilityResolved = Boolean(
+    applicablePricing && (
+      applicablePricing.decision?.zoneAccessType === "customer_order_zone" ||
+      distanceMiles !== null ||
+      deliveryError
+    )
+  );
+  const pickupOnly =
+    pickupAvailable && deliveryAvailabilityResolved && !deliveryLocationAllowed;
 
   /*
    * This is an early customer-facing check. The checkout callable repeats
@@ -89,7 +138,9 @@ export default function CartPage() {
    * stale cart data or a modified browser request.
    */
   const minimumOrder =
-    (marketplacePolicy?.defaultMinimumOrderCents ?? 0) / 100;
+    ((fulfillmentType === "pickup"
+      ? defaultMarketplacePolicy?.pickupMinimumOrderCents
+      : marketplacePolicy?.defaultMinimumOrderCents) ?? 0) / 100;
 
   const amountUntilMinimumOrder =
     Math.max(
@@ -99,6 +150,31 @@ export default function CartPage() {
 
   const meetsMinimumOrder =
     amountUntilMinimumOrder === 0;
+
+  useEffect(() => {
+    if (fulfillmentType === "delivery" && pickupOnly) {
+      setFulfillmentType("pickup");
+      return;
+    }
+    if (
+      !storeLoading &&
+      fulfillmentType === "pickup" &&
+      (!defaultMarketplacePolicy?.pickupEnabled ||
+        !effectiveStorePickupEnabled ||
+        (pickupAvailabilityResolved && !pickupLocationAllowed))
+    ) {
+      setFulfillmentType("delivery");
+    }
+  }, [
+    fulfillmentType,
+    defaultMarketplacePolicy?.pickupEnabled,
+    pickupAvailabilityResolved,
+    pickupLocationAllowed,
+    pickupOnly,
+    setFulfillmentType,
+    effectiveStorePickupEnabled,
+    storeLoading,
+  ]);
 
   // Always stay in the customer workspace, including from direct links.
   const goBack = () => {
@@ -246,6 +322,44 @@ export default function CartPage() {
 
       {/* One cart belongs to one store. Keep its items together like a store basket. */}
       <div className="mx-auto max-w-2xl px-4 py-5 pb-64">
+        <section className="mb-4 grid grid-cols-2 gap-2 rounded-xl border border-gray-200 p-1.5">
+          <button
+            type="button"
+            onClick={() => setFulfillmentType("delivery")}
+            disabled={pickupOnly}
+            className={`flex items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-40 ${
+              fulfillmentType === "delivery"
+                ? "bg-orange-500 text-white shadow-sm"
+                : "text-gray-600 hover:bg-gray-50"
+            }`}
+          >
+            <Truck className="h-4 w-4" /> Delivery
+          </button>
+          <button
+            type="button"
+            onClick={() => setFulfillmentType("pickup")}
+            disabled={!defaultMarketplacePolicy?.pickupEnabled || !effectiveStorePickupEnabled || (pickupAvailabilityResolved && !pickupLocationAllowed)}
+            className={`flex items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-40 ${
+              fulfillmentType === "pickup"
+                ? "bg-orange-500 text-white shadow-sm"
+                : "text-gray-600 hover:bg-gray-50"
+            }`}
+          >
+            <ShoppingBag className="h-4 w-4" /> Pickup
+          </button>
+        </section>
+        {pickupOnly && (
+          <p className="mb-4 rounded-xl border border-orange-200 bg-orange-50 p-3 text-center text-sm font-medium text-orange-800">
+            Delivery is unavailable because this store is outside your delivery zone or delivery distance. This order is available for customer pickup only.
+          </p>
+        )}
+        {pickupAvailabilityResolved && !pickupAvailable && (
+          <p className="mb-4 text-center text-xs text-gray-500">
+            {defaultMarketplacePolicy?.pickupEnabled && effectiveStorePickupEnabled
+              ? `This store is outside your delivery access and farther than the ${defaultMarketplacePolicy.pickupMaximumDistanceMiles}-mile pickup threshold.`
+              : "Pickup is not currently offered by this store."}
+          </p>
+        )}
         <section className="overflow-hidden rounded-xl border border-gray-200 bg-transparent">
           <div className="flex items-center justify-between gap-3 border-b border-gray-100 px-4 py-4">
             <div className="min-w-0">
@@ -380,15 +494,19 @@ export default function CartPage() {
               <span className="text-gray-800">${subtotal.toFixed(2)}</span>
             </div>
             <div className="flex items-center justify-between gap-4 text-sm">
-              <button
-                type="button"
-                onClick={() => setFeeInfoType("delivery")}
-                className="inline-flex items-center gap-1 text-gray-500 transition hover:text-gray-800"
-                aria-label="Learn about the delivery fee"
-              >
-                Delivery Fee
-                <Info className="h-3.5 w-3.5" aria-hidden="true" />
-              </button>
+              {fulfillmentType === "pickup" ? (
+                <span className="text-gray-500">Pickup fee</span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setFeeInfoType("delivery")}
+                  className="inline-flex items-center gap-1 text-gray-500 transition hover:text-gray-800"
+                  aria-label="Learn about the delivery fee"
+                >
+                  Delivery Fee
+                  <Info className="h-3.5 w-3.5" aria-hidden="true" />
+                </button>
+              )}
 
               {hasFreeDelivery ? (
                 <span className="flex items-center gap-2 font-medium text-gray-800">
@@ -477,18 +595,18 @@ export default function CartPage() {
               : storeError
                 ? "Store Unavailable"
                 : deliveryError
-                  ? "Delivery Unavailable"
+                  ? fulfillmentType === "pickup" ? "Pickup Unavailable" : "Delivery Unavailable"
                   : !meetsMinimumOrder
                     ? "Minimum Order Not Met"
                     : "Proceed to Checkout"}
           </button>
 
-         {hasFreeDelivery && (
+         {fulfillmentType === "delivery" && hasFreeDelivery && (
             <p className="text-xs text-green-600 text-center mt-2">
               🎉 Free delivery applied!
             </p>
           )}
-          {!hasFreeDelivery &&
+          {fulfillmentType === "delivery" && !hasFreeDelivery &&
              amountUntilFreeDelivery > 0 && (
           <p className="text-xs text-gray-400 text-center mt-2">
             Add $

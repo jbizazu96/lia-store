@@ -120,6 +120,12 @@ function publicStore(
     rating: number(data.rating),
     reviewCount: Math.max(0, Math.floor(number(data.reviewCount))),
     minimumOrder: number(data.minimumOrder, 30),
+    pickupEnabled: data.pickupEnabled === true,
+    pickupPreparationMinutes: Math.min(
+      240,
+      Math.max(5, Math.round(number(data.pickupPreparationMinutes, 30))),
+    ),
+    pickupInstructions: text(data.pickupInstructions),
     isApproved: data.isApproved === true,
     isActive: data.isActive === true,
     isOpen: data.isOpen === true,

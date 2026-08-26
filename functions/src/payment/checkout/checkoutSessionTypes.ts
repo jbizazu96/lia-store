@@ -63,6 +63,7 @@ export type CheckoutSessionStatus =
 */
 
 export interface CheckoutSessionFingerprintInput {
+  fulfillmentType: "delivery" | "pickup";
   /*
     Authenticated Firebase customer UID.
   */
@@ -97,7 +98,9 @@ export interface CheckoutSessionFingerprintInput {
 
     latitude: number;
     longitude: number;
-  };
+  } | null;
+
+  fulfillmentInstructions: string | null;
 
   /*
     Customer-selected tip in cents.

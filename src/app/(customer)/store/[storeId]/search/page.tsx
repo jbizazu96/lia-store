@@ -50,6 +50,9 @@ import {
 } from "@/components/customer/store/ProductCard";
 import { CustomerPageState } from "@/components/customer/ui/CustomerPageState";
 import { CustomerPageSkeleton } from "@/components/customer/ui/CustomerPageSkeleton";
+import {CustomerFulfillmentSelector} from "@/components/customer/store/CustomerFulfillmentSelector";
+import {useMarketplacePricingPolicy} from "@/hooks/useMarketplacePricingPolicy";
+import {isPickupLocationAllowed} from "@/services/pricing/pickupAvailability";
 import type {
   Product,
 } from "@/types/product";
@@ -100,6 +103,12 @@ export default function StoreSearchPage({
     storeId,
     skipDistanceWarning: true,
   });
+  const pickupPolicy = useMarketplacePricingPolicy();
+  const pickupLocationAllowed = Boolean(store && isPickupLocationAllowed(
+    pickupPolicy,
+    store.pickupZoneAccessAllowed,
+    store.distance,
+  ));
 
   useLayoutEffect(() => {
     /* See the global search header: App Router transitions can drop the
@@ -137,6 +146,8 @@ export default function StoreSearchPage({
     getItemQuantity,
     getStoreItemCount,
     getStoreTotalPrice,
+    fulfillmentType,
+    setFulfillmentType,
   } = useCart();
 
   const normalizedQuery = normalizeSearchText(searchQuery);
@@ -202,7 +213,7 @@ export default function StoreSearchPage({
       return;
     }
 
-    if (isOutsideDeliveryRadius) {
+    if (isOutsideDeliveryRadius && !(fulfillmentType === "pickup" && store.pickupEnabled && pickupLocationAllowed)) {
       openDistanceWarning();
       return;
     }
@@ -244,6 +255,7 @@ export default function StoreSearchPage({
   ) => {
     if (
       isOutsideDeliveryRadius &&
+      !(fulfillmentType === "pickup" && store?.pickupEnabled && pickupLocationAllowed) &&
       quantity > getItemQuantity(productId)
     ) {
       openDistanceWarning();
@@ -344,6 +356,16 @@ export default function StoreSearchPage({
         </div>
       </header>
 
+      <CustomerFulfillmentSelector
+        compact
+        fulfillmentType={fulfillmentType}
+        onChange={setFulfillmentType}
+        storeId={store.id}
+        storePickupEnabled={store.pickupEnabled === true}
+        distanceMiles={store.distance}
+        deliveryAvailable={!isOutsideDeliveryRadius}
+      />
+
       <section className="pt-5">
         {normalizedQuery ? (
           <>
@@ -420,7 +442,12 @@ export default function StoreSearchPage({
               closeDistanceWarning();
               router.push("/home");
             }}
-            onContinue={closeDistanceWarning}
+            onContinue={() => {
+              if (store.pickupEnabled && pickupLocationAllowed && isOutsideDeliveryRadius) {
+                setFulfillmentType("pickup");
+              }
+              closeDistanceWarning();
+            }}
           />
         )}
       </AnimatePresence>
