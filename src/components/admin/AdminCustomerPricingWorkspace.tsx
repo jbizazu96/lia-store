@@ -43,7 +43,7 @@ interface FieldDefinition {
 const SECTIONS: Array<{title: string; description: string; fields: FieldDefinition[]}> = [
   {
     title: "Customer pickup",
-    description: "Global pickup controls. Customers may pick up outside their assigned zones only while the driving distance stays within the pickup threshold. Pickup never uses Shipday, driver fees, or driver tips.",
+    description: "Global pickup controls. Customers may pick up outside their assigned zones only while the driving distance stays within the pickup threshold. Pickup does not create an LIA Delivery assignment or include driver fees or driver tips.",
     fields: [
       {key: "pickupMaximumDistanceMiles", label: "Out-of-zone pickup threshold", hint: "Maximum driving distance allowed for pickup when the store is outside the customer's Home Zone and approved Order Zones. Pickup within an approved zone is not limited by this threshold.", unit: "miles"},
       {key: "pickupMinimumOrderCents", label: "Pickup minimum order", hint: "Minimum merchandise subtotal required for customer pickup.", unit: "$"},

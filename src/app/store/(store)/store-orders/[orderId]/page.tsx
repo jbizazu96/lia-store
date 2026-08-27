@@ -248,7 +248,7 @@ export default function OrderDetailsPage({params}: OrderDetailsPageProps) {
         <div className="mt-4 pt-4 border-t border-gray-100">
           <p className="text-xs text-gray-400 text-center">
             {order.fulfillmentType === "pickup"
-              ? "Customer pickup: ask for the six-digit pickup code before completing the order. Shipday is not used."
+              ? "Customer pickup: ask for the six-digit pickup code before completing the order. LIA Delivery is not required."
               : "LIA handles delivery. Out for Delivery and Completed updates are automatic."}
           </p>
         </div>

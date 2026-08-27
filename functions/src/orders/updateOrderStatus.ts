@@ -260,7 +260,7 @@ function mapShipdayError(
 
     throw new HttpsError(
       "internal",
-      "The order is preparing, but its Shipday delivery could not be created."
+      "The order is preparing, but its LIA Delivery assignment could not be created."
     );
   }
 
@@ -285,27 +285,27 @@ function mapShipdayError(
   case "SHIPDAY_ORDER_MISSING":
     throw new HttpsError(
       "failed-precondition",
-      error.message
+      userFacingDeliveryMessage(error.message)
     );
 
   case "CREATION_IN_PROGRESS":
   case "READY_UPDATE_IN_PROGRESS":
     throw new HttpsError(
       "aborted",
-      error.message
+      userFacingDeliveryMessage(error.message)
     );
 
   case "INVALID_SHIPDAY_RESPONSE":
   case "SHIPDAY_CREATE_FAILED":
     throw new HttpsError(
       "unavailable",
-      `The order is preparing, but Shipday could not create the delivery: ${error.message}`
+      `The order is preparing, but LIA Delivery could not create the assignment: ${userFacingDeliveryMessage(error.message)}`
     );
 
   case "SHIPDAY_READY_UPDATE_FAILED":
     throw new HttpsError(
       "unavailable",
-      `The order is ready for pickup, but Shipday could not be updated: ${error.message}`
+      `The order is ready for pickup, but LIA Delivery could not be updated: ${userFacingDeliveryMessage(error.message)}`
     );
 
   default: {
@@ -314,10 +314,17 @@ function mapShipdayError(
 
     throw new HttpsError(
       "internal",
-      `Unhandled Shipday fulfillment error: ${exhaustiveCheck}`
+      `Unhandled LIA Delivery fulfillment error: ${exhaustiveCheck}`
     );
   }
 }
+}
+
+function userFacingDeliveryMessage(message: string): string {
+  return message
+    .replace(/Shipday Driver/g, "LIA Driver")
+    .replace(/Shipday delivery/gi, "LIA Delivery assignment")
+    .replace(/Shipday/g, "LIA Delivery");
 }
 
 
@@ -446,7 +453,7 @@ if (
       changedAt: statusResult.changedAt,
       changed: statusResult.changed,
       newlyReadyForPickup: statusResult.newlyReadyForPickup,
-      shipday: {attempted: false, created: false, orderId: null, message: "Shipday is not used for customer pickup."},
+      shipday: {attempted: false, created: false, orderId: null, message: "LIA Delivery is not required for customer pickup."},
       message: statusResult.changed ? "The pickup order is now being prepared." : "The pickup order is already being prepared.",
     };
   }
@@ -495,13 +502,13 @@ if (
             .shipdayOrderId,
 
         message:
-          shipdayResult.message,
+          userFacingDeliveryMessage(shipdayResult.message),
       },
 
       message:
         statusResult.changed
-          ? "The order is now preparing and its Shipday delivery was created."
-          : "The order was already preparing and its Shipday delivery was verified.",
+          ? "The order is now preparing and its LIA Delivery assignment was created."
+          : "The order was already preparing and its LIA Delivery assignment was verified.",
     };
   } catch (error: unknown) {
     return mapShipdayError(
@@ -541,7 +548,7 @@ if (
       changedAt: statusResult.changedAt,
       changed: statusResult.changed,
       newlyReadyForPickup: statusResult.newlyReadyForPickup,
-      shipday: {attempted: false, created: false, orderId: null, message: "Shipday is not used for customer pickup."},
+      shipday: {attempted: false, created: false, orderId: null, message: "LIA Delivery is not required for customer pickup."},
       message: statusResult.changed ? "The order is ready for customer pickup." : "The order is already ready for customer pickup.",
     };
   }
@@ -596,15 +603,15 @@ if (
             .shipdayOrderId,
 
         message:
-          shipdayResult.message,
+          userFacingDeliveryMessage(shipdayResult.message),
       },
 
       message:
         statusResult.changed
-          ? "The order is ready for pickup and Shipday was updated."
+          ? "The order is ready for pickup and LIA Delivery was updated."
           : shipdayResult.updated
-            ? "The order was already ready for pickup and Shipday was updated."
-            : "The order and its Shipday delivery were already ready for pickup.",
+            ? "The order was already ready for pickup and LIA Delivery was updated."
+            : "The order and its LIA Delivery assignment were already ready for pickup.",
     };
   } catch (error: unknown) {
     return mapShipdayError(

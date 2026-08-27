@@ -228,11 +228,11 @@ async function createPaymentPendingOrder(
   if (
     !Number.isFinite(input.distanceMiles) ||
     (input.checkoutRequest.fulfillmentType === "delivery" && input.distanceMiles <= 0) ||
-    (input.checkoutRequest.fulfillmentType === "pickup" && input.distanceMiles !== 0)
+    (input.checkoutRequest.fulfillmentType === "pickup" && input.distanceMiles < 0)
   ) {
     throw new PaymentPendingOrderError(
       "INVALID_DISTANCE",
-      "The trusted delivery distance is invalid."
+      "The trusted route distance is invalid."
     );
   }
 
@@ -508,7 +508,7 @@ async function createPaymentPendingOrder(
       storeHomeZoneId: input.zoneDecision.storeHomeZoneId,
       pricingZoneId: input.zoneDecision.pricingZoneId,
       zoneAccessType: input.zoneDecision.zoneAccessType,
-      trustedRouteDistanceMiles: isPickup ? null : input.distanceMiles,
+      trustedRouteDistanceMiles: input.distanceMiles,
 
       delivery: isPickup ? null : {
         instructions:
@@ -551,6 +551,7 @@ async function createPaymentPendingOrder(
 
       pickup: isPickup ? {
         storeAddress: input.checkoutData.store.address,
+        distanceMiles: input.distanceMiles,
         instructions: input.checkoutData.store.pickupInstructions,
         customerInstructions: input.checkoutRequest.pickupInstructions ?? null,
         preparationMinutes: input.estimatedDeliveryMinutes ?? input.pricingPolicy.pickupPreparationMinutes,

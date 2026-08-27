@@ -19,7 +19,7 @@ export function FulfillmentSection({storeData, setStoreData}: Props) {
         <span className="rounded-xl bg-orange-50 p-2 text-orange-600"><ShoppingBag className="h-5 w-5" /></span>
         <div>
           <h2 className="font-bold text-gray-900">Delivery & customer pickup</h2>
-          <p className="mt-1 text-sm text-gray-500">Delivery continues through Shipday. Pickup orders are handed directly to the customer and never create a Shipday delivery.</p>
+          <p className="mt-1 text-sm text-gray-500">Delivery orders continue through LIA Delivery. Pickup orders are handed directly to the customer and do not create a delivery assignment.</p>
         </div>
       </div>
 

@@ -20,7 +20,9 @@
 
 import {
   use,
+  useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 
@@ -151,6 +153,40 @@ export default function StorePage({
     store.pickupZoneAccessAllowed,
     store.distance,
   ));
+  const initializedFulfillmentStoreId = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (
+      !store ||
+      resolvedStoreId !== storeId ||
+      initializedFulfillmentStoreId.current === storeId
+    ) {
+      return;
+    }
+
+    if (!isOutsideDeliveryRadius) {
+      setFulfillmentType("delivery");
+      initializedFulfillmentStoreId.current = storeId;
+      return;
+    }
+
+    // Wait for the global pickup policy before classifying an out-of-delivery
+    // store. Once initialized, later customer clicks remain untouched.
+    if (!pickupPolicy) return;
+
+    if (store.pickupEnabled && pickupLocationAllowed) {
+      setFulfillmentType("pickup");
+    }
+    initializedFulfillmentStoreId.current = storeId;
+  }, [
+    isOutsideDeliveryRadius,
+    pickupLocationAllowed,
+    pickupPolicy,
+    resolvedStoreId,
+    setFulfillmentType,
+    store,
+    storeId,
+  ]);
 
   const {
     isFavorite,

@@ -217,7 +217,7 @@ export function OrderActions({
             </p>
 
             <p className="mt-1 text-sm text-purple-600">
-              Waiting for Shipday driver assignment.
+              Waiting for LIA Driver assignment.
             </p>
           </div>
         );
