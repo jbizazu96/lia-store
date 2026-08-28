@@ -26,6 +26,8 @@ interface OrderSummaryProps {
   storeName?: string;
   storeAddress?: string;
   fulfillmentType: FulfillmentType;
+  taxEstimateLoading?: boolean;
+  taxEstimateError?: string | null;
 }
 
 export function OrderSummary({
@@ -34,11 +36,13 @@ export function OrderSummary({
   storeName,
   storeAddress,
   fulfillmentType,
+  taxEstimateLoading = false,
+  taxEstimateError = null,
 }: OrderSummaryProps) {
   const [feeInfoType, setFeeInfoType] = useState<FeeInfoType | null>(null);
   const hasFreeDelivery =
     totals.deliveryFee === 0 && totals.originalDeliveryFee > 0;
-  const totalBeforeTip = totals.total - totals.tip;
+  const estimatedTotal = totals.total;
 
   return (
     <>
@@ -163,19 +167,25 @@ export function OrderSummary({
             type="button"
             onClick={() => setFeeInfoType("tax")}
             className="inline-flex items-center gap-1 text-gray-500 transition hover:text-gray-800"
-            aria-label="Learn about estimated tax"
+            aria-label="Learn how sales tax is calculated"
           >
             Estimated Tax
             <Info className="h-3.5 w-3.5" aria-hidden="true" />
           </button>
-          <span className="text-gray-800">${totals.tax.toFixed(2)}</span>
+          <span className="text-gray-800">
+            {taxEstimateLoading
+              ? "Calculating…"
+              : taxEstimateError
+                ? "Unavailable"
+                : `$${totals.tax.toFixed(2)}`}
+          </span>
         </div>
         
         <div className="flex justify-between border-t border-gray-200 pt-2 text-lg font-bold">
           <span className="text-gray-800">
-            {fulfillmentType === "pickup" ? "Total" : "Total before tip"}
+            Estimated total
           </span>
-          <span className="text-orange-600">${totalBeforeTip.toFixed(2)}</span>
+          <span className="text-orange-600">${estimatedTotal.toFixed(2)}</span>
         </div>
       </div>
 

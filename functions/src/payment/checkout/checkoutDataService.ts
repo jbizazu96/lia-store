@@ -70,6 +70,8 @@ export type CheckoutDataErrorCode =
   | "PRODUCT_UNAVAILABLE"
   | "INSUFFICIENT_STOCK"
   | "INVALID_PRODUCT_PRICE"
+  | "PRODUCT_TAX_CLASSIFICATION_REQUIRED"
+  | "PRODUCT_TAX_CLASSIFICATION_INVALID"
   | "INVALID_STORE_DATA";
 
 
@@ -401,6 +403,14 @@ function mapTrustedStore(
       "The store address is invalid."
     ),
 
+    city: requireString(data, "city", "The store city is invalid."),
+
+    state: requireString(data, "state", "The store state is invalid.").toUpperCase(),
+
+    zip: requireString(data, "zip", "The store ZIP code is invalid."),
+
+    country: "US",
+
     phone: requireString(
       data,
       "phone",
@@ -535,6 +545,18 @@ function mapTrustedItem(
     );
   }
 
+  const taxCategoryId =
+    typeof product.taxCategoryId === "string"
+      ? product.taxCategoryId.trim()
+      : "";
+
+  if (!taxCategoryId) {
+    throw new CheckoutDataError(
+      "PRODUCT_TAX_CLASSIFICATION_REQUIRED",
+      `${productName} needs a tax classification before it can be purchased.`
+    );
+  }
+
   return {
     productId: productSnapshot.id,
 
@@ -552,6 +574,11 @@ function mapTrustedItem(
     quantity: input.quantity,
 
     lineTotalAmount,
+
+    taxCategoryId,
+
+    /* Loaded from the Admin classification document below. */
+    stripeTaxCode: "",
 
     imageUrl:
       typeof product.imageUrl === "string" &&
@@ -657,7 +684,7 @@ async function loadTrustedCheckoutData(
       storeSnapshot
     );
 
-  const items =
+  const mappedItems =
     productSnapshots.map(
       (snapshot, index) =>
         mapTrustedItem(
@@ -666,6 +693,40 @@ async function loadTrustedCheckoutData(
           normalizedStoreId
         )
     );
+
+  const taxCategoryIds = [
+    ...new Set(mappedItems.map((item) => item.taxCategoryId)),
+  ];
+  const taxClassificationSnapshots = await Promise.all(
+    taxCategoryIds.map((id) =>
+      db.collection("productTaxClassifications").doc(id).get()
+    )
+  );
+  const stripeTaxCodes = new Map<string, string>();
+
+  taxClassificationSnapshots.forEach((snapshot) => {
+    const classification = snapshot.data();
+    const stripeTaxCode =
+      typeof classification?.stripeTaxCode === "string"
+        ? classification.stripeTaxCode.trim().toLowerCase()
+        : "";
+    if (
+      !snapshot.exists ||
+      classification?.isActive === false ||
+      !/^txcd_[0-9]{8}$/.test(stripeTaxCode)
+    ) {
+      throw new CheckoutDataError(
+        "PRODUCT_TAX_CLASSIFICATION_INVALID",
+        "A product tax classification is unavailable. Please contact LIA support."
+      );
+    }
+    stripeTaxCodes.set(snapshot.id, stripeTaxCode);
+  });
+
+  const items = mappedItems.map((item) => ({
+    ...item,
+    stripeTaxCode: stripeTaxCodes.get(item.taxCategoryId)!,
+  }));
 
   const subtotalAmount =
     items.reduce(

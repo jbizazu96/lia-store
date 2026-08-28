@@ -120,6 +120,8 @@ ProductFormData = {
 
   category: "",
 
+  taxCategoryId: null,
+
   brand: "",
 
   price: 0,
@@ -215,6 +217,21 @@ export function ProductForm({
   const [sizeUnits, setSizeUnits] = useState<Array<{value: string; label: string}>>(
     PRODUCT_SIZE_UNITS.map((unit) => ({...unit})),
   );
+  const [taxConfiguration, setTaxConfiguration] = useState<{
+    classifications: Array<{
+      id: string;
+      name: string;
+      description: string;
+      requiresStoreConfirmation: boolean;
+    }>;
+    categories: Array<{
+      categoryId: string;
+      defaultTaxCategoryId: string | null;
+      allowedTaxCategoryIds: string[];
+    }>;
+  }>({classifications: [], categories: []});
+  const [taxConfigurationLoading, setTaxConfigurationLoading] = useState(true);
+  const [taxConfigurationError, setTaxConfigurationError] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -230,6 +247,49 @@ export function ProductForm({
     }).catch(() => undefined);
     return () => { active = false; };
   }, [initialData?.size?.unit]);
+
+  useEffect(() => {
+    let active = true;
+    void productService.getStoreProductTaxConfiguration()
+      .then((configuration) => {
+        if (active) setTaxConfiguration(configuration);
+      })
+      .catch(() => {
+        if (active) setTaxConfigurationError(
+          "Tax classifications could not be loaded. Retry before making this product available."
+        );
+      })
+      .finally(() => {
+        if (active) setTaxConfigurationLoading(false);
+      });
+    return () => { active = false; };
+  }, []);
+
+  const selectedCategoryTaxConfiguration = taxConfiguration.categories.find(
+    (category) => category.categoryId === formData.category,
+  );
+  const allowedTaxClassifications = (
+    selectedCategoryTaxConfiguration?.allowedTaxCategoryIds ?? []
+  ).flatMap((id) => {
+    const classification = taxConfiguration.classifications.find((item) => item.id === id);
+    return classification ? [classification] : [];
+  });
+  const defaultTaxClassification = taxConfiguration.classifications.find(
+    (classification) =>
+      classification.id === selectedCategoryTaxConfiguration?.defaultTaxCategoryId,
+  );
+  const needsTaxConfirmation =
+    allowedTaxClassifications.length > 1 ||
+    defaultTaxClassification?.requiresStoreConfirmation === true;
+  const selectedTaxCategoryId =
+    formData.taxCategoryId &&
+    allowedTaxClassifications.some((classification) =>
+      classification.id === formData.taxCategoryId
+    )
+      ? formData.taxCategoryId
+      : !needsTaxConfirmation
+        ? defaultTaxClassification?.id ?? null
+        : null;
 
   /*
   |--------------------------------------------------------------------------
@@ -516,6 +576,15 @@ export function ProductForm({
       return;
     }
 
+    if (formData.isAvailable && !selectedTaxCategoryId) {
+      alert(
+        allowedTaxClassifications.length > 0
+          ? "Confirm the product tax classification before making it available."
+          : "LIA Admin must map this product category to a tax classification before the product can be made available."
+      );
+      return;
+    }
+
     if (
       formData.price <= 0
     ) {
@@ -597,6 +666,9 @@ export function ProductForm({
     const normalizedData:
     ProductFormData = {
       ...formData,
+
+      taxCategoryId:
+        selectedTaxCategoryId,
 
       name:
         formData.name.trim(),
@@ -787,14 +859,28 @@ export function ProductForm({
               value={
                 formData.category
               }
-              onChange={(
-                event
-              ) =>
-                updateField(
-                  "category",
-                  event.target.value
-                )
-              }
+              onChange={(event) => {
+                const nextCategory = event.target.value;
+                const mapping = taxConfiguration.categories.find(
+                  (category) => category.categoryId === nextCategory,
+                );
+                const allowed = mapping?.allowedTaxCategoryIds ?? [];
+                const defaultClassification = taxConfiguration.classifications.find(
+                  (classification) => classification.id === mapping?.defaultTaxCategoryId,
+                );
+                const requiresConfirmation =
+                  allowed.length > 1 ||
+                  defaultClassification?.requiresStoreConfirmation === true;
+                setHasUnsavedChanges(true);
+                setFormData((current) => ({
+                  ...current,
+                  category: nextCategory,
+                  taxCategoryId:
+                    !requiresConfirmation && defaultClassification
+                      ? defaultClassification.id
+                      : null,
+                }));
+              }}
               disabled={
                 loading
               }
@@ -822,6 +908,48 @@ export function ProductForm({
             </select>
           </div>
         </div>
+
+        {formData.category && (
+          <div className="rounded-xl border border-orange-100 bg-orange-50/50 p-4">
+            <p className="text-sm font-bold text-slate-800">Tax classification *</p>
+            {taxConfigurationLoading ? (
+              <p className="mt-2 text-sm text-slate-500">Loading LIA tax options…</p>
+            ) : taxConfigurationError ? (
+              <p className="mt-2 text-sm font-medium text-red-700">{taxConfigurationError}</p>
+            ) : allowedTaxClassifications.length === 0 ? (
+              <div className="mt-2 text-sm leading-6 text-amber-800">
+                <p>LIA Admin has not mapped this category to a tax classification.</p>
+                <p className="font-semibold">You may save it only when Available is turned off.</p>
+              </div>
+            ) : needsTaxConfirmation ? (
+              <div className="mt-3 space-y-2">
+                <p className="text-sm leading-6 text-slate-600">Choose the option that best describes this product. This is used to calculate sales tax and is not a browsing category.</p>
+                {allowedTaxClassifications.map((classification) => (
+                  <label key={classification.id} className={`flex cursor-pointer items-start gap-3 rounded-xl border bg-white p-3 ${selectedTaxCategoryId === classification.id ? "border-orange-400 ring-1 ring-orange-200" : "border-slate-200"}`}>
+                    <input
+                      type="radio"
+                      name="taxCategoryId"
+                      checked={selectedTaxCategoryId === classification.id}
+                      onChange={() => updateField("taxCategoryId", classification.id)}
+                      disabled={loading}
+                      className="mt-1 h-4 w-4 accent-orange-600"
+                    />
+                    <span>
+                      <b className="block text-sm text-slate-800">{classification.name}</b>
+                      <span className="mt-1 block text-xs leading-5 text-slate-500">{classification.description}</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            ) : (
+              <div className="mt-2 rounded-xl bg-white p-3">
+                <p className="text-sm font-bold text-slate-800">{defaultTaxClassification?.name}</p>
+                <p className="mt-1 text-xs leading-5 text-slate-500">{defaultTaxClassification?.description}</p>
+                <p className="mt-2 text-xs font-semibold text-emerald-700">Automatically assigned by LIA Admin.</p>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Brand and SKU */}
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">

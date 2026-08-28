@@ -15,6 +15,7 @@
 
 import {
   useEffect,
+  useRef,
   useState,
 } from "react";
 import {
@@ -105,9 +106,18 @@ export function AdminRefundClaimsWorkspace() {
   const [working, setWorking] = useState(false);
   const [error, setError] = useState("");
   const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const listLoadedRef = useRef(false);
+  const loadingMoreRef = useRef(false);
+  const requestSequenceRef = useRef(0);
 
   const load = async (cursor?: string) => {
-    setLoading(true);
+    const requestSequence = cursor ? requestSequenceRef.current : ++requestSequenceRef.current;
+    if (cursor) {
+      if (loadingMoreRef.current) return;
+      loadingMoreRef.current = true;
+    } else if (!listLoadedRef.current) {
+      setLoading(true);
+    }
 
     try {
       const result =
@@ -115,18 +125,21 @@ export function AdminRefundClaimsWorkspace() {
           status,
           cursor,
         );
+      if (!cursor && requestSequence !== requestSequenceRef.current) return;
 
       setClaims((current) => cursor ? [...current, ...result.claims] : result.claims);
       setCounts(result.counts);
       setNextCursor(result.nextCursor);
+      listLoadedRef.current = true;
     } catch (reason) {
-      setError(
+      if (requestSequence === requestSequenceRef.current) setError(
         reason instanceof Error
           ? reason.message
           : "Unable to load claims."
       );
     } finally {
       setLoading(false);
+      loadingMoreRef.current = false;
     }
   };
 

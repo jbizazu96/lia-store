@@ -224,6 +224,11 @@ export interface Product {
 
   category: string;
 
+  /** LIA-admin-controlled tax classification used for authoritative tax calculation. */
+  taxCategoryId?: string | null;
+
+  taxClassificationSource?: "category_default" | "store_confirmed" | null;
+
   brand?: string;
 
   /**

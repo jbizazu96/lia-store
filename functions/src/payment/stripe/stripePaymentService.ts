@@ -87,6 +87,8 @@ export interface CreateOrderPaymentIntentInput {
     Trusted backend-calculated payment amounts.
   */
   pricing: PaymentPricingResult;
+
+  stripeTaxCalculationId: string;
 }
 
 
@@ -336,6 +338,19 @@ async function createOrderPaymentIntent(
       "The store Stripe account is invalid."
     );
 
+  const stripeTaxCalculationId = requireIdentifier(
+    input.stripeTaxCalculationId,
+    "INVALID_PAYMENT_AMOUNT",
+    "The Stripe Tax calculation is invalid."
+  );
+
+  if (!stripeTaxCalculationId.startsWith("taxcalc_")) {
+    throw new StripePaymentServiceError(
+      "INVALID_PAYMENT_AMOUNT",
+      "The Stripe Tax calculation is invalid."
+    );
+  }
+
   /*
     Stripe expects a positive integer amount in the currency's smallest
     unit.
@@ -414,6 +429,14 @@ async function createOrderPaymentIntent(
             enabled: true,
           },
 
+          hooks: {
+            inputs: {
+              tax: {
+                calculation: stripeTaxCalculationId,
+              },
+            },
+          },
+
         /*
           Displayed in Stripe Dashboard and useful during support,
           reconciliation, disputes, and refunds.
@@ -462,7 +485,10 @@ async function createOrderPaymentIntent(
             "separate_charges_and_transfers",
 
           liaPaymentVersion:
-            "v1",
+            "v2_stripe_tax",
+
+          liaStripeTaxCalculationId:
+            stripeTaxCalculationId,
         },
       },
 

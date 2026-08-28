@@ -131,7 +131,7 @@ export interface OrderPricing {
   serviceFee: number;
 
   /*
-    Estimated sales tax charged to the customer.
+    Authoritative Stripe Tax amount charged to the customer.
   */
   tax: number;
 
@@ -168,6 +168,8 @@ export interface DeliveryInfo {
 }
 
 export interface PickupInfo {
+  /** Available only to the customer and the authenticated fulfilling store while ready. */
+  code?: string | null;
   storeAddress?: string;
   instructions?: string | null;
   customerInstructions?: string | null;

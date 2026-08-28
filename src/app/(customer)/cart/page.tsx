@@ -540,16 +540,16 @@ export default function CartPage() {
                 type="button"
                 onClick={() => setFeeInfoType("tax")}
                 className="inline-flex items-center gap-1 text-gray-500 transition hover:text-gray-800"
-                aria-label="Learn about estimated tax"
+                aria-label="Learn how sales tax is calculated"
               >
-                Estimated Tax
+                Sales Tax
                 <Info className="h-3.5 w-3.5" aria-hidden="true" />
               </button>
-              <span className="text-gray-800">${tax.toFixed(2)}</span>
+              <span className="text-gray-500">Calculated at checkout</span>
             </div>
             <div className="border-t border-gray-200 pt-2">
               <div className="flex justify-between text-lg font-bold">
-                <span className="text-gray-800">Total</span>
+                <span className="text-gray-800">Estimated total before tax</span>
                 <span className="text-orange-600">${total.toFixed(2)}</span>
               </div>
             </div>

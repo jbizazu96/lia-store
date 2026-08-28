@@ -10,7 +10,7 @@
 |
 */
 
-import {useEffect, useState} from "react";
+import {useEffect, useRef, useState} from "react";
 import {ChevronRight, LoaderCircle, PackageCheck, Truck, UserRound} from "lucide-react";
 import {useRouter} from "next/navigation";
 import {adminWorkspaceClientService} from "@/services/admin/adminWorkspaceClientService";
@@ -33,14 +33,17 @@ export function AdminOrderOperationsWorkspace({orderId}: {orderId?: string}) {
   const [detail, setDetail] = useState<AdminOrderDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const listLoadedRef = useRef(false);
+  const requestSequenceRef = useRef(0);
 
   useEffect(() => {
     const load = async (cursor?: string) => {
-      setLoading(true); setError("");
+      const requestSequence = cursor ? requestSequenceRef.current : ++requestSequenceRef.current;
+      setLoading(orderId ? true : !listLoadedRef.current); setError("");
       try {
         if (orderId) setDetail(await adminWorkspaceClientService.getOrder(orderId));
-        else { const result = await adminWorkspaceClientService.getOrders({status, exception, ...(cursor ? {cursor} : {})}); setOrders((current) => cursor ? [...current, ...result.orders] : result.orders); setNextCursor(result.nextCursor); }
-      } catch (reason) { setError(reason instanceof globalThis.Error ? reason.message : "Unable to load paid orders."); }
+        else { const result = await adminWorkspaceClientService.getOrders({status, exception, ...(cursor ? {cursor} : {})}); if (!cursor && requestSequence !== requestSequenceRef.current) return; setOrders((current) => cursor ? [...current, ...result.orders] : result.orders); setNextCursor(result.nextCursor); listLoadedRef.current = true; }
+      } catch (reason) { if (orderId || requestSequence === requestSequenceRef.current) setError(reason instanceof globalThis.Error ? reason.message : "Unable to load paid orders."); }
       finally { setLoading(false); }
     };
     void load();

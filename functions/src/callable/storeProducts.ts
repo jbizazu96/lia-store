@@ -25,6 +25,7 @@ import {createCatalogSearchTokens, normalizeCatalogSearchText} from "../services
 import {enforceCallableAbuseProtection} from "../security/callableAbuseProtection";
 import {isConfiguredLowStock, normalizeStoreSku, retailInventoryValue} from "../services/store/storeInventoryPolicy";
 import {requireStoreWorkspaceAccess} from "../services/store/storeAccessService";
+import {synchronizeProductPublicProfile} from "../triggers/productPublicProfileSync";
 
 if (admin.apps.length === 0) {
   admin.initializeApp();
@@ -173,6 +174,11 @@ function editableProductData(
   if (requireCompleteProduct || product.name !== undefined) data.name = name;
   if (requireCompleteProduct || product.description !== undefined) data.description = description;
   if (requireCompleteProduct || product.category !== undefined) data.category = category;
+  if (requireCompleteProduct || product.taxCategoryId !== undefined) {
+    data.taxCategoryId = product.taxCategoryId === null
+      ? null
+      : optionalText(product.taxCategoryId, 80) ?? null;
+  }
   if (requireCompleteProduct || product.brand !== undefined) {
     const brand = optionalText(product.brand, 160);
     data.brand = brand ? titleCaseBrand(brand) : null;
@@ -331,6 +337,65 @@ async function requireConfiguredCategory(value: unknown): Promise<void> {
   }
 }
 
+async function resolvedProductTaxClassification(input: {
+  category: unknown;
+  requestedTaxCategoryId: unknown;
+  isAvailable: boolean;
+}): Promise<{taxCategoryId: string | null; taxClassificationSource: "category_default" | "store_confirmed" | null}> {
+  const category = text(input.category, 100);
+  const categorySnapshot = await db.collection("categories").doc(category).get();
+  if (!categorySnapshot.exists) {
+    throw new HttpsError("failed-precondition", "Choose a category currently configured by LIA Admin.");
+  }
+  const categoryData = categorySnapshot.data() ?? {};
+  const allowedIds = Array.isArray(categoryData.allowedTaxCategoryIds)
+    ? [...new Set(categoryData.allowedTaxCategoryIds
+      .map((value: unknown) => text(value, 80))
+      .filter(Boolean))].slice(0, 25)
+    : [];
+  const defaultId = text(categoryData.defaultTaxCategoryId, 80);
+  const requestedId = text(input.requestedTaxCategoryId, 80);
+  const selectedId = requestedId || defaultId;
+
+  if (!selectedId) {
+    if (input.isAvailable) {
+      throw new HttpsError(
+        "failed-precondition",
+        "LIA Admin has not configured a tax classification for this category. Save the product as unavailable or contact LIA Support."
+      );
+    }
+    return {taxCategoryId: null, taxClassificationSource: null};
+  }
+  if (!allowedIds.includes(selectedId)) {
+    throw new HttpsError(
+      "failed-precondition",
+      "Choose a tax classification allowed for this product category."
+    );
+  }
+  const classification = await db.collection("productTaxClassifications").doc(selectedId).get();
+  if (!classification.exists || classification.data()?.isActive === false) {
+    throw new HttpsError(
+      "failed-precondition",
+      "The selected tax classification is no longer available."
+    );
+  }
+  const requiresConfirmation =
+    classification.data()?.requiresStoreConfirmation === true ||
+    allowedIds.length > 1;
+  if (input.isAvailable && requiresConfirmation && !requestedId) {
+    throw new HttpsError(
+      "failed-precondition",
+      "Confirm the product's tax classification before making it available."
+    );
+  }
+  return {
+    taxCategoryId: selectedId,
+    taxClassificationSource: requiresConfirmation
+      ? "store_confirmed"
+      : "category_default",
+  };
+}
+
 async function requireConfiguredSizeUnit(value: unknown): Promise<void> {
   if (value === null || value === undefined) return;
   const unit = text(record(value).unit, 20).toLowerCase();
@@ -363,6 +428,11 @@ export const mutateStoreProduct = onCall({ region: "us-central1" }, async (reque
     data.sku = normalizedSku(data.sku);
     await requireConfiguredCategory(data.category);
     await requireConfiguredSizeUnit(data.size);
+    Object.assign(data, await resolvedProductTaxClassification({
+      category: data.category,
+      requestedTaxCategoryId: data.taxCategoryId,
+      isAvailable: data.isAvailable !== false,
+    }));
     const primaryImageId = optionalText(record(input.product).primaryImageId, 200);
     const created = db.collection("products").doc();
     await db.runTransaction(async (transaction) => {
@@ -374,6 +444,8 @@ export const mutateStoreProduct = onCall({ region: "us-central1" }, async (reque
       transaction.create(db.collection("storeInventoryAuditLogs").doc(), inventoryAuditData({storeId: store.id, productId: created.id, productName: String(data.name), action: "product_created", actorUid: request.auth!.uid, next: data}));
     });
 
+    await synchronizeProductPublicProfile(created.id);
+
     return { productId: created.id };
   }
 
@@ -384,12 +456,31 @@ export const mutateStoreProduct = onCall({ region: "us-central1" }, async (reque
     await enforceCallableAbuseProtection({operation: "store-product-bulk-update", uid: request.auth.uid, appCheckVerified: Boolean(request.app), maximumRequests: 20, windowSeconds: 600});
     const snapshots = await db.getAll(...ids.map((id) => db.collection("products").doc(id)));
     if (snapshots.some((item) => !item.exists || item.data()?.storeId !== store.id || item.data()?.isArchived === true)) throw new HttpsError("permission-denied", "One or more selected products are unavailable.");
+    const taxResolutions = new Map<string, {
+      taxCategoryId: string | null;
+      taxClassificationSource: "category_default" | "store_confirmed" | null;
+    }>();
+    if (available) {
+      await Promise.all(snapshots.map(async (item) => {
+        const data = item.data() ?? {};
+        taxResolutions.set(item.id, await resolvedProductTaxClassification({
+          category: data.category,
+          requestedTaxCategoryId: data.taxCategoryId,
+          isAvailable: true,
+        }));
+      }));
+    }
     const batch = db.batch();
     snapshots.forEach((item) => {
-      batch.update(item.ref, {isAvailable: available, updatedAt: FieldValue.serverTimestamp()});
+      batch.update(item.ref, {
+        isAvailable: available,
+        ...(taxResolutions.get(item.id) ?? {}),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
       batch.create(db.collection("storeInventoryAuditLogs").doc(), inventoryAuditData({storeId: store.id, productId: item.id, productName: text(item.data()?.name, 200), action: available ? "bulk_activated" : "bulk_deactivated", actorUid: request.auth!.uid, previous: {isAvailable: item.data()?.isAvailable}, next: {isAvailable: available}}));
     });
     await batch.commit();
+    await Promise.all(ids.map((id) => synchronizeProductPublicProfile(id)));
     return {updated: ids.length};
   }
 
@@ -410,6 +501,9 @@ export const mutateStoreProduct = onCall({ region: "us-central1" }, async (reque
         transaction.create(db.collection("storeInventoryAuditLogs").doc(), inventoryAuditData({storeId: store.id, productId: snapshot.id, productName: text(current.name, 200), action: "csv_inventory_update", actorUid: request.auth!.uid, previous: {stock: current.stock, price: current.price}, next: {stock, price}}));
       });
     });
+    await Promise.all(rows.map((row) =>
+      synchronizeProductPublicProfile(productId(row.productId))
+    ));
     return {updated: rows.length};
   }
 
@@ -431,6 +525,7 @@ export const mutateStoreProduct = onCall({ region: "us-central1" }, async (reque
       if (sku) transaction.delete(skuReservationReference(store.id, sku));
       transaction.create(db.collection("storeInventoryAuditLogs").doc(), inventoryAuditData({storeId: store.id, productId: id, productName: text(currentData.name, 200), action: "product_archived", actorUid: request.auth!.uid, previous: {stock: currentData.stock, price: currentData.price, sku}}));
     });
+    await synchronizeProductPublicProfile(id);
     return { productId: id };
   }
 
@@ -444,6 +539,7 @@ export const mutateStoreProduct = onCall({ region: "us-central1" }, async (reque
     if (sku) await skuReservationReference(store.id, sku).delete();
     await db.recursiveDelete(reference);
     await db.collection("storeInventoryAuditLogs").add(inventoryAuditData({storeId: store.id, productId: id, productName: text(data.name, 200), action: "failed_creation_discarded", actorUid: request.auth.uid}));
+    await synchronizeProductPublicProfile(id);
     return {productId: id};
   }
 
@@ -474,6 +570,8 @@ export const mutateStoreProduct = onCall({ region: "us-central1" }, async (reque
       updatedAt: FieldValue.serverTimestamp(),
     });
 
+    await synchronizeProductPublicProfile(created.id);
+
     return { productId: created.id };
   }
 
@@ -486,6 +584,18 @@ export const mutateStoreProduct = onCall({ region: "us-central1" }, async (reque
       const previousUnit = text(record(existing.data()?.size).unit, 20).toLowerCase();
       const nextUnit = text(record(updates.size).unit, 20).toLowerCase();
       if (nextUnit && nextUnit !== previousUnit) await requireConfiguredSizeUnit(updates.size);
+    }
+    const mergedForTax = {...existing.data(), ...updates};
+    Object.assign(updates, await resolvedProductTaxClassification({
+      category: mergedForTax.category,
+      requestedTaxCategoryId: mergedForTax.taxCategoryId,
+      isAvailable: mergedForTax.isAvailable !== false,
+    }));
+    if (existing.data()?.taxPublicationBlocked === true && updates.taxCategoryId) {
+      updates.isAvailable = existing.data()?.availableBeforeTaxBlock !== false;
+      updates.taxPublicationBlocked = FieldValue.delete();
+      updates.availableBeforeTaxBlock = FieldValue.delete();
+      updates.taxAvailabilityMigrationVersion = 1;
     }
     await db.runTransaction(async (transaction) => {
       const current = await transaction.get(reference);
@@ -507,6 +617,8 @@ export const mutateStoreProduct = onCall({ region: "us-central1" }, async (reque
       transaction.update(reference, {...updates, sku: nextSku, ...productSearchFields(merged), updatedAt: FieldValue.serverTimestamp()});
       transaction.create(db.collection("storeInventoryAuditLogs").doc(), inventoryAuditData({storeId: store.id, productId: id, productName: text(merged.name, 200), action: "product_updated", actorUid: request.auth!.uid, previous: {stock: currentData.stock, price: currentData.price, isAvailable: currentData.isAvailable, featured: currentData.featured, sku: previousSku}, next: {stock: merged.stock, price: merged.price, isAvailable: merged.isAvailable, featured: merged.featured, sku: nextSku}}));
     });
+
+    await synchronizeProductPublicProfile(id);
 
     return { productId: id };
   }

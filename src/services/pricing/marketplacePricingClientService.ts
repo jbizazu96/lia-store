@@ -5,7 +5,7 @@ import type {OrderDeliveryPolicy} from "@/services/delivery/orderDeliveryPolicyC
 
 export interface MarketplacePricingPolicy {
   maxRadiusMiles: number; baseDeliveryFeeCents: number; baseDistanceMiles: number; costPerMileCents: number; peakSurchargeEnabled: boolean; peakSurchargeCents: number;
-  freeDeliveryMinimumCents: number; defaultMinimumOrderCents: number; serviceFeeRate: number; minimumServiceFeeCents: number; maximumServiceFeeCents: number; salesTaxRate: number;
+  freeDeliveryMinimumCents: number; defaultMinimumOrderCents: number; serviceFeeRate: number; minimumServiceFeeCents: number; maximumServiceFeeCents: number;
   driverMinimumPayCents: number;
   pickupEnabled: boolean; pickupMaximumDistanceMiles: number; pickupMinimumOrderCents: number; pickupPreparationMinutes: number;
   pickupServiceFeeRate: number; pickupMinimumServiceFeeCents: number; pickupMaximumServiceFeeCents: number;

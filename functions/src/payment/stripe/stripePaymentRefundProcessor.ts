@@ -729,6 +729,15 @@ async function saveStripeRefundState(
       ? {
           completedAt:
             now,
+
+          taxReversalPending: true,
+
+          taxReversal: {
+            provider: "stripe_tax_payment_intent",
+            automatic: true,
+            status: "pending",
+            checkedAt: now,
+          },
         }
       : {}),
 

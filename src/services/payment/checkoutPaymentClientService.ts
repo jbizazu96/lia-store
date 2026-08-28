@@ -78,6 +78,19 @@ export interface PrepareCustomerPaymentInput {
   tip: number;
 }
 
+export interface EstimateCustomerTaxInput extends PrepareCustomerPaymentInput {
+  deliveryFee: number;
+  serviceFee: number;
+}
+
+export interface CheckoutTaxEstimate {
+  currency: "usd";
+  taxAmount: number;
+  estimatedTotalAmount: number;
+  calculatedAt: string;
+  expiresAt: number | null;
+}
+
 
 /*
   Raw callable response returned by Firebase Functions.
@@ -304,7 +317,66 @@ async function prepareCheckoutPayment(
   };
 }
 
+function estimateKey(input: EstimateCustomerTaxInput): string {
+  return JSON.stringify({
+    fulfillmentType: input.fulfillmentType,
+    storeId: input.storeId,
+    items: input.items,
+    deliveryAddress: input.deliveryAddress,
+    tip: input.tip,
+    deliveryFee: input.deliveryFee,
+    serviceFee: input.serviceFee,
+  });
+}
+
+const estimateCache = new Map<string, {value: CheckoutTaxEstimate; expiresAt: number}>();
+const estimateRequests = new Map<string, Promise<CheckoutTaxEstimate>>();
+
+async function estimateCheckoutTax(
+  input: EstimateCustomerTaxInput,
+): Promise<CheckoutTaxEstimate> {
+  const key = estimateKey(input);
+  const cached = estimateCache.get(key);
+  if (cached && cached.expiresAt > Date.now()) return cached.value;
+  const active = estimateRequests.get(key);
+  if (active) return active;
+
+  const request = httpsCallable<
+    PrepareCheckoutPaymentInput & {deliveryFeeAmount: number; serviceFeeAmount: number},
+    {success: true; currency: "usd"; taxAmount: number; estimatedTotalAmount: number; calculatedAt: string; expiresAt: number | null}
+  >(functions, "estimateCheckoutTax")({
+    fulfillmentType: input.fulfillmentType,
+    storeId: input.storeId,
+    contactName: input.contactName,
+    contactPhone: input.contactPhone,
+    items: input.items,
+    deliveryAddress: input.deliveryAddress,
+    deliveryInstructions: input.deliveryInstructions,
+    pickupInstructions: input.pickupInstructions,
+    tipAmountCents: input.fulfillmentType === "pickup" ? 0 : dollarsToCents(input.tip),
+    deliveryFeeAmount: dollarsToCents(input.deliveryFee),
+    serviceFeeAmount: dollarsToCents(input.serviceFee),
+  }).then(({data}) => {
+    if (!Number.isSafeInteger(data.taxAmount) || data.taxAmount < 0 ||
+        !Number.isSafeInteger(data.estimatedTotalAmount) || data.estimatedTotalAmount <= 0) {
+      throw new Error("The sales-tax estimate is invalid.");
+    }
+    const value: CheckoutTaxEstimate = {
+      currency: data.currency,
+      taxAmount: data.taxAmount,
+      estimatedTotalAmount: data.estimatedTotalAmount,
+      calculatedAt: data.calculatedAt,
+      expiresAt: data.expiresAt,
+    };
+    estimateCache.set(key, {value, expiresAt: Date.now() + 2 * 60 * 1_000});
+    return value;
+  }).finally(() => estimateRequests.delete(key));
+  estimateRequests.set(key, request);
+  return request;
+}
+
 
 export const checkoutPaymentClientService = {
   prepareCheckoutPayment,
+  estimateCheckoutTax,
 };

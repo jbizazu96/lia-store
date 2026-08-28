@@ -160,6 +160,11 @@ export interface TrustedCheckoutItem {
   */
   lineTotalAmount: number;
 
+  /* Immutable Admin-controlled tax classification used by Stripe Tax. */
+  taxCategoryId: string;
+
+  stripeTaxCode: string;
+
   imageUrl?: string;
 
   size?: {
@@ -180,6 +185,14 @@ export interface TrustedCheckoutStore {
   name: string;
 
   address: string;
+
+  city: string;
+
+  state: string;
+
+  zip: string;
+
+  country: "US";
 
   phone: string;
 

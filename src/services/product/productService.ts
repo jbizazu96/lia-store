@@ -285,6 +285,14 @@ function mapProductDocument(
 
   category: data.category ?? "Uncategorized",
 
+  taxCategoryId: typeof data.taxCategoryId === "string" ? data.taxCategoryId : null,
+
+  taxClassificationSource:
+    data.taxClassificationSource === "category_default" ||
+    data.taxClassificationSource === "store_confirmed"
+      ? data.taxClassificationSource
+      : null,
+
   /**
    * Manufacturer or brand.
    *
@@ -518,6 +526,35 @@ export const productService = {
       "getStoreProductSizeUnits",
     )();
     return result.data.units.map((unit) => ({value: unit.id, label: unit.label}));
+  },
+
+  async getStoreProductTaxConfiguration(): Promise<{
+    classifications: Array<{
+      id: string;
+      name: string;
+      description: string;
+      requiresStoreConfirmation: boolean;
+    }>;
+    categories: Array<{
+      categoryId: string;
+      defaultTaxCategoryId: string | null;
+      allowedTaxCategoryIds: string[];
+    }>;
+  }> {
+    const result = await httpsCallable<unknown, {
+      classifications: Array<{
+        id: string;
+        name: string;
+        description: string;
+        requiresStoreConfirmation: boolean;
+      }>;
+      categories: Array<{
+        categoryId: string;
+        defaultTaxCategoryId: string | null;
+        allowedTaxCategoryIds: string[];
+      }>;
+    }>(functions, "getStoreProductTaxConfiguration")();
+    return result.data;
   },
 
   /**

@@ -110,6 +110,10 @@ import {
   isStripePaymentServiceError,
   stripePaymentService,
 } from "../stripe/stripePaymentService";
+import {
+  createStripeTaxCalculation,
+  StripeTaxCalculationError,
+} from "../tax/stripeTaxCalculationService";
 
 import type {
   PrepareCheckoutPaymentResponse,
@@ -407,6 +411,8 @@ function throwSafeCheckoutError(
       case "PRODUCT_UNAVAILABLE":
       case "INSUFFICIENT_STOCK":
       case "PRODUCT_STORE_MISMATCH":
+      case "PRODUCT_TAX_CLASSIFICATION_REQUIRED":
+      case "PRODUCT_TAX_CLASSIFICATION_INVALID":
         throw new HttpsError(
           "failed-precondition",
           error.message
@@ -504,6 +510,13 @@ function throwSafeCheckoutError(
     throw new HttpsError(
       "internal",
       "The payment could not be prepared."
+    );
+  }
+
+  if (error instanceof StripeTaxCalculationError) {
+    throw new HttpsError(
+      "failed-precondition",
+      error.message
     );
   }
 
@@ -813,7 +826,7 @@ export const prepareCheckoutPayment =
               : marketplacePricingPolicy.defaultMinimumOrderCents,
         });
 
-        const pricing =
+        const pricingBeforeTax =
           calculatePaymentPricing({
             fulfillmentType: checkoutRequest.fulfillmentType,
             subtotalAmount:
@@ -835,6 +848,8 @@ export const prepareCheckoutPayment =
 
             policy:
               marketplacePricingPolicy,
+
+            authoritativeTaxAmount: 0,
           });
 
 
@@ -870,6 +885,32 @@ export const prepareCheckoutPayment =
           new Stripe(
             stripeSecretKey.value()
           );
+
+        const taxCalculation = await createStripeTaxCalculation(stripe, {
+          fulfillmentType: checkoutRequest.fulfillmentType,
+          items: checkoutData.items,
+          store: checkoutData.store,
+          deliveryAddress: checkoutRequest.deliveryAddress,
+          pricingBeforeTax,
+        });
+
+        const pricing = calculatePaymentPricing({
+          fulfillmentType: checkoutRequest.fulfillmentType,
+          subtotalAmount: checkoutData.subtotalAmount,
+          distanceMiles,
+          tipAmount: checkoutRequest.tipAmountCents,
+          isPeakTime: !isPickup && marketplacePricingPolicy.peakSurchargeEnabled,
+          enforceMaximumDistance:
+            !isPickup && zoneDecision.zoneAccessType !== "customer_order_zone",
+          policy: marketplacePricingPolicy,
+          authoritativeTaxAmount: taxCalculation.taxAmount,
+        });
+
+        if (pricing.totalAmount !== taxCalculation.amountTotal) {
+          throw new StripeTaxCalculationError(
+            "The trusted checkout total does not match Stripe Tax."
+          );
+        }
 
 
         /*
@@ -1143,6 +1184,10 @@ export const prepareCheckoutPayment =
               pricingPolicy:
                 marketplacePricingPolicy,
 
+              taxCalculation: taxCalculation.snapshot,
+
+              productTaxById: taxCalculation.productTaxById,
+
               zoneDecision,
 
               distanceMiles,
@@ -1212,6 +1257,8 @@ export const prepareCheckoutPayment =
                     .stripeAccountId,
 
                 pricing,
+
+                stripeTaxCalculationId: taxCalculation.snapshot.calculationId,
               }
             );
 

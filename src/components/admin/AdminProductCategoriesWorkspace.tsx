@@ -5,8 +5,10 @@ import Image from "next/image";
 import {BellRing, Download, ImagePlus, ListTree, LoaderCircle, Pencil, Plus, Ruler, Trash2, X} from "lucide-react";
 import {adminWorkspaceClientService} from "@/services/admin/adminWorkspaceClientService";
 import {useAdminConfirmation} from "@/context/AdminConfirmationContext";
+import {AdminProductTaxClassifications} from "@/components/admin/AdminProductTaxClassifications";
+import type {ProductTaxClassification} from "@/types/productTaxClassification";
 
-interface ProductCategoryItem {id: string; name: string; iconUrl: string; freshnessEligible: boolean}
+interface ProductCategoryItem {id: string; name: string; iconUrl: string; freshnessEligible: boolean; defaultTaxCategoryId: string | null; allowedTaxCategoryIds: string[]}
 
 export function AdminProductCategoriesWorkspace() {
   const [categories, setCategories] = useState<ProductCategoryItem[]>([]);
@@ -15,6 +17,9 @@ export function AdminProductCategoriesWorkspace() {
   const [iconFile, setIconFile] = useState<File | null>(null);
   const [iconPreview, setIconPreview] = useState("");
   const [freshnessEligible, setFreshnessEligible] = useState(false);
+  const [taxClassifications, setTaxClassifications] = useState<ProductTaxClassification[]>([]);
+  const [defaultTaxCategoryId, setDefaultTaxCategoryId] = useState("");
+  const [allowedTaxCategoryIds, setAllowedTaxCategoryIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [importing, setImporting] = useState(false);
@@ -22,8 +27,12 @@ export function AdminProductCategoriesWorkspace() {
   const [success, setSuccess] = useState("");
 
   const load = async () => {
-    const result = await adminWorkspaceClientService.getProductCategories();
-    setCategories(result.categories);
+    const [categoryResult, taxResult] = await Promise.all([
+      adminWorkspaceClientService.getProductCategories(),
+      adminWorkspaceClientService.getProductTaxClassifications(),
+    ]);
+    setCategories(categoryResult.categories);
+    setTaxClassifications(taxResult.classifications);
   };
 
   useEffect(() => {
@@ -37,9 +46,9 @@ export function AdminProductCategoriesWorkspace() {
     setIconFile(null);
     setIconPreview("");
   };
-  const openCreate = () => {clearSelectedIcon(); setEditing(null); setName(""); setFreshnessEligible(false); setError(""); setSuccess("");};
-  const openEdit = (category: ProductCategoryItem) => {clearSelectedIcon(); setEditing(category); setName(category.name); setIconPreview(category.iconUrl); setFreshnessEligible(category.freshnessEligible); setError(""); setSuccess("");};
-  const close = () => {if (!saving) {clearSelectedIcon(); setEditing(undefined); setName(""); setFreshnessEligible(false);}};
+  const openCreate = () => {clearSelectedIcon(); setEditing(null); setName(""); setFreshnessEligible(false); setDefaultTaxCategoryId(""); setAllowedTaxCategoryIds([]); setError(""); setSuccess("");};
+  const openEdit = (category: ProductCategoryItem) => {clearSelectedIcon(); setEditing(category); setName(category.name); setIconPreview(category.iconUrl); setFreshnessEligible(category.freshnessEligible); setDefaultTaxCategoryId(category.defaultTaxCategoryId ?? ""); setAllowedTaxCategoryIds(category.allowedTaxCategoryIds); setError(""); setSuccess("");};
+  const close = () => {if (!saving) {clearSelectedIcon(); setEditing(undefined); setName(""); setFreshnessEligible(false); setDefaultTaxCategoryId(""); setAllowedTaxCategoryIds([]);}};
   const selectIcon = (file: File | undefined) => {
     if (!file) return;
     if (iconPreview.startsWith("blob:")) URL.revokeObjectURL(iconPreview);
@@ -51,17 +60,18 @@ export function AdminProductCategoriesWorkspace() {
     setSaving(true); setError(""); setSuccess("");
     try {
       if (editing) {
-        await adminWorkspaceClientService.updateProductCategory(editing.id, {name: name.trim(), freshnessEligible});
+        await adminWorkspaceClientService.updateProductCategory(editing.id, {name: name.trim(), freshnessEligible, defaultTaxCategoryId: defaultTaxCategoryId || null, allowedTaxCategoryIds});
         if (iconFile) await adminWorkspaceClientService.uploadProductCategoryIcon(editing.id, iconFile);
         setSuccess("Category renamed. Existing products remain assigned to it.");
       } else {
-        const created = await adminWorkspaceClientService.createProductCategory({name: name.trim(), freshnessEligible});
+        const created = await adminWorkspaceClientService.createProductCategory({name: name.trim(), freshnessEligible, defaultTaxCategoryId: defaultTaxCategoryId || null, allowedTaxCategoryIds});
         if (iconFile) await adminWorkspaceClientService.uploadProductCategoryIcon(created.id, iconFile);
         setSuccess("Product category created.");
       }
-      await load(); clearSelectedIcon(); setEditing(undefined); setName(""); setFreshnessEligible(false);
+      await load(); clearSelectedIcon(); setEditing(undefined); setName(""); setFreshnessEligible(false); setDefaultTaxCategoryId(""); setAllowedTaxCategoryIds([]);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Unable to save the category.");
+      setEditing(undefined);
     } finally {
       setSaving(false);
     }
@@ -88,7 +98,8 @@ export function AdminProductCategoriesWorkspace() {
     <CatalogInventoryPolicy />
     {loading ? <div className="mt-6 flex justify-center rounded-2xl bg-white p-12"><LoaderCircle className="h-7 w-7 animate-spin text-orange-600" /></div> : <div className="mt-6 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-100">{categories.length === 0 ? <p className="p-10 text-center text-sm text-slate-500">No categories have been configured. Import existing product category IDs or add the first category.</p> : <div className="divide-y divide-slate-100">{categories.map((category) => <div key={category.id} className="flex items-center gap-4 px-5 py-4"><span className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-orange-50 text-orange-600">{category.iconUrl ? <Image src={category.iconUrl} alt="" fill sizes="40px" className="object-contain p-1" /> : <ListTree className="h-5 w-5" />}</span><div className="min-w-0 flex-1"><p className="font-bold text-slate-900">{category.name}</p><p className="mt-1 text-xs text-slate-400">Stable ID: {category.id}{category.freshnessEligible ? " · Freshness guarantee" : ""}</p></div><button type="button" onClick={() => openEdit(category)} className="inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50"><Pencil className="h-4 w-4" />Edit</button></div>)}</div>}</div>}
     <SizeUnitsManager />
-    {editing !== undefined && <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/45 p-0 sm:items-center sm:p-5" onClick={close}><div role="dialog" aria-modal="true" aria-labelledby="category-editor-title" onClick={(event) => event.stopPropagation()} className="relative w-full max-w-md rounded-t-3xl bg-white p-6 shadow-2xl sm:rounded-3xl"><button type="button" onClick={close} className="absolute right-4 top-4 rounded-full p-2 text-slate-500 hover:bg-slate-100" aria-label="Close category editor"><X className="h-5 w-5" /></button><h2 id="category-editor-title" className="text-xl font-bold">{editing ? "Edit category" : "Add category"}</h2><p className="mt-2 text-sm leading-6 text-slate-500">{editing ? "Display metadata can change while products keep the same stable category ID." : "The category will become available to store owners and customers."}</p><label className="mt-5 block text-sm font-bold text-slate-700">Category name<input autoFocus value={name} onChange={(event) => setName(event.target.value)} maxLength={100} className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2.5 outline-none focus:ring-2 focus:ring-orange-300" /></label><div className="mt-4"><p className="text-sm font-bold text-slate-700">Category image</p><label className="mt-2 flex cursor-pointer items-center gap-3 rounded-xl border border-dashed border-slate-300 p-3 hover:border-orange-400 hover:bg-orange-50/40"><span className="relative flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-slate-100 text-slate-500">{iconPreview ? <Image src={iconPreview} alt="Category image preview" fill sizes="64px" unoptimized={iconPreview.startsWith("blob:")} className="object-contain p-1" /> : <ImagePlus className="h-6 w-6" />}</span><span><b className="block text-sm text-slate-800">{iconPreview ? "Replace image" : "Choose image"}</b><span className="mt-1 block text-xs text-slate-500">JPG, PNG, WebP, or AVIF · up to 3 MB</span></span><input type="file" accept="image/jpeg,image/png,image/webp,image/avif" className="sr-only" onChange={(event) => selectIcon(event.target.files?.[0])} /></label></div><label className="mt-4 flex items-start gap-3 rounded-xl bg-slate-50 p-3 text-sm text-slate-700"><input type="checkbox" checked={freshnessEligible} onChange={(event) => setFreshnessEligible(event.target.checked)} className="mt-0.5 h-4 w-4 accent-orange-600" /><span><b>Freshness guarantee</b><span className="mt-1 block text-xs leading-5 text-slate-500">Show freshness-guarantee messaging for products in this category.</span></span></label><button type="button" disabled={saving || name.trim().length < 2} onClick={() => void save()} className="mt-5 w-full rounded-xl bg-orange-600 py-3 text-sm font-bold text-white disabled:opacity-50">{saving ? "Saving…" : "Save category"}</button></div></div>}
+    <AdminProductTaxClassifications />
+    {editing !== undefined && <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/45 p-0 sm:items-center sm:p-5" onClick={close}><div role="dialog" aria-modal="true" aria-labelledby="category-editor-title" onClick={(event) => event.stopPropagation()} className="relative max-h-[92dvh] w-full max-w-xl overflow-y-auto rounded-t-3xl bg-white p-6 shadow-2xl sm:rounded-3xl"><button type="button" onClick={close} className="absolute right-4 top-4 rounded-full p-2 text-slate-500 hover:bg-slate-100" aria-label="Close category editor"><X className="h-5 w-5" /></button><h2 id="category-editor-title" className="text-xl font-bold">{editing ? "Edit category" : "Add category"}</h2><p className="mt-2 text-sm leading-6 text-slate-500">{editing ? "Display metadata and tax mapping can change while products keep the same stable category ID." : "The category will become available to store owners and customers."}</p><label className="mt-5 block text-sm font-bold text-slate-700">Category name<input autoFocus value={name} onChange={(event) => setName(event.target.value)} maxLength={100} className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2.5 outline-none focus:ring-2 focus:ring-orange-300" /></label><div className="mt-4"><p className="text-sm font-bold text-slate-700">Category image</p><label className="mt-2 flex cursor-pointer items-center gap-3 rounded-xl border border-dashed border-slate-300 p-3 hover:border-orange-400 hover:bg-orange-50/40"><span className="relative flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-slate-100 text-slate-500">{iconPreview ? <Image src={iconPreview} alt="Category image preview" fill sizes="64px" unoptimized={iconPreview.startsWith("blob:")} className="object-contain p-1" /> : <ImagePlus className="h-6 w-6" />}</span><span><b className="block text-sm text-slate-800">{iconPreview ? "Replace image" : "Choose image"}</b><span className="mt-1 block text-xs text-slate-500">JPG, PNG, WebP, or AVIF · up to 3 MB</span></span><input type="file" accept="image/jpeg,image/png,image/webp,image/avif" className="sr-only" onChange={(event) => selectIcon(event.target.files?.[0])} /></label></div><label className="mt-4 flex items-start gap-3 rounded-xl bg-slate-50 p-3 text-sm text-slate-700"><input type="checkbox" checked={freshnessEligible} onChange={(event) => setFreshnessEligible(event.target.checked)} className="mt-0.5 h-4 w-4 accent-orange-600" /><span><b>Freshness guarantee</b><span className="mt-1 block text-xs leading-5 text-slate-500">Show freshness-guarantee messaging for products in this category.</span></span></label><fieldset className="mt-5 rounded-xl border border-slate-200 p-4"><legend className="px-1 text-sm font-bold text-slate-800">Allowed tax classifications</legend><p className="mb-3 text-xs leading-5 text-slate-500">Select every classification a store may use for products in this category.</p>{taxClassifications.length === 0 ? <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-800">Create tax classifications below before mapping this category.</p> : <div className="space-y-2">{taxClassifications.map((classification) => <label key={classification.id} className="flex items-start gap-3 rounded-lg bg-slate-50 p-3 text-sm"><input type="checkbox" checked={allowedTaxCategoryIds.includes(classification.id)} onChange={(event) => {const next = event.target.checked ? [...allowedTaxCategoryIds, classification.id] : allowedTaxCategoryIds.filter((id) => id !== classification.id); setAllowedTaxCategoryIds(next); if (!next.includes(defaultTaxCategoryId)) setDefaultTaxCategoryId("");}} className="mt-0.5 h-4 w-4 accent-orange-600" /><span><b className="text-slate-800">{classification.name}</b><span className="ml-2 font-mono text-xs text-slate-400">{classification.stripeTaxCode}</span><span className="mt-1 block text-xs leading-5 text-slate-500">{classification.description}</span></span></label>)}</div>}<label className="mt-4 block text-sm font-bold text-slate-700">Default classification<select value={defaultTaxCategoryId} onChange={(event) => setDefaultTaxCategoryId(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5"><option value="">No default — products cannot be published</option>{taxClassifications.filter((classification) => allowedTaxCategoryIds.includes(classification.id)).map((classification) => <option key={classification.id} value={classification.id}>{classification.name}</option>)}</select></label></fieldset><button type="button" disabled={saving || name.trim().length < 2 || (allowedTaxCategoryIds.length > 0 && !defaultTaxCategoryId)} onClick={() => void save()} className="mt-5 w-full rounded-xl bg-orange-600 py-3 text-sm font-bold text-white disabled:opacity-50">{saving ? "Saving…" : "Save category"}</button></div></div>}
   </section>;
 }
 

@@ -357,6 +357,9 @@ async ({
         category:
           data.category,
 
+        taxCategoryId:
+          data.taxCategoryId,
+
         brand:
           data.brand,
 

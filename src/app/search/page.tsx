@@ -30,6 +30,7 @@ function SearchPageContent() {
   const [results, setResults] = useState<SearchResult[]>([]);
   const [groups, setGroups] = useState<StoreGroup[]>([]);
   const [loading, setLoading] = useState(false);
+  const [hasCompletedSearch, setHasCompletedSearch] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const [userLocation, setUserLocation] = useState<{lat: number; lng: number} | null>(null);
@@ -106,6 +107,7 @@ function SearchPageContent() {
         setSearchError(null);
         setResults([]);
         setGroups([]);
+        setHasCompletedSearch(false);
       });
       return;
     }
@@ -146,14 +148,14 @@ function SearchPageContent() {
           setNextProductCursor(page.nextProductCursor);
           setNextStoreCursor(page.nextStoreCursor);
           setHasMore(page.hasMore);
+          setHasCompletedSearch(true);
           searchTrace.stop({status: "success", result_count: String(enrichedResults.length)});
         } catch (error) {
           searchTrace.stop({status: "error"});
           console.error("Unable to search the marketplace:", error);
 
           if (active) {
-            setResults([]);
-            setGroups([]);
+            setHasCompletedSearch(true);
             setSearchError(
               "Check your connection and try searching again."
             );
@@ -211,6 +213,7 @@ function SearchPageContent() {
     setResults([]);
     setGroups([]);
     setHasMore(false);
+    setHasCompletedSearch(false);
   };
 
   const handleSearchSubmit = () => {
@@ -256,6 +259,7 @@ function SearchPageContent() {
         {searchQuery && (
           <SearchResults
             loading={loading}
+            hasCompletedSearch={hasCompletedSearch}
             error={searchError}
             results={results}
             groups={groups}

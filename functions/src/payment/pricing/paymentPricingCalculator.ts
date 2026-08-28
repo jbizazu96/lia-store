@@ -62,6 +62,15 @@ export interface CalculatePaymentPricingInput {
     to calculate the complete distance-based delivery fee.
   */
   enforceMaximumDistance?: boolean;
+
+  /*
+    Authoritative tax returned by Stripe Tax.
+
+    Checkout always supplies this value. Keeping it optional preserves the
+    calculator for non-checkout estimates while those surfaces migrate away
+    from the legacy Admin percentage.
+  */
+  authoritativeTaxAmount: number;
 }
 
 
@@ -257,27 +266,6 @@ function calculateDeliveryFeeAmount(
 
 
 /*
-  Calculate sales tax.
-
-  The current MVP behavior matches the frontend:
-
-  tax = merchandise subtotal × 8%
-
-  Delivery fee, service fee, and tip are not currently included in the
-  taxable base.
-*/
-function calculateTaxAmount(
-  subtotalAmount: number,
-  policy: MarketplacePricingPolicy
-): number {
-  return Math.round(
-    subtotalAmount *
-      policy.salesTaxRate
-  );
-}
-
-
-/*
   Calculate the complete trusted payment amount.
 */
 export function calculatePaymentPricing(
@@ -324,11 +312,10 @@ export function calculatePaymentPricing(
       fulfillmentType,
     );
 
-  const taxAmount =
-    calculateTaxAmount(
-      subtotalAmount,
-      input.policy
-    );
+  const taxAmount = requireValidCentAmount(
+    input.authoritativeTaxAmount,
+    "Sales tax"
+  );
 
   const totalAmount =
     subtotalAmount +

@@ -38,6 +38,7 @@ export function useStoreOrders(options: {status?: string; search?: string; from?
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [needsStoreSetup, setNeedsStoreSetup] = useState(false);
   const requestId = useRef(0);
+  const hasLoadedOnce = useRef(false);
   const workspaceStoreId = entry?.store?.id ?? null;
   const hasStore = entry?.hasStore === true;
 
@@ -62,6 +63,7 @@ export function useStoreOrders(options: {status?: string; search?: string; from?
       setStats(page.stats);
       setNextCursor(page.nextCursor);
       setError(null);
+      hasLoadedOnce.current = true;
     } catch (loadError) {
       if (id !== requestId.current) return;
       console.error("Error loading store order history:", loadError);
@@ -79,6 +81,7 @@ export function useStoreOrders(options: {status?: string; search?: string; from?
     let unsubscribeOrders: (() => void) | null = null;
     if (workspaceLoading) return;
     if (!auth.currentUser) {
+      hasLoadedOnce.current = false;
       queueMicrotask(() => {
         setIsAuthenticated(false);
         setError("You must sign in.");
@@ -87,6 +90,7 @@ export function useStoreOrders(options: {status?: string; search?: string; from?
       return;
     }
     if (!hasStore || !workspaceStoreId) {
+      hasLoadedOnce.current = false;
       queueMicrotask(() => {
         setIsAuthenticated(true);
         setNeedsStoreSetup(true);
@@ -99,7 +103,7 @@ export function useStoreOrders(options: {status?: string; search?: string; from?
       setStoreId(workspaceStoreId);
       setNeedsStoreSetup(false);
     });
-    queueMicrotask(() => void loadHistory());
+    queueMicrotask(() => void loadHistory(undefined, false, !hasLoadedOnce.current));
     const activeQuery = query(
           collection(db, "orders"),
           where("store.id", "==", workspaceStoreId),

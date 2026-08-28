@@ -22,7 +22,6 @@ export interface MarketplacePricingPolicy {
   serviceFeeRate: number;
   minimumServiceFeeCents: number;
   maximumServiceFeeCents: number;
-  salesTaxRate: number;
   driverMinimumPayCents: number;
   pickupEnabled: boolean;
   pickupMaximumDistanceMiles: number;
@@ -46,7 +45,6 @@ export const MARKETPLACE_PRICING_POLICY_FIELDS = [
   "serviceFeeRate",
   "minimumServiceFeeCents",
   "maximumServiceFeeCents",
-  "salesTaxRate",
   "driverMinimumPayCents",
   "pickupMaximumDistanceMiles",
   "pickupMinimumOrderCents",
@@ -114,8 +112,7 @@ export function parseMarketplacePricingPolicy(
     policy.pickupMaximumDistanceMiles < 1 ||
     policy.pickupMinimumServiceFeeCents > policy.pickupMaximumServiceFeeCents ||
     policy.serviceFeeRate > 1 ||
-    policy.pickupServiceFeeRate > 1 ||
-    policy.salesTaxRate > 1) {
+    policy.pickupServiceFeeRate > 1) {
     throw new Error("Marketplace pricing policy contains unsupported values.");
   }
   return policy;

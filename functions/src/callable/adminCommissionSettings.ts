@@ -63,14 +63,18 @@ export const saveAdminMarketplacePricingPolicy = onCall({region: "us-central1"},
   } catch {
     throw new HttpsError("invalid-argument", "Enter a complete valid marketplace pricing policy.");
   }
-  await db.collection("settings").doc("marketplacePayment").set({...policy, updatedAt: FieldValue.serverTimestamp(), updatedBy: administrator.uid}, {merge:true});
+  await db.collection("settings").doc("marketplacePayment").set({
+    ...policy,
+    salesTaxRate: FieldValue.delete(),
+    updatedAt: FieldValue.serverTimestamp(),
+    updatedBy: administrator.uid,
+  }, {merge:true});
   await writeAdminAuditLog(administrator, {
     action: "marketplace.pricing_policy_updated",
     targetType: "settings",
     targetId: "marketplacePayment",
     details: {
       serviceFeeRate: policy.serviceFeeRate,
-      salesTaxRate: policy.salesTaxRate,
       freeDeliveryMinimumCents: policy.freeDeliveryMinimumCents,
       peakSurchargeEnabled: policy.peakSurchargeEnabled,
       peakSurchargeCents: policy.peakSurchargeCents,

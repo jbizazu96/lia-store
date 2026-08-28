@@ -21,14 +21,13 @@ const policy: MarketplacePricingPolicy = {
   serviceFeeRate: 0.05,
   minimumServiceFeeCents: 199,
   maximumServiceFeeCents: 1_099,
-  salesTaxRate: 0.07,
   driverMinimumPayCents: 599,
   freeDeliveryDriverIncentiveWithoutTipCents: 500,
   freeDeliveryDriverIncentiveWithTipCents: 300,
 };
 
 describe("customer pickup pricing", () => {
-  it("removes delivery, peak, and tip while retaining service fee and configured sales tax", () => {
+  it("removes delivery, peak, and tip while retaining service fee and Stripe tax", () => {
     const result = calculatePaymentPricing({
       policy,
       fulfillmentType: "pickup",
@@ -36,6 +35,7 @@ describe("customer pickup pricing", () => {
       distanceMiles: 100,
       tipAmount: 2_000,
       isPeakTime: true,
+      authoritativeTaxAmount: 700,
     });
 
     expect(result).toMatchObject({
@@ -57,6 +57,7 @@ describe("customer pickup pricing", () => {
       subtotalAmount: 1_000,
       distanceMiles: 0,
       tipAmount: 0,
+      authoritativeTaxAmount: 0,
     }).serviceFeeAmount).toBe(99);
 
     expect(calculatePaymentPricing({
@@ -65,6 +66,7 @@ describe("customer pickup pricing", () => {
       subtotalAmount: 100_000,
       distanceMiles: 0,
       tipAmount: 0,
+      authoritativeTaxAmount: 0,
     }).serviceFeeAmount).toBe(499);
   });
 
@@ -75,6 +77,7 @@ describe("customer pickup pricing", () => {
       subtotalAmount: 2_000,
       distanceMiles: 1_000,
       tipAmount: 0,
+      authoritativeTaxAmount: 0,
     })).not.toThrow();
   });
 });

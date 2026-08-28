@@ -12,6 +12,7 @@
 
 import {
   useEffect,
+  useRef,
   useState,
 } from "react";
 import {
@@ -50,12 +51,14 @@ export function AdminAuditLogsWorkspace() {
   const [logs, setLogs] = useState<AdminAuditLog[]>([]);
   const [limited, setLimited] = useState(false);
   const [loading, setLoading] = useState(true);
+  const hasLoadedRef = useRef(false);
+  const loadingMoreRef = useRef(false);
   const [error, setError] = useState("");
   const [nextCursor, setNextCursor] = useState<string | null>(null);
 
   const loadMore = () => {
-    if (!nextCursor) return;
-    setLoading(true);
+    if (!nextCursor || loadingMoreRef.current) return;
+    loadingMoreRef.current = true;
     void adminWorkspaceClientService.getAuditLogs(search, nextCursor)
       .then((result) => {
         setLogs((current) => [...current, ...result.logs]);
@@ -63,25 +66,29 @@ export function AdminAuditLogsWorkspace() {
         setNextCursor(result.nextCursor);
       })
       .catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "Unable to load more audit history."))
-      .finally(() => setLoading(false));
+      .finally(() => { loadingMoreRef.current = false; });
   };
 
   useEffect(() => {
+    let active = true;
     const timer = window.setTimeout(() => {
-      setLoading(true);
+      if (!hasLoadedRef.current) setLoading(true);
       setError("");
       void adminWorkspaceClientService.getAuditLogs(search)
         .then((result) => {
+          if (!active) return;
           setLogs(result.logs);
           setLimited(result.limited);
           setNextCursor(result.nextCursor);
         })
-        .catch((reason: unknown) => setError(
-          reason instanceof Error ? reason.message : "Unable to load audit history."
-        ))
-        .finally(() => setLoading(false));
+        .catch((reason: unknown) => {
+          if (active) setError(reason instanceof Error ? reason.message : "Unable to load audit history.");
+        })
+        .finally(() => {
+          if (active) { setLoading(false); hasLoadedRef.current = true; }
+        });
     }, 200);
-    return () => window.clearTimeout(timer);
+    return () => { active = false; window.clearTimeout(timer); };
   }, [search]);
 
   return <section><Link href="/admin/settings" className="mb-5 inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-bold text-slate-700 ring-1 ring-slate-200"><ArrowLeft className="h-4 w-4" />Back to settings</Link><p className="text-sm font-bold tracking-wide text-orange-600">SECURITY & GOVERNANCE</p><h1 className="mt-1 text-3xl font-bold tracking-tight">Admin audit logs</h1><p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">Review immutable records of administrator decisions and platform-policy changes. Sensitive documents, addresses, and payment secrets are intentionally excluded.</p>

@@ -97,7 +97,16 @@ function publicProduct(
 
 async function publicStoreSource(storeId: string): Promise<Data | null> {
   if (!storeId) return null;
-  const store = await getFirestore("default").collection("stores").doc(storeId).get();
+  /*
+   * storePublicProfiles is the single customer-visibility authority used by
+   * the catalog callables. Do not independently reinterpret the private store
+   * document here: that can hide every product while the store itself remains
+   * visible to customers.
+   */
+  const store = await getFirestore("default")
+    .collection("storePublicProfiles")
+    .doc(storeId)
+    .get();
   const data = store.data() as Data | undefined;
 
   return store.exists && data?.isApproved === true && data.isActive === true
@@ -114,6 +123,37 @@ async function deletePublicProductProfile(productId: string): Promise<void> {
     );
 }
 
+/**
+ * Rebuild one customer-safe product projection from its authoritative private
+ * product document. Store product mutations call this directly so a successful
+ * save cannot leave the customer catalog waiting on an asynchronous trigger.
+ * The Firestore trigger remains the safety net for image processors, imports,
+ * and administrative writes.
+ */
+export async function synchronizeProductPublicProfile(
+  productId: string,
+): Promise<void> {
+  const db = getFirestore("default");
+  const productSnapshot = await db.collection("products").doc(productId).get();
+
+  if (!productSnapshot.exists) {
+    await deletePublicProductProfile(productId);
+    return;
+  }
+
+  const product = productSnapshot.data() as Data;
+  const store = await publicStoreSource(text(product.storeId));
+
+  if (!store || product.isArchived === true || !text(product.taxCategoryId)) {
+    await deletePublicProductProfile(productId);
+    return;
+  }
+
+  await db.collection("productPublicProfiles").doc(productId).set(
+    publicProduct(product, productId, store),
+  );
+}
+
 export const productPublicProfileSync = onDocumentWritten(
   {
     document: "products/{productId}",
@@ -121,7 +161,6 @@ export const productPublicProfileSync = onDocumentWritten(
     database: "default",
   },
   async (event) => {
-    const profile = getFirestore("default").collection("productPublicProfiles").doc(event.params.productId);
     const after = event.data?.after;
 
     if (!after?.exists) {
@@ -129,17 +168,7 @@ export const productPublicProfileSync = onDocumentWritten(
       return;
     }
 
-    const product = after.data() as Data;
-    const storeId = text(product.storeId);
-
-    const store = await publicStoreSource(storeId);
-
-    if (!store || product.isArchived === true) {
-      await deletePublicProductProfile(event.params.productId);
-      return;
-    }
-
-    await profile.set(publicProduct(product, event.params.productId, store));
+    await synchronizeProductPublicProfile(event.params.productId);
   },
 );
 
@@ -221,6 +250,10 @@ export async function synchronizeStoreProductPublicProfiles(
 
     const batch: WriteBatch = db.batch();
     for (const document of snapshot.docs) {
+      if (document.data().isArchived === true || !text(document.data().taxCategoryId)) {
+        batch.delete(db.collection("productPublicProfiles").doc(document.id));
+        continue;
+      }
       batch.set(
         db.collection("productPublicProfiles").doc(document.id),
         publicProduct(document.data() as Data, document.id, store),

@@ -47,6 +47,7 @@ import {
 
 import {
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -87,6 +88,7 @@ import {
   useCheckoutPricing,
 } from "@/hooks/useCheckoutPricing";
 import {useApplicableMarketplacePricing, useMarketplacePricingPolicy} from "@/hooks/useMarketplacePricingPolicy";
+import {useCheckoutTaxEstimate} from "@/hooks/useCheckoutTaxEstimate";
 import {isPickupLocationAllowed} from "@/services/pricing/pickupAvailability";
 
 import {
@@ -289,6 +291,41 @@ export default function CheckoutPage() {
     address,
     fulfillmentType,
   });
+  const taxEstimateInput = useMemo(() => {
+    if (!store || items.length === 0 || !userName.trim() || !userPhone.trim() ||
+        (fulfillmentType === "delivery" && !address)) return null;
+    return {
+      fulfillmentType,
+      storeId: store.id,
+      contactName: userName,
+      contactPhone: userPhone,
+      items: items.map((item) => ({
+        productId: item.id,
+        quantity: item.quantity,
+        size: item.size ?? null,
+      })),
+      ...(fulfillmentType === "delivery" && address ? {deliveryAddress: {
+        street: address.street,
+        city: address.city,
+        state: address.state,
+        zip: address.zip,
+        latitude: address.latitude,
+        longitude: address.longitude,
+        formattedAddress: address.formattedAddress,
+      }} : {}),
+      tip: fulfillmentType === "pickup" ? 0 : tip,
+      deliveryFee: totals.deliveryFee,
+      serviceFee: totals.serviceFee,
+    };
+  }, [address, fulfillmentType, items, store, tip, totals.deliveryFee, totals.serviceFee, userName, userPhone]);
+  const taxEstimate = useCheckoutTaxEstimate(taxEstimateInput);
+  const estimatedTax = (taxEstimate.estimate?.taxAmount ?? 0) / 100;
+  const displayedTotals = useMemo(() => ({
+    ...totals,
+    tax: estimatedTax,
+    total: totals.total + estimatedTax,
+  }), [estimatedTax, totals]);
+  const displayedTotal = total + estimatedTax;
   const pickupZoneAllowed = applicablePricing?.pickupDecision?.allowed === true;
   const pickupLocationAllowed = isPickupLocationAllowed(
     defaultMarketplacePolicy,
@@ -1395,7 +1432,7 @@ const handleViewOrder =
               CheckoutItem[]
           }
           totals={
-            totals
+            displayedTotals
           }
           storeName={
             store?.name ??
@@ -1407,6 +1444,8 @@ const handleViewOrder =
             ""
           }
           fulfillmentType={fulfillmentType}
+          taxEstimateLoading={taxEstimate.loading}
+          taxEstimateError={taxEstimate.error}
         />
 
         {fulfillmentType === "delivery" && <section className="space-y-2">
@@ -1499,7 +1538,7 @@ const handleViewOrder =
             ) : (
               <>
                 <CreditCard className="h-5 w-5" />
-                Continue to Payment · ${total.toFixed(2)}
+                Continue to Payment · ${displayedTotal.toFixed(2)}
               </>
             )}
           </button>

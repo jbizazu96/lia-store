@@ -1,5 +1,5 @@
 "use client";
-import {useCallback, useEffect, useState} from "react";
+import {useCallback, useEffect, useRef, useState} from "react";
 import {Headphones, LoaderCircle, RefreshCw, Send, StickyNote} from "lucide-react";
 import {useSearchParams} from "next/navigation";
 import {useAdminAccess} from "@/context/AdminAccessContext";
@@ -14,10 +14,11 @@ export function AdminSupportWorkspace() {
   const [filter, setFilter] = useState("all"); const [nextCursor, setNextCursor] = useState<string | null>(null); const [loading, setLoading] = useState(true); const [busy, setBusy] = useState(false); const [error, setError] = useState("");
   const [assignees, setAssignees] = useState<Array<{uid: string; name: string; email: string}>>([]);
   const [message, setMessage] = useState(""); const [note, setNote] = useState(""); const [status, setStatus] = useState<"in_review" | "responded" | "resolved">("responded");
-  const load = useCallback(async (cursor?: string) => { try { setLoading(true); setError(""); const result = await accountSupportClientService.listAdmin(filter, cursor); setRequests((current) => cursor ? [...current, ...result.requests] : result.requests); setNextCursor(result.nextCursor); setSelectedId((current) => current || result.requests[0]?.id || ""); } catch (reason) { setError(reason instanceof Error ? reason.message : "Unable to load support requests."); } finally { setLoading(false); } }, [filter]);
+  const listLoadedRef = useRef(false); const loadingMoreRef = useRef(false); const requestSequenceRef = useRef(0);
+  const load = useCallback(async (cursor?: string) => { if (cursor && loadingMoreRef.current) return; const requestSequence = cursor ? requestSequenceRef.current : ++requestSequenceRef.current; try { if (cursor) loadingMoreRef.current = true; else if (!listLoadedRef.current) setLoading(true); setError(""); const result = await accountSupportClientService.listAdmin(filter, cursor); if (!cursor && requestSequence !== requestSequenceRef.current) return; setRequests((current) => cursor ? [...current, ...result.requests] : result.requests); setNextCursor(result.nextCursor); setSelectedId((current) => cursor || result.requests.some((item) => item.id === current) ? current : result.requests[0]?.id || ""); listLoadedRef.current = true; } catch (reason) { if (requestSequence === requestSequenceRef.current) setError(reason instanceof Error ? reason.message : "Unable to load support requests."); } finally { setLoading(false); loadingMoreRef.current = false; } }, [filter]);
   const loadConversation = useCallback(async (id: string) => { try { const result = await accountSupportClientService.getConversation(id); setMessages(result.messages); setRequests((current) => current.map((item) => item.id === id ? result.request : item)); } catch (reason) { setError(reason instanceof Error ? reason.message : "Unable to load the conversation."); } }, []);
   useEffect(() => { queueMicrotask(() => { void load(); void accountSupportClientService.getAssignees().then((result) => setAssignees(result.assignees)).catch(() => undefined); }); }, [load]);
-  useEffect(() => { if (selectedId) void loadConversation(selectedId); else setMessages([]); }, [loadConversation, selectedId]);
+  useEffect(() => { queueMicrotask(() => { if (selectedId) void loadConversation(selectedId); else setMessages([]); }); }, [loadConversation, selectedId]);
   const selected = requests.find((item) => item.id === selectedId) ?? null;
   const mutate = async (operation: () => Promise<unknown>) => { if (!selected) return; try { setBusy(true); setError(""); await operation(); await Promise.all([load(), loadConversation(selected.id)]); } catch (reason) { setError(reason instanceof Error ? reason.message : "The support request could not be updated."); } finally { setBusy(false); } };
   const respond = () => mutate(async () => { await accountSupportClientService.respondAdmin({requestId: selected!.id, message: message.trim(), status}); setMessage(""); });

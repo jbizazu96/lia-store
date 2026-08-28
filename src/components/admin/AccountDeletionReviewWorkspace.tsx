@@ -13,6 +13,7 @@
 
 import {
   useEffect,
+  useRef,
   useState,
 } from "react";
 import {
@@ -101,20 +102,32 @@ export function AccountDeletionReviewWorkspace({
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
   const [error, setError] = useState("");
+  const listLoadedRef = useRef(false);
+  const loadingMoreRef = useRef(false);
+  const requestSequenceRef = useRef(0);
 
   const loadList = async (cursor?: string) => {
     if (requestId) return;
-    setLoading(true);
+    const requestSequence = cursor ? requestSequenceRef.current : ++requestSequenceRef.current;
+    if (cursor) {
+      if (loadingMoreRef.current) return;
+      loadingMoreRef.current = true;
+    } else if (!listLoadedRef.current) {
+      setLoading(true);
+    }
     setError("");
     try {
       const result = await adminWorkspaceClientService.getAccountDeletionRequests(status, cursor);
+      if (!cursor && requestSequence !== requestSequenceRef.current) return;
       setRequests((current) => cursor ? [...current, ...result.requests] : result.requests);
       setCounts(result.counts);
       setNextCursor(result.nextCursor);
+      listLoadedRef.current = true;
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Unable to load deletion requests.");
+      if (requestSequence === requestSequenceRef.current) setError(reason instanceof Error ? reason.message : "Unable to load deletion requests.");
     } finally {
       setLoading(false);
+      loadingMoreRef.current = false;
     }
   };
 

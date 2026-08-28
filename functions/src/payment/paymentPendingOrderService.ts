@@ -55,6 +55,10 @@ import type {
   MarketplacePricingPolicy,
 } from "./pricing/marketplacePricingPolicy";
 import type {ZonePricingDecision} from "./pricing/zonePricingResolutionService";
+import type {
+  StripeTaxCalculationSnapshot,
+  StripeTaxLineSnapshot,
+} from "./tax/stripeTaxCalculationService";
 import {createCatalogSearchTokens} from "../services/catalog/catalogSearchTokens";
 
 
@@ -109,6 +113,10 @@ export interface CreatePaymentPendingOrderInput {
 
   pricingPolicy:
     MarketplacePricingPolicy;
+
+  taxCalculation: StripeTaxCalculationSnapshot;
+
+  productTaxById: Map<string, StripeTaxLineSnapshot>;
 
   zoneDecision: ZonePricingDecision;
 
@@ -378,46 +386,56 @@ async function createPaymentPendingOrder(
       */
       items:
         input.checkoutData.items.map(
-          (item) => ({
-            id:
-              item.productId,
+          (item) => {
+            const itemTax = input.productTaxById.get(item.productId);
+            if (!itemTax) {
+              throw new PaymentPendingOrderError(
+                "ORDER_CREATE_FAILED",
+                `The tax snapshot for ${item.name} is missing.`
+              );
+            }
+            return {
+              id: item.productId,
 
-            name:
-              item.name,
+              name: item.name,
 
-            price:
-              centsToDollars(
+              price: centsToDollars(
                 item.unitPriceAmount
               ),
 
-            originalPrice:
+              originalPrice:
               typeof item.originalUnitPriceAmount === "number"
                 ? centsToDollars(
                     item.originalUnitPriceAmount
                   )
                 : null,
 
-            quantity:
-              item.quantity,
+              quantity: item.quantity,
 
-            imageUrl:
-              item.imageUrl ?? null,
+              imageUrl: item.imageUrl ?? null,
 
-            size:
-              item.size ?? null,
+              size: item.size ?? null,
 
             /*
               Integer amounts support future reconciliation and auditing.
             */
-            unitPriceAmount:
-              item.unitPriceAmount,
+              unitPriceAmount: item.unitPriceAmount,
 
-            originalUnitPriceAmount:
-              item.originalUnitPriceAmount ?? null,
+              originalUnitPriceAmount: item.originalUnitPriceAmount ?? null,
 
-            lineTotalAmount:
-              item.lineTotalAmount,
-          })
+              lineTotalAmount: item.lineTotalAmount,
+
+              taxCategoryId: item.taxCategoryId,
+
+              stripeTaxCode: item.stripeTaxCode,
+
+              taxAmount: itemTax.taxAmount,
+
+              taxBehavior: itemTax.taxBehavior,
+
+              taxBreakdown: itemTax.breakdown,
+            };
+          }
         ),
 
       /*
@@ -503,6 +521,9 @@ async function createPaymentPendingOrder(
        */
       pricingPolicy:
         input.pricingPolicy,
+
+      /* Immutable Stripe Tax calculation and item-level audit snapshot. */
+      taxCalculation: input.taxCalculation,
 
       customerHomeZoneId: input.zoneDecision.customerHomeZoneId,
       storeHomeZoneId: input.zoneDecision.storeHomeZoneId,

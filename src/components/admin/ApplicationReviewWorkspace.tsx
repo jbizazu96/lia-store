@@ -16,6 +16,7 @@
 
 import {
   useEffect,
+  useRef,
   useState,
 } from "react";
 import {
@@ -106,22 +107,34 @@ export function ApplicationReviewWorkspace({
   const [reason, setReason] = useState("");
   const [suspensionTarget, setSuspensionTarget] = useState(false);
   const [approvedRadius, setApprovedRadius] = useState("");
+  const listLoadedRef = useRef(false);
+  const loadingMoreRef = useRef(false);
+  const requestSequenceRef = useRef(0);
 
   const loadApplications = async (cursor?: string) => {
     if (applicationId) return;
-    setLoading(true);
+    const requestSequence = cursor ? requestSequenceRef.current : ++requestSequenceRef.current;
+    if (cursor) {
+      if (loadingMoreRef.current) return;
+      loadingMoreRef.current = true;
+    } else if (!listLoadedRef.current) {
+      setLoading(true);
+    }
     setError("");
     try {
       const result = type === "store"
         ? await adminWorkspaceClientService.getStoreApplications(status, cursor)
         : await adminWorkspaceClientService.getDriverApplications(status, cursor);
+      if (!cursor && requestSequence !== requestSequenceRef.current) return;
       setApplications((current) => cursor ? [...current, ...result.applications] : result.applications);
       setNextCursor(result.nextCursor);
       setCounts(result.counts);
+      listLoadedRef.current = true;
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "Unable to load applications.");
+      if (requestSequence === requestSequenceRef.current) setError(loadError instanceof Error ? loadError.message : "Unable to load applications.");
     } finally {
       setLoading(false);
+      loadingMoreRef.current = false;
     }
   };
 

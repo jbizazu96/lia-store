@@ -20,6 +20,7 @@ const exactCustomerPaths = new Set([
   "/register",
   "/reset-password",
   "/search",
+  "/taxes",
   "/verify-email",
 ]);
 

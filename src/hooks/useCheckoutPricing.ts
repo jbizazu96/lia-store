@@ -244,12 +244,8 @@ export function useCheckoutPricing({
     const serviceFee =
       pricing?.serviceFee ?? 0;
 
-    const tax =
-      Math.round(
-        subtotal *
-          (marketplacePolicy?.salesTaxRate ?? 0) *
-          100
-      ) / 100;
+    /* Stripe Tax supplies the authoritative amount during payment preparation. */
+    const tax = 0;
 
     const total =
       subtotal +

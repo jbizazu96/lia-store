@@ -6,6 +6,7 @@ import {HttpsError, onCall} from "firebase-functions/v2/https";
 import sharp from "sharp";
 import {requireAdminPermission} from "../admin/adminAuthorizationService";
 import {writeAdminAuditLog} from "../admin/adminAuditLogService";
+import {synchronizeProductPublicProfile} from "../triggers/productPublicProfileSync";
 
 if (admin.apps.length === 0) admin.initializeApp();
 const db = getFirestore("default");
@@ -37,12 +38,73 @@ function categoryId(value: unknown): string {
   return id;
 }
 
+function taxClassificationIds(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return [...new Set(value.map((entry) => taxClassificationId(entry)))].slice(0, 25);
+}
+
+async function validatedCategoryTaxMapping(input: Record<string, unknown>): Promise<{
+  defaultTaxCategoryId: string | null;
+  allowedTaxCategoryIds: string[];
+}> {
+  const allowedTaxCategoryIds = taxClassificationIds(input.allowedTaxCategoryIds);
+  const defaultTaxCategoryId = text(input.defaultTaxCategoryId, 80)
+    ? taxClassificationId(input.defaultTaxCategoryId)
+    : null;
+  if (defaultTaxCategoryId && !allowedTaxCategoryIds.includes(defaultTaxCategoryId)) {
+    throw new HttpsError(
+      "invalid-argument",
+      "The default tax classification must also be selected as an allowed classification."
+    );
+  }
+  if (allowedTaxCategoryIds.length > 0) {
+    const snapshots = await db.getAll(...allowedTaxCategoryIds.map((id) =>
+      db.collection("productTaxClassifications").doc(id)
+    ));
+    if (snapshots.some((snapshot) => !snapshot.exists)) {
+      throw new HttpsError(
+        "failed-precondition",
+        "One or more selected tax classifications no longer exist."
+      );
+    }
+    if (snapshots.some((snapshot) => snapshot.data()?.isActive === false)) {
+      throw new HttpsError(
+        "failed-precondition",
+        "Inactive tax classifications cannot be assigned to a product category."
+      );
+    }
+  }
+  return {defaultTaxCategoryId, allowedTaxCategoryIds};
+}
+
 function sizeUnitId(value: unknown): string {
   const id = text(value, 20).toLowerCase();
   if (!/^[a-z0-9][a-z0-9-]{0,19}$/.test(id)) {
     throw new HttpsError("invalid-argument", "Use a unit code containing only lowercase letters, numbers, or hyphens.");
   }
   return id;
+}
+
+function taxClassificationId(value: unknown): string {
+  const id = text(value, 80).toLowerCase();
+  if (!/^[a-z0-9][a-z0-9-]{0,79}$/.test(id)) {
+    throw new HttpsError(
+      "invalid-argument",
+      "Use a stable classification ID containing lowercase letters, numbers, or hyphens."
+    );
+  }
+  return id;
+}
+
+function stripeTaxCode(value: unknown): string {
+  const code = text(value, 32).toLowerCase();
+  if (!/^txcd_[0-9]{8}$/.test(code)) {
+    throw new HttpsError(
+      "invalid-argument",
+      "Enter a valid Stripe product tax code, such as txcd_99999999."
+    );
+  }
+  return code;
 }
 
 async function sizeUnits() {
@@ -111,6 +173,46 @@ export const getStoreProductSizeUnits = onCall({region: "us-central1"}, async (r
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in to load product size units.");
   return {units: await sizeUnits()};
 });
+
+export const getStoreProductTaxConfiguration = onCall(
+  {region: "us-central1"},
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Sign in to load product tax options.");
+    }
+    const [categories, classifications] = await Promise.all([
+      db.collection("categories").limit(250).get(),
+      db.collection("productTaxClassifications").limit(250).get(),
+    ]);
+    const activeClassifications = classifications.docs
+      .filter((document) => document.data().isActive !== false)
+      .map((document) => ({
+        id: document.id,
+        name: text(document.data().name, 100) || document.id,
+        description: text(document.data().description, 500),
+        requiresStoreConfirmation: document.data().requiresStoreConfirmation === true,
+      }))
+      .sort((first, second) => first.name.localeCompare(second.name));
+    const activeIds = new Set(activeClassifications.map((item) => item.id));
+    return {
+      classifications: activeClassifications,
+      categories: categories.docs.map((document) => {
+        const data = document.data();
+        const allowedTaxCategoryIds = taxClassificationIds(data.allowedTaxCategoryIds)
+          .filter((id) => activeIds.has(id));
+        const configuredDefault = text(data.defaultTaxCategoryId, 80);
+        return {
+          categoryId: document.id,
+          defaultTaxCategoryId:
+            configuredDefault && allowedTaxCategoryIds.includes(configuredDefault)
+              ? configuredDefault
+              : null,
+          allowedTaxCategoryIds,
+        };
+      }),
+    };
+  },
+);
 
 export const getAdminProductSizeUnits = onCall({region: "us-central1"}, async (request) => {
   await requireAdminPermission(request, "product_categories");
@@ -232,6 +334,337 @@ export const importAdminProductSizeUnits = onCall({region: "us-central1"}, async
   return {success: true, created: missing.length, productsScanned: products.size};
 });
 
+async function requireUniqueTaxClassificationName(
+  name: string,
+  excludedId?: string,
+): Promise<void> {
+  const normalizedName = name.toLowerCase();
+  const snapshot = await db.collection("productTaxClassifications").limit(250).get();
+  if (snapshot.docs.some((document) =>
+    document.id !== excludedId &&
+    text(document.data().name, 100).toLowerCase() === normalizedName
+  )) {
+    throw new HttpsError(
+      "already-exists",
+      "A tax classification with this name already exists."
+    );
+  }
+}
+
+export const getAdminProductTaxClassifications = onCall(
+  {region: "us-central1"},
+  async (request) => {
+    await requireAdminPermission(request, "product_categories");
+    const snapshot = await db.collection("productTaxClassifications").limit(250).get();
+    return {
+      classifications: snapshot.docs.map((document) => {
+        const data = document.data();
+        return {
+          id: document.id,
+          name: text(data.name, 100) || document.id,
+          description: text(data.description, 500),
+          stripeTaxCode: text(data.stripeTaxCode, 32).toLowerCase(),
+          isActive: data.isActive !== false,
+          requiresStoreConfirmation: data.requiresStoreConfirmation === true,
+        };
+      }).sort((first, second) => first.name.localeCompare(second.name)),
+    };
+  },
+);
+
+export const createAdminProductTaxClassification = onCall(
+  {region: "us-central1"},
+  async (request) => {
+    const administrator = await requireAdminPermission(
+      request,
+      "product_categories",
+      "write",
+    );
+    const input = record(request.data);
+    const name = text(input.name, 100);
+    const id = taxClassificationId(input.id ?? slug(name));
+    const description = text(input.description, 500);
+    const taxCode = stripeTaxCode(input.stripeTaxCode);
+    if (name.length < 2) {
+      throw new HttpsError(
+        "invalid-argument",
+        "Enter a tax-classification name with at least two characters."
+      );
+    }
+    if (description.length < 10) {
+      throw new HttpsError(
+        "invalid-argument",
+        "Add a short description so stores can classify products consistently."
+      );
+    }
+    await requireUniqueTaxClassificationName(name);
+    const reference = db.collection("productTaxClassifications").doc(id);
+    try {
+      await reference.create({
+        name,
+        normalizedName: name.toLowerCase(),
+        description,
+        stripeTaxCode: taxCode,
+        isActive: input.isActive !== false,
+        requiresStoreConfirmation: input.requiresStoreConfirmation === true,
+        createdAt: FieldValue.serverTimestamp(),
+        createdBy: administrator.uid,
+        updatedAt: FieldValue.serverTimestamp(),
+        updatedBy: administrator.uid,
+      });
+    } catch (error) {
+      if ((error as {code?: unknown}).code === 6 ||
+          (error as {code?: unknown}).code === "already-exists") {
+        throw new HttpsError(
+          "already-exists",
+          "That stable tax-classification ID already exists."
+        );
+      }
+      throw error;
+    }
+    await writeAdminAuditLog(administrator, {
+      action: "product_tax_classification.created",
+      targetType: "productTaxClassification",
+      targetId: id,
+      details: {name, stripeTaxCode: taxCode},
+    });
+    return {id};
+  },
+);
+
+export const updateAdminProductTaxClassification = onCall(
+  {region: "us-central1"},
+  async (request) => {
+    const administrator = await requireAdminPermission(
+      request,
+      "product_categories",
+      "write",
+    );
+    const input = record(request.data);
+    const id = taxClassificationId(input.id);
+    const name = text(input.name, 100);
+    const description = text(input.description, 500);
+    const taxCode = stripeTaxCode(input.stripeTaxCode);
+    if (name.length < 2 || description.length < 10) {
+      throw new HttpsError(
+        "invalid-argument",
+        "Enter a name and a description of at least 10 characters."
+      );
+    }
+    const reference = db.collection("productTaxClassifications").doc(id);
+    const existing = await reference.get();
+    if (!existing.exists) {
+      throw new HttpsError("not-found", "Tax classification not found.");
+    }
+    await requireUniqueTaxClassificationName(name, id);
+    await reference.update({
+      name,
+      normalizedName: name.toLowerCase(),
+      description,
+      stripeTaxCode: taxCode,
+      isActive: input.isActive !== false,
+      requiresStoreConfirmation: input.requiresStoreConfirmation === true,
+      updatedAt: FieldValue.serverTimestamp(),
+      updatedBy: administrator.uid,
+    });
+    await writeAdminAuditLog(administrator, {
+      action: "product_tax_classification.updated",
+      targetType: "productTaxClassification",
+      targetId: id,
+      details: {
+        previousName: text(existing.data()?.name, 100),
+        name,
+        previousStripeTaxCode: text(existing.data()?.stripeTaxCode, 32),
+        stripeTaxCode: taxCode,
+        isActive: input.isActive !== false,
+        requiresStoreConfirmation: input.requiresStoreConfirmation === true,
+      },
+    });
+    return {success: true};
+  },
+);
+
+export const deleteAdminProductTaxClassification = onCall(
+  {region: "us-central1"},
+  async (request) => {
+    const administrator = await requireAdminPermission(
+      request,
+      "product_categories",
+      "write",
+    );
+    const id = taxClassificationId(record(request.data).id);
+    const reference = db.collection("productTaxClassifications").doc(id);
+    const existing = await reference.get();
+    if (!existing.exists) {
+      throw new HttpsError("not-found", "Tax classification not found.");
+    }
+    const [assignedProduct, categoryDefault, categoryAllowed] = await Promise.all([
+      db.collection("products").where("taxCategoryId", "==", id).limit(1).get(),
+      db.collection("categories").where("defaultTaxCategoryId", "==", id).limit(1).get(),
+      db.collection("categories").where("allowedTaxCategoryIds", "array-contains", id).limit(1).get(),
+    ]);
+    if (!assignedProduct.empty || !categoryDefault.empty || !categoryAllowed.empty) {
+      throw new HttpsError(
+        "failed-precondition",
+        "This classification is assigned to a product or category. Deactivate it instead."
+      );
+    }
+    await reference.delete();
+    await writeAdminAuditLog(administrator, {
+      action: "product_tax_classification.deleted",
+      targetType: "productTaxClassification",
+      targetId: id,
+      details: {
+        name: text(existing.data()?.name, 100),
+        stripeTaxCode: text(existing.data()?.stripeTaxCode, 32),
+      },
+    });
+    return {success: true};
+  },
+);
+
+export const backfillAdminProductTaxClassifications = onCall(
+  {region: "us-central1", timeoutSeconds: 540},
+  async (request) => {
+    const administrator = await requireAdminPermission(
+      request,
+      "product_categories",
+      "write",
+    );
+    const cursor = text(record(request.data).cursor, 200);
+    let query = db.collection("products").orderBy("__name__").limit(300);
+    if (cursor) query = query.startAfter(cursor);
+    const [products, categories, classifications] = await Promise.all([
+      query.get(),
+      db.collection("categories").get(),
+      db.collection("productTaxClassifications").get(),
+    ]);
+    const categoryMap = new Map(categories.docs.map((document) => [document.id, document.data()]));
+    const classificationMap = new Map(classifications.docs.map((document) => [document.id, document.data()]));
+    const writer = db.bulkWriter();
+    let classified = 0;
+    let deactivated = 0;
+    let reactivated = 0;
+    let unchanged = 0;
+
+    products.docs.forEach((product) => {
+      const data = product.data();
+      const category = categoryMap.get(text(data.category, 100));
+      const allowedIds = category ? taxClassificationIds(category.allowedTaxCategoryIds) : [];
+      const currentId = text(data.taxCategoryId, 80);
+      const current = classificationMap.get(currentId);
+      if (currentId && allowedIds.includes(currentId) && current?.isActive !== false) {
+        /*
+         * Version 1 repairs products disabled by the original tax migration,
+         * which did not record why availability was turned off. The marker
+         * makes this a one-time recovery and prevents later runs from enabling
+         * products a store intentionally disables.
+         */
+        if (data.taxAvailabilityMigrationVersion !== 1) {
+          writer.update(product.ref, {
+            taxAvailabilityMigrationVersion: 1,
+            ...(data.isAvailable === false ? {isAvailable: true} : {}),
+            updatedAt: FieldValue.serverTimestamp(),
+          });
+          if (data.isAvailable === false) reactivated += 1;
+          else unchanged += 1;
+          return;
+        }
+        if (data.taxPublicationBlocked === true) {
+          writer.update(product.ref, {
+            isAvailable: data.availableBeforeTaxBlock !== false,
+            taxPublicationBlocked: FieldValue.delete(),
+            availableBeforeTaxBlock: FieldValue.delete(),
+            updatedAt: FieldValue.serverTimestamp(),
+          });
+          reactivated += 1;
+          return;
+        }
+        unchanged += 1;
+        return;
+      }
+
+      const defaultId = category ? text(category.defaultTaxCategoryId, 80) : "";
+      const defaultClassification = classificationMap.get(defaultId);
+      const canApplyDefault =
+        Boolean(defaultId) &&
+        allowedIds.includes(defaultId) &&
+        defaultClassification?.isActive !== false &&
+        defaultClassification?.requiresStoreConfirmation !== true &&
+        allowedIds.length === 1;
+      if (canApplyDefault) {
+        writer.update(product.ref, {
+          taxCategoryId: defaultId,
+          taxClassificationSource: "category_default",
+          taxAvailabilityMigrationVersion: 1,
+          ...(data.taxPublicationBlocked === true ||
+          data.taxAvailabilityMigrationVersion !== 1 ? {
+            isAvailable: data.taxPublicationBlocked === true
+              ? data.availableBeforeTaxBlock !== false
+              : true,
+            taxPublicationBlocked: FieldValue.delete(),
+            availableBeforeTaxBlock: FieldValue.delete(),
+          } : {}),
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+        classified += 1;
+        return;
+      }
+
+      writer.update(product.ref, {
+        taxCategoryId: null,
+        taxClassificationSource: null,
+        isAvailable: false,
+        featured: false,
+        taxPublicationBlocked: true,
+        availableBeforeTaxBlock: data.taxAvailabilityMigrationVersion !== 1
+          ? true
+          : data.isAvailable !== false,
+        taxAvailabilityMigrationVersion: 1,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      deactivated += 1;
+    });
+    await writer.close();
+
+    /*
+     * Rebuild every scanned projection, including products whose existing tax
+     * classification was already valid. This also repairs catalogs that were
+     * emptied before the tax-aware projection trigger was deployed.
+     */
+    for (let index = 0; index < products.docs.length; index += 25) {
+      await Promise.all(products.docs
+        .slice(index, index + 25)
+        .map((product) => synchronizeProductPublicProfile(product.id)));
+    }
+    const nextCursor = products.size === 300
+      ? products.docs[products.docs.length - 1]?.id ?? null
+      : null;
+    await writeAdminAuditLog(administrator, {
+      action: "product_tax_classifications.backfilled",
+      targetType: "productTaxClassification",
+      targetId: cursor || "first-page",
+      details: {
+        scanned: products.size,
+        classified,
+        deactivated,
+        reactivated,
+        unchanged,
+        hasMore: Boolean(nextCursor),
+      },
+    });
+    return {
+      success: true,
+      scanned: products.size,
+      classified,
+      deactivated,
+      reactivated,
+      unchanged,
+      nextCursor,
+    };
+  },
+);
+
 function slug(value: string): string {
   return value.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
     .replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 80);
@@ -248,7 +681,17 @@ async function requireUniqueName(name: string, excludedId?: string): Promise<voi
 export const getAdminProductCategories = onCall({region: "us-central1"}, async (request) => {
   await requireAdminPermission(request, "product_categories");
   const snapshot = await db.collection("categories").limit(250).get();
-  return {categories: snapshot.docs.map((document) => ({id: document.id, name: text(document.data().name) || "Unnamed category", iconUrl: text(document.data().iconUrl, 2_000), freshnessEligible: document.data().freshnessEligible === true})).sort((first, second) => first.name.localeCompare(second.name))};
+  return {categories: snapshot.docs.map((document) => {
+    const data = document.data();
+    return {
+      id: document.id,
+      name: text(data.name) || "Unnamed category",
+      iconUrl: text(data.iconUrl, 2_000),
+      freshnessEligible: data.freshnessEligible === true,
+      defaultTaxCategoryId: text(data.defaultTaxCategoryId, 80) || null,
+      allowedTaxCategoryIds: taxClassificationIds(data.allowedTaxCategoryIds),
+    };
+  }).sort((first, second) => first.name.localeCompare(second.name))};
 });
 
 export const createAdminProductCategory = onCall({region: "us-central1"}, async (request) => {
@@ -256,19 +699,20 @@ export const createAdminProductCategory = onCall({region: "us-central1"}, async 
   const input = request.data && typeof request.data === "object" ? request.data as Record<string, unknown> : {};
   const name = text(input.name);
   const freshnessEligible = input.freshnessEligible === true;
+  const taxMapping = await validatedCategoryTaxMapping(input);
   const id = slug(name);
   if (name.length < 2 || !id) throw new HttpsError("invalid-argument", "Enter a category name with at least two characters.");
   await requireUniqueName(name);
   const reference = db.collection("categories").doc(id);
   try {
-    await reference.create({name, freshnessEligible, normalizedName: name.toLowerCase(), createdAt: FieldValue.serverTimestamp(), createdBy: administrator.uid, updatedAt: FieldValue.serverTimestamp(), updatedBy: administrator.uid});
+    await reference.create({name, freshnessEligible, ...taxMapping, normalizedName: name.toLowerCase(), createdAt: FieldValue.serverTimestamp(), createdBy: administrator.uid, updatedAt: FieldValue.serverTimestamp(), updatedBy: administrator.uid});
   } catch (error) {
     if ((error as {code?: unknown}).code === 6 || (error as {code?: unknown}).code === "already-exists") {
       throw new HttpsError("already-exists", "That category ID is already in use. Edit the existing category instead.");
     }
     throw error;
   }
-  await writeAdminAuditLog(administrator, {action: "product_category.created", targetType: "productCategory", targetId: id, details: {name}});
+  await writeAdminAuditLog(administrator, {action: "product_category.created", targetType: "productCategory", targetId: id, details: {name, defaultTaxCategoryId: taxMapping.defaultTaxCategoryId, allowedTaxCategoryIds: taxMapping.allowedTaxCategoryIds.join(","), allowedTaxClassificationCount: taxMapping.allowedTaxCategoryIds.length}});
   return {id};
 });
 
@@ -278,19 +722,20 @@ export const updateAdminProductCategory = onCall({region: "us-central1"}, async 
   const id = categoryId(input.id);
   const name = text(input.name);
   const freshnessEligible = input.freshnessEligible === true;
+  const taxMapping = await validatedCategoryTaxMapping(input);
   if (name.length < 2) throw new HttpsError("invalid-argument", "Enter a category name with at least two characters.");
   const reference = db.collection("categories").doc(id);
   const existing = await reference.get();
   if (!existing.exists) throw new HttpsError("not-found", "Product category not found.");
   await requireUniqueName(name, id);
-  await reference.update({name, freshnessEligible, normalizedName: name.toLowerCase(), icon: FieldValue.delete(), updatedAt: FieldValue.serverTimestamp(), updatedBy: administrator.uid});
+  await reference.update({name, freshnessEligible, ...taxMapping, normalizedName: name.toLowerCase(), icon: FieldValue.delete(), updatedAt: FieldValue.serverTimestamp(), updatedBy: administrator.uid});
   const summaries = await db.collectionGroup("productCategorySummaries").where("categoryId", "==", id).get();
   if (!summaries.empty) {
     const writer = db.bulkWriter();
     summaries.docs.forEach((summary) => writer.update(summary.ref, {name, updatedAt: FieldValue.serverTimestamp()}));
     await writer.close();
   }
-  await writeAdminAuditLog(administrator, {action: "product_category.renamed", targetType: "productCategory", targetId: id, details: {previousName: text(existing.data()?.name), name}});
+  await writeAdminAuditLog(administrator, {action: "product_category.updated", targetType: "productCategory", targetId: id, details: {previousName: text(existing.data()?.name), name, defaultTaxCategoryId: taxMapping.defaultTaxCategoryId, allowedTaxCategoryIds: taxMapping.allowedTaxCategoryIds.join(","), allowedTaxClassificationCount: taxMapping.allowedTaxCategoryIds.length}});
   return {success: true};
 });
 

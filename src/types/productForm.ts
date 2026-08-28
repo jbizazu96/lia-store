@@ -41,6 +41,8 @@ export interface ProductFormData {
 
   category: string;
 
+  taxCategoryId: string | null;
+
   brand: string;
 
   price: number;

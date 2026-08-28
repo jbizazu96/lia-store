@@ -279,12 +279,8 @@ export function useCartPricing({
     |--------------------------------------------------------------------------
     */
 
-    const tax =
-      Math.round(
-        subtotal *
-          (marketplacePolicy?.salesTaxRate ?? 0) *
-          100
-      ) / 100;
+    /* Stripe Tax supplies the authoritative amount during payment preparation. */
+    const tax = 0;
 
     /*
     |--------------------------------------------------------------------------

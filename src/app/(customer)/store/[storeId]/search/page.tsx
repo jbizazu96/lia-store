@@ -84,6 +84,7 @@ export default function StoreSearchPage({
   const [searchQuery, setSearchQuery] = useState("");
   const [displayedProducts, setDisplayedProducts] = useState<Product[]>([]);
   const [searching, setSearching] = useState(false);
+  const [hasCompletedSearch, setHasCompletedSearch] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [searchCursor, setSearchCursor] = useState<{name: string; id: string} | null>(null);
   const [hasMore, setHasMore] = useState(false);
@@ -159,6 +160,7 @@ export default function StoreSearchPage({
         setSearching(false);
         setSearchCursor(null);
         setHasMore(false);
+        setHasCompletedSearch(false);
       });
       return;
     }
@@ -174,10 +176,11 @@ export default function StoreSearchPage({
           setDisplayedProducts(page.products);
           setSearchCursor(page.nextCursor);
           setHasMore(page.hasMore);
+          setHasCompletedSearch(true);
         }
       }).catch((searchError) => {
         console.error("Unable to search store products:", searchError);
-        if (active) setDisplayedProducts([]);
+        if (active) setHasCompletedSearch(true);
       }).finally(() => {
         if (active) setSearching(false);
       });
@@ -378,10 +381,15 @@ export default function StoreSearchPage({
               </p>
             </div>
 
-            {searching ? (
+            {searching && !hasCompletedSearch ? (
               <CustomerPageSkeleton variant="search" />
             ) : displayedProducts.length > 0 ? (
               <>
+                {searching ? (
+                  <p className="sr-only" role="status" aria-live="polite">
+                    Updating product results
+                  </p>
+                ) : null}
                 <div className="grid grid-cols-2 gap-x-3 gap-y-7 sm:gap-x-5 sm:gap-y-8">
                   {displayedProducts.map((product) => (
                     <ProductCard

@@ -20,10 +20,20 @@ import {
 import {PublicSupportButton} from "@/components/public/PublicSupportButton";
 
 export const metadata: Metadata = {
-  title: "LIA Marketplace | Local delivery for independent stores",
-  description: "LIA Marketplace connects customers with independent local and international stores for convenient shopping and delivery.",
+  title: {absolute: "LIA Marketplace | Shop Independent Local Stores"},
+  description: "Discover groceries and specialty products from independent local and international stores. Order online for convenient pickup or local delivery with LIA Marketplace.",
   alternates: {canonical: "/"},
-  robots: {index: true, follow: true},
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+      "max-video-preview": -1,
+    },
+  },
 };
 
 const marketplaceSteps = [
@@ -48,18 +58,38 @@ const audiences = [
 export default function HomePage() {
   const structuredData = {
     "@context": "https://schema.org",
-    "@type": "WebSite",
-    name: "LIA Marketplace",
-    alternateName: "LIA",
-    url: "https://www.liamarketplace.com/",
-    description: "A local marketplace and delivery platform connecting customers with independent local and international stores.",
-    publisher: {
-      "@type": "Organization",
-      name: "LIA Marketplace",
-      url: "https://www.liamarketplace.com/",
-      logo: "https://www.liamarketplace.com/brand/lia-logo-white-background-512.png",
-      email: "info@liamarketplace.com",
-    },
+    "@graph": [
+      {
+        "@type": "Organization",
+        "@id": "https://www.liamarketplace.com/#organization",
+        name: "LIA Marketplace",
+        alternateName: "LIA",
+        url: "https://www.liamarketplace.com/",
+        logo: {
+          "@type": "ImageObject",
+          url: "https://www.liamarketplace.com/brand/lia-logo-white-background-512.png",
+          width: 512,
+          height: 512,
+        },
+        email: "info@liamarketplace.com",
+        telephone: "+1-833-672-4143",
+        areaServed: {
+          "@type": "Country",
+          name: "United States",
+        },
+        description: "LIA Marketplace helps customers shop from independent local and international stores through pickup and delivery.",
+      },
+      {
+        "@type": "WebSite",
+        "@id": "https://www.liamarketplace.com/#website",
+        name: "LIA Marketplace",
+        alternateName: "LIA",
+        url: "https://www.liamarketplace.com/",
+        description: "Shop groceries and specialty products from independent local and international stores.",
+        publisher: {"@id": "https://www.liamarketplace.com/#organization"},
+        inLanguage: "en-US",
+      },
+    ],
   };
   return (
     <main className="min-h-screen overflow-hidden bg-white text-slate-950">
@@ -77,6 +107,7 @@ export default function HomePage() {
             <Link href="#how-it-works" className="transition hover:text-orange-600">How it works</Link>
             <Link href="#partners" className="transition hover:text-orange-600">For partners</Link>
             <Link href="#community" className="transition hover:text-orange-600">Why LIA</Link>
+            <Link href="/taxes" className="transition hover:text-orange-600">Taxes</Link>
             <PublicSupportButton className="transition hover:text-orange-600">Help</PublicSupportButton>
           </nav>
 
@@ -100,10 +131,10 @@ export default function HomePage() {
               <Sparkles className="h-3.5 w-3.5" /> LIA Marketplace · Shop local. Grow together.
             </div>
             <h1 className="mt-6 max-w-3xl text-4xl font-black leading-[1.04] tracking-[-0.045em] text-slate-950 sm:text-6xl lg:text-7xl">
-              Local stores deserve a <span className="text-orange-600">better way</span> to deliver.
+              Shop independent stores with a <span className="text-orange-600">better local marketplace.</span>
             </h1>
             <p className="mt-6 max-w-xl text-base leading-7 text-slate-600 sm:text-lg sm:leading-8">
-              LIA connects customers with independent local and international stores through one thoughtful marketplace—built to make discovery, ordering, and delivery easier.
+              LIA Marketplace connects customers with independent local and international stores—making it easier to discover groceries and specialty products, order online, and choose pickup or delivery.
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <Link href="/register" className="inline-flex items-center justify-center gap-2 rounded-full bg-orange-600 px-6 py-3.5 text-sm font-extrabold text-white shadow-lg shadow-orange-200 transition hover:-translate-y-0.5 hover:bg-orange-700">
@@ -180,7 +211,7 @@ export default function HomePage() {
           <div className="grid gap-8 md:grid-cols-[1.3fr_1fr_1fr]">
             <div><div className="flex items-center gap-3"><Image src="/brand/lia-logo-transparent-256.png" alt="LIA" width={84} height={44} className="h-11 w-[84px] object-contain"/><div><p className="font-black">Marketplace</p><p className="text-xs text-slate-500">Local marketplace and delivery</p></div></div><p className="mt-4 max-w-sm text-sm leading-6 text-slate-600">Helping independent stores serve their communities through thoughtful technology and reliable delivery coordination.</p></div>
             <div><p className="text-sm font-black">Explore</p><div className="mt-4 grid gap-3 text-sm text-slate-600"><Link href="#how-it-works" className="hover:text-orange-700">How it works</Link><Link href="#partners" className="hover:text-orange-700">For store partners</Link><Link href="/register" className="hover:text-orange-700">Create an account</Link><Link href="/login" className="hover:text-orange-700">Sign in</Link></div></div>
-            <div><p className="text-sm font-black">Support and legal</p><div className="mt-4 grid gap-3 text-sm text-slate-600"><PublicSupportButton className="text-left hover:text-orange-700">Contact support</PublicSupportButton><a href="mailto:info@liamarketplace.com" className="hover:text-orange-700">info@liamarketplace.com</a><Link href="/legal" className="hover:text-orange-700">Legal documents</Link><Link href="/legal/customer-terms" className="hover:text-orange-700">Customer Terms</Link><Link href="/legal/refund-policy" className="hover:text-orange-700">Refund and Cancellation Policy</Link><a href="tel:+18336724143" className="hover:text-orange-700">(833) 672-4143</a></div></div>
+            <div><p className="text-sm font-black">Support and legal</p><div className="mt-4 grid gap-3 text-sm text-slate-600"><PublicSupportButton className="text-left hover:text-orange-700">Contact support</PublicSupportButton><a href="mailto:info@liamarketplace.com" className="hover:text-orange-700">info@liamarketplace.com</a><Link href="/taxes" className="hover:text-orange-700">How taxes are calculated</Link><Link href="/legal" className="hover:text-orange-700">Legal documents</Link><Link href="/legal/customer-terms" className="hover:text-orange-700">Customer Terms</Link><Link href="/legal/refund-policy" className="hover:text-orange-700">Refund and Cancellation Policy</Link><a href="tel:+18336724143" className="hover:text-orange-700">(833) 672-4143</a></div></div>
           </div>
           <div className="mt-10 flex flex-col gap-3 border-t border-slate-200 pt-6 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between"><p>&copy; {new Date().getFullYear()} LIA Marketplace. All rights reserved.</p><div className="flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-emerald-600"/><span>Secure account and payment experiences</span></div></div>
         </div>

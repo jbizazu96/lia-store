@@ -376,6 +376,7 @@ export default function OrderDetailsPage({params}: OrderDetailsPageProps) {
           {!readOnly && <OrderActions
             status={order.status}
             fulfillmentType={order.fulfillmentType}
+            customerPickupCode={order.pickup?.code}
             onCompletePickup={async (code) => {
               setUpdating(true);
               try {

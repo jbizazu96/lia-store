@@ -18,7 +18,6 @@ interface MarketplacePricingPolicy {
   serviceFeeRate: number;
   minimumServiceFeeCents: number;
   maximumServiceFeeCents: number;
-  salesTaxRate: number;
   driverMinimumPayCents: number;
   pickupEnabled: boolean;
   pickupMaximumDistanceMiles: number;
@@ -67,13 +66,12 @@ const SECTIONS: Array<{title: string; description: string; fields: FieldDefiniti
     ],
   },
   {
-    title: "Customer fees and tax",
-    description: "Shown in the customer cart and trusted again during checkout.",
+    title: "Customer fees",
+    description: "Shown in the customer cart and trusted again during checkout. Sales tax is calculated separately by Stripe Tax from product classifications and the fulfillment address.",
     fields: [
       {key: "serviceFeeRate", label: "Service fee rate", hint: "Percentage of the product subtotal.", unit: "%"},
       {key: "minimumServiceFeeCents", label: "Minimum service fee", hint: "The lowest service fee charged.", unit: "$"},
       {key: "maximumServiceFeeCents", label: "Maximum service fee", hint: "The highest service fee charged.", unit: "$"},
-      {key: "salesTaxRate", label: "Estimated sales tax rate", hint: "An estimate shown before the final Stripe Tax calculation.", unit: "%"},
       {key: "defaultMinimumOrderCents", label: "Default minimum order", hint: "Used unless a store has its own approved minimum order.", unit: "$"},
     ],
   },

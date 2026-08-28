@@ -8,6 +8,7 @@ import { CustomerPageSkeleton } from "@/components/customer/ui/CustomerPageSkele
 
 interface SearchResultsProps {
   loading: boolean;
+  hasCompletedSearch: boolean;
   error?: string | null;
   results: SearchResult[];
   groups: StoreGroup[];
@@ -19,6 +20,7 @@ interface SearchResultsProps {
 
 export function SearchResults({
   loading,
+  hasCompletedSearch,
   error,
   results,
   groups,
@@ -27,13 +29,13 @@ export function SearchResults({
   loadingMore = false,
   onLoadMore,
 }: SearchResultsProps) {
-  if (loading) {
+  if (loading && !hasCompletedSearch) {
     return (
       <CustomerPageSkeleton variant="search" />
     );
   }
 
-  if (error) {
+  if (error && results.length === 0) {
     return (
       <CustomerPageState
         kind="error"
@@ -61,6 +63,16 @@ export function SearchResults({
 
   return (
     <div className="space-y-4">
+      {loading ? (
+        <p className="sr-only" role="status" aria-live="polite">
+          Updating search results
+        </p>
+      ) : null}
+      {error ? (
+        <div className="rounded-xl bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800" role="status">
+          {error} Your current results are still shown.
+        </div>
+      ) : null}
       {groups.map((group) => (
         <StoreResult
           key={group.storeId}

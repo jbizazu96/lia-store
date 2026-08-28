@@ -14,6 +14,7 @@
 import {
   useCallback,
   useEffect,
+  useRef,
   useState,
 } from "react";
 import Image from "next/image";
@@ -87,9 +88,18 @@ export function AdminCustomerManagementWorkspace() {
   const [suspensionMode, setSuspensionMode] = useState(false);
   const [reason, setReason] = useState("");
   const [zones, setZones] = useState<DeliveryZone[]>([]);
+  const listLoadedRef = useRef(false);
+  const loadingMoreRef = useRef(false);
+  const requestSequenceRef = useRef(0);
 
   const load = useCallback(async (cursor?: string) => {
-    setLoading(true);
+    const requestSequence = cursor ? requestSequenceRef.current : ++requestSequenceRef.current;
+    if (cursor) {
+      if (loadingMoreRef.current) return;
+      loadingMoreRef.current = true;
+    } else if (!listLoadedRef.current) {
+      setLoading(true);
+    }
     setError("");
 
     try {
@@ -98,14 +108,17 @@ export function AdminCustomerManagementWorkspace() {
         status: filter,
         ...(cursor ? {cursor} : {}),
       });
+      if (!cursor && requestSequence !== requestSequenceRef.current) return;
       setCustomers((current) => cursor ? [...current, ...result.customers] : result.customers);
       setCounts(result.counts);
       setLimited(result.limited);
       setNextCursor(result.nextCursor);
+      listLoadedRef.current = true;
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to load customers.");
+      if (requestSequence === requestSequenceRef.current) setError(cause instanceof Error ? cause.message : "Unable to load customers.");
     } finally {
       setLoading(false);
+      loadingMoreRef.current = false;
     }
   }, [filter, search]);
 

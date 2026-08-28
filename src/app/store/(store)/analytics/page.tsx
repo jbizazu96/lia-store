@@ -1,6 +1,6 @@
 "use client";
 
-import {useState, useEffect} from "react";
+import {useState, useEffect, useRef} from "react";
 import {motion} from "framer-motion";
 import {
   TrendingUp,
@@ -81,23 +81,34 @@ export default function AnalyticsPage() {
     topProducts: [],
   });
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<{title: string; message: string} | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const hasLoadedOnce = useRef(false);
+  const [hasLoadedData, setHasLoadedData] = useState(false);
+  const requestId = useRef(0);
 
   useEffect(() => {
     const fetchAnalytics = async () => {
+      const currentRequest = ++requestId.current;
+      const initialLoad = !hasLoadedOnce.current;
       const trace = startStorePerformanceTrace("store_analytics_ready");
       let result = "complete";
       try {
-        setLoading(true);
+        if (initialLoad) setLoading(true);
+        else setRefreshing(true);
         setError(null);
         const response =
           await storeWorkspaceClientService
             .getAnalytics(period as "week" | "month" | "year");
 
+        if (currentRequest !== requestId.current) return;
         setAnalytics(response);
+        hasLoadedOnce.current = true;
+        setHasLoadedData(true);
 
       } catch (error) {
+        if (currentRequest !== requestId.current) return;
         result = "error";
         console.error("Error fetching analytics:", error);
         const code = typeof error === "object" && error !== null && "code" in error ? String(error.code) : "";
@@ -108,7 +119,10 @@ export default function AnalyticsPage() {
             : {title: "Analytics could not be loaded", message: "A temporary server problem prevented this report from loading. No zero totals are being substituted."});
       } finally {
         trace.stop({result, period});
-        setLoading(false);
+        if (currentRequest === requestId.current) {
+          setLoading(false);
+          setRefreshing(false);
+        }
       }
     };
 
@@ -158,7 +172,7 @@ export default function AnalyticsPage() {
     return <BrandedLoader message="Loading Analytics" />;
   }
 
-  if (error) return <div className="rounded-xl border border-red-100 bg-white p-8 text-center"><h2 className="font-bold text-gray-900">{error.title}</h2><p className="mt-2 text-sm text-gray-600">{error.message}</p><button type="button" onClick={() => setReloadKey((key) => key + 1)} className="mt-4 rounded-xl bg-orange-500 px-5 py-2.5 text-sm font-semibold text-white">Retry</button></div>;
+  if (error && !hasLoadedData) return <div className="rounded-xl border border-red-100 bg-white p-8 text-center"><h2 className="font-bold text-gray-900">{error.title}</h2><p className="mt-2 text-sm text-gray-600">{error.message}</p><button type="button" onClick={() => setReloadKey((key) => key + 1)} className="mt-4 rounded-xl bg-orange-500 px-5 py-2.5 text-sm font-semibold text-white">Retry</button></div>;
 
   const currency = (value: number) => new Intl.NumberFormat("en-US", {
     style: "currency",
@@ -221,6 +235,17 @@ export default function AnalyticsPage() {
           </button>
         </div>
       </div>
+      {refreshing && (
+        <p role="status" className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-2.5 text-sm font-medium text-blue-700">
+          Updating this report in the background…
+        </p>
+      )}
+      {error && hasLoadedData && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <span><b>{error.title}:</b> {error.message} The previous report remains visible.</span>
+          <button type="button" onClick={() => setReloadKey((key) => key + 1)} className="rounded-full bg-amber-900 px-4 py-2 text-xs font-bold text-white">Retry</button>
+        </div>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">

@@ -5,6 +5,7 @@ import {HttpsError, onCall} from "firebase-functions/v2/https";
 import {onSchedule} from "firebase-functions/v2/scheduler";
 import {requireStoreWorkspaceAccess} from "../services/store/storeAccessService";
 import {enforceCallableAbuseProtection} from "../security/callableAbuseProtection";
+import {createCatalogSearchTokens} from "../services/catalog/catalogSearchTokens";
 
 if (admin.apps.length === 0) admin.initializeApp();
 const db = getFirestore("default");
@@ -53,7 +54,11 @@ async function ensurePickupCode(orderId: string, storeId: string): Promise<void>
     transaction.update(orderReference, {
       "pickup.pickupCodeHash": hashCode(orderId, code),
       "pickup.pickupCodeLastFour": code.slice(-4),
+      "pickup.pickupCodeSearchToken": code,
       "pickup.readyAt": FieldValue.serverTimestamp(),
+      storeSearchTokens: FieldValue.arrayUnion(
+        ...createCatalogSearchTokens([code])
+      ),
       updatedAt: FieldValue.serverTimestamp(),
     });
   });
@@ -125,6 +130,14 @@ export const completeCustomerPickup = onCall({region: "us-central1"}, async (req
     const changedAt = Timestamp.now();
     transaction.update(orderReference, {
       status: "completed",
+      storeSearchTokens: createCatalogSearchTokens([
+        snapshot.id,
+        order.orderNumber,
+        order.customer?.name,
+        order.customer?.email,
+      ]),
+      "pickup.pickupCodeHash": FieldValue.delete(),
+      "pickup.pickupCodeSearchToken": FieldValue.delete(),
       "pickup.pickedUpAt": FieldValue.serverTimestamp(),
       "pickup.handedOffBy": request.auth!.uid,
       updatedAt: FieldValue.serverTimestamp(),

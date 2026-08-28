@@ -32,7 +32,7 @@ const feeContent: Record<
   tax: {
     title: "Estimated Tax",
     description:
-      "The tax shown before checkout is an estimate. Your final tax is calculated when you place the order and appears on your receipt.",
+      "The amount shown is an estimate based on the items, fulfillment method, store location, and delivery or pickup location. LIA recalculates tax securely before payment, so the final amount may be higher or lower if order details or applicable rules change.",
   },
 };
 
@@ -84,7 +84,7 @@ export function FeeInfoSheet({
           </button>
         </div>
 
-        {type === "tax" && (
+        {type === "tax" && estimatedTax > 0 && (
           <p className="mb-3 text-sm font-semibold text-gray-900">
             Estimated tax: ${estimatedTax.toFixed(2)}
           </p>
@@ -93,6 +93,19 @@ export function FeeInfoSheet({
         <p className="text-base leading-relaxed text-gray-600">
           {content.description}
         </p>
+
+        {type === "tax" && (
+          <a
+            href="https://www.liamarketplace.com/taxes"
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={onClose}
+            className="mt-4 inline-flex text-sm font-bold text-orange-700 underline underline-offset-4"
+          >
+            Learn how LIA calculates taxes
+            <span className="sr-only"> (opens in a new tab)</span>
+          </a>
+        )}
 
         <button
           type="button"

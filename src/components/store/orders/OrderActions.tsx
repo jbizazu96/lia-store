@@ -38,6 +38,7 @@ import type {
 interface OrderActionsProps {
   status: OrderStatus;
   fulfillmentType: "delivery" | "pickup";
+  customerPickupCode?: string | null;
   onCompletePickup: (code: string) => Promise<void>;
 
   cancellationReason?: string;
@@ -53,6 +54,7 @@ interface OrderActionsProps {
 export function OrderActions({
   status,
   fulfillmentType,
+  customerPickupCode,
   onCompletePickup,
   cancellationReason,
   onStatusUpdate,
@@ -68,6 +70,29 @@ export function OrderActions({
     setCancellationReasonInput,
   ] = useState("");
   const [pickupCode, setPickupCode] = useState("");
+  const [pickupError, setPickupError] = useState("");
+
+  const handleCompletePickup = async () => {
+    if (pickupCode.length !== 6 || updating) {
+      return;
+    }
+
+    try {
+      setPickupError("");
+      await onCompletePickup(pickupCode);
+    } catch (error: unknown) {
+      const message = error instanceof Error
+        ? error.message
+        : "The pickup code could not be verified.";
+
+      setPickupCode("");
+      setPickupError(
+        message.toLowerCase().includes("pickup code")
+          ? message
+          : "The pickup code could not be verified. Please try again."
+      );
+    }
+  };
 
   /*
   |--------------------------------------------------------------------------
@@ -184,19 +209,30 @@ export function OrderActions({
             <div className="rounded-xl border border-purple-100 bg-purple-50 p-4">
               <p className="font-semibold text-purple-700">Ready for customer pickup</p>
               <p className="mt-1 text-sm text-purple-600">Ask the customer for the six-digit pickup code before handing over the order.</p>
+              {customerPickupCode && (
+                <div className="mt-3 rounded-xl border border-purple-200 bg-white px-4 py-3 text-center">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-purple-500">Customer pickup code</p>
+                  <p className="mt-1 font-mono text-2xl font-black tracking-[0.3em] text-purple-800">
+                    {customerPickupCode}
+                  </p>
+                </div>
+              )}
               <div className="mt-3 flex gap-2">
                 <input
                   inputMode="numeric"
                   maxLength={6}
                   value={pickupCode}
-                  onChange={(event) => setPickupCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
+                  onChange={(event) => {
+                    setPickupError("");
+                    setPickupCode(event.target.value.replace(/\D/g, "").slice(0, 6));
+                  }}
                   placeholder="6-digit code"
                   className="min-w-0 flex-1 rounded-full border border-purple-200 bg-white px-4 py-2.5 text-center font-mono font-bold tracking-widest outline-none"
                 />
                 <button
                   type="button"
                   disabled={updating || pickupCode.length !== 6}
-                  onClick={() => onCompletePickup(pickupCode)}
+                  onClick={() => void handleCompletePickup()}
                   className="rounded-full bg-purple-600 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50"
                 >
                   Complete
@@ -439,6 +475,36 @@ export function OrderActions({
                   : "Confirm cancellation"}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {pickupError && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4">
+          <div
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="pickup-error-title"
+            aria-describedby="pickup-error-message"
+            className="w-full max-w-sm rounded-2xl bg-white p-6 text-center shadow-xl"
+          >
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-red-50 text-2xl font-bold text-red-600">
+              !
+            </div>
+            <h2 id="pickup-error-title" className="mt-4 text-xl font-bold text-gray-900">
+              Pickup code incorrect
+            </h2>
+            <p id="pickup-error-message" className="mt-2 text-sm leading-6 text-gray-600">
+              {pickupError}
+            </p>
+            <button
+              type="button"
+              autoFocus
+              onClick={() => setPickupError("")}
+              className="mt-6 w-full rounded-full bg-orange-500 px-5 py-3 font-bold text-white transition hover:bg-orange-600"
+            >
+              Try again
+            </button>
           </div>
         </div>
       )}

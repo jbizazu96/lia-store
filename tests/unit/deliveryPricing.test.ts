@@ -24,7 +24,6 @@ const policy: MarketplacePricingPolicy = {
   serviceFeeRate: 0.05,
   minimumServiceFeeCents: 100,
   maximumServiceFeeCents: 500,
-  salesTaxRate: 0.07,
   driverMinimumPayCents: 599,
   freeDeliveryDriverIncentiveWithoutTipCents: 500,
   freeDeliveryDriverIncentiveWithTipCents: 300,

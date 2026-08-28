@@ -134,12 +134,14 @@ const storeOrderStatuses = ["pending", "accepted", "preparing", "ready_for_picku
 
 function orderSearchFields(id: string, data: Record<string, unknown>) {
   const customer = isRecord(data.customer) ? data.customer : {};
+  const pickup = isRecord(data.pickup) ? data.pickup : {};
   return {
     storeSearchTokens: createCatalogSearchTokens([
       id,
       data.orderNumber,
       customer.name,
       customer.email,
+      pickup.pickupCodeSearchToken,
     ]),
   };
 }
@@ -668,6 +670,57 @@ export const getStoreWorkspaceOrders = onCall({region: "us-central1", timeoutSec
   });
   const searchToken = search.length >= 2 ? search.slice(0, 40) : "";
   const cursor = text(input.cursor);
+
+  /*
+   * A six-digit pickup code lives in the private pickup-code collection, not
+   * in the public/customer-searchable catalog. Resolve it server-side and
+   * verify every matching order belongs to the authenticated store before
+   * returning anything. This also finds ready orders created before their
+   * store search token was refreshed.
+   */
+  if (/^\d{6}$/.test(searchToken)) {
+    const codeMatches = await db.collection("customerPickupCodes")
+      .where("code", "==", searchToken)
+      .limit(20)
+      .get();
+    const candidateOrders = codeMatches.empty
+      ? []
+      : await db.getAll(...codeMatches.docs.map((document) => db.collection("orders").doc(document.id)));
+    const matchingOrders = candidateOrders
+      .filter((order) => {
+        const data = order.data() ?? {};
+        const paidAt = storedDate(isRecord(data.payment) ? data.payment.paidAt : null);
+        return order.exists &&
+          data.store?.id === store.id &&
+          data.fulfillmentType === "pickup" &&
+          data.checkoutStatus === "confirmed" &&
+          data.payment?.status === "paid" &&
+          (!storeOrderStatuses.includes(status as typeof storeOrderStatuses[number]) || data.status === status) &&
+          (!from || Boolean(paidAt && paidAt.getTime() >= from.getTime())) &&
+          (!to || Boolean(paidAt && paidAt.getTime() <= to.getTime()));
+      })
+      .sort((left, right) => {
+        const leftPaidAt = storedDate(left.data()?.payment?.paidAt)?.getTime() ?? 0;
+        const rightPaidAt = storedDate(right.data()?.payment?.paidAt)?.getTime() ?? 0;
+        return rightPaidAt - leftPaidAt;
+      })
+      .slice(0, pageSize);
+    const [stats, financials] = await Promise.all([
+      storeOrderCounts(store.id),
+      access.role === "owner"
+        ? storeOrderFinancialSummaries(store.id, matchingOrders)
+        : Promise.resolve(new Map<string, unknown>()),
+    ]);
+    return {
+      orders: matchingOrders.map((order) => ({
+        id: order.id,
+        ...(serialize(order.data()) as Record<string, unknown>),
+        storeFinancials: financials.get(order.id),
+      })),
+      stats,
+      nextCursor: null,
+    };
+  }
   /*
    * Browsing order history must never wait for a legacy search migration.
    * New orders receive search tokens when they are created. Only a deliberate
@@ -730,11 +783,27 @@ export const getStoreWorkspaceOrder = onCall({ region: "us-central1" }, async (r
   }
   await enforceCallableAbuseProtection({operation: "store-order-detail", uid: request.auth.uid, appCheckVerified: Boolean(request.app), maximumRequests: 240, windowSeconds: 600});
   const financials = access.role === "owner" ? await storeOrderFinancialSummaries(store.id, [order]) : new Map<string, unknown>();
+  const orderData = order.data() ?? {};
+  const pickupData = isRecord(orderData.pickup) ? orderData.pickup : {};
+  let pickupCode: string | null = null;
+  if (orderData.fulfillmentType === "pickup" && orderData.status === "ready_for_pickup") {
+    const codeSnapshot = await db.collection("customerPickupCodes").doc(order.id).get();
+    const codeData = codeSnapshot.data() ?? {};
+    if (codeData.orderId === order.id && typeof codeData.code === "string" && /^\d{6}$/.test(codeData.code)) {
+      pickupCode = codeData.code;
+    }
+  }
 
   return {
     order: {
       id: order.id,
-      ...(serialize(order.data()) as Record<string, unknown>),
+      ...(serialize(orderData) as Record<string, unknown>),
+      ...(orderData.fulfillmentType === "pickup" ? {
+        pickup: {
+          ...(serialize(pickupData) as Record<string, unknown>),
+          code: pickupCode,
+        },
+      } : {}),
       storeFinancials: financials.get(order.id),
     },
   };

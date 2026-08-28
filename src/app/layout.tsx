@@ -14,16 +14,31 @@ import {GlobalClientErrorReporter} from "@/components/monitoring/GlobalClientErr
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://www.liamarketplace.com"),
-  title: "LIA Marketplace | Local delivery for independent stores",
-  description: "Shop local and international products from independent stores, delivered to your door.",
+  title: {
+    default: "LIA Marketplace | Shop Independent Local Stores",
+    template: "%s | LIA Marketplace",
+  },
+  description: "Shop groceries and specialty products from independent local and international stores with pickup and delivery through LIA Marketplace.",
   applicationName: "LIA Marketplace",
+  creator: "LIA Marketplace",
+  publisher: "LIA Marketplace",
+  category: "shopping",
+  robots: {
+    index: false,
+    follow: false,
+    googleBot: {
+      index: false,
+      follow: false,
+      noimageindex: true,
+    },
+  },
   openGraph: {
     type: "website",
     locale: "en_US",
     url: "/",
     siteName: "LIA Marketplace",
-    title: "LIA Marketplace | Local delivery for independent stores",
-    description: "Shop local and international products from independent stores, delivered to your door.",
+    title: "LIA Marketplace | Shop Independent Local Stores",
+    description: "Shop groceries and specialty products from independent local and international stores with pickup and delivery.",
     images: [{
       url: "/opengraph-image",
       width: 1200,
@@ -33,8 +48,8 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "LIA Marketplace | Local delivery for independent stores",
-    description: "Shop local and international products from independent stores, delivered to your door.",
+    title: "LIA Marketplace | Shop Independent Local Stores",
+    description: "Shop groceries and specialty products from independent local and international stores with pickup and delivery.",
     images: ["/opengraph-image"],
   },
   manifest: "/manifest.webmanifest",

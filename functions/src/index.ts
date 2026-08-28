@@ -52,6 +52,7 @@ import { syncShipdayDeliveries } from "./scheduler/syncShipdayDeliveries";
 import {
   prepareCheckoutPayment,
 } from "./payment/checkout/prepareCheckoutPayment";
+export {estimateCheckoutTax} from "./payment/tax/estimateCheckoutTax";
 export {getCustomerPickupCode, completeCustomerPickup, cleanupExpiredPickupCodes} from "./orders/pickupFulfillmentService";
 import {
   cleanupDeliveryRouteCache,
@@ -134,16 +135,22 @@ export {
 export {
   createAdminProductSizeUnit,
   createAdminProductCategory,
+  createAdminProductTaxClassification,
+  backfillAdminProductTaxClassifications,
+  deleteAdminProductTaxClassification,
   deleteAdminProductSizeUnit,
   getAdminProductCategories,
   getAdminProductCatalogPolicy,
   getAdminProductSizeUnits,
+  getAdminProductTaxClassifications,
   getStoreProductSizeUnits,
+  getStoreProductTaxConfiguration,
   importAdminProductCategories,
   importAdminProductSizeUnits,
   saveAdminProductCatalogPolicy,
   updateAdminProductSizeUnit,
   updateAdminProductCategory,
+  updateAdminProductTaxClassification,
   uploadAdminProductCategoryIcon,
 } from "./callable/adminProductCategories";
 export {
@@ -378,6 +385,9 @@ export {
 export {
   processMarketplaceRefunds,
 } from "./scheduler/processMarketplaceRefunds";
+export {
+  reconcileStripeTaxRefunds,
+} from "./scheduler/reconcileStripeTaxRefunds";
 
 export {
   processEligibleMarketplaceRefund,

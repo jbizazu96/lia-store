@@ -223,6 +223,22 @@ export interface MarketplacePaymentRefund {
   stripeRefundId?: string;
 
   /*
+   * Stripe automatically creates the Tax reversal because the original
+   * PaymentIntent is linked to a Stripe Tax calculation. LIA reconciles the
+   * asynchronous association and stores the committed transaction IDs.
+   */
+  taxReversal?: {
+    provider: "stripe_tax_payment_intent";
+    automatic: true;
+    status: "pending" | "committed" | "failed" | "not_applicable";
+    calculationId?: string;
+    originalTransactionId?: string;
+    reversalTransactionId?: string;
+    checkedAt?: string;
+    error?: string;
+  };
+
+  /*
    * Full or partial refund.
    */
   scope:

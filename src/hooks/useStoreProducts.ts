@@ -63,6 +63,7 @@ export function useStoreProducts(options: UseStoreProductsOptions = {}) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [needsStoreSetup, setNeedsStoreSetup] = useState(false);
   const requestId = useRef(0);
+  const hasLoadedOnce = useRef(false);
   const lastVisibleRefreshAt = useRef(0);
 
   const load = useCallback(async (cursor?: string, append = false, showLoading = true) => {
@@ -89,6 +90,7 @@ export function useStoreProducts(options: UseStoreProductsOptions = {}) {
       setFilteredStats(inventory.filteredStats);
       setNextCursor(inventory.nextCursor);
       setNeedsStoreSetup(false);
+      hasLoadedOnce.current = true;
     } catch (loadError) {
       if (currentRequest !== requestId.current) return;
       console.error("Error loading store products:", loadError);
@@ -111,6 +113,7 @@ export function useStoreProducts(options: UseStoreProductsOptions = {}) {
     if (workspaceLoading) return;
     if (!auth.currentUser) {
       requestId.current += 1;
+      hasLoadedOnce.current = false;
       queueMicrotask(() => {
         setProducts([]); setCategories([]); setStoreId(null); setIsAuthenticated(false);
         setError("You must sign in."); setLoading(false);
@@ -118,10 +121,14 @@ export function useStoreProducts(options: UseStoreProductsOptions = {}) {
       return;
     }
     if (!entry?.hasStore || !entry.store) {
+      hasLoadedOnce.current = false;
       queueMicrotask(() => {setNeedsStoreSetup(true); setLoading(false);});
       return;
     }
-    queueMicrotask(() => {setIsAuthenticated(true); void load();});
+    queueMicrotask(() => {
+      setIsAuthenticated(true);
+      void load(undefined, false, !hasLoadedOnce.current);
+    });
   }, [entry, load, workspaceLoading]);
 
   useEffect(() => {

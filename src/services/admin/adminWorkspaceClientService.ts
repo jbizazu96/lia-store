@@ -55,6 +55,10 @@ import type {
   DeliveryZone,
   DeliveryZoneDraft,
 } from "@/types/deliveryZone";
+import type {
+  ProductTaxClassification,
+  ProductTaxClassificationDraft,
+} from "@/types/productTaxClassification";
 
 export class AdminWorkspaceClientError extends Error {
   constructor(
@@ -379,11 +383,11 @@ export const adminWorkspaceClientService = {
   }>("reindexAdminCatalogSearch", afterStoreId ? {afterStoreId} : undefined),
   getAuditLogs: (search = "", cursor?: string) => call<{logs: AdminAuditLog[]; limited: boolean; nextCursor: string | null}>("getAdminAuditLogs", {search, ...(cursor ? {cursor} : {})}),
   getHomePromotions: () => call<{promotions: HomePromotion[]}>("getAdminHomePromotions"),
-  getProductCategories: () => call<{categories: Array<{id: string; name: string; iconUrl: string; freshnessEligible: boolean}>}>("getAdminProductCategories"),
+  getProductCategories: () => call<{categories: Array<{id: string; name: string; iconUrl: string; freshnessEligible: boolean; defaultTaxCategoryId: string | null; allowedTaxCategoryIds: string[]}>}>("getAdminProductCategories"),
   getProductCatalogPolicy: () => call<{lowStockThreshold: number; inventoryEmailsPerDay: number}>("getAdminProductCatalogPolicy"),
   saveProductCatalogPolicy: (policy: {lowStockThreshold: number; inventoryEmailsPerDay: number}) => call<{success: boolean; productsUpdated: number}>("saveAdminProductCatalogPolicy", policy),
-  createProductCategory: (category: {name: string; freshnessEligible: boolean}) => call<{id: string}>("createAdminProductCategory", category),
-  updateProductCategory: (id: string, category: {name: string; freshnessEligible: boolean}) => call<{success: boolean}>("updateAdminProductCategory", {id, ...category}),
+  createProductCategory: (category: {name: string; freshnessEligible: boolean; defaultTaxCategoryId: string | null; allowedTaxCategoryIds: string[]}) => call<{id: string}>("createAdminProductCategory", category),
+  updateProductCategory: (id: string, category: {name: string; freshnessEligible: boolean; defaultTaxCategoryId: string | null; allowedTaxCategoryIds: string[]}) => call<{success: boolean}>("updateAdminProductCategory", {id, ...category}),
   uploadProductCategoryIcon: async (id: string, file: File) => {
     if (!file.type.match(/^image\/(jpeg|png|webp|avif)$/)) {
       throw new Error("Choose a JPG, PNG, WebP, or AVIF image.");
@@ -403,6 +407,29 @@ export const adminWorkspaceClientService = {
   updateProductSizeUnit: (id: string, nextId: string, label: string) => call<{success: boolean}>("updateAdminProductSizeUnit", {id, nextId, label}),
   deleteProductSizeUnit: (id: string) => call<{success: boolean}>("deleteAdminProductSizeUnit", {id}),
   importProductSizeUnits: () => call<{success: boolean; created: number; productsScanned: number}>("importAdminProductSizeUnits"),
+  getProductTaxClassifications: () => call<{
+    classifications: ProductTaxClassification[];
+  }>("getAdminProductTaxClassifications"),
+  createProductTaxClassification: (classification: ProductTaxClassificationDraft) =>
+    call<{id: string}>("createAdminProductTaxClassification", classification),
+  updateProductTaxClassification: (
+    id: string,
+    classification: Omit<ProductTaxClassificationDraft, "id">,
+  ) => call<{success: boolean}>(
+    "updateAdminProductTaxClassification",
+    {id, ...classification},
+  ),
+  deleteProductTaxClassification: (id: string) =>
+    call<{success: boolean}>("deleteAdminProductTaxClassification", {id}),
+  backfillProductTaxClassifications: (cursor?: string) => call<{
+    success: boolean;
+    scanned: number;
+    classified: number;
+    deactivated: number;
+    reactivated: number;
+    unchanged: number;
+    nextCursor: string | null;
+  }>("backfillAdminProductTaxClassifications", cursor ? {cursor} : undefined),
   saveHomePromotion: (id: string | null, promotion: Omit<HomePromotion, "id">) => call<{id: string}>("saveAdminHomePromotion", {id, promotion}),
   deleteHomePromotion: (id: string) => call<{success: boolean}>("deleteAdminHomePromotion", {id}),
   getDeliveryZones: () => call<{zones: DeliveryZone[]}>("getAdminDeliveryZones"),

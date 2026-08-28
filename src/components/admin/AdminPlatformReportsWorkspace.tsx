@@ -13,6 +13,7 @@
 
 import {
   useEffect,
+  useRef,
   useState,
 } from "react";
 import {
@@ -46,18 +47,17 @@ export function AdminPlatformReportsWorkspace() {
   const [error, setError] = useState("");
   const [backfilling, setBackfilling] = useState(false);
   const [backfillMessage, setBackfillMessage] = useState("");
+  const reportRef = useRef<AdminPlatformReport | null>(null);
 
   useEffect(() => {
     let active = true;
     queueMicrotask(() => {
-      if (!active) return;
-      setReport(null);
-      setError("");
+      if (active) setError("");
     });
     void adminWorkspaceClientService.getPlatformReport(periodDays)
-      .then((result) => { if (active) setReport(result); })
+      .then((result) => { if (active) { reportRef.current = result; setReport(result); } })
       .catch((reason: unknown) => {
-        if (active) setError(reason instanceof Error ? reason.message : "Unable to load platform reporting.");
+        if (active && !reportRef.current) setError(reason instanceof Error ? reason.message : "Unable to load platform reporting.");
       });
     return () => { active = false; };
   }, [periodDays]);
@@ -82,7 +82,9 @@ export function AdminPlatformReportsWorkspace() {
       setBackfillMessage(
         `Report history synchronized from ${ordersScanned} orders and ${customersScanned} customers.`
       );
-      setReport(await adminWorkspaceClientService.getPlatformReport(periodDays));
+      const refreshedReport = await adminWorkspaceClientService.getPlatformReport(periodDays);
+      reportRef.current = refreshedReport;
+      setReport(refreshedReport);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Unable to synchronize report history.");
     } finally {
