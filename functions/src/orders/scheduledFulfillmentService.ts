@@ -6,6 +6,8 @@ import type {PrepareCheckoutPaymentRequest, TrustedCheckoutStore} from "../payme
 
 const db = getFirestore("default");
 type Reservation = {customerUid: string; expiresAt: Timestamp; status: "held" | "confirmed"};
+const STORE_OPENING_BUFFER_MINUTES = 30;
+const STORE_CLOSING_BUFFER_MINUTES = 30;
 
 function localParts(date: Date, timezone: string) {
   const values = Object.fromEntries(new Intl.DateTimeFormat("en-US", {timeZone: timezone, weekday: "long", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23"}).formatToParts(date).map((part) => [part.type, part.value]));
@@ -33,7 +35,13 @@ export async function reserveScheduledFulfillment(input: {request: PrepareChecko
   if (end.getTime() - start.getTime() !== input.policy.scheduling.slotIntervalMinutes * 60_000) throw new HttpsError("invalid-argument", "The scheduled time-slot duration is invalid.");
   const startLocal = localParts(start, timezone); const endLocal = localParts(end, timezone);
   const schedule = input.store.schedule.find((entry) => entry.day === startLocal.day);
-  if (!schedule || schedule.isClosed || startLocal.date !== endLocal.date || startLocal.minutes < clock(schedule.open) || endLocal.minutes > clock(schedule.close)) throw new HttpsError("failed-precondition", "The selected time is outside the store's operating hours.");
+  if (
+    !schedule ||
+    schedule.isClosed ||
+    startLocal.date !== endLocal.date ||
+    startLocal.minutes < clock(schedule.open) + STORE_OPENING_BUFFER_MINUTES ||
+    endLocal.minutes > clock(schedule.close) - STORE_CLOSING_BUFFER_MINUTES
+  ) throw new HttpsError("failed-precondition", "Choose a time at least 30 minutes after the store opens and ending at least 30 minutes before it closes.");
   const id = slotId(input.store.id, input.request.fulfillmentType, window.start); const reference = db.collection("stores").doc(input.store.id).collection("fulfillmentSlots").doc(id);
   const capacity = input.store.scheduledOrdersPerSlot || input.policy.scheduling.defaultOrdersPerSlot;
   await db.runTransaction(async (transaction) => {

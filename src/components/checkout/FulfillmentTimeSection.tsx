@@ -34,6 +34,8 @@ interface DateGroup {
 
 const MINUTE_MS = 60_000;
 const DAY_MS = 86_400_000;
+const STORE_OPENING_BUFFER_MINUTES = 30;
+const STORE_CLOSING_BUFFER_MINUTES = 30;
 
 function localParts(date: Date, timezone: string): LocalDateParts {
   const values = Object.fromEntries(
@@ -125,8 +127,8 @@ function generateSlots(
       !schedule ||
       schedule.isClosed ||
       dateKey(start, timezone) !== dateKey(end, timezone) ||
-      ((startLocal.hour * 60) + startLocal.minute) < clockMinutes(schedule.open) ||
-      ((endLocal.hour * 60) + endLocal.minute) > clockMinutes(schedule.close)
+      ((startLocal.hour * 60) + startLocal.minute) < clockMinutes(schedule.open) + STORE_OPENING_BUFFER_MINUTES ||
+      ((endLocal.hour * 60) + endLocal.minute) > clockMinutes(schedule.close) - STORE_CLOSING_BUFFER_MINUTES
     ) {
       continue;
     }
@@ -297,25 +299,27 @@ export function FulfillmentTimeSection({
       </div>
 
       {pickerOpen && (
-        <div className="fixed inset-0 z-[120] overflow-y-auto bg-white text-gray-950" role="dialog" aria-modal="true" aria-labelledby="schedule-title">
-          <div className="mx-auto flex min-h-full w-full max-w-2xl flex-col px-5 pb-[calc(env(safe-area-inset-bottom)+1.5rem)] pt-[calc(env(safe-area-inset-top)+1rem)] sm:px-8">
-            <button
-              type="button"
-              onClick={() => setPickerOpen(false)}
-              className="mb-5 flex size-9 items-center justify-center rounded-full text-gray-950 transition-colors hover:bg-gray-100"
-              aria-label="Back to checkout"
-            >
-              <ChevronLeft className="size-6" />
-            </button>
+        <div className="fixed inset-0 z-[120] overflow-hidden bg-white text-gray-950" role="dialog" aria-modal="true" aria-labelledby="schedule-title">
+          <div className="mx-auto flex h-full min-h-0 w-full max-w-2xl flex-col px-5 pt-[calc(env(safe-area-inset-top)+1rem)] sm:px-8">
+            <div className="shrink-0">
+              <button
+                type="button"
+                onClick={() => setPickerOpen(false)}
+                className="mb-5 flex size-9 items-center justify-center rounded-full text-gray-950 transition-colors hover:bg-gray-100"
+                aria-label="Back to checkout"
+              >
+                <ChevronLeft className="size-6" />
+              </button>
 
-            <h2 id="schedule-title" className="text-xl font-extrabold tracking-tight">
-              Schedule {typeLabel}
-            </h2>
-            <p className="mt-1.5 text-xs font-medium leading-5 text-gray-600">
-              Choose an available window for your {type}. Times shown are in {timezoneName(timezone)}.
-            </p>
+              <h2 id="schedule-title" className="text-xl font-extrabold tracking-tight">
+                Schedule {typeLabel}
+              </h2>
+              <p className="mt-1.5 text-xs font-medium leading-5 text-gray-600">
+                Choose an available window for your {type}. Times shown are in {timezoneName(timezone)}.
+              </p>
+            </div>
 
-            <div className="mt-5 flex snap-x gap-2.5 overflow-x-auto pb-2">
+            <div className="mt-5 flex shrink-0 snap-x gap-2.5 overflow-x-auto overflow-y-hidden pb-2">
               {dateGroups.map((group) => {
                 const selected = group.key === activeDate?.key;
                 return (
@@ -340,7 +344,7 @@ export function FulfillmentTimeSection({
               })}
             </div>
 
-            <div className="mt-3 flex-1 pb-40">
+            <div className="mt-3 min-h-0 flex-1 overflow-y-auto overscroll-contain pb-4">
               {activeDate && activeDate.slots.length === 0 && (
                 <div className="rounded-xl bg-gray-50 px-4 py-4 text-center text-xs font-medium text-gray-600">
                   No {type} times are available on this day.
@@ -362,8 +366,8 @@ export function FulfillmentTimeSection({
               })}
             </div>
 
-            <div className="fixed inset-x-0 bottom-0 border-t border-gray-100 bg-white/95 px-5 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-4 backdrop-blur sm:px-8">
-              <div className="mx-auto max-w-2xl">
+            <div className="shrink-0 border-t border-gray-100 bg-white pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-3">
+              <div>
                 <button
                   type="button"
                   onClick={confirmScheduledTime}

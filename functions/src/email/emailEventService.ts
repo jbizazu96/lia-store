@@ -2,7 +2,7 @@ import * as admin from "firebase-admin";
 import {getFirestore} from "firebase-admin/firestore";
 import {defineString} from "firebase-functions/params";
 import {enqueueAdminEmail, enqueueEmail} from "./emailQueueService";
-import {adminActionEmail, customerRefundClaimActivityEmail, deliveredOrderEmail, EmailReceiptItem, EmailReceiptPricing, newOrderEmail, storeRefundClaimEmail} from "./emailTemplates";
+import {adminActionEmail, customerRefundClaimActivityEmail, deliveredOrderEmail, EmailReceiptItem, EmailReceiptPricing, newOrderEmail, scheduledPreparationEmail, storeRefundClaimEmail} from "./emailTemplates";
 
 if (admin.apps.length === 0) admin.initializeApp();
 const db = getFirestore("default");
@@ -81,6 +81,47 @@ export async function queueStoreNewOrderEmail(orderId: string, ownerUid = ""): P
     : undefined;
   const template = newOrderEmail({storeName: text(store.name) || "Your store", orderNumber: text(data.orderNumber) || orderId.slice(0, 8), fulfillmentType: data.fulfillmentType === "pickup" ? "pickup" : "delivery", scheduledFor, url: absolute(`/store/store-orders/${encodeURIComponent(orderId)}`)});
   await enqueueEmail({dedupeKey: `store-new-order:${orderId}`, category: "store_new_order", to: email, ...template, tags: {order_id: orderId}});
+}
+
+export async function queueStoreScheduledPreparationEmail(orderId: string, ownerUid = ""): Promise<void> {
+  const order = await db.collection("orders").doc(orderId).get();
+  if (!order.exists) return;
+  const data = order.data() ?? {};
+  const embeddedStore = data.store && typeof data.store === "object" && !Array.isArray(data.store)
+    ? data.store as Record<string, unknown>
+    : {};
+  const storeId = text(embeddedStore.id);
+  const store = storeId ? await db.collection("stores").doc(storeId).get() : null;
+  const storeData = store?.data() ?? {};
+  if (storeData.emailNotifications === false || storeData.orderNotifications === false) return;
+  const resolvedOwnerUid = ownerUid || text(storeData.ownerId) || text(embeddedStore.ownerId);
+  const owner = resolvedOwnerUid ? await db.collection("users").doc(resolvedOwnerUid).get() : null;
+  const email = text(owner?.data()?.email) || text(storeData.email) || text(embeddedStore.email);
+  const scheduling = data.scheduling && typeof data.scheduling === "object" && !Array.isArray(data.scheduling)
+    ? data.scheduling as Record<string, unknown>
+    : {};
+  const scheduledStart = date(scheduling.windowStart);
+  if (scheduling.timing !== "scheduled" || !scheduledStart) return;
+  const timezone = text(scheduling.timezone) || text(storeData.fulfillmentTimezone) || "America/Chicago";
+  const scheduledFor = new Intl.DateTimeFormat("en-US", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: timezone,
+  }).format(new Date(scheduledStart));
+  const template = scheduledPreparationEmail({
+    storeName: text(storeData.name) || text(embeddedStore.name) || "Your store",
+    orderNumber: text(data.orderNumber) || orderId.slice(0, 8),
+    fulfillmentType: data.fulfillmentType === "pickup" ? "pickup" : "delivery",
+    scheduledFor,
+    url: absolute(`/store/store-orders/${encodeURIComponent(orderId)}`),
+  });
+  await enqueueEmail({
+    dedupeKey: `store-scheduled-preparation:${orderId}`,
+    category: "store_scheduled_preparation",
+    to: email,
+    ...template,
+    tags: {order_id: orderId},
+  });
 }
 
 export async function queueCustomerDeliveredEmail(orderId: string, customerUid: string): Promise<void> {

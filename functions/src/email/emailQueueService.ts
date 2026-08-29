@@ -11,6 +11,7 @@ export type EmailCategory =
   | "customer_order_delivered"
   | "customer_refund_claim"
   | "store_new_order"
+  | "store_scheduled_preparation"
   | "store_refund_claim"
   | "store_inventory_digest"
   | "driver_shipday_credentials"

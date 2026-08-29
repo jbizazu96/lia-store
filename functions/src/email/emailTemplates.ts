@@ -120,6 +120,14 @@ export function newOrderEmail(input: {storeName: string; orderNumber: string; ur
   return {subject: title, text, html: layout({title, preheader: `A new paid order is ready for ${input.storeName}.`, body, action: {label: "Review order", url: input.url}})};
 }
 
+export function scheduledPreparationEmail(input: {storeName: string; orderNumber: string; url: string; fulfillmentType: "delivery" | "pickup"; scheduledFor: string}) {
+  const fulfillment = input.fulfillmentType === "pickup" ? "pickup" : "delivery";
+  const title = `Time to prepare order ${input.orderNumber}`;
+  const text = `${input.storeName}, it is time to start preparing order ${input.orderNumber} for its scheduled ${fulfillment} window: ${input.scheduledFor}. Open the order: ${input.url}`;
+  const body = `<div style="display:inline-block;padding:6px 10px;border-radius:999px;background:#fff7ed;color:${brandDark};font-size:12px;font-weight:800">PREPARATION TIME</div><p style="margin:18px 0 0;line-height:1.65;color:#374151">${escapeHtml(input.storeName)}, it is time to start preparing scheduled ${fulfillment} order <strong>${escapeHtml(input.orderNumber)}</strong>.</p><p style="margin:16px 0 0;padding:12px 14px;border-radius:12px;background:#fff7ed;color:${brandDark};font-weight:800">Customer ${fulfillment} window: ${escapeHtml(input.scheduledFor)}</p><p style="margin:16px 0 0;font-size:13px;line-height:1.6;color:${muted}">Open the protected store order page to review the items and update the order to Preparing.</p>`;
+  return {subject: title, text, html: layout({title, preheader: `${input.orderNumber} is ready to begin preparation.`, body, action: {label: "Start preparing order", url: input.url}})};
+}
+
 export function deliveredOrderEmail(input: {customerName: string; storeName: string; orderNumber: string; url: string; items: EmailReceiptItem[]; pricing: EmailReceiptPricing; fulfillmentType?: "delivery" | "pickup"}) {
   const pickup = input.fulfillmentType === "pickup";
   const title = `Order ${input.orderNumber} was ${pickup ? "picked up" : "delivered"}`;

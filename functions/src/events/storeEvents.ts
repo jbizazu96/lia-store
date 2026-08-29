@@ -21,6 +21,7 @@
 
 import { notificationStore } from "../services/notificationStore";
 import { notificationService } from "../services/notificationService";
+import {queueStoreScheduledPreparationEmail} from "../email/emailEventService";
 
 export class StoreEvents {
 
@@ -132,13 +133,26 @@ await notificationStore.createNotification({
     });
 
     if (!created) return;
-    await notificationService.sendToUser(
-      storeOwnerUid,
-      title,
-      body,
-      `/store/store-orders/${orderId}`,
-      "orderUpdates",
-    );
+    const results = await Promise.allSettled([
+      notificationService.sendToUser(
+        storeOwnerUid,
+        title,
+        body,
+        `/store/store-orders/${orderId}`,
+        "orderUpdates",
+      ),
+      queueStoreScheduledPreparationEmail(orderId, storeOwnerUid),
+    ]);
+    for (const [index, result] of results.entries()) {
+      if (result.status === "rejected") {
+        console.error(index === 0
+          ? "Scheduled preparation push notification failed."
+          : "Scheduled preparation email could not be queued.", {
+          orderId,
+          message: result.reason instanceof Error ? result.reason.message : "Unknown error",
+        });
+      }
+    }
   }
 
   /**
