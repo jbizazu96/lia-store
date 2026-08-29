@@ -58,8 +58,12 @@ async function createStoreNotification(input: {
   state: "pending" | "completed";
 }): Promise<void> {
   const db = getFirestore("default");
-  const store = await db.collection("stores").doc(input.storeId).get();
+  const [store, order] = await Promise.all([
+    db.collection("stores").doc(input.storeId).get(),
+    db.collection("orders").doc(input.orderId).get(),
+  ]);
   const ownerId = text(store.data()?.ownerId);
+  const orderNumber = text(order.data()?.orderNumber) || input.orderId;
 
   if (!ownerId) {
     console.error("Store earning notification skipped: store owner is missing.", {
@@ -72,8 +76,8 @@ async function createStoreNotification(input: {
   const isCompleted = input.state === "completed";
   const title = isCompleted ? "Earnings paid" : "Earnings pending";
   const body = isCompleted
-    ? `${money(input.amount)} for order ${input.orderId} has been sent to your payout account.`
-    : `${money(input.amount)} for order ${input.orderId} is pending payout after delivery.`;
+    ? `${money(input.amount)} for order ${orderNumber} has been sent to your payout account.`
+    : `${money(input.amount)} for order ${orderNumber} is pending payout after delivery.`;
   const notificationReference = db
     .collection("users")
     .doc(ownerId)

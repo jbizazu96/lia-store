@@ -284,6 +284,7 @@ export default function CheckoutPage() {
     distanceMiles,
     isCalculatingDistance,
     distanceError,
+    estimatedDeliveryMinutes,
     total,
     totals,
   } = useCheckoutPricing({
@@ -1436,6 +1437,7 @@ const handleViewOrder =
           policy={orderDeliveryPolicy}
           timing={fulfillmentTiming}
           window={scheduledWindow}
+          estimatedMinutes={estimatedDeliveryMinutes}
           onChange={(nextTiming, nextWindow) => { setFulfillmentTiming(nextTiming); setScheduledWindow(nextWindow); resetPreparedPayment(); }}
         />}
 

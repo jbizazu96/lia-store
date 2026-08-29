@@ -383,6 +383,7 @@ export default function OrderDetailsPage({params}: OrderDetailsPageProps) {
             status={order.status}
             fulfillmentType={order.fulfillmentType}
             customerPickupCode={order.pickup?.code}
+            scheduling={order.scheduling}
             onCompletePickup={async (code) => {
               setUpdating(true);
               try {

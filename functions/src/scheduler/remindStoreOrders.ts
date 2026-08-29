@@ -95,6 +95,7 @@ function getStatusStartedAt(
 }
 
 interface DueReminder {
+  kind: "status" | "scheduled_preparation";
   orderId: string;
   storeOwnerUid: string;
   status: ReminderStatus;
@@ -167,12 +168,35 @@ export const remindStoreOrders = onSchedule(
           }
 
           const scheduling = order.scheduling && typeof order.scheduling === "object"
-            ? order.scheduling as {timing?: unknown; windowStart?: unknown}
+            ? order.scheduling as {timing?: unknown; windowStart?: unknown; preparationLeadMinutes?: unknown}
             : null;
           if (scheduling?.timing === "scheduled" && status !== "preparing") {
             const windowStart = toMilliseconds(scheduling.windowStart);
-            const preparationLeadMs = policy.defaultPreparationMinutes * 60_000;
+            const preparationLeadMinutes = typeof scheduling.preparationLeadMinutes === "number" &&
+              Number.isFinite(scheduling.preparationLeadMinutes) && scheduling.preparationLeadMinutes >= 0
+              ? scheduling.preparationLeadMinutes
+              : policy.defaultPreparationMinutes;
+            const preparationLeadMs = preparationLeadMinutes * 60_000;
             if (windowStart !== null && now < windowStart - preparationLeadMs) return null;
+
+            if (
+              status === "accepted" &&
+              toMilliseconds(order.scheduledPreparationNotificationSentAt) === null
+            ) {
+              const storeOwnerUid = order.store?.ownerId;
+              if (typeof storeOwnerUid !== "string" || !storeOwnerUid.trim()) return null;
+              transaction.set(orderDocument.ref, {
+                scheduledPreparationNotificationSentAt: Timestamp.fromMillis(now),
+              }, {merge: true});
+              return {
+                kind: "scheduled_preparation" as const,
+                orderId: orderDocument.id,
+                storeOwnerUid,
+                status,
+                count: 1,
+                orderNumber: typeof order.orderNumber === "string" ? order.orderNumber : undefined,
+              };
+            }
           }
 
           const storeOwnerUid = order.store?.ownerId;
@@ -214,6 +238,7 @@ export const remindStoreOrders = onSchedule(
             : 0;
 
           const reminder: DueReminder = {
+            kind: "status",
             orderId: orderDocument.id,
             storeOwnerUid,
             status,
@@ -247,13 +272,21 @@ export const remindStoreOrders = onSchedule(
     await Promise.all(
       reminders.map(async (reminder) => {
         try {
-          await storeEvents.orderStatusReminder(
-            reminder.orderId,
-            reminder.storeOwnerUid,
-            reminder.status,
-            reminder.count,
-            reminder.orderNumber
-          );
+          if (reminder.kind === "scheduled_preparation") {
+            await storeEvents.scheduledPreparationReady(
+              reminder.orderId,
+              reminder.storeOwnerUid,
+              reminder.orderNumber,
+            );
+          } else {
+            await storeEvents.orderStatusReminder(
+              reminder.orderId,
+              reminder.storeOwnerUid,
+              reminder.status,
+              reminder.count,
+              reminder.orderNumber
+            );
+          }
         } catch (error) {
           // A notification outage must not stop reminders for other orders.
           console.error(

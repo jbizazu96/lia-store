@@ -125,7 +125,7 @@ import type {
 } from "./checkoutSessionTypes";
 import {checkoutOperationalGuard} from "../../callable/adminOperations";
 import {reserveScheduledFulfillment} from "../../orders/scheduledFulfillmentService";
-import {getOrderDeliveryPolicy} from "../../admin/orderDeliveryPolicy";
+import {getOrderDeliveryPolicy, type OrderDeliveryPolicy} from "../../admin/orderDeliveryPolicy";
 
 
 /*
@@ -158,13 +158,14 @@ const db = getFirestore("default");
 */
 
 function estimateDeliveryMinutes(
-  distanceMiles: number
+  distanceMiles: number,
+  policy: OrderDeliveryPolicy,
 ): number {
   const preparationMinutes =
-    5;
+    policy.defaultPreparationMinutes;
 
   const minutesPerMile =
-    2;
+    policy.minutesPerMile;
 
   return Math.max(
     preparationMinutes,
@@ -1153,10 +1154,11 @@ export const prepareCheckoutPayment =
             .session
             .sessionId;
 
+        const orderDeliveryPolicy = await getOrderDeliveryPolicy();
         const scheduledFulfillment = await reserveScheduledFulfillment({
           request: checkoutRequest,
           store: checkoutData.store,
-          policy: await getOrderDeliveryPolicy(),
+          policy: orderDeliveryPolicy,
           checkoutSessionId: newlyCreatedSessionId,
           checkoutExpiresAt: sessionResolution.session.expiresAt,
           customerUid: customer.uid,
@@ -1209,7 +1211,7 @@ export const prepareCheckoutPayment =
 
               estimatedDeliveryMinutes: isPickup
                 ? checkoutData.store.pickupPreparationMinutes ?? marketplacePricingPolicy.pickupPreparationMinutes
-                : estimateDeliveryMinutes(distanceMiles),
+                : estimateDeliveryMinutes(distanceMiles, orderDeliveryPolicy),
             });
 
         newlyCreatedOrderId =

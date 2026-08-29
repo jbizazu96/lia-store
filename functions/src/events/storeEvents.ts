@@ -110,6 +110,37 @@ await notificationStore.createNotification({
     );
   }
 
+  /** Alerts an accepted scheduled order when its preparation lead window opens. */
+  async scheduledPreparationReady(
+    orderId: string,
+    storeOwnerUid: string,
+    orderNumber?: string,
+  ): Promise<void> {
+    const orderLabel = orderNumber?.trim() ? `Order ${orderNumber}` : "Your scheduled order";
+    const title = "Time to start preparing";
+    const body = `${orderLabel} has reached its preparation time. Start preparing it for the selected fulfillment window.`;
+    const created = await notificationStore.createNotification({
+      uid: storeOwnerUid,
+      title,
+      body,
+      type: "order",
+      icon: "clock",
+      color: "orange",
+      orderId,
+      navigationPath: "/store/store-orders",
+      dedupeKey: `scheduled-preparation-${orderId}`,
+    });
+
+    if (!created) return;
+    await notificationService.sendToUser(
+      storeOwnerUid,
+      title,
+      body,
+      `/store/store-orders/${orderId}`,
+      "orderUpdates",
+    );
+  }
+
   /**
    * Product stock crossed a low-inventory alert threshold after an order.
    */

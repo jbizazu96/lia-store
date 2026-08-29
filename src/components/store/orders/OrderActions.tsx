@@ -28,10 +28,12 @@
 |
 */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import {CalendarClock, X} from "lucide-react";
 
 import type {
+  OrderScheduling,
   OrderStatus,
 } from "@/types/order";
 
@@ -39,6 +41,7 @@ interface OrderActionsProps {
   status: OrderStatus;
   fulfillmentType: "delivery" | "pickup";
   customerPickupCode?: string | null;
+  scheduling?: OrderScheduling;
   onCompletePickup: (code: string) => Promise<void>;
 
   cancellationReason?: string;
@@ -55,6 +58,7 @@ export function OrderActions({
   status,
   fulfillmentType,
   customerPickupCode,
+  scheduling,
   onCompletePickup,
   cancellationReason,
   onStatusUpdate,
@@ -71,6 +75,38 @@ export function OrderActions({
   ] = useState("");
   const [pickupCode, setPickupCode] = useState("");
   const [pickupError, setPickupError] = useState("");
+  const [showScheduledPreparationModal, setShowScheduledPreparationModal] = useState(false);
+  const [currentTime, setCurrentTime] = useState(() => Date.now());
+  const scheduledPreparationStart = scheduling?.timing === "scheduled" && scheduling.windowStart
+    ? scheduling.windowStart.getTime() - ((scheduling.preparationLeadMinutes ?? 0) * 60_000)
+    : null;
+  const scheduledPreparationIsEarly = scheduledPreparationStart !== null && currentTime < scheduledPreparationStart;
+
+  useEffect(() => {
+    if (!scheduledPreparationIsEarly) return;
+    const timer = window.setInterval(() => setCurrentTime(Date.now()), 30_000);
+    return () => window.clearInterval(timer);
+  }, [scheduledPreparationIsEarly]);
+
+  const preparationStartLabel = scheduledPreparationStart === null
+    ? null
+    : new Intl.DateTimeFormat("en-US", {
+      timeZone: scheduling?.timezone || "America/Chicago",
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      timeZoneName: "short",
+    }).format(new Date(scheduledPreparationStart));
+
+  const handleStartPreparing = () => {
+    if (scheduledPreparationIsEarly) {
+      setShowScheduledPreparationModal(true);
+      return;
+    }
+    void onStatusUpdate("preparing");
+  };
 
   const handleCompletePickup = async () => {
     if (pickupCode.length !== 6 || updating) {
@@ -159,24 +195,27 @@ export function OrderActions({
 
       case "accepted":
         return (
-          <button
-            type="button"
-            onClick={() =>
-              onStatusUpdate("preparing")
-            }
-            disabled={updating}
-            className="
-              w-full rounded-xl bg-blue-500 px-4 py-3
-              font-semibold text-white transition
-              hover:bg-blue-600
-              disabled:cursor-not-allowed
-              disabled:opacity-50
-            "
-          >
-            {updating
-              ? "Updating..."
-              : "Start Preparing"}
-          </button>
+          <div>
+            <button
+              type="button"
+              onClick={handleStartPreparing}
+              disabled={updating}
+              className="
+                w-full rounded-xl bg-blue-500 px-4 py-3
+                font-semibold text-white transition
+                hover:bg-blue-600
+                disabled:cursor-not-allowed
+                disabled:opacity-50
+              "
+            >
+              {updating ? "Updating..." : "Start Preparing"}
+            </button>
+            {scheduledPreparationIsEarly && preparationStartLabel && (
+              <p className="mt-2 text-center text-xs font-medium text-violet-700">
+                Scheduled order · Preparation opens {preparationStartLabel}
+              </p>
+            )}
+          </div>
         );
 
       case "preparing":
@@ -375,6 +414,41 @@ export function OrderActions({
           </p>
         </div>
       </div>
+
+      {showScheduledPreparationModal && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/45 p-4" role="dialog" aria-modal="true" aria-labelledby="scheduled-preparation-title">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl">
+            <div>
+              <div className="flex items-start justify-between gap-4">
+                <span className="flex size-10 items-center justify-center rounded-full bg-violet-50 text-violet-700">
+                  <CalendarClock className="size-5" />
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowScheduledPreparationModal(false)}
+                  className="flex size-9 items-center justify-center rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200"
+                  aria-label="Close"
+                >
+                  <X className="size-5" />
+                </button>
+              </div>
+              <h2 id="scheduled-preparation-title" className="mt-4 text-lg font-extrabold text-gray-950">
+                This order is scheduled for later
+              </h2>
+              <p className="mt-2 text-sm leading-6 text-gray-600">
+                Start preparation at <strong className="text-gray-900">{preparationStartLabel}</strong>. This gives the store {scheduling?.preparationLeadMinutes ?? 0} minutes to prepare the order before the customer&apos;s selected {fulfillmentType} window.
+              </p>
+              <button
+                type="button"
+                onClick={() => setShowScheduledPreparationModal(false)}
+                className="mt-5 w-full rounded-full bg-orange-600 px-4 py-3 text-sm font-extrabold text-white hover:bg-orange-700"
+              >
+                Got it
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showCancellationModal && (
         <div

@@ -1371,6 +1371,8 @@ export const saveStoreWorkspaceSchedule = onCall({ region: "us-central1" }, asyn
     changedFields: ["schedule"],
   }));
   await batch.commit();
+  const updatedStore = await store.ref.get();
+  await syncStorePublicProfile(store.id, updatedStore.data());
   return { schedule };
 });
 
