@@ -160,6 +160,11 @@ export function CheckoutPaymentForm({
   ] = useState(false);
 
   const [
+    paymentElementLoadFailed,
+    setPaymentElementLoadFailed,
+  ] = useState(false);
+
+  const [
     localError,
     setLocalError,
   ] = useState<string | null>(
@@ -359,6 +364,7 @@ export function CheckoutPaymentForm({
       onSubmit={
         handleSubmit
       }
+      noValidate
       className="space-y-4"
     >
       <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
@@ -378,13 +384,13 @@ export function CheckoutPaymentForm({
           </div>
         </div>
 
-        {!paymentElementReady && (
+        {!paymentElementReady && !paymentElementLoadFailed && (
           <div className="flex min-h-24 items-center justify-center">
             <div className="h-6 w-6 animate-spin rounded-full border-2 border-orange-500 border-t-transparent" />
           </div>
         )}
 
-        <div
+        {!paymentElementLoadFailed && <div
           className={
             paymentElementReady
               ? "block"
@@ -392,11 +398,20 @@ export function CheckoutPaymentForm({
           }
         >
           <PaymentElement
-              onReady={() =>
-                setPaymentElementReady(
-                  true
-                )
-              }
+            onReady={() => {
+              setPaymentElementLoadFailed(false);
+              setPaymentElementReady(true);
+            }}
+            onLoadError={(event) => {
+              const terminal = event.error.message?.toLowerCase().includes("terminal state");
+              const message = terminal
+                ? "This payment is already being finalized. Wait for the order confirmation and do not submit another payment."
+                : "The secure payment form could not load. Return to order review and try again.";
+              setPaymentElementReady(false);
+              setPaymentElementLoadFailed(true);
+              setLocalError(message);
+              onPaymentError(message);
+            }}
             options={{
               defaultValues: {
                 billingDetails: {
@@ -435,7 +450,7 @@ export function CheckoutPaymentForm({
                 },
               }}
             />
-        </div>
+        </div>}
       </div>
 
       {localError && (
@@ -452,6 +467,7 @@ export function CheckoutPaymentForm({
           !stripe ||
           !elements ||
           !paymentElementReady ||
+          paymentElementLoadFailed ||
           isSubmitting
         }
         className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-orange-500 to-orange-600 py-3.5 font-semibold text-white transition hover:from-orange-600 hover:to-orange-700 hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-50"

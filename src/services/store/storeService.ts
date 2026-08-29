@@ -142,6 +142,10 @@ function mapStoreDocument(
       Math.max(5, Math.round(number(data.pickupPreparationMinutes, 30))),
     ),
     pickupInstructions: optionalText(data.pickupInstructions),
+    scheduledPickupEnabled: data.scheduledPickupEnabled === true,
+    scheduledDeliveryEnabled: data.scheduledDeliveryEnabled === true,
+    scheduledOrdersPerSlot: Math.min(100, Math.max(1, Math.round(number(data.scheduledOrdersPerSlot, 5)))),
+    fulfillmentTimezone: optionalText(data.fulfillmentTimezone) || "America/Chicago",
 
     isApproved: isStoreApproved(data),
     isActive: isStoreActive(data),

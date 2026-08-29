@@ -44,6 +44,7 @@ export type CheckoutPaymentValidationErrorCode =
   | "INVALID_DELIVERY_ADDRESS"
   | "INVALID_DELIVERY_COORDINATES"
   | "INVALID_DELIVERY_INSTRUCTIONS"
+  | "INVALID_FULFILLMENT_TIME"
   | "INVALID_TIP";
 
 
@@ -515,6 +516,20 @@ if (
       500
     );
 
+  const fulfillmentTiming = value.fulfillmentTiming === undefined ? "asap" : value.fulfillmentTiming;
+  if (fulfillmentTiming !== "asap" && fulfillmentTiming !== "scheduled") {
+    throw new CheckoutPaymentValidationError("INVALID_FULFILLMENT_TIME", "Choose ASAP or a scheduled fulfillment time.");
+  }
+  let scheduledWindow: PrepareCheckoutPaymentRequest["scheduledWindow"];
+  if (fulfillmentTiming === "scheduled") {
+    if (!isRecord(value.scheduledWindow)) throw new CheckoutPaymentValidationError("INVALID_FULFILLMENT_TIME", "Choose a scheduled fulfillment window.");
+    const start = requireString(value.scheduledWindow.start, "INVALID_FULFILLMENT_TIME", "The scheduled start time is invalid.");
+    const end = requireString(value.scheduledWindow.end, "INVALID_FULFILLMENT_TIME", "The scheduled end time is invalid.");
+    const timezone = requireString(value.scheduledWindow.timezone, "INVALID_FULFILLMENT_TIME", "The store timezone is invalid.");
+    if (Number.isNaN(Date.parse(start)) || Number.isNaN(Date.parse(end)) || start.length > 40 || end.length > 40 || timezone.length > 80) throw new CheckoutPaymentValidationError("INVALID_FULFILLMENT_TIME", "The scheduled fulfillment window is invalid.");
+    scheduledWindow = {start: new Date(start).toISOString(), end: new Date(end).toISOString(), timezone};
+  }
+
   const tipAmountCents =
     value.tipAmountCents;
 
@@ -571,6 +586,9 @@ if (
     deliveryInstructions,
 
     pickupInstructions,
+
+    fulfillmentTiming,
+    scheduledWindow,
 
     tipAmountCents:
         Number(tipAmountCents),

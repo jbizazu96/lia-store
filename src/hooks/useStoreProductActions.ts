@@ -7,6 +7,7 @@ import type {Product} from "@/types/product";
 
 export function useStoreProductActions(refreshProducts: () => Promise<void>) {
   const {confirm} = useConfirmation();
+  const [actionError, setActionError] = useState("");
   const [pendingProductIds, setPendingProductIds] = useState<Set<string>>(new Set());
   const run = useCallback(async (productId: string, operation: () => Promise<void>) => {
     if (pendingProductIds.has(productId)) return;
@@ -15,20 +16,22 @@ export function useStoreProductActions(refreshProducts: () => Promise<void>) {
   }, [pendingProductIds]);
 
   const toggleProductActive = useCallback(async (productId: string, currentStatus: boolean) => {
+    setActionError("");
     try {
       await run(productId, async () => {await productService.updateAvailability(productId, !currentStatus); await refreshProducts();});
     } catch (error) {
       console.error("Error updating product availability:", error);
-      window.alert("Failed to update product availability");
+      setActionError("Failed to update product availability. Please try again.");
     }
   }, [refreshProducts, run]);
 
   const toggleProductFeatured = useCallback(async (productId: string, currentStatus: boolean) => {
+    setActionError("");
     try {
       await run(productId, async () => {await productService.updateFeatured(productId, !currentStatus); await refreshProducts();});
     } catch (error) {
       console.error("Error updating featured status:", error);
-      window.alert("Failed to update featured status");
+      setActionError("Failed to update featured status. Please try again.");
     }
   }, [refreshProducts, run]);
 
@@ -41,22 +44,24 @@ export function useStoreProductActions(refreshProducts: () => Promise<void>) {
       destructive: true,
     });
     if (!confirmed) return;
+    setActionError("");
     try {
       await run(productId, async () => {await productService.deleteProduct(productId); await refreshProducts();});
     } catch (error) {
       console.error("Error deleting product:", error);
-      window.alert("Failed to delete product");
+      setActionError("Failed to archive the product. Please try again.");
     }
   }, [confirm, refreshProducts, run]);
 
   const duplicateProduct = useCallback(async (product: Product) => {
+    setActionError("");
     try {
       await run(product.id, async () => {await productService.duplicateProduct(product); await refreshProducts();});
     } catch (error) {
       console.error("Error duplicating product:", error);
-      window.alert("Failed to duplicate product");
+      setActionError("Failed to duplicate the product. Please try again.");
     }
   }, [refreshProducts, run]);
 
-  return {toggleProductActive, toggleProductFeatured, deleteProduct, duplicateProduct, isMutating: (productId: string) => pendingProductIds.has(productId)};
+  return {toggleProductActive, toggleProductFeatured, deleteProduct, duplicateProduct, actionError, clearActionError: () => setActionError(""), isMutating: (productId: string) => pendingProductIds.has(productId)};
 }

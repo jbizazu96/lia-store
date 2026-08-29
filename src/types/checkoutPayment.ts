@@ -118,6 +118,8 @@ export interface PrepareCheckoutPaymentInput {
   */
   deliveryInstructions?: string;
   pickupInstructions?: string;
+  fulfillmentTiming: "asap" | "scheduled";
+  scheduledWindow?: {start: string; end: string; timezone: string};
 
   /*
     Customer-selected tip in cents.

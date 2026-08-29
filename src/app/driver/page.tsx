@@ -26,6 +26,7 @@ import {
 function DriverPageContent() {
   const router = useRouter();
   const [error, setError] = useState("");
+  const [retryKey, setRetryKey] = useState(0);
 
   useEffect(() => {
     driverWorkspaceClientService.getEntry()
@@ -58,10 +59,10 @@ function DriverPageContent() {
             : "Unable to open the driver workspace."
         );
       });
-  }, [router]);
+  }, [retryKey, router]);
 
   if (error) {
-    return <main className="mx-auto flex min-h-screen max-w-lg items-center p-6"><section className="w-full rounded-2xl border border-red-100 bg-white p-6 shadow-sm"><h1 className="text-xl font-bold text-slate-900">Unable to open the driver app</h1><p className="mt-2 text-sm text-slate-600">{error}</p><button type="button" onClick={() => window.location.reload()} className="mt-5 rounded-xl bg-orange-600 px-4 py-2 text-sm font-bold text-white">Try again</button></section></main>;
+    return <main className="mx-auto flex min-h-screen max-w-lg items-center p-6"><section className="w-full rounded-2xl border border-red-100 bg-white p-6 shadow-sm"><h1 className="text-xl font-bold text-slate-900">Unable to open the driver app</h1><p className="mt-2 text-sm text-slate-600">{error}</p><button type="button" onClick={() => { setError(""); setRetryKey((current) => current + 1); }} className="mt-5 rounded-xl bg-orange-600 px-4 py-2 text-sm font-bold text-white">Try again</button></section></main>;
   }
 
   return <BrandedLoader message="Opening driver dashboard" />;

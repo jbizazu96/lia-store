@@ -111,11 +111,12 @@ export function passwordResetEmail(input: {displayName: string; url: string}) {
   return {subject: title, text, html: layout({title, preheader: "A secure password reset was requested for your LIA account.", body, action: {label: "Reset password", url: input.url}})};
 }
 
-export function newOrderEmail(input: {storeName: string; orderNumber: string; url: string; fulfillmentType?: "delivery" | "pickup"}) {
+export function newOrderEmail(input: {storeName: string; orderNumber: string; url: string; fulfillmentType?: "delivery" | "pickup"; scheduledFor?: string}) {
   const fulfillment = input.fulfillmentType === "pickup" ? "pickup" : "delivery";
   const title = `New paid ${fulfillment} order ${input.orderNumber}`;
-  const text = `${input.storeName}, you received a new paid ${fulfillment} order. Open LIA to review and accept it: ${input.url}`;
-  const body = `<div style="display:inline-block;padding:6px 10px;border-radius:999px;background:#fff7ed;color:${brandDark};font-size:12px;font-weight:800">NEW ${fulfillment.toUpperCase()} ORDER</div><p style="margin:18px 0 0;line-height:1.65;color:#374151">${escapeHtml(input.storeName)}, you received a new paid ${fulfillment} order. Open the secure store workspace to review the items and begin fulfillment.</p>`;
+  const scheduleText = input.scheduledFor ? ` Scheduled for ${input.scheduledFor}.` : "";
+  const text = `${input.storeName}, you received a new paid ${fulfillment} order.${scheduleText} Open LIA to review and accept it: ${input.url}`;
+  const body = `<div style="display:inline-block;padding:6px 10px;border-radius:999px;background:#fff7ed;color:${brandDark};font-size:12px;font-weight:800">NEW ${fulfillment.toUpperCase()} ORDER</div><p style="margin:18px 0 0;line-height:1.65;color:#374151">${escapeHtml(input.storeName)}, you received a new paid ${fulfillment} order. Open the secure store workspace to review the items and begin fulfillment.</p>${input.scheduledFor ? `<p style="margin:16px 0 0;padding:12px 14px;border-radius:12px;background:#fff7ed;color:${brandDark};font-weight:800">Scheduled for ${escapeHtml(input.scheduledFor)}</p>` : ""}`;
   return {subject: title, text, html: layout({title, preheader: `A new paid order is ready for ${input.storeName}.`, body, action: {label: "Review order", url: input.url}})};
 }
 

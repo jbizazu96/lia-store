@@ -199,7 +199,7 @@ export interface LiaPaymentIntentMetadata {
     "separate_charges_and_transfers";
 
   paymentVersion:
-    "v1";
+    "v2_stripe_tax";
 }
 
 

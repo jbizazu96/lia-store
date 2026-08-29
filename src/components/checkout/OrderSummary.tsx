@@ -42,7 +42,7 @@ export function OrderSummary({
   const [feeInfoType, setFeeInfoType] = useState<FeeInfoType | null>(null);
   const hasFreeDelivery =
     totals.deliveryFee === 0 && totals.originalDeliveryFee > 0;
-  const estimatedTotal = totals.total;
+  const estimatedTotalBeforeTip = Math.max(0, totals.total - totals.tip);
 
   return (
     <>
@@ -183,9 +183,13 @@ export function OrderSummary({
         
         <div className="flex justify-between border-t border-gray-200 pt-2 text-lg font-bold">
           <span className="text-gray-800">
-            Estimated total
+            {fulfillmentType === "delivery"
+              ? "Estimated total before tip"
+              : "Estimated total"}
           </span>
-          <span className="text-orange-600">${estimatedTotal.toFixed(2)}</span>
+          <span className="text-orange-600">
+            ${estimatedTotalBeforeTip.toFixed(2)}
+          </span>
         </div>
       </div>
 

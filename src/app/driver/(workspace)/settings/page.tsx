@@ -27,6 +27,8 @@ import type { DriverWorkspaceSummary } from "@/types/driverWorkspace";
 import {AccountSupportForm} from "@/components/support/AccountSupportForm";
 import {accountLogoutService} from "@/services/auth/customerLogoutService";
 import {DeviceNotificationTestPanel} from "@/components/notification/DeviceNotificationTestPanel";
+import {useConfirmation} from "@/context/ConfirmationContext";
+import {useRouter} from "next/navigation";
 
 type ReviewableField = Exclude<DriverImageField, "profile-photo">;
 const replacements: { label: string; field: ReviewableField }[] = [
@@ -48,6 +50,8 @@ function addressLabel(summary: DriverWorkspaceSummary) {
 }
 
 export default function DriverSettingsPage() {
+  const {confirm} = useConfirmation();
+  const router = useRouter();
   const [summary, setSummary] = useState<DriverWorkspaceSummary | null>(null);
   const [message, setMessage] = useState("");
   const [loadError, setLoadError] = useState("");
@@ -75,7 +79,7 @@ export default function DriverSettingsPage() {
     try { setBusy(true); setMessage(""); await driverImageService.uploadOriginalImage({ driverId: user.uid, field: choice.field, file: values.file }); await driverWorkspaceClientService.submitDocumentReplacement({ field: choice.field, expirationDate: values.expirationDate, issuingState: values.issuingState, provider: values.provider }); await refresh(); setDocumentModal(null); setMessage("Replacement submitted for administrator review."); } catch (error) { setMessage(error instanceof Error ? error.message : "Unable to submit the replacement."); } finally { setBusy(false); }
   };
   const connectStripe = async () => { try { setBusy(true); await driverStripeConnectClientService.createOrRetrieveAccount(); const onboarding = await driverStripeConnectClientService.createOnboardingLink(); window.location.assign(onboarding.onboarding.url); } catch (error) { setMessage(error instanceof Error ? error.message : "Unable to start Stripe onboarding."); } finally { setBusy(false); } };
-  const requestDeletion = async () => { if (!window.confirm("Request account deletion? Your account will be locked while an administrator reviews it.")) return; try { setBusy(true); await httpsCallable(functions, "requestAccountDeletion")({ ownerType: "driver", reasonCode: "no_longer_needed", reasonDetails: null }); await accountLogoutService.logout(); window.location.assign("/login?accountDeletion=review"); } catch (error) { setMessage(error instanceof Error ? error.message : "Unable to request deletion."); } finally { setBusy(false); } };
+  const requestDeletion = async () => { if (!await confirm({title: "Request account deletion?", message: "Your driver account will be locked while a LIA administrator reviews the request.", confirmLabel: "Submit request", cancelLabel: "Keep account", destructive: true})) return; try { setBusy(true); await httpsCallable(functions, "requestAccountDeletion")({ ownerType: "driver", reasonCode: "no_longer_needed", reasonDetails: null }); await accountLogoutService.logout(); router.replace("/login?accountDeletion=review"); } catch (error) { setMessage(error instanceof Error ? error.message : "Unable to request deletion."); } finally { setBusy(false); } };
   const documentDetails = new Map(summary.documents.map((document) => [document.label, document]));
   const radius = summary.profile.serviceArea.approvedRadiusMiles ?? summary.profile.serviceArea.preferredRadiusMiles;
 

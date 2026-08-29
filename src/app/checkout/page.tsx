@@ -127,6 +127,9 @@ import type {
   CheckoutItem,
 } from "./types";
 import { BrandedLoader } from "@/components/ui/BrandedLoader";
+import {FulfillmentTimeSection} from "@/components/checkout/FulfillmentTimeSection";
+import {useOrderDeliveryPolicy} from "@/hooks/useOrderDeliveryPolicy";
+import type {FulfillmentTiming, ScheduledFulfillmentWindow} from "@/types/fulfillment";
 
 
 /*
@@ -192,6 +195,7 @@ export default function CheckoutPage() {
   const applicablePricing = useApplicableMarketplacePricing(storeId);
   const marketplacePolicy = applicablePricing?.policy ?? null;
   const defaultMarketplacePolicy = useMarketplacePricingPolicy();
+  const orderDeliveryPolicy = useOrderDeliveryPolicy(storeId);
 
   /*
   |--------------------------------------------------------------------------
@@ -243,6 +247,8 @@ export default function CheckoutPage() {
   ] = useState("");
 
   const [pickupInstructions, setPickupInstructions] = useState("");
+  const [fulfillmentTiming, setFulfillmentTiming] = useState<FulfillmentTiming>("asap");
+  const [scheduledWindow, setScheduledWindow] = useState<ScheduledFulfillmentWindow | null>(null);
 
   const [
     tip,
@@ -296,6 +302,7 @@ export default function CheckoutPage() {
         (fulfillmentType === "delivery" && !address)) return null;
     return {
       fulfillmentType,
+      fulfillmentTiming: "asap" as const,
       storeId: store.id,
       contactName: userName,
       contactPhone: userPhone,
@@ -425,6 +432,8 @@ export default function CheckoutPage() {
       resetPreparedPayment();
       setCheckoutStep("review");
       setTip(fulfillmentType === "pickup" ? 0 : 3);
+      setFulfillmentTiming("asap");
+      setScheduledWindow(null);
       setPaymentConfirmationError(null);
     }, [fulfillmentType, resetPreparedPayment]);
 
@@ -470,6 +479,9 @@ export default function CheckoutPage() {
   const isStoreClosed =
     storeStatus !== null &&
     !storeStatus.isOpen;
+
+  const isAsapStoreClosed =
+    isStoreClosed && fulfillmentTiming === "asap";
 
   const isOutsideDeliveryRadius =
     fulfillmentType === "delivery" &&
@@ -721,6 +733,11 @@ export default function CheckoutPage() {
         return;
       }
 
+      if (fulfillmentTiming === "scheduled" && !scheduledWindow) {
+        setCheckoutError("Choose an available fulfillment time before continuing.");
+        return;
+      }
+
       if (
         fulfillmentType === "pickup" &&
         (!defaultMarketplacePolicy?.pickupEnabled ||
@@ -840,6 +857,8 @@ export default function CheckoutPage() {
             ),
 
           fulfillmentType,
+          fulfillmentTiming,
+          ...(fulfillmentTiming === "scheduled" && scheduledWindow ? {scheduledWindow} : {}),
 
           ...(fulfillmentType === "delivery" && address ? {deliveryAddress: {
             street:
@@ -1293,7 +1312,7 @@ const handleViewOrder =
             </div>
           )}
 
-          <StripeCheckout
+          {!isWebhookProcessing && !isWebhookConfirmed && <StripeCheckout
             orderId={
               preparedPayment
                 .orderId
@@ -1327,7 +1346,7 @@ const handleViewOrder =
             onPaymentError={
               handlePaymentError
             }
-          />
+          />}
         </div>
       </main>
     );
@@ -1411,6 +1430,15 @@ const handleViewOrder =
           />
         </section>}
 
+        {store && <FulfillmentTimeSection
+          store={store}
+          type={fulfillmentType}
+          policy={orderDeliveryPolicy}
+          timing={fulfillmentTiming}
+          window={scheduledWindow}
+          onChange={(nextTiming, nextWindow) => { setFulfillmentTiming(nextTiming); setScheduledWindow(nextWindow); resetPreparedPayment(); }}
+        />}
+
         <section className="space-y-2">
           <h2 className="px-1 text-base font-extrabold text-gray-900">
             {fulfillmentType === "pickup" ? "Pickup Instructions" : "Delivery Instructions"}
@@ -1475,11 +1503,11 @@ const handleViewOrder =
           </div>
         )}
 
-        {isStoreClosed && (
+        {isAsapStoreClosed && (
           <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-center">
             <p className="text-sm font-medium text-amber-700">
-              This store is currently closed. You can place your order
-              when it reopens.
+              This store is currently closed. Choose a scheduled time or
+              place your order when it reopens.
             </p>
           </div>
         )}
@@ -1516,7 +1544,7 @@ const handleViewOrder =
             disabled={
               loading ||
               isCalculatingDistance ||
-              isStoreClosed ||
+              isAsapStoreClosed ||
               isOutsideDeliveryRadius ||
               isDeliveryDistanceUnavailable
             }
@@ -1529,7 +1557,7 @@ const handleViewOrder =
               </>
             ) : isCalculatingDistance ? (
               "Calculating delivery distance..."
-            ) : isStoreClosed ? (
+            ) : isAsapStoreClosed ? (
               "Store Closed"
             ) : isOutsideDeliveryRadius ? (
               "Delivery Unavailable"

@@ -40,6 +40,7 @@ export function AdminGuard({
   const {user, loading} = useAuth();
   const [administrator, setAdministrator] = useState<AdminAccessProfile | null>(null);
   const [error, setError] = useState("");
+  const [retryKey, setRetryKey] = useState(0);
 
   useEffect(() => {
     let active = true;
@@ -84,7 +85,7 @@ export function AdminGuard({
     return () => {
       active = false;
     };
-  }, [loading, router, user]);
+  }, [loading, retryKey, router, user]);
 
   if (loading || !administrator) {
     if (error) {
@@ -97,7 +98,7 @@ export function AdminGuard({
             <p className="mt-2 text-sm text-slate-600">{error}</p>
             <button
               type="button"
-              onClick={() => window.location.reload()}
+              onClick={() => setRetryKey((current) => current + 1)}
               className="mt-5 rounded-xl bg-orange-600 px-4 py-2 text-sm font-bold text-white"
             >
               Try again

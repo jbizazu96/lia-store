@@ -23,6 +23,7 @@ import Link from "next/link";
 import {Eye, MapPin, User, DollarSign, Package} from "lucide-react";
 import {StatusBadge} from "./StatusBadge";
 import {OrderInvestigationNotice} from "./OrderInvestigationNotice";
+import {ScheduledFulfillmentNotice} from "@/components/orders/ScheduledFulfillmentNotice";
 
 interface OrderCardProps {
   order: Order;
@@ -66,6 +67,7 @@ export function OrderCard({order, index, hideFinancials = false}: OrderCardProps
               investigation={order.liaInvestigation}
               compact
             />
+            <ScheduledFulfillmentNotice order={order} compact />
             <span className="text-sm text-gray-400">
               {formatOrderDate(order.payment?.paidAt ?? order.createdAt)}
             </span>

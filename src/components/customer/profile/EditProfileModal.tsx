@@ -132,7 +132,7 @@ export function EditProfileModal({userData, onClose, onUpdate}: EditProfileModal
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <form onSubmit={handleSubmit} noValidate className="p-6 space-y-4">
           {error && (
             <div className="bg-red-50 text-red-600 p-3 rounded-xl text-sm">
               {error}

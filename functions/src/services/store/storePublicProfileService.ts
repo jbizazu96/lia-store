@@ -42,6 +42,10 @@ export interface StorePublicProfileSource {
   pickupEnabled?: unknown;
   pickupPreparationMinutes?: unknown;
   pickupInstructions?: unknown;
+  scheduledPickupEnabled?: unknown;
+  scheduledDeliveryEnabled?: unknown;
+  scheduledOrdersPerSlot?: unknown;
+  fulfillmentTimezone?: unknown;
   isApproved?: unknown;
   isActive?: unknown;
   isOpen?: unknown;
@@ -136,6 +140,10 @@ export async function syncStorePublicProfile(
         Math.max(5, Math.round(publicNumber(store.pickupPreparationMinutes, 30))),
       ),
       pickupInstructions: publicText(store.pickupInstructions),
+      scheduledPickupEnabled: store.scheduledPickupEnabled === true,
+      scheduledDeliveryEnabled: store.scheduledDeliveryEnabled === true,
+      scheduledOrdersPerSlot: Math.min(100, Math.max(1, Math.round(publicNumber(store.scheduledOrdersPerSlot, 5)))),
+      fulfillmentTimezone: publicText(store.fulfillmentTimezone) || "America/Chicago",
       isApproved: true,
       isActive: true,
       isOpen: store.isOpen === true,

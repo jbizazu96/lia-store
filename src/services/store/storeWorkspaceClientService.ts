@@ -59,6 +59,10 @@ export interface StoreWorkspaceStore {
   pickupEnabled: boolean;
   pickupPreparationMinutes: number;
   pickupInstructions: string;
+  scheduledPickupEnabled: boolean;
+  scheduledDeliveryEnabled: boolean;
+  scheduledOrdersPerSlot: number;
+  fulfillmentTimezone: string;
   businessType: string;
   registeredName: string;
   ein: string;

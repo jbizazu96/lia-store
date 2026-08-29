@@ -145,6 +145,14 @@ export function mapOrderData(id: string, data: DocumentData): Order {
     id,
 
     fulfillmentType: data.fulfillmentType === "pickup" ? "pickup" : "delivery",
+    fulfillmentTiming: data.fulfillmentTiming === "scheduled" ? "scheduled" : "asap",
+    scheduling: data.scheduling && typeof data.scheduling === "object" ? {
+      timing: data.scheduling.timing === "scheduled" ? "scheduled" : "asap",
+      windowStart: toOptionalDate(data.scheduling.windowStart) ?? null,
+      windowEnd: toOptionalDate(data.scheduling.windowEnd) ?? null,
+      timezone: typeof data.scheduling.timezone === "string" ? data.scheduling.timezone : "America/Chicago",
+      preparationLeadMinutes: typeof data.scheduling.preparationLeadMinutes === "number" ? data.scheduling.preparationLeadMinutes : undefined,
+    } : undefined,
 
     orderNumber: data.orderNumber ?? "",
 

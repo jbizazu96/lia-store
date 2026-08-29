@@ -211,7 +211,7 @@ function validateMetadata(
 
   if (
     metadata.liaPaymentVersion !==
-      "v1"
+      "v2_stripe_tax"
   ) {
     throw new StripePaymentWebhookValidationError(
       "INVALID_LIA_METADATA",
@@ -247,7 +247,7 @@ function validateMetadata(
       "separate_charges_and_transfers",
 
     paymentVersion:
-      "v1",
+      "v2_stripe_tax",
   };
 }
 

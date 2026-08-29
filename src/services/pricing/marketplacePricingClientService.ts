@@ -1,7 +1,7 @@
 import {httpsCallable} from "firebase/functions";
 import {auth, functions} from "@/lib/firebase";
 import {loadCached} from "@/services/cache/clientDataCache";
-import type {OrderDeliveryPolicy} from "@/services/delivery/orderDeliveryPolicyClientService";
+import {normalizeOrderDeliveryPolicy, type OrderDeliveryPolicy} from "@/services/delivery/orderDeliveryPolicyClientService";
 
 export interface MarketplacePricingPolicy {
   maxRadiusMiles: number; baseDeliveryFeeCents: number; baseDistanceMiles: number; costPerMileCents: number; peakSurchargeEnabled: boolean; peakSurchargeCents: number;
@@ -33,7 +33,7 @@ async function pricingRequest(storeIds: string[]): Promise<MarketplacePricingBoo
   const normalizedIds = [...new Set(storeIds)].sort();
   const customerCacheKey = auth.currentUser?.uid ?? "anonymous";
   return loadCached(
-    `marketplace-pricing:v2:${customerCacheKey}:${normalizedIds.join(",") || "default"}`,
+    `marketplace-pricing:v3:${customerCacheKey}:${normalizedIds.join(",") || "default"}`,
     async () => {
       const callable = httpsCallable<
           {storeIds: string[]},
@@ -50,7 +50,7 @@ async function pricingRequest(storeIds: string[]): Promise<MarketplacePricingBoo
       const first = responses[0].data;
       return {
         policy: first.policy,
-        orderDeliveryPolicy: first.orderDeliveryPolicy,
+        orderDeliveryPolicy: normalizeOrderDeliveryPolicy(first.orderDeliveryPolicy),
         byStoreId: Object.assign({}, ...responses.map((response) => response.data.byStoreId)),
       };
     },

@@ -130,7 +130,7 @@ export function SecurityModal({onClose}: SecurityModalProps) {
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <form onSubmit={handleSubmit} noValidate className="p-6 space-y-4">
           {success && (
             <div className="bg-green-50 text-green-700 p-3 rounded-xl text-sm flex items-center gap-2">
               <Check className="w-4 h-4" />

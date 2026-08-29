@@ -119,6 +119,9 @@ export interface PrepareCheckoutPaymentRequest {
 
   pickupInstructions?: string;
 
+  fulfillmentTiming: "asap" | "scheduled";
+  scheduledWindow?: {start: string; end: string; timezone: string};
+
   /*
     Customer-selected driver tip in cents.
 
@@ -207,6 +210,11 @@ export interface TrustedCheckoutStore {
   pickupEnabled: boolean;
   pickupPreparationMinutes: number | null;
   pickupInstructions: string | null;
+  schedule: Array<{day: string; open: string; close: string; isClosed: boolean}>;
+  scheduledPickupEnabled: boolean;
+  scheduledDeliveryEnabled: boolean;
+  scheduledOrdersPerSlot: number;
+  fulfillmentTimezone: string;
 
   /*
     Connected account used later for store transfers.

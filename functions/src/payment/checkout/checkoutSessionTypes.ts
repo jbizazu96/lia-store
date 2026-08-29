@@ -102,6 +102,9 @@ export interface CheckoutSessionFingerprintInput {
 
   fulfillmentInstructions: string | null;
 
+  fulfillmentTiming: "asap" | "scheduled";
+  scheduledWindow: {start: string; end: string; timezone: string} | null;
+
   /*
     Customer-selected tip in cents.
   */

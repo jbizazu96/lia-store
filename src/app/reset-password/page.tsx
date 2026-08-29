@@ -89,7 +89,7 @@ function ResetPasswordContent() {
           <p className="text-gray-500 text-sm mt-4">Redirecting to login...</p>
         </div>
       ) : (
-        <form onSubmit={handleReset} className="space-y-5">
+        <form onSubmit={handleReset} noValidate className="space-y-5">
           {error && (
             <div className="bg-red-50 text-red-500 p-3 rounded-xl text-sm">
               {error}

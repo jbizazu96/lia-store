@@ -73,6 +73,7 @@ import {
   productGalleryImageService,
 } from "@/services/product/productGalleryImageService";
 import {useSuccessToast} from "@/context/SuccessToastContext";
+import {useConfirmation} from "@/context/ConfirmationContext";
 
 /*
 |--------------------------------------------------------------------------
@@ -96,6 +97,7 @@ export default function EditProductPage({
   params,
 }: EditProductPageProps) {
   const {showSuccess} = useSuccessToast();
+  const {confirm} = useConfirmation();
   const {
     productId,
   } = use(params);
@@ -582,10 +584,13 @@ async ({
         return;
       }
 
-      const confirmed =
-        window.confirm(
-          "Are you sure you want to delete this product? This action cannot be undone."
-        );
+      const confirmed = await confirm({
+        title: "Archive product?",
+        message: "This product will be removed from the active catalog while its order and inventory history are preserved.",
+        confirmLabel: "Archive product",
+        cancelLabel: "Keep product",
+        destructive: true,
+      });
 
       if (!confirmed) {
         return;

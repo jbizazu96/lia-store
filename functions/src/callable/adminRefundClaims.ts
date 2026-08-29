@@ -28,7 +28,7 @@ import {parseMarketplacePricingPolicy} from "../payment/pricing/marketplacePrici
 
 if (admin.apps.length === 0) admin.initializeApp();
 const db = getFirestore("default");
-const CLAIM_REASONS = new Set(["missing_items", "incorrect_items", "damaged_items", "quality_issue", "delivery_failed", "duplicate_charge", "other"]);
+const CLAIM_REASONS = new Set(["missing_items", "incorrect_items", "damaged_items", "quality_issue", "delivery_failed", "pickup_failed", "duplicate_charge", "other"]);
 const EVIDENCE_URL_DURATION_MS = 10 * 60 * 1000;
 
 function record(value: unknown): Record<string, unknown> { return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {}; }

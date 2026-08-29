@@ -9,6 +9,12 @@ const db = getFirestore("default");
 const appUrl = defineString("APP_URL", {default: "https://www.liamarketplace.com"});
 const text = (value: unknown): string => typeof value === "string" ? value.trim() : "";
 const finite = (value: unknown): number | null => typeof value === "number" && Number.isFinite(value) ? value : null;
+const date = (value: unknown): string | null => {
+  if (value && typeof value === "object" && "toDate" in value && typeof (value as {toDate?: unknown}).toDate === "function") {
+    return (value as {toDate: () => Date}).toDate().toISOString();
+  }
+  return typeof value === "string" && Number.isFinite(new Date(value).getTime()) ? value : null;
+};
 
 function amountInCents(data: Record<string, unknown>, amountField: string, dollarField: string): number {
   const integerAmount = finite(data[amountField]);
@@ -68,7 +74,12 @@ export async function queueStoreNewOrderEmail(orderId: string, ownerUid = ""): P
   const resolvedOwnerUid = ownerUid || text(currentStoreData.ownerId) || text(store.ownerId);
   const owner = resolvedOwnerUid ? await db.collection("users").doc(resolvedOwnerUid).get() : null;
   const email = text(owner?.data()?.email) || text(currentStoreData.email) || text(store.email);
-  const template = newOrderEmail({storeName: text(store.name) || "Your store", orderNumber: text(data.orderNumber) || orderId.slice(0, 8), fulfillmentType: data.fulfillmentType === "pickup" ? "pickup" : "delivery", url: absolute(`/store/store-orders/${encodeURIComponent(orderId)}`)});
+  const scheduling = data.scheduling && typeof data.scheduling === "object" ? data.scheduling as Record<string, unknown> : {};
+  const scheduledStart = date(scheduling.windowStart);
+  const scheduledFor = scheduling.timing === "scheduled" && scheduledStart
+    ? new Intl.DateTimeFormat("en-US", {dateStyle: "medium", timeStyle: "short", timeZone: text(scheduling.timezone) || "America/Chicago"}).format(new Date(scheduledStart))
+    : undefined;
+  const template = newOrderEmail({storeName: text(store.name) || "Your store", orderNumber: text(data.orderNumber) || orderId.slice(0, 8), fulfillmentType: data.fulfillmentType === "pickup" ? "pickup" : "delivery", scheduledFor, url: absolute(`/store/store-orders/${encodeURIComponent(orderId)}`)});
   await enqueueEmail({dedupeKey: `store-new-order:${orderId}`, category: "store_new_order", to: email, ...template, tags: {order_id: orderId}});
 }
 

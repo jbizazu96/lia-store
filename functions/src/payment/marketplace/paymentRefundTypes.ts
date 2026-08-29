@@ -49,6 +49,7 @@ export type MarketplaceRefundReason =
   | "customer_cancelled"
   | "store_cancelled"
   | "delivery_failed"
+  | "pickup_failed"
   | "missing_items"
   | "incorrect_items"
   | "damaged_items"

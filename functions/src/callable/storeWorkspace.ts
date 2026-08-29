@@ -521,6 +521,10 @@ function settingsStore(data: Record<string, unknown>, id: string) {
     pickupEnabled: data.pickupEnabled === true,
     pickupPreparationMinutes: Math.min(240, Math.max(5, Math.round(Number(data.pickupPreparationMinutes) || 30))),
     pickupInstructions: text(data.pickupInstructions),
+    scheduledPickupEnabled: data.scheduledPickupEnabled === true,
+    scheduledDeliveryEnabled: data.scheduledDeliveryEnabled === true,
+    scheduledOrdersPerSlot: Math.min(100, Math.max(1, Math.round(Number(data.scheduledOrdersPerSlot) || 5))),
+    fulfillmentTimezone: text(data.fulfillmentTimezone) || "America/Chicago",
     businessType: text(data.businessType),
     registeredName: text(data.registeredName),
     ein: text(data.ein),
@@ -1303,11 +1307,16 @@ export const saveStoreWorkspaceSettings = onCall({ region: "us-central1", secret
   } else if (section === "fulfillment") {
     const pickupPreparationMinutes = Number(storeInput.pickupPreparationMinutes);
     const pickupInstructions = text(storeInput.pickupInstructions).trim();
+    const scheduledOrdersPerSlot = Number(storeInput.scheduledOrdersPerSlot);
+    const fulfillmentTimezone = text(storeInput.fulfillmentTimezone).trim();
     if (
       !Number.isSafeInteger(pickupPreparationMinutes) ||
       pickupPreparationMinutes < 5 ||
       pickupPreparationMinutes > 240 ||
-      pickupInstructions.length > 500
+      pickupInstructions.length > 500 ||
+      !Number.isSafeInteger(scheduledOrdersPerSlot) ||
+      scheduledOrdersPerSlot < 1 || scheduledOrdersPerSlot > 100 ||
+      !["America/New_York", "America/Chicago", "America/Denver", "America/Phoenix", "America/Los_Angeles", "America/Anchorage", "Pacific/Honolulu"].includes(fulfillmentTimezone)
     ) {
       throw new HttpsError("invalid-argument", "Pickup preparation must be 5 to 240 minutes and instructions cannot exceed 500 characters.");
     }
@@ -1315,6 +1324,10 @@ export const saveStoreWorkspaceSettings = onCall({ region: "us-central1", secret
       pickupEnabled: storeInput.pickupEnabled === true,
       pickupPreparationMinutes,
       pickupInstructions,
+      scheduledPickupEnabled: storeInput.scheduledPickupEnabled === true,
+      scheduledDeliveryEnabled: storeInput.scheduledDeliveryEnabled === true,
+      scheduledOrdersPerSlot,
+      fulfillmentTimezone,
     });
   } else {
     Object.assign(updates, {

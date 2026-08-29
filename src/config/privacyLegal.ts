@@ -1,5 +1,5 @@
-export const CUSTOMER_PRIVACY_VERSION = "customer-privacy-v1";
-export const CUSTOMER_PRIVACY_EFFECTIVE_DATE = "August 14, 2026";
-export const CUSTOMER_PRIVACY_LAST_UPDATED = "August 14, 2026";
+export const CUSTOMER_PRIVACY_VERSION = "customer-privacy-v2";
+export const CUSTOMER_PRIVACY_EFFECTIVE_DATE = "August 28, 2026";
+export const CUSTOMER_PRIVACY_LAST_UPDATED = "August 28, 2026";
 export const CUSTOMER_PRIVACY_DOCUMENT_PATH = "/legal/privacy";
-
+export const CUSTOMER_PRIVACY_DOCUMENT_HASH = "sha256:080160d7b8514c452fe23b16706dc88fa733152a6b1e7d44353e71c2894f85f1";

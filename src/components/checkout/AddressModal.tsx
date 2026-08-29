@@ -96,7 +96,7 @@ export function AddressModal({
           </div>
         )}
 
-        <form onSubmit={onSubmit} className="space-y-4">
+        <form onSubmit={onSubmit} noValidate className="space-y-4">
           {/* Contact Name */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -199,7 +199,7 @@ export function AddressModal({
           <div className="flex gap-3 pt-2">
             <button
               type="button"
-              onClick={onClose}
+              onClick={() => void handleClose()}
               className="flex-1 py-2.5 border border-gray-200 rounded-xl text-gray-600 font-medium hover:bg-gray-50 transition"
               disabled={loading}
             >

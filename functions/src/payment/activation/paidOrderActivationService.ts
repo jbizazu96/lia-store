@@ -936,7 +936,7 @@ async function activatePaidOrder(
               "separate_charges_and_transfers",
 
             "payment.version":
-              "v1",
+              paymentEvent.metadata.paymentVersion,
 
             "payment.amountReceived":
               paymentEvent

@@ -384,7 +384,7 @@ function validateOrderState(
 
   if (
     order.payment?.version !==
-    "v1"
+    "v2_stripe_tax"
   ) {
     throw new MarketplaceSettlementActivationError(
       "INVALID_PAYMENT_SOURCE",

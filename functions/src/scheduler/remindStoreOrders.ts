@@ -166,6 +166,15 @@ export const remindStoreOrders = onSchedule(
             return null;
           }
 
+          const scheduling = order.scheduling && typeof order.scheduling === "object"
+            ? order.scheduling as {timing?: unknown; windowStart?: unknown}
+            : null;
+          if (scheduling?.timing === "scheduled" && status !== "preparing") {
+            const windowStart = toMilliseconds(scheduling.windowStart);
+            const preparationLeadMs = policy.defaultPreparationMinutes * 60_000;
+            if (windowStart !== null && now < windowStart - preparationLeadMs) return null;
+          }
+
           const storeOwnerUid = order.store?.ownerId;
 
           if (typeof storeOwnerUid !== "string" || !storeOwnerUid.trim()) {

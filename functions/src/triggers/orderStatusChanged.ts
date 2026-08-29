@@ -25,6 +25,7 @@
 
 import { onDocumentUpdated } from "firebase-functions/v2/firestore";
 import { orderEvents } from "../events/orderEvents";
+import {confirmScheduledFulfillmentReservation} from "../orders/scheduledFulfillmentService";
 
 export const orderStatusChanged =
   onDocumentUpdated(
@@ -41,6 +42,10 @@ export const orderStatusChanged =
 
       if (!before || !after) {
         return;
+      }
+
+      if (before.checkoutStatus !== "confirmed" && after.checkoutStatus === "confirmed") {
+        await confirmScheduledFulfillmentReservation(after);
       }
 
       // Nothing changed.

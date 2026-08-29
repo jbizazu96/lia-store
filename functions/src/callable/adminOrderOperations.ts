@@ -42,8 +42,10 @@ function pricing(data: Record<string, unknown>) {
 }
 function exceptions(data: Record<string, unknown>) {
   const delivery = record(data.delivery); const shipday = record(data.shipday);
-  const status = text(data.status); const createdAt = date(data.createdAt);
-  const ageMinutes = createdAt ? (Date.now() - new Date(createdAt).getTime()) / 60000 : 0;
+  const scheduling = record(data.scheduling); const status = text(data.status); const createdAt = date(data.createdAt);
+  const scheduledStart = scheduling.timing === "scheduled" ? date(scheduling.windowStart) : null;
+  const waitingSince = scheduledStart && new Date(scheduledStart).getTime() > new Date(createdAt ?? 0).getTime() ? scheduledStart : createdAt;
+  const ageMinutes = waitingSince ? (Date.now() - new Date(waitingSince).getTime()) / 60000 : 0;
   const pickupWaiting = ["pending", "accepted", "preparing", "ready_for_pickup"].includes(status);
   const hasCarrier = Boolean(text(delivery.driverId) || text(delivery.shipdayCarrierId));
   const result: string[] = [];
@@ -57,6 +59,7 @@ function exceptions(data: Record<string, unknown>) {
 function listItem(document: FirebaseFirestore.QueryDocumentSnapshot) {
   const data = document.data(); const store = record(data.store); const customer = record(data.customer);
   const delivery = record(data.delivery); const shipday = record(data.shipday); const payment = record(data.payment);
+  const scheduling = record(data.scheduling);
   return {
     id: document.id, orderNumber: text(data.orderNumber) || "Unavailable",
     fulfillmentType: data.fulfillmentType === "pickup" ? "pickup" : "delivery",
@@ -65,6 +68,9 @@ function listItem(document: FirebaseFirestore.QueryDocumentSnapshot) {
     totalAmount: pricing(data).totalAmount, currency: pricing(data).currency,
     paymentStatus: text(payment.status) || "paid", driverName: text(delivery.driverName) || null,
     shipdayStatus: text(shipday.status) || null, exceptions: exceptions(data),
+    fulfillmentTiming: scheduling.timing === "scheduled" ? "scheduled" : "asap",
+    scheduledWindowStart: date(scheduling.windowStart), scheduledWindowEnd: date(scheduling.windowEnd),
+    fulfillmentTimezone: text(scheduling.timezone) || null,
   };
 }
 

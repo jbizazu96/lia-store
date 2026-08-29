@@ -232,6 +232,7 @@ export function ProductForm({
   }>({classifications: [], categories: []});
   const [taxConfigurationLoading, setTaxConfigurationLoading] = useState(true);
   const [taxConfigurationError, setTaxConfigurationError] = useState("");
+  const [validationError, setValidationError] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -549,6 +550,7 @@ export function ProductForm({
       FormEvent<HTMLFormElement>
   ) => {
     event.preventDefault();
+    setValidationError("");
 
     /*
     |--------------------------------------------------------------------------
@@ -559,7 +561,7 @@ export function ProductForm({
     if (
       !formData.name.trim()
     ) {
-      alert(
+      setValidationError(
         "Product name is required."
       );
 
@@ -569,7 +571,7 @@ export function ProductForm({
     if (
       !formData.category
     ) {
-      alert(
+      setValidationError(
         "Please select a category."
       );
 
@@ -577,7 +579,7 @@ export function ProductForm({
     }
 
     if (formData.isAvailable && !selectedTaxCategoryId) {
-      alert(
+      setValidationError(
         allowedTaxClassifications.length > 0
           ? "Confirm the product tax classification before making it available."
           : "LIA Admin must map this product category to a tax classification before the product can be made available."
@@ -588,7 +590,7 @@ export function ProductForm({
     if (
       formData.price <= 0
     ) {
-      alert(
+      setValidationError(
         "Regular price must be greater than zero."
       );
 
@@ -598,7 +600,7 @@ export function ProductForm({
     if (
       formData.stock < 0
     ) {
-      alert(
+      setValidationError(
         "Stock cannot be negative."
       );
 
@@ -623,7 +625,7 @@ export function ProductForm({
       !initialData &&
       !frontImage
     ) {
-      alert(
+      setValidationError(
         "Please upload the front product image."
       );
 
@@ -789,8 +791,10 @@ export function ProductForm({
       onSubmit={
         handleSubmit
       }
+      noValidate
       className="space-y-6"
     >
+      {validationError && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-700">{validationError}</div>}
       <div className="grid gap-6 lg:grid-cols-[14rem_minmax(0,1fr)] lg:items-start">
       {/*
       |--------------------------------------------------------------------------

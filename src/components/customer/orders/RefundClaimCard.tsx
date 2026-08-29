@@ -11,6 +11,7 @@ const reasons = [
   ["damaged_items", "Damaged item"],
   ["quality_issue", "Quality issue"],
   ["delivery_failed", "Delivery issue"],
+  ["pickup_failed", "Pickup failed"],
   ["duplicate_charge", "Duplicate charge"],
   ["other", "Other"],
 ] as const;
@@ -125,17 +126,26 @@ function ClaimTimeline({claim}: {claim: NonNullable<Claim>}) {
 export function RefundClaimCard({
   orderId,
   embedded = false,
-  deliveryFailureOnly = false,
+  fulfillmentType,
+  fulfillmentFailureOnly = false,
 }: {
   orderId: string;
   embedded?: boolean;
-  deliveryFailureOnly?: boolean;
+  fulfillmentType: "delivery" | "pickup";
+  fulfillmentFailureOnly?: boolean;
 }) {
   const [claim, setClaim] = useState<Claim>(null);
-  const availableReasons = deliveryFailureOnly
-    ? reasons.filter(([value]) => value === "delivery_failed")
-    : reasons;
-  const [reason, setReason] = useState<string>(deliveryFailureOnly ? "delivery_failed" : reasons[0][0]);
+  const fulfillmentFailureReason = fulfillmentType === "pickup"
+    ? "pickup_failed"
+    : "delivery_failed";
+  const availableReasons = fulfillmentFailureOnly
+    ? reasons.filter(([value]) => value === fulfillmentFailureReason)
+    : reasons.filter(([value]) =>
+      value !== (fulfillmentType === "pickup" ? "delivery_failed" : "pickup_failed")
+    );
+  const [reason, setReason] = useState<string>(
+    fulfillmentFailureOnly ? fulfillmentFailureReason : reasons[0][0],
+  );
   const [description, setDescription] = useState("");
   const [evidenceFile, setEvidenceFile] = useState<File | null>(null);
   const [evidencePickerOpen, setEvidencePickerOpen] = useState(false);

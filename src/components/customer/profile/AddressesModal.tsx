@@ -289,7 +289,7 @@ export function AddressesModal({
                 </div>
               ) : address && isEditing ? (
                 // Edit form
-                <form onSubmit={handleSubmit} className="bg-orange-50 rounded-xl p-4 space-y-3 border border-orange-200">
+                <form onSubmit={handleSubmit} noValidate className="bg-orange-50 rounded-xl p-4 space-y-3 border border-orange-200">
                   <h3 className="font-semibold text-gray-800">Update Your Address</h3>
 
                   <div>
@@ -368,7 +368,7 @@ export function AddressesModal({
                 </form>
               ) : (
                 // No address - Add form
-                <form onSubmit={handleSubmit} className="bg-orange-50 rounded-xl p-4 space-y-3 border border-orange-200">
+                <form onSubmit={handleSubmit} noValidate className="bg-orange-50 rounded-xl p-4 space-y-3 border border-orange-200">
                   <div className="text-center mb-2">
                     <MapPin className="w-12 h-12 text-gray-300 mx-auto mb-2" />
                     <h3 className="font-semibold text-gray-800">Add Your Delivery Address</h3>

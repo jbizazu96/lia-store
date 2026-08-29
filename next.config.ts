@@ -79,7 +79,7 @@ const contentSecurityPolicyReportOnly = [
   "font-src 'self' data: https://fonts.gstatic.com",
   "img-src 'self' data: blob: https://firebasestorage.googleapis.com https://storage.googleapis.com https://lh3.googleusercontent.com https://*.googleusercontent.com https://maps.googleapis.com https://*.gstatic.com",
   "connect-src 'self' https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://*.cloudfunctions.net https://*.google.com https://*.recaptcha.net https://*.stripe.com https://api.stripe.com",
-  "frame-src 'self' https://js.stripe.com https://hooks.stripe.com https://*.firebaseapp.com https://accounts.google.com https://www.google.com https://www.recaptcha.net https://appleid.apple.com",
+  "frame-src 'self' https://js.stripe.com https://hooks.stripe.com https://*.firebaseapp.com https://accounts.google.com https://www.google.com https://www.recaptcha.net https://appleid.apple.com https://storage.googleapis.com https://firebasestorage.googleapis.com",
   "form-action 'self' https://*.stripe.com",
   "report-uri /api/csp-report",
 ].join("; ");

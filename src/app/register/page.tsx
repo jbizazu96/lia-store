@@ -357,7 +357,7 @@ export default function RegisterPage() {
           </motion.div>
         )}
 
-        <form onSubmit={handleRegister} className="space-y-5">
+        <form onSubmit={handleRegister} noValidate className="space-y-5">
           {/* Full Name */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">

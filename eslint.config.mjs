@@ -35,6 +35,84 @@ const eslintConfig = defineConfig([
       "@next/next/no-html-link-for-pages": "warn",
     },
   },
+  {
+    files: [
+      "src/app/(customer)/**/*.{ts,tsx}",
+      "src/app/login/**/*.{ts,tsx}",
+      "src/app/register/**/*.{ts,tsx}",
+      "src/app/reset-password/**/*.{ts,tsx}",
+      "src/components/customer/**/*.{ts,tsx}",
+      "src/components/checkout/**/*.{ts,tsx}",
+      "src/hooks/useCheckout*.{ts,tsx}",
+    ],
+    rules: {
+      // Customer actions must use LIA dialogs and inline messages, never
+      // browser-native alert, confirm, or prompt windows.
+      "no-alert": "error",
+      "no-restricted-globals": [
+        "error",
+        {name: "alert", message: "Use a LIA in-app dialog or inline message."},
+        {name: "confirm", message: "Use ConfirmationContext for customer confirmations."},
+        {name: "prompt", message: "Use a LIA in-app form."},
+      ],
+    },
+  },
+  {
+    files: [
+      "src/app/store/**/*.{ts,tsx}",
+      "src/components/store/**/*.{ts,tsx}",
+      "src/hooks/useStore*.{ts,tsx}",
+      "src/services/store/**/*.{ts,tsx}",
+    ],
+    rules: {
+      // Store actions must use LIA dialogs and inline messages, never
+      // browser-native alert, confirm, or prompt windows.
+      "no-alert": "error",
+      "no-restricted-globals": [
+        "error",
+        {name: "alert", message: "Use a LIA in-app dialog or inline message."},
+        {name: "confirm", message: "Use ConfirmationContext for store confirmations."},
+        {name: "prompt", message: "Use a LIA in-app form."},
+      ],
+    },
+  },
+  {
+    files: [
+      "src/app/admin/**/*.{ts,tsx}",
+      "src/components/admin/**/*.{ts,tsx}",
+      "src/services/admin/**/*.{ts,tsx}",
+    ],
+    rules: {
+      // Administrator actions must remain inside the LIA workspace instead
+      // of using browser-native alerts, confirmations, or prompts.
+      "no-alert": "error",
+      "no-restricted-globals": [
+        "error",
+        {name: "alert", message: "Use an admin in-app dialog or inline message."},
+        {name: "confirm", message: "Use AdminConfirmationContext for administrator confirmations."},
+        {name: "prompt", message: "Use an admin in-app form."},
+      ],
+    },
+  },
+  {
+    files: [
+      "src/app/driver/**/*.{ts,tsx}",
+      "src/components/driver/**/*.{ts,tsx}",
+      "src/hooks/useDriver*.{ts,tsx}",
+      "src/services/driver/**/*.{ts,tsx}",
+    ],
+    rules: {
+      // Driver actions must use LIA dialogs and inline messages instead of
+      // browser-native alerts, confirmations, or prompts.
+      "no-alert": "error",
+      "no-restricted-globals": [
+        "error",
+        {name: "alert", message: "Use a LIA in-app dialog or inline message."},
+        {name: "confirm", message: "Use ConfirmationContext for driver confirmations."},
+        {name: "prompt", message: "Use a LIA in-app form."},
+      ],
+    },
+  },
 ]);
 
 export default eslintConfig;

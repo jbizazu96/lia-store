@@ -60,6 +60,7 @@ import type {
   StripeTaxLineSnapshot,
 } from "./tax/stripeTaxCalculationService";
 import {createCatalogSearchTokens} from "../services/catalog/catalogSearchTokens";
+import type {ScheduledFulfillmentSnapshot} from "../orders/scheduledFulfillmentService";
 
 
 const db =
@@ -119,6 +120,8 @@ export interface CreatePaymentPendingOrderInput {
   productTaxById: Map<string, StripeTaxLineSnapshot>;
 
   zoneDecision: ZonePricingDecision;
+
+  scheduledFulfillment: ScheduledFulfillmentSnapshot;
 
   distanceMiles: number;
 
@@ -377,6 +380,9 @@ async function createPaymentPendingOrder(
       },
 
       fulfillmentType: input.checkoutRequest.fulfillmentType,
+
+      fulfillmentTiming: input.scheduledFulfillment.timing,
+      scheduling: input.scheduledFulfillment,
 
       /*
         Trusted product snapshots.

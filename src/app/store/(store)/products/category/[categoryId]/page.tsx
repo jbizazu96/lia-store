@@ -85,7 +85,7 @@ export default function StoreCategoryProductsPage({params}: StoreCategoryProduct
         <p>{error}</p>
         <button type="button" onClick={() => void refreshProducts()} className="mt-4 rounded-xl bg-red-600 px-4 py-2 font-semibold text-white">Try again</button>
       </section>
-    ) : products.length === 0 ? (
+    ) : <>{actions.actionError && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">{actions.actionError}</div>}{products.length === 0 ? (
       <section className="rounded-2xl border border-gray-100 bg-white px-6 py-14 text-center">
         <PackageOpen className="mx-auto h-12 w-12 text-gray-300" />
         <h2 className="mt-4 font-bold text-gray-800">{deferredSearch ? "No matching products" : "No products in this category"}</h2>
@@ -104,7 +104,7 @@ export default function StoreCategoryProductsPage({params}: StoreCategoryProduct
           mutating={actions.isMutating(product.id)}
         />)}
       </div>
-    )}
+    )}</>}
     {hasMore && <div className="flex justify-center"><button type="button" disabled={loadingMore} onClick={() => void loadMore()} className="rounded-xl bg-gray-900 px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-60">{loadingMore ? "Loading…" : "Load more products"}</button></div>}
   </div>;
 }

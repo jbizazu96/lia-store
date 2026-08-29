@@ -214,6 +214,7 @@ function mapOrderStatusError(
 
     case "PAYMENT_NOT_CONFIRMED":
     case "INVALID_TRANSITION":
+    case "SCHEDULED_FULFILLMENT_NOT_READY":
       throw new HttpsError(
         "failed-precondition",
         error.message

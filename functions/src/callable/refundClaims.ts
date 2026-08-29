@@ -25,7 +25,7 @@ if (admin.apps.length === 0) admin.initializeApp();
 const db = getFirestore("default");
 const CUSTOMER_REASONS = new Set([
   "missing_items", "incorrect_items", "damaged_items", "quality_issue",
-  "delivery_failed", "duplicate_charge", "other",
+  "delivery_failed", "pickup_failed", "duplicate_charge", "other",
 ]);
 const PHOTO_EVIDENCE_REASONS = new Set([
   "damaged_items",
@@ -79,9 +79,14 @@ function evidenceUploadPath(
   return `users/${customerId}/refund-claim-evidence/${orderId}/${uploadId}/original.${fileExtension}`;
 }
 
-const DELIVERY_FAILURE_ELIGIBLE_STATUSES = new Set([
+const FULFILLMENT_FAILURE_ELIGIBLE_STATUSES = new Set([
   "cancelled",
   "completed",
+]);
+
+const FULFILLMENT_FAILURE_REASONS = new Set([
+  "delivery_failed",
+  "pickup_failed",
 ]);
 
 async function requireEligiblePaidOrder(
@@ -107,16 +112,30 @@ async function requireEligiblePaidOrder(
   }
 
   const status = text(orderData.status);
-  const eligible = reason === "delivery_failed"
-    ? DELIVERY_FAILURE_ELIGIBLE_STATUSES.has(status)
+  const fulfillmentType = orderData.fulfillmentType === "pickup"
+    ? "pickup"
+    : "delivery";
+
+  if (
+    (reason === "delivery_failed" && fulfillmentType !== "delivery") ||
+    (reason === "pickup_failed" && fulfillmentType !== "pickup")
+  ) {
+    throw new HttpsError(
+      "failed-precondition",
+      `Choose the ${fulfillmentType} issue reason for this order.`,
+    );
+  }
+
+  const eligible = FULFILLMENT_FAILURE_REASONS.has(reason)
+    ? FULFILLMENT_FAILURE_ELIGIBLE_STATUSES.has(status)
     : status === "completed";
 
   if (!eligible) {
     throw new HttpsError(
       "failed-precondition",
-      reason === "delivery_failed"
-        ? "A delivery-failure claim is available after a material delivery failure or cancellation. Contact LIA Support while delivery is still active."
-        : "This claim can be submitted after delivery is completed.",
+      FULFILLMENT_FAILURE_REASONS.has(reason)
+        ? `A ${fulfillmentType} failure claim is available after a material fulfillment failure or cancellation. Contact LIA Support while the order is still active.`
+        : "This claim can be submitted after the order is completed.",
     );
   }
 

@@ -51,6 +51,7 @@ import {
   OrderInvestigationNotice,
 } from "@/components/store/orders/OrderInvestigationNotice";
 import {useStoreWorkspace} from "@/context/StoreWorkspaceContext";
+import {ScheduledFulfillmentNotice} from "@/components/orders/ScheduledFulfillmentNotice";
 
 interface OrderDetailsPageProps {
   params: Promise<{
@@ -74,6 +75,7 @@ export default function OrderDetailsPage({params}: OrderDetailsPageProps) {
       orderId,
     });
   const [updating, setUpdating] = useState(false);
+  const [actionError, setActionError] = useState("");
 
 
   // ✅ Handle status update - Store can only update up to ready_for_pickup
@@ -86,6 +88,7 @@ export default function OrderDetailsPage({params}: OrderDetailsPageProps) {
 
     try {
       setUpdating(true);
+      setActionError("");
       
       // Accepting an order is a business action.
       //
@@ -108,7 +111,7 @@ export default function OrderDetailsPage({params}: OrderDetailsPageProps) {
       
     } catch (error) {
       console.error("Error updating order:", error);
-      alert(error instanceof Error ? error.message : "Failed to update order status");
+      setActionError(error instanceof Error ? error.message : "Failed to update order status.");
     } finally {
       setUpdating(false);
     }
@@ -162,6 +165,7 @@ export default function OrderDetailsPage({params}: OrderDetailsPageProps) {
 
   return (
     <div className="space-y-6">
+      {actionError && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-700">{actionError}</div>}
       {/* Header */}
       <div className="flex flex-wrap items-center gap-4">
         <Link
@@ -201,6 +205,8 @@ export default function OrderDetailsPage({params}: OrderDetailsPageProps) {
       <OrderInvestigationNotice
         investigation={order.liaInvestigation}
       />
+
+      <ScheduledFulfillmentNotice order={order} />
 
       <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
         <div className="flex items-center justify-between">

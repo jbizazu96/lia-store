@@ -36,7 +36,7 @@ import type {
   PrepareCheckoutPaymentInput,
   PrepareCheckoutPaymentResult,
 } from "@/types/checkoutPayment";
-import type {FulfillmentType} from "@/types/fulfillment";
+import type {FulfillmentTiming, FulfillmentType, ScheduledFulfillmentWindow} from "@/types/fulfillment";
 
 
 /*
@@ -69,6 +69,8 @@ export interface PrepareCustomerPaymentInput {
 
   deliveryInstructions?: string;
   pickupInstructions?: string;
+  fulfillmentTiming: FulfillmentTiming;
+  scheduledWindow?: ScheduledFulfillmentWindow;
 
   /*
     Example:
@@ -236,6 +238,9 @@ async function prepareCheckoutPayment(
 
       pickupInstructions: input.pickupInstructions,
 
+      fulfillmentTiming: input.fulfillmentTiming,
+      scheduledWindow: input.scheduledWindow,
+
       tipAmountCents:
         input.fulfillmentType === "pickup" ? 0 : dollarsToCents(input.tip),
     };
@@ -353,6 +358,7 @@ async function estimateCheckoutTax(
     deliveryAddress: input.deliveryAddress,
     deliveryInstructions: input.deliveryInstructions,
     pickupInstructions: input.pickupInstructions,
+    fulfillmentTiming: "asap",
     tipAmountCents: input.fulfillmentType === "pickup" ? 0 : dollarsToCents(input.tip),
     deliveryFeeAmount: dollarsToCents(input.deliveryFee),
     serviceFeeAmount: dollarsToCents(input.serviceFee),

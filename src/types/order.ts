@@ -178,6 +178,14 @@ export interface PickupInfo {
   pickedUpAt?: Date;
 }
 
+export interface OrderScheduling {
+  timing: "asap" | "scheduled";
+  windowStart: Date | null;
+  windowEnd: Date | null;
+  timezone: string;
+  preparationLeadMinutes?: number;
+}
+
 /* ==========================================================================
    PAYMENT
    ========================================================================== */
@@ -343,6 +351,8 @@ export interface Order {
    */
   delivery?: DeliveryInfo;
   pickup?: PickupInfo;
+  fulfillmentTiming: "asap" | "scheduled";
+  scheduling?: OrderScheduling;
 
   /**
    * Current order status.

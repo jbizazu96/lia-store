@@ -124,6 +124,8 @@ import type {
   ReusableCheckoutSession,
 } from "./checkoutSessionTypes";
 import {checkoutOperationalGuard} from "../../callable/adminOperations";
+import {reserveScheduledFulfillment} from "../../orders/scheduledFulfillmentService";
+import {getOrderDeliveryPolicy} from "../../admin/orderDeliveryPolicy";
 
 
 /*
@@ -330,7 +332,6 @@ async function retrieveReusablePaymentIntent(
       "requires_payment_method",
       "requires_confirmation",
       "requires_action",
-      "processing",
     ];
 
   if (
@@ -1010,6 +1011,9 @@ export const prepareCheckoutPayment =
                   ? checkoutRequest.pickupInstructions ?? null
                   : checkoutRequest.deliveryInstructions ?? null,
 
+                fulfillmentTiming: checkoutRequest.fulfillmentTiming,
+                scheduledWindow: checkoutRequest.scheduledWindow ?? null,
+
                 tipAmount:
                   pricing.tipAmount,
 
@@ -1149,6 +1153,15 @@ export const prepareCheckoutPayment =
             .session
             .sessionId;
 
+        const scheduledFulfillment = await reserveScheduledFulfillment({
+          request: checkoutRequest,
+          store: checkoutData.store,
+          policy: await getOrderDeliveryPolicy(),
+          checkoutSessionId: newlyCreatedSessionId,
+          checkoutExpiresAt: sessionResolution.session.expiresAt,
+          customerUid: customer.uid,
+        });
+
 
         /*
         |--------------------------------------------------------------------------
@@ -1189,6 +1202,8 @@ export const prepareCheckoutPayment =
               productTaxById: taxCalculation.productTaxById,
 
               zoneDecision,
+
+              scheduledFulfillment,
 
               distanceMiles,
 

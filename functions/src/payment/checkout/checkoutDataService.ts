@@ -448,6 +448,17 @@ function mapTrustedStore(
       typeof data.pickupInstructions === "string" && data.pickupInstructions.trim()
         ? data.pickupInstructions.trim()
         : null,
+    schedule: Array.isArray(data.schedule) ? data.schedule.flatMap((entry) => {
+      if (!entry || typeof entry !== "object") return [];
+      const day = entry as Record<string, unknown>;
+      return typeof day.day === "string" && typeof day.open === "string" && typeof day.close === "string"
+        ? [{day: day.day, open: day.open, close: day.close, isClosed: day.isClosed === true}]
+        : [];
+    }) : [],
+    scheduledPickupEnabled: data.scheduledPickupEnabled === true,
+    scheduledDeliveryEnabled: data.scheduledDeliveryEnabled === true,
+    scheduledOrdersPerSlot: Number.isInteger(data.scheduledOrdersPerSlot) ? Math.min(100, Math.max(1, Number(data.scheduledOrdersPerSlot))) : 5,
+    fulfillmentTimezone: typeof data.fulfillmentTimezone === "string" && data.fulfillmentTimezone ? data.fulfillmentTimezone : "America/Chicago",
 
     stripeAccountId,
 

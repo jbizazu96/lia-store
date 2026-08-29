@@ -64,6 +64,16 @@ export function FulfillmentSection({storeData, setStoreData}: Props) {
           />
         </label>
       </div>
+      <div className="mt-5 rounded-xl border border-orange-100 bg-orange-50/40 p-4">
+        <h3 className="text-sm font-bold text-gray-900">Scheduled orders</h3>
+        <p className="mt-1 text-xs leading-5 text-gray-600">Available windows follow the weekly Store Schedule. LIA&apos;s global policy can temporarily disable either method.</p>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <label className="flex items-center justify-between rounded-xl bg-white p-3 text-sm font-semibold"><span>Scheduled pickup</span><input type="checkbox" checked={storeData.scheduledPickupEnabled} onChange={(event) => update({scheduledPickupEnabled: event.target.checked})} className="h-5 w-5 accent-orange-500"/></label>
+          <label className="flex items-center justify-between rounded-xl bg-white p-3 text-sm font-semibold"><span>Scheduled delivery</span><input type="checkbox" checked={storeData.scheduledDeliveryEnabled} onChange={(event) => update({scheduledDeliveryEnabled: event.target.checked})} className="h-5 w-5 accent-orange-500"/></label>
+          <label className="text-sm font-semibold text-gray-700">Orders allowed per time slot<input type="number" min={1} max={100} value={storeData.scheduledOrdersPerSlot} onChange={(event) => update({scheduledOrdersPerSlot: Number(event.target.value)})} className="mt-1 block w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5"/></label>
+          <label className="text-sm font-semibold text-gray-700">Store timezone<select value={storeData.fulfillmentTimezone} onChange={(event) => update({fulfillmentTimezone: event.target.value})} className="mt-1 block w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5"><option value="America/New_York">Eastern</option><option value="America/Chicago">Central</option><option value="America/Denver">Mountain</option><option value="America/Phoenix">Arizona</option><option value="America/Los_Angeles">Pacific</option><option value="America/Anchorage">Alaska</option><option value="Pacific/Honolulu">Hawaii</option></select></label>
+        </div>
+      </div>
     </section>
   );
 }

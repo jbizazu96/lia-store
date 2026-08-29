@@ -39,6 +39,7 @@ import { useCart } from "@/context/CartContext";
 import { useConfirmation } from "@/context/ConfirmationContext";
 import { useSuccessToast } from "@/context/SuccessToastContext";
 import {getCustomerPickupCode} from "@/services/order/customerPickupService";
+import {ScheduledFulfillmentNotice} from "@/components/orders/ScheduledFulfillmentNotice";
 
 
 interface OrderPageProps {
@@ -277,7 +278,8 @@ export default function OrderDetailPage({params}: OrderPageProps) {
         <OrderHelpSection
           orderId={orderId}
           canRequestRefund={order.status === "completed" || isCancelled}
-          deliveryFailureOnly={isCancelled}
+          fulfillmentType={order.fulfillmentType}
+          fulfillmentFailureOnly={isCancelled}
         />
 
         {order.status === "completed" && (
@@ -403,6 +405,8 @@ export default function OrderDetailPage({params}: OrderPageProps) {
           
           
         </div>
+
+        <ScheduledFulfillmentNotice order={order} />
 
         {/* Fulfillment location */}
         <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-[0_6px_18px_rgba(15,23,42,0.08)]">

@@ -25,6 +25,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { CustomerBottomNavigation } from "@/components/customer/navigation/CustomerBottomNavigation";
 import { CustomerPageState } from "@/components/customer/ui/CustomerPageState";
+import { ScheduledFulfillmentNotice } from "@/components/orders/ScheduledFulfillmentNotice";
 
 export default function OrdersPage() {
   const router = useRouter();
@@ -320,6 +321,7 @@ export default function OrdersPage() {
                         </Link>
                       </div>
                     </div>
+                    <ScheduledFulfillmentNotice order={order} compact />
                     
                     {order.fulfillmentType === "delivery" && order.customer.address && (
                       <div className="flex items-center gap-1.5 text-xs text-gray-400 mt-1">

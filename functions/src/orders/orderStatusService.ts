@@ -173,6 +173,8 @@ interface StatusWorkflowOrder {
 
   checkoutStatus?: unknown;
 
+  scheduling?: {timing?: unknown; windowStart?: unknown; preparationLeadMinutes?: unknown};
+
   customer?: {
     uid?: unknown;
   };
@@ -214,6 +216,7 @@ export type OrderStatusServiceErrorCode =
   | "PAYMENT_NOT_CONFIRMED"
   | "INVALID_CURRENT_STATUS"
   | "INVALID_TRANSITION"
+  | "SCHEDULED_FULFILLMENT_NOT_READY"
   | "CANCELLATION_REASON_REQUIRED";
 
 
@@ -538,6 +541,14 @@ async function updateStoreOrderStatus(
       const previousStatus =
         order.status;
       const fulfillmentType = order.fulfillmentType === "pickup" ? "pickup" : "delivery";
+
+      if (newStatus === "preparing" && order.scheduling?.timing === "scheduled") {
+        const windowStart = typeof order.scheduling.windowStart === "string" ? new Date(order.scheduling.windowStart).getTime() : Number.NaN;
+        const leadMinutes = typeof order.scheduling.preparationLeadMinutes === "number" ? order.scheduling.preparationLeadMinutes : 0;
+        if (Number.isFinite(windowStart) && Date.now() < windowStart - leadMinutes * 60_000) {
+          throw new OrderStatusServiceError("SCHEDULED_FULFILLMENT_NOT_READY", "This scheduled order is not ready to begin preparation yet.");
+        }
+      }
 
       const orderNumber =
         typeof order.orderNumber ===

@@ -81,6 +81,9 @@ interface NormalizedCheckoutFingerprint {
 
   fulfillmentInstructions: string | null;
 
+  fulfillmentTiming: "asap" | "scheduled";
+  scheduledWindow: {start: string; end: string; timezone: string} | null;
+
   tipAmount: number;
 
   totalAmount: number;
@@ -496,6 +499,13 @@ function normalizeFingerprintInput(
     fulfillmentInstructions: typeof input.fulfillmentInstructions === "string"
       ? input.fulfillmentInstructions.trim().replace(/\s+/g, " ") || null
       : null,
+
+    fulfillmentTiming: input.fulfillmentTiming,
+    scheduledWindow: input.fulfillmentTiming === "scheduled" && input.scheduledWindow ? {
+      start: input.scheduledWindow.start,
+      end: input.scheduledWindow.end,
+      timezone: input.scheduledWindow.timezone,
+    } : null,
 
     tipAmount:
       requireCentAmount(

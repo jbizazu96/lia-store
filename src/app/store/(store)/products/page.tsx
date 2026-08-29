@@ -59,6 +59,7 @@ import {useProductCategories} from "@/hooks/useProductCategories";
 import {useStoreProductActions} from "@/hooks/useStoreProductActions";
 import {productService} from "@/services/product/productService";
 import {useDebouncedValue} from "@/hooks/useDebouncedValue";
+import {useSuccessToast} from "@/context/SuccessToastContext";
 
 function parseCsvLine(line: string): string[] {
   const cells: string[] = [];
@@ -76,6 +77,7 @@ function parseCsvLine(line: string): string[] {
 }
 
 export default function ProductsPage() {
+  const {showSuccess} = useSuccessToast();
   const {entry} = useStoreWorkspace();
   const readOnly = entry?.access.role === "staff" && entry.access.permissions.products === "read";
   const router = useRouter();
@@ -85,6 +87,7 @@ export default function ProductsPage() {
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive" | "out_of_stock" | "low_stock" | "image_issues">("all");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkSaving, setBulkSaving] = useState(false);
+  const [operationError, setOperationError] = useState("");
   const [sort, setSort] = useState<"name" | "stock_asc" | "stock_desc" | "price_asc" | "price_desc" | "updated_desc">("name");
   const importInputRef = useRef<HTMLInputElement>(null);
   const [auditEntries, setAuditEntries] = useState<Array<{id: string; productName: string; action: string; createdAt: string}>>([]);
@@ -119,6 +122,7 @@ export default function ProductsPage() {
     toggleProductFeatured,
     deleteProduct,
     duplicateProduct,
+    actionError,
     isMutating,
   } = useStoreProductActions(refreshProducts);
 
@@ -141,10 +145,14 @@ export default function ProductsPage() {
   const bulkAvailability = async (isAvailable: boolean) => {
     if (selectedIds.size === 0 || bulkSaving) return;
     try {
+      setOperationError("");
       setBulkSaving(true);
       await productService.bulkUpdateAvailability([...selectedIds], isAvailable);
       setSelectedIds(new Set());
       await refreshProducts();
+      showSuccess(`Selected products ${isAvailable ? "activated" : "deactivated"}.`);
+    } catch (bulkError) {
+      setOperationError(bulkError instanceof Error ? bulkError.message : "The selected products could not be updated.");
     } finally { setBulkSaving(false); }
   };
   const exportLoadedProducts = () => {
@@ -161,8 +169,8 @@ export default function ProductsPage() {
       const cells = parseCsvLine(line);
       return {productId: cells[0], price: cells[4] === "" ? undefined : Number(cells[4]), stock: cells[5] === "" ? undefined : Number(cells[5])};
     }).filter((row) => row.productId && Number.isFinite(row.price ?? 0) && Number.isFinite(row.stock ?? 0));
-    if (rows.length === 0) {window.alert("No valid inventory rows were found."); return;}
-    try {setBulkSaving(true); await productService.importInventory(rows); await refreshProducts(); window.alert(`${rows.length} products updated.`);} catch (error) {window.alert(error instanceof Error ? error.message : "Inventory import failed.");} finally {setBulkSaving(false); if (importInputRef.current) importInputRef.current.value = "";}
+    if (rows.length === 0) {setOperationError("No valid inventory rows were found in that file."); return;}
+    try {setBulkSaving(true); setOperationError(""); await productService.importInventory(rows); await refreshProducts(); showSuccess(`${rows.length} products updated.`);} catch (importError) {setOperationError(importError instanceof Error ? importError.message : "Inventory import failed.");} finally {setBulkSaving(false); if (importInputRef.current) importInputRef.current.value = "";}
   };
   useEffect(() => {
     if (!loading && isAuthenticated && !needsStoreSetup) void productService.getStoreInventoryAudit(10).then(setAuditEntries).catch((auditError) => console.error("Unable to load inventory history:", auditError));
@@ -280,6 +288,7 @@ export default function ProductsPage() {
       <ProductStats {...stats} />
 
       {readOnly && <div className="rounded-xl border border-blue-100 bg-blue-50 p-3 text-sm font-semibold text-blue-800">Read-only product access. Contact the store owner to request editing permission.</div>}
+      {(operationError || actionError) && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">{operationError || actionError}</div>}
       {!readOnly && <div className="flex flex-wrap items-center gap-2 rounded-xl border border-gray-100 bg-white p-3 text-sm">
         <span className="mr-auto text-gray-500">{selectedIds.size} selected</span>
         <button type="button" disabled={selectedIds.size === 0 || bulkSaving} onClick={() => void bulkAvailability(true)} className="rounded-lg bg-green-50 px-3 py-2 font-semibold text-green-700 disabled:opacity-40">Activate</button>

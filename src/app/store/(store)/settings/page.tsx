@@ -130,6 +130,10 @@ function sectionFingerprint(
     pickupEnabled: store.pickupEnabled,
     pickupPreparationMinutes: store.pickupPreparationMinutes,
     pickupInstructions: store.pickupInstructions,
+    scheduledPickupEnabled: store.scheduledPickupEnabled,
+    scheduledDeliveryEnabled: store.scheduledDeliveryEnabled,
+    scheduledOrdersPerSlot: store.scheduledOrdersPerSlot,
+    fulfillmentTimezone: store.fulfillmentTimezone,
   });
   return JSON.stringify({
     orderNotifications: store.orderNotifications,
@@ -148,7 +152,7 @@ function mergeSavedSection(
   const fields: Record<SavableSettingsSection, Array<keyof StoreWorkspaceStore>> = {
     profile: ["name", "email", "phone", "description", "address", "city", "state", "zip", "country", "formattedAddress", "latitude", "longitude", "placeId"],
     business: ["businessType", "registeredName", "ein", "businessStructure"],
-    fulfillment: ["pickupEnabled", "pickupPreparationMinutes", "pickupInstructions"],
+    fulfillment: ["pickupEnabled", "pickupPreparationMinutes", "pickupInstructions", "scheduledPickupEnabled", "scheduledDeliveryEnabled", "scheduledOrdersPerSlot", "fulfillmentTimezone"],
     notifications: ["orderNotifications", "paymentNotifications", "productStockNotifications", "emailNotifications", "pushNotifications"],
   };
   const next = {...current};

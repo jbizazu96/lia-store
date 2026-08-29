@@ -25,11 +25,13 @@ type HelpView = "support" | "claim" | null;
 export function OrderHelpSection({
   orderId,
   canRequestRefund,
-  deliveryFailureOnly = false,
+  fulfillmentType,
+  fulfillmentFailureOnly = false,
 }: {
   orderId: string;
   canRequestRefund: boolean;
-  deliveryFailureOnly?: boolean;
+  fulfillmentType: "delivery" | "pickup";
+  fulfillmentFailureOnly?: boolean;
 }) {
   const [activeView, setActiveView] =
     useState<HelpView>(null);
@@ -126,7 +128,12 @@ export function OrderHelpSection({
       {activeView && (
         <div className="p-5">
           {activeView === "claim" && canRequestRefund ? (
-          <RefundClaimCard orderId={orderId} embedded deliveryFailureOnly={deliveryFailureOnly} />
+          <RefundClaimCard
+            orderId={orderId}
+            embedded
+            fulfillmentType={fulfillmentType}
+            fulfillmentFailureOnly={fulfillmentFailureOnly}
+          />
           ) : (
             <OrderHelpCard orderId={orderId} embedded />
           )}

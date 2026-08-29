@@ -6,8 +6,8 @@ export interface CustomerLegalDocument {
   documentHash: string; requiresAcceptance: boolean; acceptanceVerb: "agree" | "acknowledge";
 }
 
-export const CUSTOMER_TERMS: CustomerLegalDocument = {documentKey: "customer_terms", acceptanceField: "customerTerms", title: "Customer Terms of Service", version: "customer-terms-v2", effectiveDate: "2026-08-20", lastUpdated: "2026-08-20", documentPath: "/legal/customer-terms", documentHash: "sha256:54ec77f41846cbe380f3ead1239b52afc7a7a24664cee9ae9ac16d2a69d6e40a", requiresAcceptance: true, acceptanceVerb: "agree"};
-export const CUSTOMER_PRIVACY: CustomerLegalDocument = {documentKey: "customer_privacy", acceptanceField: "customerPrivacy", title: "Privacy Policy", version: "customer-privacy-v1", effectiveDate: "2026-08-14", lastUpdated: "2026-08-14", documentPath: "/legal/privacy", documentHash: "sha256:c4863c982b70398b7f9f150048fbed9df05452fc1a4020fd669841379f5a69a6", requiresAcceptance: true, acceptanceVerb: "acknowledge"};
+export const CUSTOMER_TERMS: CustomerLegalDocument = {documentKey: "customer_terms", acceptanceField: "customerTerms", title: "Customer Terms of Service", version: "customer-terms-v3", effectiveDate: "2026-08-28", lastUpdated: "2026-08-28", documentPath: "/legal/customer-terms", documentHash: "sha256:9fddf57b5bcd1dd5b5fda207a23bf44a51c81706b3f091afe2687198309fccc1", requiresAcceptance: true, acceptanceVerb: "agree"};
+export const CUSTOMER_PRIVACY: CustomerLegalDocument = {documentKey: "customer_privacy", acceptanceField: "customerPrivacy", title: "Privacy Policy", version: "customer-privacy-v2", effectiveDate: "2026-08-28", lastUpdated: "2026-08-28", documentPath: "/legal/privacy", documentHash: "sha256:080160d7b8514c452fe23b16706dc88fa733152a6b1e7d44353e71c2894f85f1", requiresAcceptance: true, acceptanceVerb: "acknowledge"};
 const FALLBACKS = [CUSTOMER_TERMS, CUSTOMER_PRIVACY];
 
 function text(value: unknown): string { return typeof value === "string" ? value : ""; }

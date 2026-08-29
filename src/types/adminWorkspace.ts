@@ -158,6 +158,10 @@ export interface AdminAccountDeletionRequestDetail {
 
 export interface AdminOrderListItem {
   fulfillmentType: "delivery" | "pickup";
+  fulfillmentTiming: "asap" | "scheduled";
+  scheduledWindowStart: string | null;
+  scheduledWindowEnd: string | null;
+  fulfillmentTimezone: string | null;
   id: string; orderNumber: string; status: string; createdAt: string | null;
   storeName: string; customerName: string; totalAmount: number; currency: string;
   paymentStatus: string; driverName: string | null; shipdayStatus: string | null;
@@ -220,7 +224,7 @@ export interface AdminDriverApplicationPolicy {
   requireApprovedDocumentsForApproval: boolean;
 }
 
-export interface AdminOrderDeliveryPolicy { minutesPerMile: number; defaultPreparationMinutes: number; reminderIntervalsMinutes: {pending: number; accepted: number; preparing: number}; }
+export interface AdminOrderDeliveryPolicy { minutesPerMile: number; defaultPreparationMinutes: number; reminderIntervalsMinutes: {pending: number; accepted: number; preparing: number}; scheduling: {pickupEnabled: boolean; deliveryEnabled: boolean; maximumDaysAhead: number; slotIntervalMinutes: number; defaultOrdersPerSlot: number}; }
 
 export interface AdminCustomerListItem {
   id: string;

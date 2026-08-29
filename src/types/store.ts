@@ -53,6 +53,10 @@ export interface Store {
   pickupEnabled?: boolean;
   pickupPreparationMinutes?: number;
   pickupInstructions?: string;
+  scheduledPickupEnabled?: boolean;
+  scheduledDeliveryEnabled?: boolean;
+  scheduledOrdersPerSlot?: number;
+  fulfillmentTimezone?: string;
   /* Approval unlocks owner tools; activation publishes to customers. */
   isApproved: boolean;
   isActive: boolean;

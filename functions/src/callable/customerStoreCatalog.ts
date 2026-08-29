@@ -126,6 +126,13 @@ function publicStore(
       Math.max(5, Math.round(number(data.pickupPreparationMinutes, 30))),
     ),
     pickupInstructions: text(data.pickupInstructions),
+    scheduledPickupEnabled: data.scheduledPickupEnabled === true,
+    scheduledDeliveryEnabled: data.scheduledDeliveryEnabled === true,
+    scheduledOrdersPerSlot: Math.min(
+      100,
+      Math.max(1, Math.round(number(data.scheduledOrdersPerSlot, 5))),
+    ),
+    fulfillmentTimezone: text(data.fulfillmentTimezone) || "America/Chicago",
     isApproved: data.isApproved === true,
     isActive: data.isActive === true,
     isOpen: data.isOpen === true,
