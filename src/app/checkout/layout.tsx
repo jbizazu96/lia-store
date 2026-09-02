@@ -4,6 +4,7 @@ import {
   RoleGuard,
 } from "@/components/auth/RoleGuard";
 import { CustomerOfflineNotice } from "@/components/customer/ui/CustomerOfflineNotice";
+import {CustomerTermsGate} from "@/components/customer/legal/CustomerTermsGate";
 
 export default function CheckoutLayout({
   children,
@@ -16,8 +17,10 @@ export default function CheckoutLayout({
         "customer",
       ]}
     >
-      <CustomerOfflineNotice />
-      {children}
+      <CustomerTermsGate>
+        <CustomerOfflineNotice />
+        {children}
+      </CustomerTermsGate>
     </RoleGuard>
   );
 }

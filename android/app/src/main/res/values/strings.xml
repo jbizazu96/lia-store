@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">LIA</string>
+    <string name="title_activity_main">LIA</string>
+    <string name="package_name">com.liamarketplace.customer</string>
+    <string name="custom_url_scheme">com.liamarketplace.customer</string>
+</resources>

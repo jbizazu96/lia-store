@@ -43,6 +43,8 @@ import {appleAuthenticationService} from "@/services/auth/appleAuthenticationSer
 import {Capacitor} from "@capacitor/core";
 import {reportClientIssue} from "@/services/monitoring/clientErrorReporter";
 import {authEmailService} from "@/services/auth/authEmailService";
+import {registrationService, type SocialCustomerProfileInput} from "@/services/user/registrationService";
+import {SocialCustomerOnboardingModal} from "@/components/login/SocialCustomerOnboardingModal";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -73,6 +75,11 @@ export default function LoginPage() {
   const [showResetModal, setShowResetModal] = useState(false);
   const [showAddressModal, setShowAddressModal] = useState(false);
   const [showStoreStatusModal, setShowStoreStatusModal] = useState(false);
+  const [socialSetup, setSocialSetup] = useState<{
+    providerName: "Google" | "Apple";
+    initialName: string;
+  } | null>(null);
+  const [socialSetupError, setSocialSetupError] = useState("");
   const [storeStatusData, setStoreStatusData] = useState<{
     status: "approved" | "pending" | "none";
     storeName?: string;
@@ -301,7 +308,15 @@ export default function LoginPage() {
         return;
       }
 
-      await handlePostLogin(user.uid);
+      try {
+        await handlePostLogin(user.uid);
+      } catch (accountError) {
+        if (accountError instanceof CurrentAccountClientError && accountError.status === 412) {
+          setSocialSetup({providerName: "Google", initialName: user.displayName ?? ""});
+          return;
+        }
+        throw accountError;
+      }
     } catch (error) {
       console.error(error);
       reportClientIssue({
@@ -320,7 +335,15 @@ export default function LoginPage() {
       setLoading(true);
       setError("");
       const result = await appleAuthenticationService.signIn();
-      await handlePostLogin(result.user.uid);
+      try {
+        await handlePostLogin(result.user.uid);
+      } catch (accountError) {
+        if (accountError instanceof CurrentAccountClientError && accountError.status === 412) {
+          setSocialSetup({providerName: "Apple", initialName: result.user.displayName ?? ""});
+          return;
+        }
+        throw accountError;
+      }
     } catch (error: unknown) {
       console.error("Apple sign in failed:", error);
       const code = error && typeof error === "object" && "code" in error
@@ -342,6 +365,39 @@ export default function LoginPage() {
     } finally {
       setLoading(false);
     }
+  }
+
+  async function handleSocialCustomerSetup(input: SocialCustomerProfileInput) {
+    try {
+      setLoading(true);
+      setSocialSetupError("");
+      await registrationService.initializeSocialCustomer(input);
+      setSocialSetup(null);
+      const user = auth.currentUser;
+      if (!user) throw new Error("The social sign-in session ended during setup.");
+      await handlePostLogin(user.uid);
+    } catch (setupError) {
+      console.error("Social customer profile setup failed:", setupError);
+      reportClientIssue({
+        area: "authentication.social_customer_setup",
+        message: "Social customer profile setup failed",
+        error: setupError,
+        metadata: {provider: socialSetup?.providerName ?? "unknown"},
+      });
+      setSocialSetupError(
+        setupError && typeof setupError === "object" && "message" in setupError && typeof setupError.message === "string"
+          ? setupError.message.replace(/^FirebaseError:\s*/, "")
+          : "We couldn't create your customer profile. Please try again.",
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function cancelSocialCustomerSetup() {
+    setSocialSetup(null);
+    setSocialSetupError("");
+    await signOut(auth);
   }
 
   /*
@@ -436,6 +492,15 @@ export default function LoginPage() {
         onSubmit={handleAddressSubmit}
         onClose={() => setShowAddressModal(false)}
       />
+
+      {socialSetup ? <SocialCustomerOnboardingModal
+        initialName={socialSetup.initialName}
+        providerName={socialSetup.providerName}
+        loading={loading}
+        error={socialSetupError}
+        onCancel={() => void cancelSocialCustomerSetup()}
+        onSubmit={(input) => void handleSocialCustomerSetup(input)}
+      /> : null}
 
       {/* Store Status Modal */}
       <StoreStatusModal

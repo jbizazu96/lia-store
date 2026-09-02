@@ -9,9 +9,12 @@ import { getFirestore } from "firebase/firestore";
 import { getFunctions } from "firebase/functions";
 import { getStorage } from "firebase/storage";
 import {
+  CustomProvider,
   ReCaptchaEnterpriseProvider,
   initializeAppCheck,
 } from "firebase/app-check";
+import {Capacitor} from "@capacitor/core";
+import {FirebaseAppCheck} from "@capacitor-firebase/app-check";
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -47,16 +50,34 @@ const appCheckSiteKey = process.env.NEXT_PUBLIC_FIREBASE_APP_CHECK_SITE_KEY;
 const appCheckRuntime = globalThis as typeof globalThis & {
   __liaAppCheckInitialized?: boolean;
 };
-if (
-  typeof window !== "undefined" &&
-  appCheckSiteKey &&
-  !appCheckRuntime.__liaAppCheckInitialized
-) {
-  initializeAppCheck(app, {
-    provider: new ReCaptchaEnterpriseProvider(appCheckSiteKey),
-    isTokenAutoRefreshEnabled: true,
-  });
-  appCheckRuntime.__liaAppCheckInitialized = true;
+if (typeof window !== "undefined" && !appCheckRuntime.__liaAppCheckInitialized) {
+  if (Capacitor.isNativePlatform()) {
+    const nativeInitialization = FirebaseAppCheck.initialize({
+      isTokenAutoRefreshEnabled: true,
+    });
+    initializeAppCheck(app, {
+      provider: new CustomProvider({
+        getToken: async () => {
+          await nativeInitialization;
+          const result = await FirebaseAppCheck.getToken({forceRefresh: false});
+          return {
+            token: result.token,
+            // Native platforms provide this value. The short fallback keeps
+            // the JS bridge safe if a platform SDK omits it unexpectedly.
+            expireTimeMillis: result.expireTimeMillis ?? Date.now() + 5 * 60_000,
+          };
+        },
+      }),
+      isTokenAutoRefreshEnabled: true,
+    });
+    appCheckRuntime.__liaAppCheckInitialized = true;
+  } else if (appCheckSiteKey) {
+    initializeAppCheck(app, {
+      provider: new ReCaptchaEnterpriseProvider(appCheckSiteKey),
+      isTokenAutoRefreshEnabled: true,
+    });
+    appCheckRuntime.__liaAppCheckInitialized = true;
+  }
 }
 
 // Export Firebase instances

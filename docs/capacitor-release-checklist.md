@@ -27,28 +27,39 @@ Complete these checks during native development and repeat them on release candi
 
 ## Native configuration
 
-- Choose the final unique app identifier before creating the iOS and Android projects.
+- The native projects now live in `ios/` and `android/`, using the final customer app identifier `com.liamarketplace.customer`.
 - Set `CAPACITOR_SERVER_URL=https://www.liamarketplace.com` before running Capacitor sync. A safe committed template is provided in `.env.capacitor.example`; configure it explicitly in each native build environment.
 - Generate the Android and iOS splash assets from the approved LIA launch artwork after creating the native projects. The shared native splash behavior is already configured in `capacitor.config.ts`; verify the white native screen hands off cleanly to the branded customer loader without a blank or flashing frame.
-- Register the `lia://` deep-link scheme and configure Universal Links (iOS) and App Links (Android) for the production HTTPS domain.
+- Universal Links and Android App Links are declared for `www.liamarketplace.com`. The Stripe return path `/checkout/payment-result` is explicitly included and is handled by `NativeCustomerBridge` through Capacitor's `appUrlOpen` event.
+- Set `APPLE_TEAM_ID` in Vercel to the 10-character Apple Developer Team ID. Confirm `https://www.liamarketplace.com/.well-known/apple-app-site-association` returns `200` without a redirect and contains `TEAM_ID.com.liamarketplace.customer`.
+- Create/select the Android release signing key, obtain its SHA-256 fingerprint, and set `ANDROID_APP_LINK_SHA256_CERT_FINGERPRINTS` in Vercel. Multiple fingerprints are comma-separated. Confirm `https://www.liamarketplace.com/.well-known/assetlinks.json` returns `200` without a redirect and contains the release fingerprint. Include both Play App Signing and local release fingerprints when they differ.
+- In Xcode, select the LIA App target and the correct Apple team. Verify the committed `App.entitlements` shows Associated Domains and Sign in with Apple capabilities; Xcode must provision both capabilities for `com.liamarketplace.customer`.
 - Set `NEXT_PUBLIC_APP_URL=https://www.liamarketplace.com` in the hosted/native build environment. Stripe redirect returns must never use `capacitor://localhost`.
-- Configure Firebase Android (`google-services.json`) and iOS (`GoogleService-Info.plist`) applications separately from the web app.
-- Enable Google as a Firebase Authentication provider. Add the Android SHA-1 fingerprint and enable the plugin's Google dependencies in `android/variables.gradle` after creating Android.
-- Add the reversed Google client ID URL scheme and the Firebase Authentication Google pod configuration after creating iOS.
+- The iOS Firebase app and committed `ios/App/App/GoogleService-Info.plist` use `com.liamarketplace.customer`; the plist is included in the Xcode target and its reversed Google client ID is registered in `Info.plist`.
+- Register a separate Android Firebase app in the same Firebase project with package `com.liamarketplace.customer`. Add development/release SHA-1 and SHA-256 fingerprints, then place its downloaded file at `android/app/google-services.json` and run `npx cap sync android`.
+- Keep Google and Apple enabled as Firebase Authentication providers. The native shell uses the Capacitor Firebase Authentication plugin while the hosted web/PWA keeps the Firebase JS flow.
 - Configure Sign in with Apple in the Apple Developer portal and Firebase Authentication using the final App ID, Services ID, Team ID, Key ID, and private key.
-- Add the Sign in with Apple capability to the iOS target. Verify Apple and Google are displayed as equivalent login choices and test Apple private-email relay accounts.
+- Verify Apple and Google are displayed as equivalent login choices and test Apple private-email relay accounts.
 - Register the Firebase authentication email sender or custom email domain with Apple Private Email Relay so verification and account emails reach customers using Hide My Email.
-- Test Apple reauthentication and access-token revocation as part of the in-app account deletion release flow before App Store submission.
+- Test Apple reauthentication and authorization revocation as part of the in-app account deletion release flow before App Store submission. The native flow now passes Apple's fresh authorization code to Firebase `revokeAccessToken` before submitting the deletion request.
 - Configure APNs credentials in Firebase for iOS, then confirm that FCM tokens can receive an APNs notification.
-- After creating each native project, run `npx cap sync`. Confirm that `@capacitor-firebase/messaging` and `capacitor-native-settings` appear in the synchronized plugin list.
+- After native dependency changes, run `npx cap sync`. Confirm that Firebase Authentication, App Check, Crashlytics, Messaging, and native settings appear in the synchronized plugin list.
 - Follow the Firebase Messaging iOS setup in the plugin documentation: forward remote-notification registration and receipt callbacks from `AppDelegate.swift`. Do not reinstall `@capacitor/push-notifications`; it conflicts with the Firebase Messaging plugin used to obtain iOS FCM tokens.
-- Add the recommended Android monochrome notification icon metadata after the Android project is created.
+- Android now has a monochrome notification icon and LIA notification color; verify their appearance on light/dark Android notification trays.
+
+## Firebase App Check
+
+- Register App Check separately for iOS and Android in the same Firebase project. Use App Attest with DeviceCheck fallback on iOS and Play Integrity on Android.
+- Add the Android release SHA-256 fingerprint in Firebase and Google Play App Signing before testing Play Integrity.
+- Keep Firebase products in monitoring mode while web/PWA, iOS, and Android metrics are being collected. Enforce only after valid-token traffic is healthy on every supported surface.
+- The native App Check token is bridged into the hosted Firebase JS SDK so Firestore, Storage, Authentication, and callable requests made by the WebView carry native attestation.
+- Never enable the debug provider in a production/TestFlight/Play build. Use a debug token only for trusted local development and CI.
 
 ## Native crash reporting
 
 - `@capacitor-firebase/crashlytics` is connected to the customer shell. The existing Firestore reporter remains responsible for web/PWA diagnostics; native builds additionally send process crashes and handled client failures to Firebase Crashlytics.
-- After creating Android, add the Firebase Crashlytics Gradle plugin to the project and app Gradle files, then run `npx cap sync android`.
-- After creating iOS, run `npx cap sync ios`; the required Swift Package Manager symlink option is already declared in `capacitor.config.ts`.
+- Android applies the Firebase Crashlytics Gradle plugin whenever `google-services.json` is present.
+- iOS includes the Crashlytics Swift package and dSYM upload build phase. Archive once in Xcode and confirm the upload phase succeeds.
 - In Firebase Console > Crashlytics, confirm separate iOS and Android apps are linked to the production Firebase project.
 - Produce one intentional crash in a non-production build on each physical platform. Relaunch the app, then verify the issue, app version, customer UID, `app_surface=customer`, and `hosted_shell=true` appear in Crashlytics.
 - Verify a handled React error appears as a non-fatal report and that ordinary web/PWA errors still appear only in LIA's browser error reports.

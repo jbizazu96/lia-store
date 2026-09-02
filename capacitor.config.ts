@@ -1,4 +1,5 @@
 /// <reference types="@capacitor-firebase/authentication" />
+/// <reference types="@capacitor-firebase/app-check" />
 /// <reference types="@capacitor-firebase/crashlytics" />
 /// <reference types="@capacitor-firebase/messaging" />
 
@@ -46,6 +47,9 @@ const config: CapacitorConfig = {
       spm: {
         packageOptions: {
           "@capacitor-firebase/messaging": {
+            symlink: true,
+          },
+          "@capacitor-firebase/app-check": {
             symlink: true,
           },
           "@capacitor-firebase/crashlytics": {

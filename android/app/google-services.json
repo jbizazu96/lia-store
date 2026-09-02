@@ -1,0 +1,46 @@
+{
+  "project_info": {
+    "project_number": "262212004282",
+    "project_id": "lia-store",
+    "storage_bucket": "lia-store.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:262212004282:android:69dee18bb1383aaea49583",
+        "android_client_info": {
+          "package_name": "com.liamarketplace.customer"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "262212004282-8l9n2ffa8363dj7bfl64l5fllrirk4r7.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyArRPTB3ko5HZEIEh7EckHOQNh-M4wSuKg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "262212004282-8l9n2ffa8363dj7bfl64l5fllrirk4r7.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "262212004282-rjnfbjhnuvl5qc4f1nl925a3t7si604n.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.liamarketplace.customer"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

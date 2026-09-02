@@ -23,6 +23,7 @@ import {
   functions,
 } from "@/lib/firebase";
 import {authEmailService} from "@/services/auth/authEmailService";
+import {invalidateCached} from "@/services/cache/clientDataCache";
 
 export type RegistrationAccountType =
   | "customer"
@@ -37,6 +38,13 @@ export interface RegistrationInput {
   accountType: RegistrationAccountType;
   customerTermsAccepted?: boolean;
   customerPrivacyAcknowledged?: boolean;
+}
+
+export interface SocialCustomerProfileInput {
+  fullName: string;
+  phone: string;
+  customerTermsAccepted: boolean;
+  customerPrivacyAcknowledged: boolean;
 }
 
 interface InitializeUserProfileInput {
@@ -57,6 +65,28 @@ interface InitializeUserProfileInput {
 |
 */
 export const registrationService = {
+  async initializeSocialCustomer(
+    input: SocialCustomerProfileInput,
+  ): Promise<void> {
+    if (!auth.currentUser) {
+      throw new Error("Sign in with Google or Apple before completing your profile.");
+    }
+
+    const initializeProfile = httpsCallable<
+      InitializeUserProfileInput,
+      { created: boolean; accountType: RegistrationAccountType }
+    >(functions, "initializeUserProfile");
+
+    await initializeProfile({
+      fullName: input.fullName,
+      phone: input.phone,
+      accountType: "customer",
+      customerTermsAccepted: input.customerTermsAccepted,
+      customerPrivacyAcknowledged: input.customerPrivacyAcknowledged,
+    });
+    invalidateCached("current-account");
+  },
+
   async register(input: RegistrationInput): Promise<void> {
     const result = await createUserWithEmailAndPassword(
       auth,

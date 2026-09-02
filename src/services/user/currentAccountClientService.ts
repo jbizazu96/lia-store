@@ -46,7 +46,9 @@ export const currentAccountClientService = {
           functionError.code === "functions/unauthenticated" ||
             functionError.code === "functions/permission-denied"
             ? 403
-            : 500,
+            : functionError.code === "functions/failed-precondition"
+              ? 412
+              : 500,
         );
       }
     },

@@ -118,7 +118,7 @@ export function RoleGuard({
       // A broken or expired session must never trap the user on this screen.
       console.error("Unable to cleanly end the inaccessible session:", error);
     } finally {
-      window.location.assign("/login");
+      router.replace("/login");
     }
   };
 

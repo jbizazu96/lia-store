@@ -1,6 +1,7 @@
 "use client";
 
 import {useCallback, useEffect, useState} from "react";
+import {useRouter} from "next/navigation";
 import {CheckCircle2, FileText, RefreshCw} from "lucide-react";
 import {BrandedLoader} from "@/components/ui/BrandedLoader";
 import {customerLegalClientService, type CustomerLegalDocumentStatus} from "@/services/legal/customerLegalClientService";
@@ -9,6 +10,7 @@ import {customerLogoutService} from "@/services/auth/customerLogoutService";
 import {startCustomerPerformanceTrace} from "@/services/performance/customerPerformanceService";
 
 export function CustomerTermsGate({children}: {children: React.ReactNode}) {
+  const router = useRouter();
   const [status, setStatus] = useState<"loading" | "required" | "accepted" | "error">("loading");
   const [checked, setChecked] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -39,7 +41,7 @@ export function CustomerTermsGate({children}: {children: React.ReactNode}) {
   const decline = async () => {
     if (saving) return;
     setSaving(true);
-    try { await customerLogoutService.logout(); window.location.assign("/login"); }
+    try { await customerLogoutService.logout(); router.replace("/login"); }
     finally { setSaving(false); }
   };
 

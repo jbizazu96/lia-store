@@ -22,7 +22,7 @@ describe("US state normalization", () => {
 });
 
 describe("customer-only native navigation", () => {
-  it.each(["/home", "/orders/order-1", "/product/product-1", "/store/store-1", "/store/store-1/category/rice", "/legal/refund-policy"])("allows %s", (path) => {
+  it.each(["/home", "/checkout/payment-result", "/orders/order-1", "/product/product-1", "/store/store-1", "/store/store-1/category/rice", "/legal/refund-policy"])("allows %s", (path) => {
     expect(isNativeCustomerPath(path)).toBe(true);
   });
 
@@ -33,6 +33,12 @@ describe("customer-only native navigation", () => {
 
   it("preserves safe query and hash values", () => {
     expect(nativeCustomerDestination("/search?q=rice#results")).toBe("/search?q=rice#results");
+  });
+
+  it("preserves Stripe return parameters on the native payment-result route", () => {
+    expect(nativeCustomerDestination(
+      "/checkout/payment-result?orderId=order-1&checkoutSessionId=session-1",
+    )).toBe("/checkout/payment-result?orderId=order-1&checkoutSessionId=session-1");
   });
 });
 

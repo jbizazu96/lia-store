@@ -42,6 +42,12 @@ beforeEach(async () => {
       onboardingCompleted: false,
       isApproved: false,
     });
+    await context.firestore().doc("users/customer-1").set({
+      accountType: "customer",
+      isActive: true,
+      profileImageStatus: "processing",
+      profileImageOriginalPath: `users/customer-1/images/originals/profile/${IMAGE_ID}.png`,
+    });
   });
 });
 
@@ -169,5 +175,73 @@ describe("customer profile image rules", () => {
       storage.ref(`users/customer-1/images/originals/profile/${IMAGE_ID}.png`)
         .put(new Uint8Array(10 * 1024 * 1024 + 1), customerMetadata()),
     );
+  });
+
+  it("rejects customer image access after deletion lock or suspension", async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await context.firestore().doc("users/customer-1").update({accountDeletionState: "deletion_pending"});
+    });
+    const storage = testEnv.authenticatedContext("customer-1").storage();
+    await assertFails(
+      storage.ref(`users/customer-1/images/originals/profile/${IMAGE_ID}.png`)
+        .put(SMALL_IMAGE, customerMetadata()),
+    );
+
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await context.firestore().doc("users/customer-1").update({accountDeletionState: null, isActive: false});
+    });
+    await assertFails(
+      storage.ref(`users/customer-1/images/originals/profile/${IMAGE_ID}.png`)
+        .put(SMALL_IMAGE, customerMetadata()),
+    );
+  });
+});
+
+describe("customer refund evidence rules", () => {
+  const orderId = "order-1";
+  const uploadId = "evidence-1";
+  const fileName = "original.jpg";
+  const path = `users/customer-1/refund-claim-evidence/${orderId}/${uploadId}/${fileName}`;
+  const metadata = {
+    contentType: "image/jpeg",
+    customMetadata: {
+      customerId: "customer-1",
+      orderId,
+      evidenceUploadId: uploadId,
+    },
+  };
+
+  async function reserve(expiresAt: Date) {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await context.firestore().doc(`refundClaimEvidenceUploads/${uploadId}`).set({
+        status: "reserved",
+        customerId: "customer-1",
+        orderId,
+        storagePath: path,
+        expiresAt,
+      });
+    });
+  }
+
+  it("accepts only the exact active server reservation", async () => {
+    await reserve(new Date(Date.now() + 60_000));
+    const storage = testEnv.authenticatedContext("customer-1").storage();
+    await assertSucceeds(storage.ref(path).put(SMALL_IMAGE, metadata));
+    await assertFails(
+      storage.ref(`users/customer-1/refund-claim-evidence/${orderId}/other-upload/${fileName}`)
+        .put(SMALL_IMAGE, {...metadata, customMetadata: {...metadata.customMetadata, evidenceUploadId: "other-upload"}}),
+    );
+  });
+
+  it("rejects missing, expired, and deletion-locked reservations", async () => {
+    const storage = testEnv.authenticatedContext("customer-1").storage();
+    await assertFails(storage.ref(path).put(SMALL_IMAGE, metadata));
+    await reserve(new Date(Date.now() - 60_000));
+    await assertFails(storage.ref(path).put(SMALL_IMAGE, metadata));
+    await reserve(new Date(Date.now() + 60_000));
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await context.firestore().doc("users/customer-1").update({accountDeletionState: "deletion_processing"});
+    });
+    await assertFails(storage.ref(path).put(SMALL_IMAGE, metadata));
   });
 });

@@ -6,6 +6,37 @@ service firebase.storage {
       return request.auth != null;
     }
 
+    function isOperationalCustomer(userId) {
+      return signedIn() &&
+        request.auth.uid == userId &&
+        firestore.exists(/databases/(default)/documents/users/$(userId)) &&
+        firestore.get(/databases/(default)/documents/users/$(userId)).data.accountType == "customer" &&
+        firestore.get(/databases/(default)/documents/users/$(userId)).data.isActive == true &&
+        (
+          !firestore.get(/databases/(default)/documents/users/$(userId)).data.keys().hasAny(["accountDeletionState"]) ||
+          (
+            firestore.get(/databases/(default)/documents/users/$(userId)).data.accountDeletionState != "deletion_pending" &&
+            firestore.get(/databases/(default)/documents/users/$(userId)).data.accountDeletionState != "deletion_processing"
+          )
+        );
+    }
+
+    function hasReservedCustomerProfileImage(userId, fileName) {
+      return firestore.get(/databases/(default)/documents/users/$(userId)).data.profileImageStatus == "processing" &&
+        firestore.get(/databases/(default)/documents/users/$(userId)).data.profileImageOriginalPath ==
+          "users/" + userId + "/images/originals/profile/" + fileName;
+    }
+
+    function hasValidClaimEvidenceReservation(userId, orderId, evidenceUploadId, fileName) {
+      return firestore.exists(/databases/(default)/documents/refundClaimEvidenceUploads/$(evidenceUploadId)) &&
+        firestore.get(/databases/(default)/documents/refundClaimEvidenceUploads/$(evidenceUploadId)).data.status == "reserved" &&
+        firestore.get(/databases/(default)/documents/refundClaimEvidenceUploads/$(evidenceUploadId)).data.customerId == userId &&
+        firestore.get(/databases/(default)/documents/refundClaimEvidenceUploads/$(evidenceUploadId)).data.orderId == orderId &&
+        firestore.get(/databases/(default)/documents/refundClaimEvidenceUploads/$(evidenceUploadId)).data.storagePath ==
+          "users/" + userId + "/refund-claim-evidence/" + orderId + "/" + evidenceUploadId + "/" + fileName &&
+        firestore.get(/databases/(default)/documents/refundClaimEvidenceUploads/$(evidenceUploadId)).data.expiresAt > request.time;
+    }
+
     function ownsStore(storeId) {
       return signedIn() &&
         request.auth.token.storeUploadStoreId == storeId &&
@@ -223,9 +254,9 @@ service firebase.storage {
 
     /* Customer profile photos are private to their authenticated owner. */
     match /users/{userId}/images/originals/profile/{fileName} {
-      allow read: if signedIn() && request.auth.uid == userId;
-      allow write: if signedIn() &&
-        request.auth.uid == userId &&
+      allow read: if isOperationalCustomer(userId);
+      allow create: if isOperationalCustomer(userId) &&
+        hasReservedCustomerProfileImage(userId, fileName) &&
         isSupportedCustomerProfileImage() &&
         request.resource.metadata.userId == userId &&
         request.resource.metadata.processingType ==
@@ -237,10 +268,11 @@ service firebase.storage {
           request.resource.metadata.imageId +
           "\\.(jpg|jpeg|png|webp|avif|heic|heif)"
         );
+      allow update, delete: if false;
     }
 
     match /users/{userId}/images/optimized/profile/{fileName} {
-      allow read: if signedIn() && request.auth.uid == userId;
+      allow read: if isOperationalCustomer(userId);
       allow write: if false;
     }
 
@@ -251,13 +283,14 @@ service firebase.storage {
      */
     match /users/{userId}/refund-claim-evidence/{orderId}/{evidenceUploadId}/{fileName} {
       allow read: if false;
-      allow write: if signedIn() &&
-        request.auth.uid == userId &&
+      allow create: if isOperationalCustomer(userId) &&
+        hasValidClaimEvidenceReservation(userId, orderId, evidenceUploadId, fileName) &&
         fileName.matches("original\\.(jpg|jpeg|png|webp|heic|heif)") &&
         isSupportedClaimEvidence() &&
         request.resource.metadata.customerId == userId &&
         request.resource.metadata.orderId == orderId &&
         request.resource.metadata.evidenceUploadId == evidenceUploadId;
+      allow update, delete: if false;
     }
 
     /*

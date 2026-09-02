@@ -5,6 +5,7 @@
 */
 
 import {useState} from "react";
+import {useRouter} from "next/navigation";
 import {motion} from "framer-motion";
 import {
   AlertTriangle,
@@ -22,6 +23,7 @@ import {
 import {customerLogoutService} from "@/services/auth/customerLogoutService";
 
 export function DangerSection() {
+  const router = useRouter();
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -51,7 +53,7 @@ export function DangerSection() {
       });
 
       await customerLogoutService.logout();
-      window.location.assign("/login?accountDeletion=review");
+      router.replace("/login?accountDeletion=review");
 
       setShowDeleteModal(false);
       setError(

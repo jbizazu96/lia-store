@@ -21,6 +21,7 @@
     "verify": "npm run lint && tsc --noEmit && npm --prefix functions run lint && npm --prefix functions run build && npm run test && npm run build && npm run test:rules && npm run test:e2e"
   },
   "dependencies": {
+    "@capacitor-firebase/app-check": "^8.5.0",
     "@capacitor-firebase/authentication": "^8.3.0",
     "@capacitor-firebase/crashlytics": "^8.4.0",
     "@capacitor-firebase/messaging": "^8.3.0",
@@ -40,18 +41,19 @@
     "framer-motion": "^12.40.0",
     "glob": "^13.0.6",
     "lucide-react": "^1.20.0",
-    "next": "16.2.9",
-    "next-pwa": "^5.6.0",
+    "next": "^16.3.4",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "react-hook-form": "^7.79.0",
     "react-hot-toast": "^2.6.0",
     "stripe": "^22.2.1",
-    "uuid": "^14.0.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@capacitor/android": "^8.5.1",
     "@capacitor/cli": "^8.5.0",
+    "@capacitor/ios": "^8.5.1",
+    "@ducanh2912/next-pwa": "^10.2.9",
     "@firebase/rules-unit-testing": "^5.0.1",
     "@playwright/test": "^1.62.1",
     "@tailwindcss/postcss": "^4",
@@ -60,10 +62,14 @@
     "@types/react-dom": "^19",
     "@vitest/coverage-v8": "^4.1.10",
     "eslint": "^9",
-    "eslint-config-next": "16.2.9",
+    "eslint-config-next": "^16.3.4",
     "firebase-tools": "^15.26.0",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^4.1.10"
+  },
+  "overrides": {
+    "serialize-javascript": "^7.0.5",
+    "uuid": "^11.1.1"
   }
 }

@@ -19,6 +19,10 @@ const eslintConfig = defineConfig([
     "playwright-report/**",
     "test-results/**",
     "coverage/**",
+    // Capacitor copies compiled web assets into both generated native
+    // projects. Lint the source once, not the synchronized build copies.
+    "android/**",
+    "ios/**",
   ]),
   {
     rules: {

@@ -8,7 +8,7 @@ interface RuntimeCacheMatchContext {
   url: URL;
 }
 
-const withPwa = require("next-pwa")({
+const withPwa = require("@ducanh2912/next-pwa").default({
   dest: "public",
   disable: process.env.NODE_ENV === "development",
   register: true,
@@ -67,7 +67,7 @@ const withPwa = require("next-pwa")({
   ],
 });
 
-const contentSecurityPolicyReportOnly = [
+const contentSecurityPolicy = [
   "default-src 'self'",
   "base-uri 'self'",
   "object-src 'none'",
@@ -93,8 +93,14 @@ const nextConfig: NextConfig = {
    */
   turbopack: {},
   async headers() {
+    // Keep the safe default until production violation reports have been
+    // reviewed. Set CSP_ENFORCEMENT_MODE=enforce in the hosting environment
+    // only after completing docs/csp-enforcement-runbook.md.
+    const cspHeader = process.env.CSP_ENFORCEMENT_MODE === "enforce"
+      ? "Content-Security-Policy"
+      : "Content-Security-Policy-Report-Only";
     const securityHeaders = [
-      {key: "Content-Security-Policy-Report-Only", value: contentSecurityPolicyReportOnly},
+      {key: cspHeader, value: contentSecurityPolicy},
       {key: "X-Content-Type-Options", value: "nosniff"},
       {key: "Referrer-Policy", value: "strict-origin-when-cross-origin"},
       {key: "Permissions-Policy", value: "camera=(self), microphone=(), geolocation=(self), payment=(self \"https://js.stripe.com\")"},

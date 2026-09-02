@@ -9,6 +9,7 @@ if (admin.apps.length === 0) admin.initializeApp();
 const db = getFirestore("default");
 const resendApiKey = defineSecret("RESEND_API_KEY");
 const emailFrom = defineString("EMAIL_FROM");
+const emailReplyTo = defineString("EMAIL_REPLY_TO", {default: "info@liamarketplace.com"});
 const MAX_ATTEMPTS = 5;
 
 type JobData = Record<string, unknown>;
@@ -35,6 +36,7 @@ async function deliver(reference: FirebaseFirestore.DocumentReference): Promise<
       headers: {Authorization: `Bearer ${resendApiKey.value()}`, "Content-Type": "application/json", "Idempotency-Key": reference.id},
       body: JSON.stringify({
         from: emailFrom.value(), to: [text(claimed.to)], subject: text(claimed.subject),
+        reply_to: emailReplyTo.value(),
         html: text(claimed.html), text: text(claimed.text),
         tags: Object.entries((claimed.tags && typeof claimed.tags === "object" ? claimed.tags : {}) as Record<string, unknown>)
           .filter(([, value]) => typeof value === "string")

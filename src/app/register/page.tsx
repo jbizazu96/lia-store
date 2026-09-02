@@ -3,7 +3,7 @@
 /*
   React hooks.
 */
-import {useState} from "react";
+import {useEffect, useState} from "react";
 
 /*
   Next.js navigation.
@@ -36,6 +36,8 @@ import {
 } from "@/services/user/registrationService";
 import {LegalReviewModal} from "@/components/legal/LegalReviewModal";
 import {getPasswordPolicyError, PASSWORD_POLICY_DESCRIPTION} from "@/utils/passwordPolicy";
+import {Capacitor} from "@capacitor/core";
+import {BrandedLoader} from "@/components/ui/BrandedLoader";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -45,6 +47,18 @@ export default function RegisterPage() {
   */
   const [step, setStep] = useState<"select" | "form">("select");
   const [accountType, setAccountType] = useState<RegistrationAccountType | null>(null);
+  const [nativeCustomerRegistration, setNativeCustomerRegistration] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    const native = Capacitor.isNativePlatform();
+    // Resolve the platform after hydration so server and client markup agree.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setNativeCustomerRegistration(native);
+    if (native) {
+      setAccountType("customer");
+      setStep("form");
+    }
+  }, []);
 
   /*
     Form fields.
@@ -129,7 +143,8 @@ export default function RegisterPage() {
       setError("");
       setSuccess(false);
 
-      if (!accountType) {
+      const selectedAccountType = nativeCustomerRegistration ? "customer" : accountType;
+      if (!selectedAccountType) {
         setError("Choose an account type before registering.");
         return;
       }
@@ -139,7 +154,7 @@ export default function RegisterPage() {
         email,
         phone,
         password,
-        accountType,
+        accountType: selectedAccountType,
         customerTermsAccepted,
         customerPrivacyAcknowledged,
       });
@@ -164,6 +179,10 @@ export default function RegisterPage() {
     } finally {
       setLoading(false);
     }
+  }
+
+  if (nativeCustomerRegistration === null) {
+    return <BrandedLoader message="Preparing registration" />;
   }
 
   /*
@@ -291,10 +310,10 @@ export default function RegisterPage() {
       >
         {/* Back Button */}
         <button
-          onClick={() => setStep("select")}
+          onClick={() => nativeCustomerRegistration ? router.replace("/login") : setStep("select")}
           className="mb-4 text-gray-500 hover:text-gray-700 transition"
         >
-          ← Back
+          ← {nativeCustomerRegistration ? "Back to sign in" : "Back"}
         </button>
 
         <div className="flex justify-center mb-6">

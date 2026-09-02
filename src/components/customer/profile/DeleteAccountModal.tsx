@@ -1,6 +1,7 @@
 "use client";
 
 import {useState} from "react";
+import {useRouter} from "next/navigation";
 import {motion} from "framer-motion";
 import {X, Trash2} from "lucide-react";
 import {
@@ -20,6 +21,7 @@ interface DeleteAccountModalProps {
 }
 
 export function DeleteAccountModal({onClose}: DeleteAccountModalProps) {
+  const router = useRouter();
   const [step, setStep] = useState<"confirm" | "password">("confirm");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -45,7 +47,14 @@ export function DeleteAccountModal({onClose}: DeleteAccountModalProps) {
         const credential = EmailAuthProvider.credential(user.email, password);
         await reauthenticateWithCredential(user, credential);
       } else if (usesAppleProvider) {
-        await appleAuthenticationService.reauthenticate(user);
+        const appleReauthentication = await appleAuthenticationService.reauthenticate(user);
+        if (appleReauthentication.authorizationCode) {
+          // Apple requires apps that support account creation to revoke the
+          // user's Apple authorization when the customer deletes the account.
+          await appleAuthenticationService.revokeAuthorizationCode(
+            appleReauthentication.authorizationCode,
+          );
+        }
       } else {
         await googleAuthenticationService.reauthenticate(user);
       }
@@ -59,7 +68,7 @@ export function DeleteAccountModal({onClose}: DeleteAccountModalProps) {
 
       setPassword("");
       await customerLogoutService.logout();
-      window.location.assign("/login?accountDeletion=review");
+      router.replace("/login?accountDeletion=review");
 
     } catch (error: unknown) {
       console.error("Error deleting account:", error);

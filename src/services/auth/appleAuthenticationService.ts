@@ -4,6 +4,7 @@ import {
   OAuthProvider,
   reauthenticateWithCredential,
   reauthenticateWithPopup,
+  revokeAccessToken,
   signInWithCredential,
   signInWithPopup,
   type User,
@@ -25,13 +26,14 @@ async function nativeAppleCredential() {
   });
   const idToken = result.credential?.idToken;
   const rawNonce = result.credential?.nonce;
+  const authorizationCode = result.credential?.authorizationCode?.trim() ?? "";
   if (!idToken) {
     throw new Error("Apple did not return a usable authentication credential.");
   }
-  return appleProvider().credential({
-    idToken,
-    rawNonce,
-  });
+  return {
+    credential: appleProvider().credential({idToken, rawNonce}),
+    authorizationCode,
+  };
 }
 
 export const appleAuthenticationService = {
@@ -39,13 +41,32 @@ export const appleAuthenticationService = {
     if (!Capacitor.isNativePlatform()) {
       return signInWithPopup(auth, appleProvider());
     }
-    return signInWithCredential(auth, await nativeAppleCredential());
+    const {credential} = await nativeAppleCredential();
+    return signInWithCredential(auth, credential);
   },
 
-  async reauthenticate(user: User): Promise<UserCredential> {
+  async reauthenticate(user: User): Promise<{
+    credential: UserCredential;
+    authorizationCode: string | null;
+  }> {
     if (!Capacitor.isNativePlatform()) {
-      return reauthenticateWithPopup(user, appleProvider());
+      return {
+        credential: await reauthenticateWithPopup(user, appleProvider()),
+        authorizationCode: null,
+      };
     }
-    return reauthenticateWithCredential(user, await nativeAppleCredential());
+    const nativeCredential = await nativeAppleCredential();
+    return {
+      credential: await reauthenticateWithCredential(user, nativeCredential.credential),
+      authorizationCode: nativeCredential.authorizationCode || null,
+    };
+  },
+
+  async revokeAuthorizationCode(authorizationCode: string): Promise<void> {
+    const code = authorizationCode.trim();
+    if (!code) {
+      throw new Error("Apple did not return the authorization needed to revoke access.");
+    }
+    await revokeAccessToken(auth, code);
   },
 };
