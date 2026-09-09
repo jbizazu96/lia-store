@@ -111,12 +111,23 @@ describe("store product gallery rules", () => {
 });
 
 describe("store onboarding image rules", () => {
-  it("accepts a supported reserved original with matching metadata", async () => {
+  it("accepts a supported claimed original without a Firestore store lookup", async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await context.firestore().doc("stores/store-1").delete();
+    });
     const storage = testEnv.authenticatedContext("owner-1", {
       storeUploadStoreId: "store-1",
     }).storage();
     await assertSucceeds(
       storage.ref(`stores/store-1/images/originals/logo/${IMAGE_ID}.jpg`)
+        .put(SMALL_IMAGE, storeMetadata()),
+    );
+  });
+
+  it("rejects an onboarding image without the server-issued store claim", async () => {
+    await assertFails(
+      testEnv.authenticatedContext("owner-1").storage()
+        .ref(`stores/store-1/images/originals/logo/${IMAGE_ID}.jpg`)
         .put(SMALL_IMAGE, storeMetadata()),
     );
   });

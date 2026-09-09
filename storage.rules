@@ -37,36 +37,21 @@ service firebase.storage {
         firestore.get(/databases/(default)/documents/refundClaimEvidenceUploads/$(evidenceUploadId)).data.expiresAt > request.time;
     }
 
-    function ownsStore(storeId) {
+    function ownsStoreUploadClaim(storeId) {
       return signedIn() &&
-        request.auth.token.storeUploadStoreId == storeId &&
-        firestore.exists(
-          /databases/(default)/documents/stores/$(storeId)
-        ) &&
-        firestore.get(
-          /databases/(default)/documents/stores/$(storeId)
-        ).data.ownerId == request.auth.uid;
-    }
-
-    function ownsApprovedStore(storeId) {
-      return ownsStore(storeId) &&
-        firestore.get(
-          /databases/(default)/documents/stores/$(storeId)
-        ).data.onboardingCompleted == true &&
-        firestore.get(
-          /databases/(default)/documents/stores/$(storeId)
-        ).data.isApproved == true;
+        request.auth.token.storeUploadStoreId == storeId;
     }
 
     function canManageStoreApplication(storeId) {
-      return ownsStore(storeId) && (
-        firestore.get(
-          /databases/(default)/documents/stores/$(storeId)
-        ).data.onboardingCompleted != true ||
-        firestore.get(
-          /databases/(default)/documents/stores/$(storeId)
-        ).data.isApproved == true
-      );
+      /*
+       * The Admin SDK grants this claim only after verifying that the signed-in
+       * user owns the store. Do not repeat that authorization through a
+       * Storage-to-Firestore lookup: that integration is not available in all
+       * Firestore editions and caused valid first-onboarding uploads to fail.
+       * Onboarding callables still enforce the current application lifecycle
+       * before accepting an uploaded image into the store record.
+       */
+      return ownsStoreUploadClaim(storeId);
     }
 
     /*
@@ -192,7 +177,7 @@ service firebase.storage {
      */
     match /stores/{storeId}/images/originals/{imageField}/{fileName} {
       allow read: if canManageStoreApplication(storeId);
-      allow write: if canManageStoreApplication(storeId) &&
+      allow create: if canManageStoreApplication(storeId) &&
         isStoreImageField(imageField) &&
         isSupportedStoreImage() &&
         request.resource.metadata.storeId == storeId &&
@@ -205,6 +190,7 @@ service firebase.storage {
           request.resource.metadata.imageId +
           "\\.(jpg|jpeg|png|webp|avif|heic|heif)"
         );
+      allow update, delete: if false;
     }
 
     match /stores/{storeId}/images/optimized/{imageField}/{fileName} {
