@@ -8,6 +8,8 @@ import {
   useRef,
 } from "react";
 import Image from "next/image";
+import {Capacitor} from "@capacitor/core";
+import {selectNativeImage} from "@/services/native/nativeMediaService";
 
 interface ProfileHeaderProps {
   displayName: string;
@@ -49,7 +51,15 @@ export function ProfileHeader({
             </div>
             <button
               type="button"
-              onClick={() => imageInputReference.current?.click()}
+              onClick={() => {
+                if (!Capacitor.isNativePlatform()) {
+                  imageInputReference.current?.click();
+                  return;
+                }
+                void selectNativeImage("prompt").then((file) => {
+                  if (file) onSelectProfileImage(file);
+                }).catch(() => undefined);
+              }}
               disabled={isUploadingImage}
               className="absolute -bottom-1 -right-1 flex h-9 w-9 items-center justify-center rounded-full border-2 border-white bg-orange-600 text-white shadow-md transition hover:bg-orange-700 disabled:opacity-60"
               aria-label="Change profile picture"

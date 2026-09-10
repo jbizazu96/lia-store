@@ -24,6 +24,7 @@ import {
 import {
   useCustomerOrdersContext,
 } from "@/context/CustomerOrdersContext";
+import {nativeSelectionFeedback} from "@/services/native/nativeInteractionService";
 
 const navigationItems = [
   {
@@ -75,6 +76,7 @@ export function CustomerBottomNavigation() {
             <Link
               key={item.href}
               href={item.href}
+              onClick={nativeSelectionFeedback}
               aria-current={active ? "page" : undefined}
               className={
                 "relative flex min-h-12 flex-col items-center justify-center gap-0.5 rounded-[23px] border px-2 py-1.5 text-[11px] font-bold transition " +

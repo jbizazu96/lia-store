@@ -23,6 +23,8 @@ import { useAuth } from "./AuthContext";
 import { notificationService } from "@/services/notification/notificationService";
 import {listenForNotificationMutations} from "@/services/notification/notificationSync";
 import {auth} from "@/lib/firebase";
+import {Capacitor} from "@capacitor/core";
+import {Badge} from "@capawesome/capacitor-badge";
 
 interface NotificationContextType {
 
@@ -49,8 +51,8 @@ export function NotificationProvider({
 
   useEffect(() => {
 
-    /* Only the customer Home header consumes this unread-count context. */
-    if (!user || pathname !== "/home") {
+    /* Native also keeps the application icon badge authoritative off Home. */
+    if (!user || (pathname !== "/home" && !Capacitor.isNativePlatform())) {
       return;
 
     }
@@ -76,6 +78,15 @@ export function NotificationProvider({
     }
 
   }, [pathname, user]);
+
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+    const count = user ? Math.max(0, unreadCount) : 0;
+    void Badge.isSupported().then(({isSupported}) => {
+      if (!isSupported) return;
+      return count > 0 ? Badge.set({count}) : Badge.clear();
+    }).catch(() => undefined);
+  }, [unreadCount, user]);
 
   useEffect(() => listenForNotificationMutations("user", (mutation) => {
     if (mutation.action === "read-one") {

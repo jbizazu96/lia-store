@@ -30,6 +30,7 @@ import {
   Store,
   Receipt,
   ShoppingCart,
+  Share2,
 } from "lucide-react";
 import { CustomerPageSkeleton } from "@/components/customer/ui/CustomerPageSkeleton";
 import { OrderHelpSection } from "@/components/customer/orders/OrderHelpSection";
@@ -40,6 +41,7 @@ import { useConfirmation } from "@/context/ConfirmationContext";
 import { useSuccessToast } from "@/context/SuccessToastContext";
 import {getCustomerPickupCode} from "@/services/order/customerPickupService";
 import {ScheduledFulfillmentNotice} from "@/components/orders/ScheduledFulfillmentNotice";
+import {shareLiaContent} from "@/services/native/nativeInteractionService";
 
 
 interface OrderPageProps {
@@ -80,6 +82,20 @@ export default function OrderDetailPage({params}: OrderPageProps) {
 
   const handleReturn = () => {
     router.push("/orders");
+  };
+
+  const shareOrder = async () => {
+    if (!order) return;
+    try {
+      const shared = await shareLiaContent({
+        title: `LIA order ${order.orderNumber}`,
+        text: `Open LIA order ${order.orderNumber}. Sign-in is required to view order details.`,
+        url: `${window.location.origin}/orders/${order.id}`,
+      });
+      if (!shared) showSuccess("Order link copied.");
+    } catch {
+      // Closing the operating-system share sheet is a normal cancellation.
+    }
   };
 
   // Get status config
@@ -211,6 +227,7 @@ export default function OrderDetailPage({params}: OrderPageProps) {
             <ArrowLeft className="w-5 h-5 text-gray-700" />
           </button>
           <h1 className="pointer-events-none absolute inset-x-20 text-center text-xl font-bold text-gray-800">Order Details</h1>
+          <button type="button" onClick={() => void shareOrder()} className="ml-auto rounded-full p-2 transition hover:bg-gray-100" aria-label="Share order link"><Share2 className="h-5 w-5 text-gray-700" /></button>
         </div>
       </div>
 

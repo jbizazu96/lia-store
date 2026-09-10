@@ -85,3 +85,17 @@ export function recordNativeClientIssue(issue: NativeCrashIssue): void {
     ],
   }).catch(() => undefined);
 }
+
+/** Lightweight native lifecycle breadcrumbs appear with Crashlytics reports. */
+export function logNativeEvent(
+  name: string,
+  metadata: Record<string, string | number | boolean> = {},
+): void {
+  if (!isNative()) return;
+  const details = Object.entries(metadata)
+    .map(([key, value]) => `${key}=${String(value).slice(0, 100)}`)
+    .join(" ");
+  void FirebaseCrashlytics.log({
+    message: `[native] ${name}${details ? ` ${details}` : ""}`.slice(0, 1000),
+  }).catch(() => undefined);
+}

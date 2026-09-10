@@ -1,7 +1,9 @@
 /// <reference types="@capacitor-firebase/authentication" />
+/// <reference types="@capacitor-firebase/analytics" />
 /// <reference types="@capacitor-firebase/app-check" />
 /// <reference types="@capacitor-firebase/crashlytics" />
 /// <reference types="@capacitor-firebase/messaging" />
+/// <reference types="@capawesome/capacitor-badge" />
 
 import type { CapacitorConfig } from "@capacitor/cli";
 
@@ -19,6 +21,7 @@ const config: CapacitorConfig = {
         server: {
           url: hostedAppUrl,
           cleartext: hostedAppUrl.startsWith("http://"),
+          errorPath: "native-error.html",
         },
       }
     : {}),
@@ -41,6 +44,19 @@ const config: CapacitorConfig = {
     FirebaseMessaging: {
       presentationOptions: ["alert", "badge", "sound"],
     },
+    Keyboard: {
+      resize: "native",
+      resizeOnFullScreen: true,
+    },
+    StatusBar: {
+      style: "light",
+      backgroundColor: "#ffffff",
+      overlaysWebView: false,
+    },
+    Badge: {
+      persist: true,
+      autoClear: false,
+    },
   },
   experimental: {
     ios: {
@@ -53,6 +69,9 @@ const config: CapacitorConfig = {
             symlink: true,
           },
           "@capacitor-firebase/crashlytics": {
+            symlink: true,
+          },
+          "@capacitor-firebase/analytics": {
             symlink: true,
           },
         },

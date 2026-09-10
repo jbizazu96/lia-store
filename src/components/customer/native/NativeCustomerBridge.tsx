@@ -12,7 +12,9 @@ import {
   nativeCustomerDestination,
 } from "@/services/navigation/nativeCustomerRoutes";
 import {reportClientIssue} from "@/services/monitoring/clientErrorReporter";
-import {initializeNativeCrashReporting} from "@/services/monitoring/nativeCrashReporter";
+import {initializeNativeCrashReporting, logNativeEvent} from "@/services/monitoring/nativeCrashReporter";
+import {NativeRuntimeGate} from "@/components/customer/native/NativeRuntimeGate";
+import {recordNativeAnalyticsEvent} from "@/services/monitoring/nativeAnalytics";
 
 export function NativeCustomerBridge() {
   const pathname = usePathname();
@@ -75,11 +77,18 @@ export function NativeCustomerBridge() {
       const fallback = user ? "/home" : "/login";
       const internalPath = toSafeLiaPath(candidate);
       if (!internalPath) {
+        logNativeEvent("deep_link_rejected", {scheme: candidate.split(":", 1)[0]?.slice(0, 30) ?? "unknown"});
+        recordNativeAnalyticsEvent("lia_deep_link_failed", {scheme: candidate.split(":", 1)[0]?.slice(0, 30) ?? "unknown"});
         reportClientIssue({
           area: "navigation.deep_link",
           message: "Native deep link was rejected",
           metadata: {scheme: candidate.split(":", 1)[0]?.slice(0, 30) ?? "unknown"},
         });
+      }
+      if (internalPath) {
+        const path = internalPath.split("?", 1)[0].slice(0, 150);
+        logNativeEvent("deep_link_open", {path});
+        recordNativeAnalyticsEvent("lia_deep_link_open", {path});
       }
       router.replace(
         internalPath
@@ -146,5 +155,5 @@ export function NativeCustomerBridge() {
     };
   }, [loading, user]);
 
-  return null;
+  return <NativeRuntimeGate />;
 }

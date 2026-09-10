@@ -12,9 +12,10 @@ import {currentAccountClientService} from "@/services/user/currentAccountClientS
 interface PostLoginResult {
   accountType: "customer" | "store_owner" | "store_staff" | "driver" | "admin";
   hasAddress: boolean;
-  storeStatus: "approved" | "pending" | "none";
+  storeStatus: "approved" | "pending" | "onboarding" | "none";
   storeName?: string;
   storeId?: string;
+  storeOnboardingStep?: string;
 }
 
 export async function handlePostLogin(uid: string): Promise<PostLoginResult> {
@@ -32,9 +33,10 @@ export async function handlePostLogin(uid: string): Promise<PostLoginResult> {
     Check store status for store owners.
     Query by ownerId since store ID is not the same as user UID.
   */
-  let storeStatus: "approved" | "pending" | "none" = "none";
+  let storeStatus: "approved" | "pending" | "onboarding" | "none" = "none";
   let storeName = "";
   let storeId = "";
+  let storeOnboardingStep: string | undefined;
 
   if (accountType === "store_owner" || accountType === "store_staff") {
     const entry = await storeWorkspaceClientService.getEntry();
@@ -42,7 +44,12 @@ export async function handlePostLogin(uid: string): Promise<PostLoginResult> {
     if (entry.hasStore && entry.store) {
       storeId = entry.store.id;
       storeName = entry.store.name || "Your Store";
-      storeStatus = entry.store.isApproved ? "approved" : "pending";
+      storeStatus = entry.store.onboardingCompleted !== true
+        ? "onboarding"
+        : entry.store.isApproved
+          ? "approved"
+          : "pending";
+      storeOnboardingStep = entry.store.onboardingStep;
     }
   }
 
@@ -52,5 +59,6 @@ export async function handlePostLogin(uid: string): Promise<PostLoginResult> {
     storeStatus,
     storeName,
     storeId,
+    storeOnboardingStep,
   };
 }

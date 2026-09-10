@@ -43,7 +43,12 @@ Complete these checks during native development and repeat them on release candi
 - Register the Firebase authentication email sender or custom email domain with Apple Private Email Relay so verification and account emails reach customers using Hide My Email.
 - Test Apple reauthentication and authorization revocation as part of the in-app account deletion release flow before App Store submission. The native flow now passes Apple's fresh authorization code to Firebase `revokeAccessToken` before submitting the deletion request.
 - Configure APNs credentials in Firebase for iOS, then confirm that FCM tokens can receive an APNs notification.
-- After native dependency changes, run `npx cap sync`. Confirm that Firebase Authentication, App Check, Crashlytics, Messaging, and native settings appear in the synchronized plugin list.
+- After native dependency changes, run `npx cap sync`. Confirm that Firebase Authentication, App Check, Crashlytics, Analytics, Messaging, Network, Keyboard, Status Bar, Haptics, Share, Camera, Badge, and native settings appear in the synchronized plugin list.
+- Configure `NATIVE_IOS_MINIMUM_VERSION`, `NATIVE_IOS_LATEST_VERSION`, `NATIVE_IOS_STORE_URL`, and the equivalent `NATIVE_ANDROID_*` variables in Vercel. Raising the minimum version blocks obsolete native shells; raising only the latest version shows a dismissible recommendation. Never raise a minimum version until its store release is approved and available.
+- Verify the hosted/native capability handshake reports no missing plugins and that `lia_native_startup`, `lia_deep_link_open`, and `lia_deep_link_failed` events appear in Firebase Analytics. Revisit the Apple App Privacy and Google Play Data Safety answers after enabling Analytics.
+- Disable networking or make the hosted server unavailable and verify the native full-screen recovery UI. Also test the local `native-error.html` fallback, which must work before hosted JavaScript loads.
+- Verify the app icon badge follows the authoritative unread-notification count, clears after reading all notifications or logout, and survives a restart where supported.
+- Test native camera/gallery selection for profile photos and refund evidence. Denial must return safely to LIA, and selected images must still pass LIA's size/type and Storage authorization checks.
 - Follow the Firebase Messaging iOS setup in the plugin documentation: forward remote-notification registration and receipt callbacks from `AppDelegate.swift`. Do not reinstall `@capacitor/push-notifications`; it conflicts with the Firebase Messaging plugin used to obtain iOS FCM tokens.
 - Android now has a monochrome notification icon and LIA notification color; verify their appearance on light/dark Android notification trays.
 

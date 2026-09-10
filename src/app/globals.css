@@ -93,3 +93,7 @@ body {
 .snap-start {
   scroll-snap-align: start;
 }
+html.native-keyboard-open .safe-area-fixed-bottom {
+  visibility: hidden;
+  pointer-events: none;
+}

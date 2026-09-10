@@ -45,6 +45,7 @@ import {reportClientIssue} from "@/services/monitoring/clientErrorReporter";
 import {authEmailService} from "@/services/auth/authEmailService";
 import {registrationService, type SocialCustomerProfileInput} from "@/services/user/registrationService";
 import {SocialCustomerOnboardingModal} from "@/components/login/SocialCustomerOnboardingModal";
+import {getStoreEntryDestination} from "@/services/store/storeEntryNavigation";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -156,6 +157,11 @@ export default function LoginPage() {
       const entry = await storeWorkspaceClientService.getEntry();
 
       if (entry.hasStore && entry.store) {
+        if (entry.store.onboardingCompleted !== true) {
+          router.replace(getStoreEntryDestination(entry));
+          return;
+        }
+
         const isApproved = entry.store.isApproved;
         const storeName = entry.store.name || "Your Store";
 
@@ -168,7 +174,7 @@ export default function LoginPage() {
           router.replace("/store/dashboard");
           return;
         } else {
-          // Store is pending - show review message
+          // Only a completed application can be pending, rejected, or suspended.
           setStoreStatusData({
             status: "pending",
             storeName: storeName,

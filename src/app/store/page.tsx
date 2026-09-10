@@ -19,6 +19,7 @@ import {
   RoleGuard,
 } from "@/components/auth/RoleGuard";
 import {AlertTriangle, RefreshCw} from "lucide-react";
+import {getStoreEntryDestination} from "@/services/store/storeEntryNavigation";
 
 function StorePageContent() {
   const router = useRouter();
@@ -39,23 +40,7 @@ function StorePageContent() {
         const entry =
           await storeWorkspaceClientService.getEntry(true);
 
-        if (entry.hasStore && entry.store) {
-          const storeData = entry.store;
-          
-          if (storeData.onboardingCompleted === true) {
-            const isApproved = storeData.isApproved === true;
-
-            router.replace(isApproved
-              ? entry.access.role === "staff"
-                ? entry.access.permissions.orders ? "/store/store-orders" : "/store/products"
-                : "/store/dashboard"
-              : "/store/pending-approval");
-          } else {
-            router.replace(`/store/onboarding/${storeData.onboardingStep || "owner"}`);
-          }
-        } else {
-          router.replace("/store/onboarding/owner");
-        }
+        router.replace(getStoreEntryDestination(entry));
       } catch (error) {
         console.error("Error checking store:", error);
         setError("We could not load your store workspace. Your store information has not been changed.");

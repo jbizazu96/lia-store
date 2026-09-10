@@ -4,6 +4,8 @@ import {useEffect, useState} from "react";
 import {createPortal} from "react-dom";
 import {Camera, Check, Circle, ImagePlus, LoaderCircle, RotateCcw, Upload} from "lucide-react";
 import {refundClaimClientService} from "@/services/refund/refundClaimClientService";
+import {Capacitor} from "@capacitor/core";
+import {selectNativeImage} from "@/services/native/nativeMediaService";
 
 const reasons = [
   ["missing_items", "Missing item"],
@@ -164,6 +166,14 @@ export function RefundClaimCard({
 
     setEvidencePickerOpen(false);
     setError("");
+  };
+
+  const chooseNativeEvidence = async (source: "camera" | "gallery") => {
+    try {
+      chooseEvidenceFile(await selectNativeImage(source));
+    } catch (selectionError) {
+      setError(selectionError instanceof Error ? selectionError.message : "Unable to select that photo.");
+    }
   };
 
   useEffect(() => {
@@ -398,10 +408,10 @@ export function RefundClaimCard({
               Choose how you want to add your photo.
             </p>
             <div className="mt-5 grid grid-cols-2 gap-3">
-              <label className="flex cursor-pointer flex-col items-center rounded-2xl border border-gray-200 p-4 hover:bg-orange-50">
+              {Capacitor.isNativePlatform() ? <button type="button" onClick={() => void chooseNativeEvidence("camera")} className="flex cursor-pointer flex-col items-center rounded-2xl border border-gray-200 p-4 hover:bg-orange-50">
                 <Camera className="mb-2 h-7 w-7 text-orange-600" />
                 <span className="text-sm font-semibold">Take photo</span>
-                <input
+              </button> : <label className="flex cursor-pointer flex-col items-center rounded-2xl border border-gray-200 p-4 hover:bg-orange-50"><Camera className="mb-2 h-7 w-7 text-orange-600" /><span className="text-sm font-semibold">Take photo</span><input
                   hidden
                   type="file"
                   accept="image/*"
@@ -409,20 +419,18 @@ export function RefundClaimCard({
                   onChange={(event) =>
                     chooseEvidenceFile(event.target.files?.[0] ?? null)
                   }
-                />
-              </label>
-              <label className="flex cursor-pointer flex-col items-center rounded-2xl border border-gray-200 p-4 hover:bg-orange-50">
+                /></label>}
+              {Capacitor.isNativePlatform() ? <button type="button" onClick={() => void chooseNativeEvidence("gallery")} className="flex cursor-pointer flex-col items-center rounded-2xl border border-gray-200 p-4 hover:bg-orange-50">
                 <Upload className="mb-2 h-7 w-7 text-orange-600" />
                 <span className="text-sm font-semibold">Upload image</span>
-                <input
+              </button> : <label className="flex cursor-pointer flex-col items-center rounded-2xl border border-gray-200 p-4 hover:bg-orange-50"><Upload className="mb-2 h-7 w-7 text-orange-600" /><span className="text-sm font-semibold">Upload image</span><input
                   hidden
                   type="file"
                   accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
                   onChange={(event) =>
                     chooseEvidenceFile(event.target.files?.[0] ?? null)
                   }
-                />
-              </label>
+                /></label>}
             </div>
             <button
               type="button"
